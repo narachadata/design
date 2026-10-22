@@ -465,3 +465,34 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .dlpanel .dlinfo ul{margin:6px 0 0 16px;padding:0;line-height:1.7}
 .dlpanel .dlprog{font-size:12.5px;color:var(--ui-fg2);min-height:18px;margin-bottom:6px}
 .btn.full{width:100%;justify-content:center}
+/* 직관적인 조절 장치: 슬라이더 + 숫자, 방향 다이얼, 위치 패드 */
+.sl{margin:6px 0 10px}
+.sl .slh{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;color:var(--ui-muted);margin-bottom:4px}
+.sl .slh>span:first-child{cursor:default;user-select:none}
+.sl .slv{display:flex;align-items:center;gap:3px;font-size:11.5px;color:var(--ui-muted)}
+.sl .slv small{margin-left:4px}
+.sl input.num{width:58px;padding:3px 6px;border:1px solid var(--ui-line2);border-radius:6px;font:inherit;font-size:12px;text-align:right;background:var(--ui-field);-moz-appearance:textfield}
+.sl input.num::-webkit-inner-spin-button{opacity:.4}
+.sl input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:6px;background:linear-gradient(90deg,var(--ui-accent) var(--p,50%),var(--ui-line) var(--p,50%));outline:none;margin:4px 0}
+.sl input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid var(--ui-accent);box-shadow:0 1px 3px rgba(0,0,0,.25);cursor:pointer}
+.sl input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid var(--ui-accent)}
+.sl .dialrow,.sl .xyrow{display:flex;gap:12px;align-items:center}
+.dial{width:54px;height:54px;flex:none;border-radius:50%;border:2px solid var(--ui-line2);background:radial-gradient(circle,#fff 60%,var(--ui-field) 61%);position:relative;cursor:grab;touch-action:none}
+.dial.drag{cursor:grabbing;border-color:var(--ui-accent)}
+.dial i{position:absolute;left:50%;top:50%;width:2px;height:22px;margin-left:-1px;background:var(--ui-accent);transform-origin:50% 0;transform:rotate(calc(var(--a) + 180deg));border-radius:2px}
+.dial i::after{content:'';position:absolute;left:-4px;bottom:-5px;width:10px;height:10px;border-radius:50%;background:var(--ui-accent)}
+.dial::after{content:'';position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:var(--ui-fg2)}
+.dialq,.xyq,.shq{display:flex;flex-wrap:wrap;gap:4px}
+.dialq button,.xyq button{border:1px solid var(--ui-line2);background:#fff;border-radius:6px;padding:3px 7px;font:inherit;font-size:11.5px;cursor:pointer;color:var(--ui-fg2)}
+.dialq button:hover,.xyq button:hover{border-color:var(--ui-accent);color:var(--ui-accent)}
+.xypad{width:96px;height:96px;flex:none;border:1px solid var(--ui-line2);border-radius:10px;position:relative;cursor:crosshair;touch-action:none;background:linear-gradient(var(--ui-line) 0 0) 50% 0/1px 100% no-repeat,linear-gradient(var(--ui-line) 0 0) 0 50%/100% 1px no-repeat,repeating-conic-gradient(#f4f5f8 0 25%,#fff 0 50%) 0 0/12px 12px}
+.xypad::before{content:'가';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:800;font-size:22px;color:var(--ui-fg)}
+.xypad i{position:absolute;width:14px;height:14px;margin:-7px;border-radius:50%;background:var(--ui-accent);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.xypad.drag{border-color:var(--ui-accent)}
+.shq{flex:1;align-items:flex-end}
+.grid2.sls{grid-template-columns:1fr 1fr;column-gap:14px}
+.sl .xyside{display:flex;flex-direction:column;gap:6px;min-width:0}
+.sl .xyside .slv{flex-wrap:wrap}
+.sl .xyside input.num{width:50px}
+.shq{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:4px}
+.shq span{font-size:12px;color:var(--ui-muted);width:100%}
