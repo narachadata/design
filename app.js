@@ -724,9 +724,10 @@ function renderSide() {
   $('#sideTitle').textContent = (RAIL.find(r => r[0] === sideTab) || [])[1] || '';
   body.onclick = null; body.oninput = null; body.onchange = null;
   if (sideTab === 'pages') {
-    body.innerHTML = `<div class="row" style="margin-bottom:8px"><button class="btn sm" id="pgAdd">+ 새 페이지</button><button class="btn sm" id="pgDup">복제</button><button class="btn sm icon" id="pgUp" title="위로">↑</button><button class="btn sm icon" id="pgDown" title="아래로">↓</button><button class="btn sm danger" id="pgDel">삭제</button></div><div id="thumbs"></div>`;
+    body.innerHTML = `<div class="row" style="margin-bottom:8px"><button class="btn sm" id="pgAdd">+ 새 페이지</button><button class="btn sm" id="pgDup">복제</button><button class="btn sm icon" id="pgUp" title="위로">↑</button><button class="btn sm icon" id="pgDown" title="아래로">↓</button><button class="btn sm danger" id="pgDel">삭제</button><button class="btn sm" id="pgGrid" title="모든 쪽을 한눈에 (여러 쪽 고르기·끌어서 순서 바꾸기)">모아 보기</button></div><div id="thumbs"></div>`;
     renderThumbs();
     $('#thumbs').onclick = e => { const b = e.target.closest('.thumb'); if (b) goto(Number(b.dataset.i)); };
+    $('#pgGrid').onclick = openPageGrid;
     $('#pgAdd').onclick = () => { doc.pages.splice(cur + 1, 0, newPage(page().bg)); commit(); goto(cur + 1); };
     $('#pgDup').onclick = () => { const n = clone(page()); n.id = uid(); const gmap = {}; n.els.forEach(e => { e.id = uid(); if (e.group) { gmap[e.group] = gmap[e.group] || uid(); e.group = gmap[e.group]; } }); doc.pages.splice(cur + 1, 0, n); commit(); goto(cur + 1); };
     $('#pgDel').onclick = () => { if (doc.pages.length === 1) { toast('마지막 페이지는 지울 수 없습니다', true); return; } if (!window.confirm(`${cur + 1}쪽을 지울까요?`)) return; doc.pages.splice(cur, 1); commit(); goto(Math.min(cur, doc.pages.length - 1)); };
@@ -2474,6 +2475,44 @@ wrap.addEventListener('pointerdown', e => { const u = e.target.closest && e.targ
 $('#scroller').addEventListener('scroll', () => { if (showRulers()) drawRulers(); }, { passive: true });
 window.addEventListener('resize', () => { if (showRulers()) drawRulers(); });
 document.addEventListener('keydown', e => { if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.code === 'KeyR' && !editing && !$('#cellEd') && !cellSel && !(e.target.matches && e.target.matches('input,textarea,select,[contenteditable="true"]')) && !document.querySelector('dialog[open]')) { e.preventDefault(); toggleRulers(); } });
+
+/* ---- 쪽 모아 보기 (Canva 'Grid view'): 모든 쪽을 한눈에, 끌어서 순서 바꾸기, 여러 쪽 골라 복제·삭제, 두 번 눌러 그 쪽으로 ---- */
+let gridSel = new Set(), gridAnchor = 0;
+function dupPage(p) { const n = clone(p); n.id = uid(); const gmap = {}; n.els.forEach(e => { e.id = uid(); delete e.gen; if (e.group) { gmap[e.group] = gmap[e.group] || uid(); e.group = gmap[e.group]; } }); return n; }
+function openPageGrid() {
+  endEdit(); let d = $('#dlgGrid');
+  if (!d) { d = document.createElement('dialog'); d.id = 'dlgGrid'; d.className = 'wide'; d.innerHTML = `<div class="dhead"><h2>쪽 모아 보기</h2><div class="row" style="gap:6px"><span class="hint" id="gridInfo" style="margin:0"></span><button class="btn sm" data-gx="dup">복제</button><button class="btn sm danger" data-gx="del">삭제</button><button class="btn sm primary" data-gx="go">이 쪽 편집</button><button class="btn sm" data-close>닫기</button></div></div><div class="dbody"><p class="hint" style="margin-top:0">누르면 고르기 · Ctrl/⌘·Shift로 여러 쪽 · 끌어서 순서 바꾸기 · 두 번 누르면 그 쪽으로 · Delete로 삭제</p><div id="gridBody" class="pgrid"></div></div>`; document.body.appendChild(d);
+    d.querySelector('[data-close]').onclick = () => d.close();
+    d.addEventListener('click', e => { const b = e.target.closest('[data-gx]'); if (b) gridCmd(b.dataset.gx); });
+    d.addEventListener('keydown', e => { if ((e.key === 'Delete' || e.key === 'Backspace') && !(e.target.matches && e.target.matches('input,textarea'))) { e.preventDefault(); gridCmd('del'); } });
+  }
+  gridSel = new Set([cur]); gridAnchor = cur; renderPageGrid(); d.showModal();
+  requestAnimationFrame(() => { const t = $(`#gridBody [data-gi="${cur}"]`); if (t) t.scrollIntoView({ block: 'center' }); });
+}
+function renderPageGrid() {
+  const B = $('#gridBody'), tw = 170, k = tw / (doc.w * MM), th = doc.h * MM * k;
+  B.innerHTML = doc.pages.map((pg, i) => `<div class="gtile ${gridSel.has(i) ? 'on' : ''} ${i === cur ? 'cur' : ''}" data-gi="${i}" draggable="true"><div class="gbox" style="width:${tw}px;height:${th}px">${sheetHTML(pg, 'thumb')}</div><span><b>${i + 1}</b> ${esc(pg.label || '')}</span></div>`).join('');
+  B.querySelectorAll('.gbox .sheet').forEach(s => { s.style.transform = `scale(${k})`; });
+  $('#gridInfo').textContent = `${doc.pages.length}쪽 중 ${gridSel.size}쪽 고름`;
+  B.onclick = e => { const t = e.target.closest('[data-gi]'); if (!t) return; const i = Number(t.dataset.gi);
+    if (e.shiftKey) { gridSel = new Set(); for (let j = Math.min(gridAnchor, i); j <= Math.max(gridAnchor, i); j++) gridSel.add(j); }
+    else if (e.ctrlKey || e.metaKey) { gridSel.has(i) ? gridSel.delete(i) : gridSel.add(i); gridAnchor = i; }
+    else { gridSel = new Set([i]); gridAnchor = i; }
+    renderPageGrid(); };
+  B.ondblclick = e => { const t = e.target.closest('[data-gi]'); if (!t) return; $('#dlgGrid').close(); goto(Number(t.dataset.gi)); };
+  B.ondragstart = e => { const t = e.target.closest('[data-gi]'); if (!t) return; const i = Number(t.dataset.gi); if (!gridSel.has(i)) { gridSel = new Set([i]); } e.dataTransfer.setData('text/x-nc-grid', [...gridSel].join(',')); e.dataTransfer.effectAllowed = 'move'; };
+  B.ondragover = e => { const t = e.target.closest('[data-gi]'); if (!t || !e.dataTransfer.types.includes('text/x-nc-grid')) return; e.preventDefault(); B.querySelectorAll('.gtile').forEach(x => x.classList.remove('dropl', 'dropr')); const r = t.getBoundingClientRect(); t.classList.add(e.clientX < r.left + r.width / 2 ? 'dropl' : 'dropr'); };
+  B.ondrop = e => { const t = e.target.closest('[data-gi]'); if (!t || !e.dataTransfer.types.includes('text/x-nc-grid')) return; e.preventDefault();
+    const idx = e.dataTransfer.getData('text/x-nc-grid').split(',').map(Number).sort((a, b) => a - b); const r = t.getBoundingClientRect(); let to = Number(t.dataset.gi) + (e.clientX < r.left + r.width / 2 ? 0 : 1);
+    const moving = idx.map(i => doc.pages[i]), curPg = page(); to -= idx.filter(i => i < to).length; const rest = doc.pages.filter((p, i) => !idx.includes(i)); rest.splice(to, 0, ...moving); doc.pages = rest;
+    gridSel = new Set(moving.map(p => doc.pages.indexOf(p))); cur = Math.max(0, doc.pages.indexOf(curPg)); sel = []; cellSel = null; commit(); renderAll(); renderPageGrid(); toast(`${moving.length}쪽을 옮겼습니다`); };
+}
+function gridCmd(k) {
+  const idx = [...gridSel].sort((a, b) => a - b); if (!idx.length) return;
+  if (k === 'go') { $('#dlgGrid').close(); goto(idx[0]); return; }
+  if (k === 'dup') { const copies = idx.map(i => dupPage(doc.pages[i])); const at = idx[idx.length - 1] + 1; doc.pages.splice(at, 0, ...copies); gridSel = new Set(copies.map((_, j) => at + j)); commit(); renderAll(); renderPageGrid(); toast(`${copies.length}쪽을 복제했습니다`); return; }
+  if (k === 'del') { if (idx.length >= doc.pages.length) { toast('모든 쪽을 지울 수는 없습니다', true); return; } if (!window.confirm(`${idx.length}쪽을 지울까요? (Ctrl+Z로 되돌릴 수 있습니다)`)) return; const curPg = page(); doc.pages = doc.pages.filter((p, i) => !gridSel.has(i)); cur = Math.max(0, Math.min(doc.pages.indexOf(curPg) >= 0 ? doc.pages.indexOf(curPg) : idx[0], doc.pages.length - 1)); sel = []; cellSel = null; gridSel = new Set([Math.min(idx[0], doc.pages.length - 1)]); commit(); renderAll(); renderPageGrid(); toast(`${idx.length}쪽을 지웠습니다`); }
+}
 
 // 점검용 (주소에 ?qa 가 있을 때만): 자동 시험에서 문서 상태를 읽음
 if (/[?&]qa\b/.test(location.search)) window.NCQA = { get doc() { return doc; }, get sel() { return sel; }, get cur() { return cur; }, select, goto, commit, undo, renderAll };
