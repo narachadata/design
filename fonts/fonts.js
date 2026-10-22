@@ -191,8 +191,15 @@ window.NARACAL_FONTS = [
   "label": "본고딕 (Noto Sans KR)",
   "cat": "body",
   "weights": [
+   100,
+   200,
+   300,
    400,
-   700
+   500,
+   600,
+   700,
+   800,
+   900
   ]
  },
  {
@@ -200,8 +207,15 @@ window.NARACAL_FONTS = [
   "label": "프리텐다드",
   "cat": "body",
   "weights": [
+   100,
+   200,
+   300,
    400,
-   700
+   500,
+   600,
+   700,
+   800,
+   900
   ]
  },
  {
@@ -272,8 +286,15 @@ window.NARACAL_FONTS = [
   "label": "함렛 (명조)",
   "cat": "body",
   "weights": [
+   100,
+   200,
+   300,
    400,
-   700
+   500,
+   600,
+   700,
+   800,
+   900
   ]
  },
  {
@@ -289,8 +310,15 @@ window.NARACAL_FONTS = [
   "label": "Montserrat (영문·숫자)",
   "cat": "latin",
   "weights": [
+   100,
+   200,
+   300,
    400,
-   700
+   500,
+   600,
+   700,
+   800,
+   900
   ]
  },
  {
@@ -298,8 +326,15 @@ window.NARACAL_FONTS = [
   "label": "본명조 (Noto Serif KR)",
   "cat": "body",
   "weights": [
+   100,
+   200,
+   300,
    400,
-   700
+   500,
+   600,
+   700,
+   800,
+   900
   ]
  },
  {
@@ -325,8 +360,15 @@ window.NARACAL_FONTS = [
   "label": "프리텐다드 GOV (공공)",
   "cat": "body",
   "weights": [
+   100,
+   200,
+   300,
    400,
-   700
+   500,
+   600,
+   700,
+   800,
+   900
   ]
  }
 ];

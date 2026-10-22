@@ -124,16 +124,19 @@ NC.fx = (function () {
   }
   /* ---------- 이미지 ---------- */
   const CLIPS = [['none', '없음'], ['circle', '원'], ['rounded', '둥근 모서리'], ['star', '별'], ['hexagon', '육각형'], ['heart', '하트'], ['diamond', '마름모'], ['blob', '물방울'], ['tri', '삼각형'], ['pill', '알약']];
-  function clipPath(k) {
+  // w·h: 요소 크기(px). path()는 % 단위를 못 써서 하트는 실제 크기로 그림, 둥근 모서리는 가로세로가 달라도 같은 둥글기
+  const HEART = [[0.5, 0.95], ['C', 0.1, 0.62, -0.05, 0.28, 0.25, 0.12], ['C', 0.4, 0.03, 0.5, 0.2, 0.5, 0.3], ['C', 0.5, 0.2, 0.6, 0.03, 0.75, 0.12], ['C', 1.05, 0.28, 0.9, 0.62, 0.5, 0.95]];
+  function clipPath(k, w, h) {
+    w = w || 100; h = h || 100; const f = v => Math.round(v * 100) / 100;
     switch (k) {
       case 'circle': return 'ellipse(50% 50% at 50% 50%)';
-      case 'rounded': return 'inset(0 round 12%)';
+      case 'rounded': return `inset(0 round ${f(Math.min(w, h) * 0.12)}px)`;
       case 'pill': return 'inset(0 round 999px)';
       case 'star': return 'polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)';
       case 'hexagon': return 'polygon(25% 5%,75% 5%,100% 50%,75% 95%,25% 95%,0% 50%)';
       case 'diamond': return 'polygon(50% 0,100% 50%,50% 100%,0 50%)';
       case 'tri': return 'polygon(50% 0,100% 100%,0 100%)';
-      case 'heart': return 'path("M0.5 0.95 C0.1 0.62 -0.05 0.28 0.25 0.12 C0.4 0.03 0.5 0.2 0.5 0.3 C0.5 0.2 0.6 0.03 0.75 0.12 C1.05 0.28 0.9 0.62 0.5 0.95Z")';
+      case 'heart': return `path('M${f(HEART[0][0] * w)} ${f(HEART[0][1] * h)} ${HEART.slice(1).map(c => 'C' + [1, 3, 5].map(i => `${f(c[i] * w)} ${f(c[i + 1] * h)}`).join(' ')).join(' ')}Z')`; // 작은따옴표: style="" 속성 안에 들어가므로
       case 'blob': return 'polygon(60% 4%,86% 14%,98% 42%,90% 74%,66% 96%,34% 94%,10% 76%,2% 46%,14% 16%,36% 4%)';
       default: return '';
     }
