@@ -892,6 +892,68 @@ function libPhotoHTML() {
   return h + '<p class="hint">사진을 누르면 원본 크기(최대 2400px)로 문서에 들어갑니다. 게티이미지 사진은 도장 홍보물에만 쓰세요.</p>';
 }
 
+/* ---- 템플릿 로고 자동 배치: 나라차태권도 템플릿에 로고를 디자이너 규칙으로 넣음 ----
+   ① 도장 이름만 적힌 글자 → 로고 (위아래 여유가 있으면 한글 로고, 없으면 가로 로고)
+   ② '나라차태권도 · 연락처' 줄 → 연락처만 남기고 로고는 ③에서
+   ③ 로고가 없는 쪽 → 다른 요소와 겹치지 않는 빈 모서리에 (어린이·칭찬은 라차 로고, 상장은 육각 엠블럼)
+   ④ 상장의 '(인)' 옆 → 육각 엠블럼을 직인처럼
+   로고는 배경 없는 판을 쓰고, 그 자리 바탕색에 따라 원래 색 / 흰색(빨간 점 유지) / 전부 흰색을 고름 */
+const NAME_ONLY = /^(나라차\s*태권도|NARACHA(\s+TAEKWONDO)?)$/i, NAME_LEAD = /^나라차\s*태권도\s*[·|,]\s*/;
+const isLogoRef = s => /^asset:(brand-|logo-wordmark|backcover-logo|footer-wordmark)|^lib:brand\//.test(s || '');
+const LOGO_AR = { 'brand-horizontal': 5.19, 'brand-korean': 1.98, 'brand-hex': 0.867, 'backcover-logo': 0.957 };
+function logoRef(base, bg) { return NC.logoFor ? NC.logoFor(base, bg) : 'asset:' + base; }
+function elExtent(e) { // 요소가 실제로 차지하는 범위 (글 상자는 글자 폭으로)
+  if (e.type !== 'text' || e.vertical) return { x: e.x, y: e.y, w: e.w, h: e.h };
+  const tw = Math.min(e.w, textWidthMM(e)), lines = String(e.text || '').split('\n').length, th = Math.min(e.h, lines * e.size * 0.3528 * (e.lh || 1.3) * 1.05);
+  const x = e.align === 'center' ? e.x + (e.w - tw) / 2 : e.align === 'right' ? e.x + e.w - tw : e.x, y = e.valign === 'middle' ? e.y + (e.h - th) / 2 : e.valign === 'bottom' ? e.y + e.h - th : e.y;
+  return { x, y, w: tw, h: th };
+}
+const bgLike = (e, W, H) => e.locked || (e.type === 'shape' && (e.w >= W * 0.85 || e.h >= H * 0.85 || e.w * e.h >= W * H * 0.3)) || (e.type === 'image' && !isLogoRef(e.src) && e.w * e.h >= W * H * 0.45);
+function collides(pg, b, skip, W, H, pad = 1.5) { return pg.els.some(e => { if (e.hidden || skip.includes(e)) return false;
+  if (bgLike(e, W, H)) { if (e.type !== 'shape' || e.w >= W * 0.98 && e.h >= H * 0.98) return false; const inside = b.x >= e.x + pad && b.y >= e.y + pad && b.x + b.w <= e.x + e.w - pad && b.y + b.h <= e.y + e.h - pad, outside = b.x + b.w <= e.x || b.x >= e.x + e.w || b.y + b.h <= e.y || b.y >= e.y + e.h; return !(inside || outside); } /* 큰 바탕 상자: 가장자리에 걸치지 않게 */ const r = elExtent(e); return b.x - pad < r.x + r.w && b.x + b.w + pad > r.x && b.y - pad < r.y + r.h && b.y + b.h + pad > r.y; }); }
+function colorUnder(pg, b, skip) {
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+  for (let i = pg.els.length - 1; i >= 0; i--) { const e = pg.els[i]; if (e === skip || e.hidden || e.type === 'text' || isLogoRef(e.src)) continue; if (cx < e.x || cx > e.x + e.w || cy < e.y || cy > e.y + e.h) continue;
+    if (e.type === 'shape' && !['line', 'arrow'].includes(e.kind) && /^#[0-9a-f]{6}$/i.test(e.fill || '') && (e.opacity == null || e.opacity > 0.6)) return e.fill;
+    if (e.type === 'image' && e.w * e.h > b.w * b.h * 3) return null; }
+  return /^#[0-9a-f]{6}$/i.test(pg.bg || '') ? pg.bg : '#ffffff';
+}
+function brandize(pages, W, H, t) {
+  if (!Array.isArray(pages) || t.theme || t.lib || t.holiday) return pages;
+  const txt = (t.name || '') + ' ' + (t.kw || ''), kid = /유아|어린이|칭찬|생일|스티커|키즈|아이/.test(txt) || (t.tags && t.tags.age === '유아'), cert = t.cat === 'cert';
+  const mk = (src, b) => ({ id: uid(), type: 'image', src, x: r1(b.x), y: r1(b.y), w: r1(b.w), h: r1(b.h), rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '로고' });
+  pages.forEach(pg => {
+    let has = false;
+    pg.els.forEach(e => { if (e.type === 'image' && isLogoRef(e.src)) { has = true; if (e.src === 'asset:logo-wordmark') { const bg = colorUnder(pg, e, e); if (bg && NC.lum && NC.lum(bg) < 0.62) e.src = 'asset:logo-wordmark-white'; } } });
+    // ① 도장 이름 글자 → 로고
+    pg.els.slice().forEach(e => {
+      if (has || e.type !== 'text' || e.html || !NAME_ONLY.test(String(e.text || '').trim())) return; // 이미 로고가 있으면 이름 글자는 그대로 (로고 두 개는 군더더기)
+      const sz = e.size * 0.3528, ext = elExtent(e), cy = ext.y + ext.h / 2, bg = colorUnder(pg, ext, e);
+      const ax = lw => e.align === 'left' ? e.x : e.align === 'right' ? e.x + e.w - lw : e.x + (e.w - lw) / 2;
+      // 로고가 제 역할을 하는 최소 크기: 한글 로고 짧은 변의 7%, 가로 로고 4.5% (겹치면 작은 판으로 물러남)
+      const mn = Math.min(W, H), mg = Math.max(SAFE, mn * 0.04);
+      const place = (base, lh) => { const lw = lh * LOGO_AR[base]; let x = ax(lw), y = cy - lh / 2; x = clamp(x, mg, W - mg - lw); y = clamp(y, mg, H - mg - lh); return { base, b: { x, y, w: lw, h: lh } }; };
+      const cands = [place('brand-korean', Math.max(sz * 2.4, mn * 0.07)), place('brand-horizontal', Math.max(sz * 1.5, mn * 0.045)), place('brand-horizontal', Math.max(sz * 1.5, 3.5))];
+      const pick = cands.find(c => c.b.w <= W - 2 * mg && !collides(pg, c.b, [e], W, H, 0.8)) || cands[cands.length - 1];
+      pg.els.splice(pg.els.indexOf(e), 1, mk(logoRef(pick.base, bg), pick.b)); has = true;
+    });
+    // ② 이름이 섞인 연락처 줄
+    pg.els.forEach(e => { if (e.type === 'text' && !e.html && NAME_LEAD.test(e.text || '')) e.text = e.text.replace(NAME_LEAD, ''); });
+    // ③ 빈 모서리에 로고
+    if (!has && Math.min(W, H) >= 70) {
+      const base = cert ? 'brand-hex' : kid ? 'backcover-logo' : 'brand-horizontal', ar = LOGO_AR[base], wide = W / H > 2;
+      const lh0 = base === 'brand-horizontal' ? (wide ? H * 0.12 : Math.min(Math.max(W * 0.26, 20), 130) / ar) : Math.min(W, H) * (cert ? 0.15 : 0.17);
+      const m = Math.max(SAFE + 2, Math.min(W, H) * 0.055), order = cert ? ['tc', 'br', 'bl'] : kid ? ['br', 'bl', 'tr', 'tl'] : wide ? ['tr', 'br', 'tl', 'bl', 'tc', 'bc'] : ['tl', 'tr', 'bc', 'br', 'bl', 'tc'];
+      // 빈 자리가 없으면 크기를 줄여 가며 다시 찾음 (현수막처럼 로고가 꼭 있어야 하는 곳)
+      outer: for (const f of [1, 0.8, 0.64, 0.5]) { const lh = lh0 * f, lw = lh * ar, S = { tl: [m, m], tr: [W - m - lw, m], tc: [(W - lw) / 2, m], bl: [m, H - m - lh], br: [W - m - lw, H - m - lh], bc: [(W - lw) / 2, H - m - lh] };
+        for (const k of order) { const b = { x: S[k][0], y: S[k][1], w: lw, h: lh }; if (collides(pg, b, [], W, H)) continue; const bg = colorUnder(pg, b, null); pg.els.push(mk(base === 'brand-horizontal' ? logoRef(base, bg) : 'asset:' + base, b)); has = true; break outer; } }
+    }
+    // ④ 상장 직인
+    if (cert) pg.els.filter(e => e.type === 'text' && /\(인\)/.test(e.text || '')).forEach(e => { const ext = elExtent(e), s = Math.max(e.size * 0.3528 * 3.2, 12), b = { x: ext.x + ext.w - s * 0.55, y: ext.y + ext.h / 2 - s * 0.55, w: s * 0.867, h: s }; const st = mk('asset:brand-hex', b); st.opacity = 0.92; st.name = '직인 엠블럼'; pg.els.push(st); });
+  });
+  return pages;
+}
+
 /* ---- 템플릿 패널 이동 기록: 들어갈 때마다 남기고 '‹ 뒤로'·브라우저 뒤로로 한 단계씩 돌아감 ---- */
 let tplHist = [];
 const TPLF0 = () => ({ format: '', season: '', age: '', occasion: '', biz: '' });
@@ -913,7 +975,7 @@ function tplItems() {
   const y = doc.calendar.year || 2027;
   const themeItems = CAL.THEMES.map(th => ({ id: 'theme-' + th.id, cat: 'calendar', theme: th, name: th.name + ' 캘린더', desc: th.desc, w: 224, h: 154, build: () => { const saved = doc; const tmp = Object.assign({}, doc, { calendar: Object.assign(clone(doc.calendar), { theme: clone(th) }) }); doc = tmp; try { return CAL.buildPages(tmp, uid, { year: y, kind: 'virtue', month: 1 }).concat(CAL.buildPages(tmp, uid, { year: y, kind: 'cal', month: 1 })); } finally { doc = saved; } } }));
   const calItems = [['cal-cover', '캘린더 표지', () => CAL.buildPages(doc, uid, { year: y, kind: 'cover' })], ['cal-virtue', '인성 페이지 (1월)', () => CAL.buildPages(doc, uid, { year: y, kind: 'virtue', month: 1 })], ['cal-month', '달력 페이지 (1월)', () => CAL.buildPages(doc, uid, { year: y, kind: 'cal', month: 1 })], ['cal-back', '캘린더 뒷표지', () => CAL.buildPages(doc, uid, { year: y, kind: 'back' })]].map(([id, name, build]) => ({ id, cat: 'calpage', name, w: 224, h: 154, build }));
-  const items = themeItems.concat(calItems, NC.tpl.list.map(t => ({ id: t.id, cat: t.cat, name: t.name, w: t.w, h: t.h, tags: t.tags, kw: t.kw || t.name, responsive: t.responsive, holiday: t.holiday, build: sz => t.responsive && sz ? t.build(uid, sz) : t.build(uid, t.pal || null, { year: y }) })));
+  const items = themeItems.concat(calItems, NC.tpl.list.map(t => ({ id: t.id, cat: t.cat, name: t.name, w: t.w, h: t.h, tags: t.tags, kw: t.kw || t.name, responsive: t.responsive, holiday: t.holiday, build: sz => brandize(t.responsive && sz ? t.build(uid, sz) : t.build(uid, t.pal || null, { year: y }), sz ? sz.w : t.w, sz ? sz.h : t.h, t) })));
   // 나라차 자료실 템플릿 (동기화 폴더의 디자인자료)
   const fresh = pg => Object.assign(clone(pg), { id: uid(), els: pg.els.map(e => Object.assign(clone(e), { id: uid() })) });
   NC.lib.templates().forEach(t => items.unshift({ id: t.id, cat: t.cat, name: t.name, w: t.w, h: t.h, tags: t.tags, kw: t.kw, lib: true, build: () => t.pages.map(fresh) }));
