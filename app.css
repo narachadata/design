@@ -625,3 +625,13 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 
 /* 도구 막대 안 팔레트: 막대 단추 모양을 물려받지 않게 */
 .textbar .cpalpop{color:#222}.textbar>button.cpal{min-width:16px;width:16px;padding:0;font-size:10px;margin-left:-4px}
+#dlgTpl .tsize{margin-top:10px}#dlgTpl .tsize select{width:100%}
+
+/* 템플릿 패널 위치 표시·뒤로 */
+.tnav{position:sticky;top:-12px;z-index:3;background:var(--ui-panel,#fff);margin:-4px 0 8px;padding:6px 0 8px;border-bottom:1px solid #eceef2}
+.tnav-top{display:flex;align-items:center;gap:8px}.tnav-t{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tnav .lnk{border:0;background:none;color:#2f6fe4;cursor:pointer;font-size:12px;padding:0}
+.tchips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.tchips button{border:1px solid #d6d9e0;background:#f4f6fa;border-radius:999px;font-size:11px;padding:2px 8px;cursor:pointer}
+#tplcats{margin:6px 0 4px}
+.toast.act{display:flex;align-items:center;gap:12px}.toast.act button{border:0;background:#fff;color:#1f2430;font-weight:700;border-radius:6px;padding:4px 10px;cursor:pointer}
+.toast[hidden]{display:none!important}
