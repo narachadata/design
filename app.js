@@ -686,6 +686,23 @@ $('#btnPNG').onclick = async () => {
   catch (e) { toast('PNG 저장 실패: ' + e.message, true); } finally { tmp.remove(); setStatus(''); }
 };
 
+
+/* ---------- 패널 너비 조절 ---------- */
+(function () {
+  const root = document.documentElement;
+  try { const w = JSON.parse(localStorage.getItem('naracal-panels') || '{}'); if (w.side) root.style.setProperty('--side-w', w.side + 'px'); if (w.insp) root.style.setProperty('--insp-w', w.insp + 'px'); } catch (e) {}
+  function save() { try { localStorage.setItem('naracal-panels', JSON.stringify({ side: parseInt(getComputedStyle(root).getPropertyValue('--side-w')), insp: parseInt(getComputedStyle(root).getPropertyValue('--insp-w')) })); } catch (e) {} }
+  [['rszL', '--side-w', 1, 180, 520], ['rszR', '--insp-w', -1, 240, 560]].forEach(([id, v, dir, min, max]) => {
+    const h = document.getElementById(id); if (!h) return;
+    h.addEventListener('pointerdown', e => {
+      e.preventDefault(); const x0 = e.clientX, w0 = parseInt(getComputedStyle(root).getPropertyValue(v)); h.classList.add('on'); h.setPointerCapture(e.pointerId);
+      const mv = ev => { root.style.setProperty(v, clamp(w0 + dir * (ev.clientX - x0), min, max) + 'px'); };
+      const up = () => { h.classList.remove('on'); h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); save(); fitCanvas(); renderThumbs(); };
+      h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up);
+    });
+    h.addEventListener('dblclick', () => { root.style.setProperty(v, (dir === 1 ? 260 : 320) + 'px'); save(); fitCanvas(); renderThumbs(); });
+  });
+})();
 /* ---------- 기타 ---------- */
 let toastTimer; function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, err ? 5000 : 2200); }
 
