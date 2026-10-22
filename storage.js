@@ -103,6 +103,9 @@ NC.store = (function () {
   async function snapshot(docId, text, memo) {
     const d = await snapDir(docId, true); if (!d) return false;
     const t = new Date(), p2 = n => String(n).padStart(2, '0'); const stamp = `${t.getFullYear()}${p2(t.getMonth() + 1)}${p2(t.getDate())}-${p2(t.getHours())}${p2(t.getMinutes())}${p2(t.getSeconds())}`;
+    // 그림(data URL)은 그림 폴더에 한 번만 두고, 버전 파일에는 그림 이름만 (사진 많은 캘린더도 드라이브를 덜 차지)
+    let j = null; try { j = JSON.parse(text); } catch (e) {}
+    if (j && j.assets && Object.keys(j.assets).length) { const ad = await d.getDirectoryHandle('그림', { create: true }); for (const [k, v] of Object.entries(j.assets)) { try { await ad.getFileHandle(k + '.txt'); } catch (e) { const fh = await ad.getFileHandle(k + '.txt', { create: true }); const ww = await fh.createWritable(); await ww.write(v); await ww.close(); } } j.assetRefs = Object.keys(j.assets); delete j.assets; text = JSON.stringify(j); }
     const h = await d.getFileHandle(`${stamp}_${clean(pcName())}${memo ? '_' + clean(memo) : ''}.json`, { create: true }); const w = await h.createWritable(); await w.write(text); await w.close();
     const all = (await listSnapshots(docId)); for (const x of all.slice(SNAP_KEEP)) { try { await d.removeEntry(x.name); } catch (e) {} }
     return true;
@@ -113,7 +116,11 @@ NC.store = (function () {
     for await (const [name, h] of d.entries()) { const m = name.match(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)(\d\d)_([^_]*)(?:_(.*))?\.json$/); if (!m || h.kind !== 'file') continue; out.push({ name, handle: h, time: new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime(), pc: m[7], memo: m[8] || '' }); }
     return out.sort((a, b) => b.time - a.time);
   }
-  async function readSnapshot(x) { const f = await x.handle.getFile(); return Object.assign(JSON.parse(await f.text()), { _size: f.size }); }
+  async function readSnapshot(x, docId) {
+    const f = await x.handle.getFile(); const j = Object.assign(JSON.parse(await f.text()), { _size: f.size });
+    if (j.assetRefs) { j.assets = {}; let ad = null; try { ad = await (await snapDir(docId || j.docId, false)).getDirectoryHandle('그림'); } catch (e) {} for (const k of j.assetRefs) { try { j.assets[k] = await (await (await ad.getFileHandle(k + '.txt')).getFile()).text(); } catch (e) {} } delete j.assetRefs; }
+    return j;
+  }
   async function disconnect() { state.handle = null; state.fileName = ''; state.lastMod = 0; adopt(null); await idbDel('fileHandle'); }
   // 다른 PC(동기화 폴더)에서 파일이 바뀌었는지 확인
   async function checkExternal() {
