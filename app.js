@@ -278,9 +278,11 @@ function formatGuides() {
 function safeMM() { return SAFE_BY[doc.fmt] || (Math.max(doc.w, doc.h) >= 2000 ? 30 : SAFE); }
 function showGuides() { try { return localStorage.getItem('naracal-guides') !== '0'; } catch (e) { return true; } }
 document.addEventListener('change', e => { if (e.target.id === 'guideToggle') { try { localStorage.setItem('naracal-guides', e.target.checked ? '1' : '0'); } catch (err) {} renderOverlay(); } });
+// 쪽을 거의 다 덮는 잠긴 배경: 클릭이 통과해 그 위에서 끌어 고르기가 됨 (레이어 목록이나 우클릭으로는 고를 수 있음)
+const lockedBg = el => el.locked && el.w * el.h >= doc.w * doc.h * 0.6;
 function renderOverlay(guides) {
   const o = $('#ovl'); const els = selEls(); let h = '';
-  els.forEach(el => { const single = els.length === 1; h += `<div class="sel${single ? '' : ' multi'}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map(d => `<div class="h ${d}" data-h="${d}"></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; h += '</div>'; });
+  els.forEach(el => { const single = els.length === 1; h += `<div class="sel${single ? '' : ' multi'}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map(d => `<div class="h ${d}" data-h="${d}"></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; if (el.locked) h += `<button class="lockbadge" data-unlock="${el.id}" title="잠금 풀기 (Ctrl+L)">🔒 잠금 풀기</button>`; h += '</div>'; });
   if (els.length > 1) { const bx = Math.min(...els.map(e => e.x)), by = Math.min(...els.map(e => e.y)), bw = Math.max(...els.map(e => e.x + e.w)) - bx, bh = Math.max(...els.map(e => e.y + e.h)) - by; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm">${els.some(e => e.locked) ? '' : ['nw', 'ne', 'se', 'sw'].map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="함께 크기 조절 (비율 유지)"></div>`).join('')}</div>`; }
   (guides || []).forEach(g => { h += g.v != null ? `<div class="guide v" style="left:${g.v}mm"></div>` : `<div class="guide h" style="top:${g.h}mm"></div>`; });
   h += calOverlay(); h += userGuidesHTML(); try { if (showRulers()) requestAnimationFrame(drawRulers); } catch (e) {} // 고른 요소 범위를 눈금자에 표시
@@ -414,7 +416,7 @@ wrap.addEventListener('pointerdown', e => {
   if (hd && sel.length === 1) { const el = find(sel[0]); drag = { kind: hd.dataset.h === 'rot' ? 'rot' : 'resize', dir: hd.dataset.h, el, start: p, o: clone(el), cx: el.x + el.w / 2, cy: el.y + el.h / 2, moved: false }; e.preventDefault(); return; }
   const gl = e.target.closest('.ovl .cgl');
   if (gl && sel.length === 1) { const el = find(sel[0]); const G = calGeom(el); const isC = gl.dataset.cgl[0] === 'c', i = Number(gl.dataset.cgl.slice(1)); drag = { kind: 'cgl', el, isC, i, G, start: p, moved: false, w0: (isC ? G.colW : G.rowH).slice() }; e.preventDefault(); return; }
-  let hitNode = e.target; const dom = (() => { const seen = new Set(); for (const n of document.elementsFromPoint(e.clientX, e.clientY)) { const d = n.closest && n.closest('#canvas .el'); if (!d || seen.has(d)) continue; seen.add(d); const x = find(d.dataset.id); if (x && (!x.locked || sel.includes(x.id))) { hitNode = n; return d; } } return null; })();
+  let hitNode = e.target; const dom = (() => { const seen = new Set(); for (const n of document.elementsFromPoint(e.clientX, e.clientY)) { const d = n.closest && n.closest('#canvas .el'); if (!d || seen.has(d)) continue; seen.add(d); const x = find(d.dataset.id); if (x && (!x.locked || sel.includes(x.id) || !lockedBg(x))) { hitNode = n; return d; } } return null; })();
   if (dom) {
     const id = dom.dataset.id, el = find(id); const was = sel.includes(id);
     // 고른 달력의 칸 위를 누르면 칸 선택 (요일 줄을 누르면 달력 이동)
@@ -426,7 +428,7 @@ wrap.addEventListener('pointerdown', e => {
     if (e.shiftKey) { sel = was ? sel.filter(i => !ids.includes(i)) : sel.concat(ids.filter(i => !sel.includes(i))); select(sel); }
     else if (!was) select(ids);
     if (el.type === 'cal' && was && !e.shiftKey) { const cell = e.target.closest('.cell'); if (cell && cell.dataset.day) { selDay = Number(cell.dataset.day); renderInspector(); const ds = $('#daySel'); if (ds) ds.scrollIntoView({ block: 'center' }); } }
-    if (el.locked) return;
+    if (el.locked) { drag = { kind: 'marq', start: p, moved: false, base: [] }; e.preventDefault(); return; } // 잠긴 요소: 골라지기만 하고 옮겨지지 않음, 끌면 영역 고르기
     let dup = null; if (e.altKey && !e.shiftKey) { // Alt+끌기: 제자리에 복제한 뒤 복제본을 옮김
       const gmap = {}; const ids = selEls().filter(x => !x.locked).map(o => { const n = clone(o); n.id = uid(); delete n.gen; if (n.group) { gmap[n.group] = gmap[n.group] || uid(); n.group = gmap[n.group]; } page().els.push(n); return n.id; }); dup = { ids, orig: sel.slice() }; sel = ids; renderCanvas(); }
     drag = { kind: 'move', dup, reduceTo: (was && !e.shiftKey && !e.altKey && sel.length > ids.length) ? ids : null, els: selEls().filter(x => !x.locked), start: p, orig: selEls().map(x => ({ id: x.id, x: x.x, y: x.y })), moved: false };
@@ -1105,6 +1107,15 @@ function renderWizard() {
 }
 
 /* ======================= 속성 패널 ======================= */
+const presetsOpen = () => { try { return localStorage.getItem('naracal-presets-open') !== '0'; } catch (e) { return true; } };
+// 잠금 풀기·잠그기 (속성 창 단추, 선택 테두리의 잠금 단추 공용)
+function setLock(ids, on) { ids.forEach(id => { const el = find(id); if (el) el.locked = on; }); commit(); renderOverlay(); renderInspector(); if (sideTab === 'layers') renderSide(); toast(on ? '잠갔습니다 (Ctrl+L로 풀기)' : '잠금을 풀었습니다'); }
+document.addEventListener('click', e => {
+  const t = e.target;
+  if (t.closest && t.closest('#presetFold')) { const open = !presetsOpen(); try { localStorage.setItem('naracal-presets-open', open ? '1' : '0'); } catch (err) {} renderInspector(); return; }
+  if (t.closest && t.closest('#elUnlock')) { setLock(sel, false); return; }
+  if (t.closest && t.closest('#elLock')) { const on = !selEls().every(x => x.locked); setLock(sel, on); }
+}, true);
 const F = (label, k, v, o = {}) => {
   const val = v == null ? '' : v;
   if (o.type === 'textarea') return `<label class="f"><span>${label}</span><textarea data-k="${k}" rows="${o.rows || 3}">${esc(val)}</textarea></label>`;
@@ -1176,14 +1187,15 @@ function renderInspector() {
     return;
   }
   const el = els[0];
-  let h = `<h2>${esc(elName(el))} <span class="row"><button class="btn sm icon ${el.locked ? 'on' : ''}" data-k="locked" data-toggle="1" title="잠금">${el.locked ? '🔒' : '🔓'}</button></span></h2>`;
-  const geo = `<h3>위치·크기</h3><div class="grid4">${F('X', 'x', el.x, { type: 'number', step: 0.5 })}${F('Y', 'y', el.y, { type: 'number', step: 0.5 })}${F('너비', 'w', el.w, { type: 'number', step: 0.5 })}${F('높이', 'h', el.h, { type: 'number', step: 0.5 })}</div>${['image', 'shape', 'path', 'chart'].includes(el.type) ? F('너비·높이 비율 고정 (숫자로 바꿀 때)', 'ratioLock', el.ratioLock == null ? el.type === 'image' : el.ratioLock, { type: 'check' }) : ''}${F('회전', 'rot', el.rot || 0, { type: 'angle', def: 0 })}${F('투명도', 'opacity', el.opacity == null ? 1 : el.opacity, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 1 })}${el.type !== 'text' ? F('혼합 모드', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['darken', '어둡게'], ['lighten', '밝게'], ['difference', '차이']] }) : ''}${F('이름', 'name', el.name)}`;
+  let h = el.type === 'text' ? `<h2 class="phead"><span>스타일 프리셋</span><button class="btn sm icon" id="presetFold" title="스타일 프리셋 ${presetsOpen() ? '접기' : '펴기'}">${presetsOpen() ? '▴' : '▾'}</button></h2>` : `<h2>${esc(elName(el))}</h2>`;
+  if (el.locked) h += `<div class="lockbar">🔒 잠긴 요소입니다 — 옮기거나 크기를 바꿀 수 없습니다<button class="btn sm" id="elUnlock">잠금 풀기</button></div>`;
+  const geo = `<h3 class="phead"><span>위치·크기</span><button class="btn sm" id="elLock" title="Ctrl+L">${el.locked ? '🔓 잠금 풀기' : '🔒 잠그기'}</button></h3><div class="grid4">${F('X', 'x', el.x, { type: 'number', step: 0.5 })}${F('Y', 'y', el.y, { type: 'number', step: 0.5 })}${F('너비', 'w', el.w, { type: 'number', step: 0.5 })}${F('높이', 'h', el.h, { type: 'number', step: 0.5 })}</div>${['image', 'shape', 'path', 'chart'].includes(el.type) ? F('너비·높이 비율 고정 (숫자로 바꿀 때)', 'ratioLock', el.ratioLock == null ? el.type === 'image' : el.ratioLock, { type: 'check' }) : ''}${F('회전', 'rot', el.rot || 0, { type: 'angle', def: 0 })}${F('투명도', 'opacity', el.opacity == null ? 1 : el.opacity, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 1 })}${el.type !== 'text' ? F('혼합 모드', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['darken', '어둡게'], ['lighten', '밝게'], ['difference', '차이']] }) : ''}${F('이름', 'name', el.name)}`;
   const shadowBlock = (pfx) => `<details class="fx" ${el.shadow ? 'open' : ''}><summary>${F('그림자', 'shadow', el.shadow, { type: 'check' })}</summary>${F('위치 — 점을 끌어 조정', 'shX,shY', [el.shX == null ? 0.6 : el.shX, el.shY == null ? 0.7 : el.shY], { type: 'xy', range: 4, step: 0.1, presets: [['아래', 0, 1], ['오른쪽 아래', 0.8, 0.8], ['왼쪽 아래', -0.8, 0.8], ['위', 0, -1], ['가운데(번짐만)', 0, 0]] })}
     ${F('번짐', 'shB', el.shB == null ? 0.5 : el.shB, { type: 'slider', min: 0, max: 6, step: 0.1, unit: 'mm', def: 0.5 })}${F('진하기', 'shA', el.shA == null ? 0.3 : el.shA, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 0.3 })}
     ${F('그림자 색', 'shC', el.shC || '#000000', { type: 'color' })}<div class="shq"><span>빠른 설정</span>${[['부드럽게', 0.4, 0.8, 2.2, 0.22], ['또렷하게', 0.6, 0.7, 0.2, 0.45], ['강하게', 1.2, 1.4, 0.6, 0.6], ['떠 있게', 0, 2.2, 3.5, 0.3]].map(([t, x, y, b, a]) => `<button type="button" class="btn sm" data-shq="${x},${y},${b},${a}">${t}</button>`).join('')}</div></details>`;
   const fillBlock = `<div class="seg">${[['solid', '단색'], ['gradient', '그라데이션']].map(([a, t]) => `<button data-set="fillType:${a}" aria-pressed="${(el.fillType || 'solid') === a}">${t}</button>`).join('')}</div>${(el.fillType || 'solid') === 'gradient' ? `<div class="grid3">${F('시작 색', 'g1', el.g1 || '#2f5bea', { type: 'color' })}${F('끝 색', 'g2', el.g2 || '#e0564b', { type: 'color' })}</div>${F('방향', 'gAngle', el.gAngle == null ? 90 : el.gAngle, { type: 'angle', def: 90 })}${el.type === 'shape' || el.type === 'path' ? F('모양', 'gKind', el.gKind || 'linear', { type: 'select', options: [['linear', '직선'], ['radial', '원형']] }) : ''}` : ''}`;
   if (el.type === 'text') {
-    h += `<h3>스타일 프리셋</h3><div class="tstyles sm">${FX.TEXT_PRESETS.map(p => `<button data-preset="${p.id}" class="tsb"><span style="${FX.textStyle(Object.assign({}, TEXT_DEF, { font: 'Jua', size: 13, weight: 800, align: 'center' }, p.st))}">${esc(p.name)}</span></button>`).join('')}</div>
+    h += `<div class="tstyles sm" id="presetGrid" ${presetsOpen() ? '' : 'hidden'}>${FX.TEXT_PRESETS.map(p => `<button data-preset="${p.id}" class="tsb"><span style="${FX.textStyle(Object.assign({}, TEXT_DEF, { font: 'Jua', size: 13, weight: 800, align: 'center' }, p.st))}">${esc(p.name)}</span></button>`).join('')}</div>
     <h3>글자</h3>${el.html && el.htmlFor === el.text ? `<label class="f"><span>내용 <small>부분 서식이 있어 캔버스에서 두 번 눌러 고칩니다</small></span><textarea rows="3" readonly>${esc(el.text)}</textarea></label><button class="btn sm" data-set="html:">부분 서식 지우고 여기서 편집</button>` : F('내용', 'text', el.text, { type: 'textarea', rows: 3 })}
     <div class="row"><label class="f" style="flex:1;margin:0"><span>글꼴</span>${fontPicker('font', el.font)}</label><button class="btn sm" id="fontBrowse" style="margin-top:17px">둘러보기</button></div>
     ${F('글자 크기', 'size', el.size, { type: 'slider', min: 4, max: Math.max(160, el.size || 0), step: 0.5, unit: 'pt', def: 12 })}
@@ -1761,6 +1773,7 @@ function renderAI() {
     <div class="grid2">${aiF('Claude API 키', 'anthropicKey', 'password')}${aiF('Claude 모델', 'claudeModel')}${aiF('Gemini API 키', 'geminiKey', 'password')}${aiF('Gemini 이미지 모델', 'geminiModel')}
     <label class="f"><span>이미지 비율</span><select data-ai="aspect">${['1:1', '3:4', '4:3', '2:3', '3:2', '9:16', '16:9'].map(a => `<option ${AI.cfg.aspect === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
     <label class="f"><span>이미지 크기</span><select data-ai="size">${['1K', '2K', '4K'].map(a => `<option ${AI.cfg.size === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label></div>
+    <div class="keysaved" id="keySaved">${keySavedText()}</div>
     <p class="hint">모델 이름: Gemini는 gemini-nano-banana-2.1(기본), gemini-3.1-flash-image, gemini-3-pro-image, gemini-2.5-flash-image(구형). Claude는 claude-opus-5-5(기본), claude-sonnet-5-5. Claude 요청에는 안전 거절 시 다른 모델로 자동 전환되는 fallbacks 설정이 켜져 있습니다.</p>`;
     return;
   }
@@ -1867,7 +1880,9 @@ function aiComposePrompt(mv, withRef) {
 function aiName(mv) { const t = k => (AI_MOVES.find(x => x[0] === k) || [])[1] || ''; const w = (AI_WHO.find(x => x[0] === aiStudio.who) || [])[1]; return `${t(mv) || 'AI 그림'} · ${aiStudio.style === 'mascot' ? '라차' : w} (${(AI_STYLES.find(x => x[0] === aiStudio.style) || [])[1]})`; }
 function aiKw(mv) { const S = aiStudio; return ['AI', (AI_STYLES.find(x => x[0] === S.style) || [])[1], (AI_WHO.find(x => x[0] === S.who) || [])[1], (AI_BELT.find(x => x[0] === S.belt) || [])[1], (AI_MOVES.find(x => x[0] === mv) || [])[1], S.extra].filter(Boolean).join(' '); }
 function aiF(label, key, type) { return `<label class="f"><span>${label}</span><input type="${type || 'text'}" data-ai="${key}" value="${esc(AI.cfg[key])}" autocomplete="off"></label>`; }
-$('#aiBody').addEventListener('input', e => { const k = e.target.dataset.ai; if (k) { AI.cfg[k] = e.target.value.trim(); AI.saveCfg(); } });
+// 키 저장 표시: 이 브라우저에 바로 저장되고, 동기화 폴더가 있으면 몇 초 안에 설정 파일로 올라가 다른 PC에도 적용됨
+function keySavedText() { const has = [AI.cfg.geminiKey && 'Gemini', AI.cfg.anthropicKey && 'Claude'].filter(Boolean); if (!has.length) return '아직 저장된 키가 없습니다. 칸에 붙여 넣으면 바로 저장됩니다.'; return `✓ ${has.join('·')} 키 저장됨 — ${store.state.dir ? '동기화 폴더(구글 드라이브)에도 저장되어 같은 폴더를 연결한 다른 PC에서도 그대로 쓰입니다' : '이 브라우저에 저장됨 · 다른 PC에서도 쓰려면 저장 ▾ → 동기화 폴더를 연결하세요'}`; }
+$('#aiBody').addEventListener('input', e => { const k = e.target.dataset.ai; if (k) { AI.cfg[k] = e.target.value.trim(); AI.saveCfg(); const ks = $('#keySaved'); if (ks) ks.textContent = keySavedText(); if (/Key$/.test(k) && store.state.dir) setTimeout(() => store.pushSettings().catch(() => {}), 300); } });
 $('#aiBody').addEventListener('change', e => { const k = e.target.dataset.ai; if (k) { AI.cfg[k] = e.target.value.trim(); AI.saveCfg(); } });
 async function runAI(fn) { const busy = $('#aiBusy'); const btns = $$('#aiBody button'); btns.forEach(b => b.disabled = true); if (busy) busy.innerHTML = '<span class="spin"></span>요청 중…'; try { await fn(); if (busy) busy.textContent = '완료'; } catch (err) { if (busy) busy.textContent = ''; toast(err.message, true); } finally { btns.forEach(b => b.disabled = false); } }
 
@@ -2209,7 +2224,7 @@ function ctxDo(k) {
 function flipSel(dir) { const els = selEls().filter(x => !x.locked && x.type === 'image'); if (!els.length) { toast('뒤집기는 그림에 쓸 수 있습니다', true); return; } els.forEach(x => { if (dir === 'h') x.flip = !x.flip; else x.flipV = !x.flipV; }); commit(); rerender(); }
 $('#scroller').addEventListener('contextmenu', e => {
   if (e.target.closest('#cellEd') || editing) return; e.preventDefault();
-  const d = (document.elementsFromPoint(e.clientX, e.clientY).map(n => n.closest && n.closest('#canvas .el')).filter(Boolean)).find(x => { const el = find(x.dataset.id); return el && (!el.locked || sel.includes(el.id)); });
+  const d = (document.elementsFromPoint(e.clientX, e.clientY).map(n => n.closest && n.closest('#canvas .el')).filter(Boolean)).find(x => { const el = find(x.dataset.id); return el && (!el.locked || sel.includes(el.id) || !lockedBg(el)); });
   if (d && !sel.includes(d.dataset.id)) select(groupOf(d.dataset.id));
   if (!d) { if (sel.length) select([]); openCtx(e, [['paste', '붙여넣기', 'Ctrl+V', !clip], ['pastein', '같은 자리에 붙여넣기', 'Ctrl+Shift+V', !clip], '-', ['all', '모두 선택', 'Ctrl+A'], ['find', '찾아 바꾸기…', 'Ctrl+F'], '-', ['rulers', showRulers() ? '눈금자 끄기' : '눈금자 보이기', 'Shift+R'], ...(doc.guides && (doc.guides.x.length || doc.guides.y.length) ? [['clrguides', '안내선 모두 지우기', '']] : [])]); return; }
   const els = selEls(), img = els.length === 1 && els[0].type === 'image', locked = els.every(x => x.locked);
@@ -2572,6 +2587,7 @@ function startGuide(e, axis, idx) {
 function showGuideTip(ev, t) { let d = $('#guideTip'); if (!d) { d = document.createElement('div'); d.id = 'guideTip'; document.body.appendChild(d); } d.textContent = t; d.style.left = (ev.clientX + 12) + 'px'; d.style.top = (ev.clientY + 12) + 'px'; d.hidden = false; }
 function hideGuideTip() { const d = $('#guideTip'); if (d) d.hidden = true; }
 function userGuidesHTML() { const g = doc.guides; if (!g || !showGuides()) return ''; return (g.x || []).map((v, i) => `<div class="uguide ugv" data-ug="x:${i}" style="left:${v}mm;top:-60mm;height:${doc.h + 120}mm" title="끌어서 옮기기 · 눈금자로 끌어 지우기"></div>`).join('') + (g.y || []).map((v, i) => `<div class="uguide ugh" data-ug="y:${i}" style="top:${v}mm;left:-60mm;width:${doc.w + 120}mm" title="끌어서 옮기기 · 눈금자로 끌어 지우기"></div>`).join(''); }
+wrap.addEventListener('pointerdown', e => { const ub = e.target.closest && e.target.closest('.lockbadge'); if (ub) { e.preventDefault(); e.stopPropagation(); setLock([ub.dataset.unlock], false); } }, true);
 wrap.addEventListener('pointerdown', e => { const u = e.target.closest && e.target.closest('.uguide'); if (!u || e.button !== 0) return; const [ax, i] = u.dataset.ug.split(':'); startGuide(e, ax, Number(i)); }, true);
 $('#scroller').addEventListener('scroll', () => { if (showRulers()) drawRulers(); }, { passive: true });
 window.addEventListener('resize', () => { if (showRulers()) drawRulers(); });
