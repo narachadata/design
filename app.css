@@ -361,3 +361,13 @@ details.fx>.grid2,details.fx>.grid3,details.fx>.grid4,details.fx>label,details.f
 .ie-wrap canvas{display:block;image-rendering:auto}
 .ie-wrap #ieOverlay{position:absolute;left:10px;top:10px;cursor:crosshair;touch-action:none}
 .ie-wrap.picking #ieOverlay{cursor:copy}
+
+/* 템플릿 패널: 필터·가로 줄·지연 미리보기 */
+.facets{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.facets select{flex:1 1 45%;min-width:0;padding:5px 6px;border:1px solid var(--ui-line2);border-radius:6px;background:#fff;font-size:12px}
+.tgal-row{display:flex;gap:8px;overflow-x:auto;padding:4px 0 8px;scroll-snap-type:x mandatory}
+.tgal-row .tcard{flex:0 0 46%;scroll-snap-align:start}
+.tgal-row .tcard.two{flex:0 0 94%}
+.tgal-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tcard.lazy .tbox{min-height:80px;background:linear-gradient(90deg,#f3f4f7,#e9ebf0,#f3f4f7);background-size:200% 100%;animation:shimmer 1.2s infinite}
+@keyframes shimmer{to{background-position:-200% 0}}
