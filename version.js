@@ -1,0 +1,1 @@
+window.NARACAL_VER = "20261022.1926";

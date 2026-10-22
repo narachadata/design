@@ -39,3 +39,8 @@
 | Hahmlet (함렛 (명조)) | Hahmlet.ttf | https://github.com/google/fonts/tree/main/ofl/hahmlet |
 | Nanum Gothic Coding (나눔고딕코딩) | NanumGothicCoding.ttf | https://github.com/google/fonts/tree/main/ofl/nanumgothiccoding |
 | Montserrat (Montserrat (영문·숫자)) | Montserrat.ttf | https://github.com/google/fonts/tree/main/ofl/montserrat |
+
+| Noto Serif KR (본명조) | NotoSerifKR.ttf | https://github.com/google/fonts/tree/main/ofl/notoserifkr |
+| Gasoek One (가속 원) | GasoekOne.ttf | https://github.com/google/fonts/tree/main/ofl/gasoekone |
+| NanumSquare (나눔스퀘어, OFL) | NanumSquareR/B/EB.ttf | https://github.com/moonspam/NanumSquare |
+| Pretendard GOV (OFL) | PretendardGOVVariable.woff2 | https://github.com/orioncactus/pretendard |
