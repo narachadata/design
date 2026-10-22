@@ -77,8 +77,10 @@
       els.push(T(c.eyebrow, m, y * u, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3.4 * u, weight: 700, color: P_.ac, ls: 0.3, align: 'center' })); y += 5;
       const tS = tall ? 15 : 12; els.push(T(c.title.replace('\n', ' '), m, y * u, w - 2 * m, (tS * 0.45 + 2) * u, { font: fT, size: tS * u, weight: 800, color: dark ? WHITE : P_.fg, lh: 1.1, align: 'center', name: '제목' })); y += tS * 0.45 + 3;
       els.push(T(c.sub, m, y * u, w - 2 * m, 6 * u, { font: fB, size: 4.4 * u, weight: 500, color: sub, align: 'center', name: '부제' })); y += 7;
-      const bodyH = c.body.split('\n').length * 3.9 * 0.3528 * 1.7 + 2;
-      if (y + bodyH <= (c.cta ? ctaY : Hu - 10) - 1) els.push(T(c.body, m + 6 * u, y * u, w - 2 * m - 12 * u, bodyH * u, { font: fB, size: 3.9 * u, lh: 1.7, weight: 500, color: tx, align: 'center', name: '본문' }));
+      // 본문이 다 안 들어가면(정사각 SNS) 가장 중요한 한 줄(문의·일시·기간·접수)만 남김
+      let bodyT = c.body, bodyH = bodyT.split('\n').length * 3.9 * 0.3528 * 1.7 + 2; const lim = (c.cta ? ctaY : Hu - 10) - 1;
+      if (y + bodyH > lim) { const ls_ = c.body.split('\n'); bodyT = ls_.find(l => /문의|일시|기간|접수|오픈|—/.test(l)) || ls_[ls_.length - 1]; bodyH = 3.9 * 0.3528 * 1.7 + 2; }
+      if (y + bodyH <= lim) els.push(T(bodyT, m + 6 * u, y * u, w - 2 * m - 12 * u, bodyH * u, { font: fB, size: 3.9 * u, lh: 1.7, weight: 500, color: tx, align: 'center', name: '본문' }));
       if (c.cta) { els.push(S('pill', w / 2 - 20 * u, ctaY * u, 40 * u, 8 * u, { fill: P_.fg })); els.push(T(c.cta, w / 2 - 20 * u, (ctaY + 1.5) * u, 40 * u, 5 * u, { font: fB, size: 4 * u, weight: 700, color: P_.ac, align: 'center', valign: 'middle', name: '버튼' })); }
       els.push(motif(1, m, m, 10 * u)); els.push(motif(2, w - m - 10 * u, m * 0.8, 10 * u)); els.push(motif(3, m * 0.8, h - m - 12 * u, 9 * u));
       els.push(T(o.biz.name, m, h - m - 3 * u, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3 * u, weight: 700, color: dark ? WHITE : P_.fg, align: 'center', ls: 0.2 }));
