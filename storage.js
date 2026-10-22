@@ -186,9 +186,9 @@ NC.store = (function () {
   async function inFolder(h) { if (!state.dir || !h) return false; try { return !!(await state.dir.resolve(h)); } catch (e) { return false; } }
   async function openHandle(h) { state.handle = h; state.fileName = h.name; await idbSet('fileHandle', h); return readFile(); }
   // 현재 문서를 폴더에 새 파일로 저장하고 연결 (이름이 겹치면 번호를 붙임)
-  async function uniqueName(title) {
+  async function uniqueName(title, dir) {
     const base = (title || 'design').replace(/[\\/:*?"<>|]/g, '_').trim() || 'design';
-    const names = new Set((await listDocs()).map(d => d.name));
+    const names = new Set(); for await (const [n] of (dir || state.dir).entries()) names.add(n);
     let name = base + '.design.json'; for (let i = 2; names.has(name); i++) name = `${base} (${i}).design.json`;
     return name;
   }
@@ -198,14 +198,83 @@ NC.store = (function () {
     const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign({}, data, { saveId: '', lineage: [], savedBy: pcName(), savedAt: Date.now() }))); await w.close();
     return h;
   }
-  async function saveIntoFolder(doc) {
-    const h = await state.dir.getFileHandle(await uniqueName(doc.name), { create: true });
+  async function saveIntoFolder(doc, path) {
+    const dir = path && path.length ? await dirAt(path) : state.dir;
+    const h = await dir.getFileHandle(await uniqueName(doc.name, dir), { create: true });
     state.handle = h; state.fileName = h.name; state.lastMod = 0; await idbSet('fileHandle', h);
     await writeFile(doc);
     return h;
   }
 
-  return { state, idbGet, idbSet, idbDel, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
+  /* ---------- 내 드라이브: 동기화 폴더 안의 하위 폴더 관리 ---------- */
+  const HIDDEN = new Set(['디자인자료', '휴지통']);
+  const TRASH = '휴지통';
+  async function dirAt(path) { let d = state.dir; for (const p of path || []) d = await d.getDirectoryHandle(p); return d; }
+  async function countItems(d) { let n = 0; for await (const [name, h] of d.entries()) if ((h.kind === 'directory' && !name.startsWith('.')) || /\.design\.json$/i.test(name)) n++; return n; }
+  // 한 폴더의 하위 폴더와 디자인 목록
+  async function listDir(path, opts) {
+    opts = opts || {};
+    const d = await dirAt(path); const folders = [], docs = [];
+    for await (const [name, h] of d.entries()) {
+      if (name.startsWith('.')) continue;
+      if (h.kind === 'directory') { if (!opts.showHidden && !path.length && HIDDEN.has(name)) continue; folders.push({ name, handle: h, path: path.concat(name), count: await countItems(h).catch(() => 0) }); }
+      else if (/\.design\.json$/i.test(name)) { try { const f = await h.getFile(); docs.push({ name, handle: h, path, lastModified: f.lastModified, size: f.size }); } catch (e) {} }
+    }
+    folders.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    docs.sort((a, b) => b.lastModified - a.lastModified);
+    return { folders, docs };
+  }
+  // 모든 폴더를 돌며 디자인 찾기 (검색·최근 목록용, 휴지통·자료실 제외)
+  async function walkDocs(path, out) {
+    out = out || []; path = path || [];
+    const { folders, docs } = await listDir(path); out.push(...docs);
+    for (const f of folders) await walkDocs(f.path, out);
+    return out;
+  }
+  async function allFolders(path, out) {
+    out = out || [[]]; path = path || [];
+    const { folders } = await listDir(path);
+    for (const f of folders) { out.push(f.path); await allFolders(f.path, out); }
+    return out;
+  }
+  async function makeFolder(path, name) {
+    name = (name || '').replace(/[\\/:*?"<>|]/g, '_').trim(); if (!name) throw new Error('폴더 이름을 넣어 주세요');
+    const d = await dirAt(path);
+    for await (const [n] of d.entries()) if (n === name) throw new Error('같은 이름의 폴더가 이미 있습니다');
+    return d.getDirectoryHandle(name, { create: true });
+  }
+  async function copyDir(src, dst) {
+    for await (const [n, h] of src.entries()) {
+      if (h.kind === 'directory') await copyDir(h, await dst.getDirectoryHandle(n, { create: true }));
+      else { const f = await h.getFile(); const nh = await dst.getFileHandle(n, { create: true }); const w = await nh.createWritable(); await w.write(f); await w.close(); }
+    }
+  }
+  // 파일·폴더 옮기기(이름 바꾸기 포함). 브라우저가 move를 지원하지 않으면 복사 후 지움
+  async function moveEntry(entry, fromPath, toPath, newName) {
+    const src = await dirAt(fromPath), dst = await dirAt(toPath);
+    let name = newName || entry.name;
+    if (entry.kind === 'file') {
+      const base = name.replace(/\.design\.json$/i, '');
+      if (dst !== src || name !== entry.name) { let taken = false; try { await dst.getFileHandle(name); taken = true; } catch (e) {} if (taken) name = await uniqueName(base, dst); }
+    }
+    try { if (entry.move) { await entry.move(dst, name); return entry; } } catch (e) {}
+    if (entry.kind === 'file') {
+      const f = await entry.getFile(); const nh = await dst.getFileHandle(name, { create: true });
+      const w = await nh.createWritable(); await w.write(f); await w.close();
+      await src.removeEntry(entry.name); return nh;
+    }
+    const nd = await dst.getDirectoryHandle(name, { create: true }); await copyDir(entry, nd);
+    await src.removeEntry(entry.name, { recursive: true }); return nd;
+  }
+  async function toTrash(entry, fromPath) {
+    const t = await state.dir.getDirectoryHandle(TRASH, { create: true });
+    let name = entry.name, taken = false; try { entry.kind === 'file' ? await t.getFileHandle(name) : await t.getDirectoryHandle(name); taken = true; } catch (e) {}
+    if (taken) name = entry.kind === 'file' ? await uniqueName(name.replace(/\.design\.json$/i, ''), t) : `${name} (${Date.now() % 100000})`;
+    return moveEntry(entry, fromPath, [TRASH], name);
+  }
+  async function emptyEntry(name) { const t = await state.dir.getDirectoryHandle(TRASH); await t.removeEntry(name, { recursive: true }); }
+
+  return { state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
     writeCopy, pcName, setPcName, adopt, descends,
     connectFolder, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
 })();
