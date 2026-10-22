@@ -635,3 +635,11 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 #tplcats{margin:6px 0 4px}
 .toast.act{display:flex;align-items:center;gap:12px}.toast.act button{border:0;background:#fff;color:#1f2430;font-weight:700;border-radius:6px;padding:4px 10px;cursor:pointer}
 .toast[hidden]{display:none!important}
+
+/* 잠금 표시·스타일 프리셋 접기 */
+.ins h2.phead,.ins h3.phead,#inspector .phead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#inspector .lockbar{display:flex;align-items:center;gap:8px;justify-content:space-between;background:#FFF4E5;border:1px solid #F5C98B;color:#7A4A10;border-radius:8px;padding:6px 8px;font-size:12px;margin:0 0 10px}
+.ovl .lockbadge{position:absolute;right:0;top:0;transform:translateY(-110%) scale(calc(1 / var(--k,1)));transform-origin:100% 100%;pointer-events:auto;border:0;background:#1f2430;color:#fff;font:600 11px/1 var(--font-ui,sans-serif);padding:5px 8px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.ovl .lockbadge:hover{background:#2f5bea}
+
+#aiBody .keysaved{margin-top:8px;font-size:12px;color:#1b7f3b;background:#eaf7ee;border-radius:8px;padding:7px 10px}
