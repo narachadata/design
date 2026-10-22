@@ -265,6 +265,15 @@ function fitCanvas() {
 const SAFE = 3;
 // 형식별 안전 여백(mm): 현수막은 미싱·아일렛, X배너는 거치대 자리. 나머지는 3mm
 const SAFE_BY = { banner: 40, banner3: 30, 'banner-v': 30, xbanner: 25, 'sign-a1': 10 };
+// 형식별 안내선: 도련이 없어도 인쇄물은 안전 여백, 스토리는 위·아래 가림 영역, 3단 리플렛은 접는 선, 유튜브 썸네일은 재생 시간 자리
+function formatGuides() {
+  const f = FORMATS.find(x => x[0] === doc.fmt), grp = f ? f[2] : ''; let h = '';
+  if (!(Number(doc.bleed) > 0) && ['print', 'doc', 'sign', 'cal'].includes(grp)) { const m = safeMM(); h += `<div class="pg-safe" style="left:${m}mm;top:${m}mm;width:${doc.w - 2 * m}mm;height:${doc.h - 2 * m}mm" title="안전 여백 ${m}mm: 글자·로고는 이 안쪽에"></div>`; }
+  if (doc.fmt === 'story') { const t = PX(250), b = PX(340); h += `<div class="pg-zone" style="left:0;top:0;width:${doc.w}mm;height:${t}mm"><span>위쪽 ${t.toFixed(0)}mm: 프로필·진행 막대에 가려짐</span></div><div class="pg-zone" style="left:0;top:${doc.h - b}mm;width:${doc.w}mm;height:${b}mm"><span>아래쪽: 답장 칸에 가려짐</span></div>`; }
+  if (doc.fmt === 'leaflet') { const a = Math.abs(doc.w - 297) < 1 ? [99, 198] : [doc.w / 3, doc.w * 2 / 3]; h += a.map(x => `<div class="pg-fold" style="left:${x}mm;top:0;height:${doc.h}mm" title="접는 선 ${x}mm"></div>`).join(''); }
+  if (doc.fmt === 'yt-thumb') { const w = PX(150), hh = PX(60), m = PX(12); h += `<div class="pg-zone" style="left:${doc.w - w - m}mm;top:${doc.h - hh - m}mm;width:${w}mm;height:${hh}mm"><span>재생 시간</span></div>`; }
+  return h;
+}
 function safeMM() { return SAFE_BY[doc.fmt] || (Math.max(doc.w, doc.h) >= 2000 ? 30 : SAFE); }
 function showGuides() { try { return localStorage.getItem('naracal-guides') !== '0'; } catch (e) { return true; } }
 document.addEventListener('change', e => { if (e.target.id === 'guideToggle') { try { localStorage.setItem('naracal-guides', e.target.checked ? '1' : '0'); } catch (err) {} renderOverlay(); } });
@@ -276,6 +285,7 @@ function renderOverlay(guides) {
   h += calOverlay();
   // 인쇄 안내선: 도련(잘려 나가는 영역)·안전 여백(글자를 두지 않을 영역)
   if (showGuides() && Number(doc.bleed) > 0) { const b = Number(doc.bleed); h += `<div class="pg-bleed" style="left:${-b}mm;top:${-b}mm;width:${doc.w + 2 * b}mm;height:${doc.h + 2 * b}mm" title="도련 ${b}mm: 이 선까지 배경을 채우세요"></div><div class="pg-safe" style="left:${safeMM()}mm;top:${safeMM()}mm;width:${doc.w - 2 * safeMM()}mm;height:${doc.h - 2 * safeMM()}mm" title="안전 여백 ${safeMM()}mm: 글자·로고는 이 안쪽에"></div>`; }
+  if (showGuides()) h += formatGuides();
   o.innerHTML = h; showCellBar();
 }
 let thumbTimer;
@@ -694,7 +704,7 @@ function addEls(els, name) { if (!els.length) return; els.forEach(e => delete e.
 const docK = () => clamp(Math.min(doc.w, doc.h) / 148, 0.35, 20);
 function addText(preset, st) { const base = Object.assign({}, TEXT_DEF, lastTextStyle || {}); const k = docK(); const p0 = preset === 'h' ? { text: '제목을 입력하세요', size: 36, weight: 700, w: 120, h: 16, ls: -0.02 } : preset === 's' ? { text: '부제목을 입력하세요', size: 20, weight: 500, w: 100, h: 10 } : { text: '본문 글을 입력하세요', size: 12, weight: 400, w: 90, h: 8 }; const p = Object.assign({}, p0, { size: Math.round(p0.size * k * 2) / 2, w: r1(Math.min(p0.w * k, doc.w * 0.9)), h: r1(p0.h * k) }); if (st && st.text && !st.w) p.w = r1(Math.min(doc.w * 0.8, Math.max(p.w, 20 * k))); const noEdit = st && st.noEdit; if (st) delete st.noEdit; const el = addEl(Object.assign(base, p, st || {})); if (noEdit) return el; freshText = el.id; setTimeout(() => { const d = $(`#canvas [data-id="${el.id}"]`); if (d && !(el.warp && el.warp !== 'none')) startEdit(d); }, 50); return el; }
 function addShape(kind, st) { const k = docK(); const def = { type: 'shape', kind, x: 0, y: 0, w: r1(40 * k), h: kind === 'line' ? r1(4 * k) : r1(40 * k), rot: 0, fill: kind === 'line' ? '#333333' : '#F0716B', stroke: '', strokeW: kind === 'line' ? 0.6 : 0, radius: 0, opacity: 1, name: '' }; if (kind === 'line') { def.w = r1(80 * k); def.strokeW = 0.6 * k; } if (kind === 'polygon') def.sides = 6; addEl(Object.assign(def, st || {})); }
-function addImage(ref) { const el = { type: 'image', src: ref, x: 0, y: 0, w: 60, h: 60, rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '' }; const s = src(ref); if (s) { const i = new Image(); i.onload = () => { const ar = i.naturalWidth / i.naturalHeight; el.w = Math.min(80, doc.w * 0.6); el.h = r1(el.w / ar); if (el.h > doc.h * 0.8) { el.h = r1(doc.h * 0.8); el.w = r1(el.h * ar); } el.x = r1((doc.w - el.w) / 2); el.y = r1((doc.h - el.h) / 2); rerender(); if (hptr === at && hist.length - 1 === at) amendCommit(); else commit(); }; i.src = s; } addEl(el); const at = hptr; }
+function addImage(ref) { const el = { type: 'image', src: ref, x: 0, y: 0, w: 60, h: 60, rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '' }; const s = src(ref); if (s) { const i = new Image(); i.onload = () => { const ar = i.naturalWidth / i.naturalHeight; el.w = Math.min(80 * docK(), doc.w * 0.6); el.h = r1(el.w / ar); if (el.h > doc.h * 0.8) { el.h = r1(doc.h * 0.8); el.w = r1(el.h * ar); } el.x = r1((doc.w - el.w) / 2); el.y = r1((doc.h - el.h) / 2); rerender(); if (hptr === at && hist.length - 1 === at) amendCommit(); else commit(); }; i.src = s; } addEl(el); const at = hptr; }
 function addCal() { const y = doc.calendar.year || new Date().getFullYear(); ensureHolidays(y, true); addEl({ type: 'cal', year: y, month: 1, x: 0, y: 0, w: Math.min(204, doc.w - 20), h: Math.min(100, doc.h - 30), rot: 0, opacity: 1, s: {}, events: [], notes: [], name: '달력' }); }
 function addMini() { const y = doc.calendar.year || new Date().getFullYear(); addEl({ type: 'mini', year: y, month: 1, x: 0, y: 0, w: 42, h: 24, rot: 0, opacity: 1, s: {}, name: '미니 달력' }); }
 function fileToDataURL(f) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); }); }
@@ -1067,7 +1077,7 @@ function renderInspector() {
   }
   const el = els[0];
   let h = `<h2>${esc(elName(el))} <span class="row"><button class="btn sm icon ${el.locked ? 'on' : ''}" data-k="locked" data-toggle="1" title="잠금">${el.locked ? '🔒' : '🔓'}</button></span></h2>`;
-  const geo = `<h3>위치·크기</h3><div class="grid4">${F('X', 'x', el.x, { type: 'number', step: 0.5 })}${F('Y', 'y', el.y, { type: 'number', step: 0.5 })}${F('너비', 'w', el.w, { type: 'number', step: 0.5 })}${F('높이', 'h', el.h, { type: 'number', step: 0.5 })}</div>${F('회전', 'rot', el.rot || 0, { type: 'angle', def: 0 })}${F('투명도', 'opacity', el.opacity == null ? 1 : el.opacity, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 1 })}${el.type !== 'text' ? F('혼합 모드', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['darken', '어둡게'], ['lighten', '밝게'], ['difference', '차이']] }) : ''}${F('이름', 'name', el.name)}`;
+  const geo = `<h3>위치·크기</h3><div class="grid4">${F('X', 'x', el.x, { type: 'number', step: 0.5 })}${F('Y', 'y', el.y, { type: 'number', step: 0.5 })}${F('너비', 'w', el.w, { type: 'number', step: 0.5 })}${F('높이', 'h', el.h, { type: 'number', step: 0.5 })}</div>${['image', 'shape', 'path', 'chart'].includes(el.type) ? F('너비·높이 비율 고정 (숫자로 바꿀 때)', 'ratioLock', el.ratioLock == null ? el.type === 'image' : el.ratioLock, { type: 'check' }) : ''}${F('회전', 'rot', el.rot || 0, { type: 'angle', def: 0 })}${F('투명도', 'opacity', el.opacity == null ? 1 : el.opacity, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 1 })}${el.type !== 'text' ? F('혼합 모드', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['darken', '어둡게'], ['lighten', '밝게'], ['difference', '차이']] }) : ''}${F('이름', 'name', el.name)}`;
   const shadowBlock = (pfx) => `<details class="fx" ${el.shadow ? 'open' : ''}><summary>${F('그림자', 'shadow', el.shadow, { type: 'check' })}</summary>${F('위치 — 점을 끌어 조정', 'shX,shY', [el.shX == null ? 0.6 : el.shX, el.shY == null ? 0.7 : el.shY], { type: 'xy', range: 4, step: 0.1, presets: [['아래', 0, 1], ['오른쪽 아래', 0.8, 0.8], ['왼쪽 아래', -0.8, 0.8], ['위', 0, -1], ['가운데(번짐만)', 0, 0]] })}
     ${F('번짐', 'shB', el.shB == null ? 0.5 : el.shB, { type: 'slider', min: 0, max: 6, step: 0.1, unit: 'mm', def: 0.5 })}${F('진하기', 'shA', el.shA == null ? 0.3 : el.shA, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 0.3 })}
     ${F('그림자 색', 'shC', el.shC || '#000000', { type: 'color' })}<div class="shq"><span>빠른 설정</span>${[['부드럽게', 0.4, 0.8, 2.2, 0.22], ['또렷하게', 0.6, 0.7, 0.2, 0.45], ['강하게', 1.2, 1.4, 0.6, 0.6], ['떠 있게', 0, 2.2, 3.5, 0.3]].map(([t, x, y, b, a]) => `<button type="button" class="btn sm" data-shq="${x},${y},${b},${a}">${t}</button>`).join('')}</div></details>`;
@@ -1205,7 +1215,10 @@ $('#inspector').addEventListener('input', e => {
   if (t.dataset.ev != null) return;
   if (k === 'chartData') { el.data = v.split('\n').map(l => l.split(/[,\t]/)).filter(a => a[0] && a[0].trim()).map(a => ({ l: a[0].trim(), v: Number((a[1] || '0').trim()) || 0 })); renderCanvas(); return; }
   if (k === 'chartColors') { el.colors = v.split(',').map(s => s.trim()).filter(Boolean); renderCanvas(); return; }
+  const ow = el.w, oh = el.h;
   setK(el, k, v);
+  // 너비·높이를 숫자로 바꿀 때: 비율 고정이면 다른 쪽도 함께 (그림은 기본으로 고정), 자유 곡선은 점도 함께 늘림
+  if ((k === 'w' || k === 'h') && ow > 0 && oh > 0) { const lock = el.ratioLock == null ? el.type === 'image' : el.ratioLock; if (lock) { if (k === 'w') el.h = Math.round(v * oh / ow * 1000) / 1000; else el.w = Math.round(v * ow / oh * 1000) / 1000; } if (el.pts) { const fx = el.w / ow, fy = el.h / oh; el.pts = el.pts.map(q => [q[0] * fx, q[1] * fy]); } if (lock) setTimeout(() => { const o = $(`#inspector input[data-k="${k === 'w' ? 'h' : 'w'}"]`); if (o && document.activeElement !== o) o.value = r1(k === 'w' ? el.h : el.w); }, 0); }
   if (el.type === 'text' && el.html && (k === 'color' || k === 'size')) stripRich(el, k === 'color' ? 'color' : 'size');
   if (el.type === 'cal' && ['month', 'year', 's.weekStart', 's.rows'].includes(k)) { const grid = Object.keys(el.cells || {}).filter(x => !x.startsWith('d')); if ((el.merges && el.merges.length) || el.rowH || grid.length) { delete el.merges; delete el.rowH; grid.forEach(x => delete el.cells[x]); cellSel = null; toast('칸 배치가 바뀌어 합친 칸·행 높이·빈 칸 글자를 초기화했습니다 (날짜 칸 색·글자는 날짜를 따라갑니다)'); } }
   if (el.type === 'text') lastTextStyle = { font: el.font, size: el.size, weight: el.weight, color: el.color };
@@ -2233,7 +2246,7 @@ $('#scroller').addEventListener('drop', async e => {
   const ids = [];
   for (const [i, ref] of refs.entries()) {
     const im = await new Promise(res => { const i_ = new Image(); i_.onload = () => res(i_); i_.onerror = () => res(null); i_.src = src(ref); }); const ar = im ? im.naturalWidth / im.naturalHeight : 1;
-    let w = Math.min(80, doc.w * 0.6), h = w / ar; if (h > doc.h * 0.8) { h = doc.h * 0.8; w = h * ar; }
+    let w = Math.min(80 * docK(), doc.w * 0.6), h = w / ar; if (h > doc.h * 0.8) { h = doc.h * 0.8; w = h * ar; }
     const el = { id: uid(), type: 'image', src: ref, x: r1(clamp(p.x - w / 2 + i * 5, -w / 2, doc.w - w / 2)), y: r1(clamp(p.y - h / 2 + i * 5, -h / 2, doc.h - h / 2)), w: r1(w), h: r1(h), rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '' };
     page().els.push(el); ids.push(el.id);
   }
