@@ -75,5 +75,71 @@ NC.store = (function () {
   function pickLocal() {
     return new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.accept = '.json,application/json'; i.onchange = () => { const f = i.files[0]; if (!f) return res(null); const r = new FileReader(); r.onload = () => { try { res(JSON.parse(r.result)); } catch (e) { res(null); } }; r.readAsText(f); }; i.click(); });
   }
-  return { state, idbGet, idbSet, idbDel, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal };
+  /* ---------- 동기화 폴더 (Google Drive 등): 설정값 + 모든 문서 ---------- */
+  // 폴더 안: 설정.naracha.json(API 키·모델·최근 사용 목록) + *.design.json(문서들)
+  const SET_FILE = '설정.naracha.json';
+  const SYNC_KEYS = ['naracal-ai-v1', 'naracal-recent-fonts', 'naracal-recent-elems', 'naracal-recent-tpls'];
+  Object.assign(state, { dir: null, dirName: '', dirSupported: !!window.showDirectoryPicker, setMod: 0, setLast: '' });
+  async function connectFolder() {
+    if (!state.dirSupported) throw new Error('이 브라우저는 폴더 연결을 지원하지 않습니다 (Chrome, Edge 권장).');
+    const h = await window.showDirectoryPicker({ id: 'naracha-sync', mode: 'readwrite' });
+    state.dir = h; state.dirName = h.name; state.setMod = 0; state.setLast = '';
+    await idbSet('syncDir', h);
+    return h;
+  }
+  async function reconnectFolder() {
+    try {
+      const h = await idbGet('syncDir'); if (!h) return 'none';
+      state.dir = h; state.dirName = h.name;
+      return await h.queryPermission({ mode: 'readwrite' });
+    } catch (e) { return 'none'; }
+  }
+  async function requestFolderPermission() { if (!state.dir) return false; return (await state.dir.requestPermission({ mode: 'readwrite' })) === 'granted'; }
+  async function disconnectFolder() { state.dir = null; state.dirName = ''; state.setMod = 0; state.setLast = ''; await idbDel('syncDir'); }
+  async function folderReady() { try { return !!state.dir && (await state.dir.queryPermission({ mode: 'readwrite' })) === 'granted'; } catch (e) { return false; } }
+  function localSettings() { const o = {}; SYNC_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v != null) o[k] = v; }); return o; }
+  // 이 PC의 설정을 폴더에 씀 (바뀐 게 있을 때만)
+  async function pushSettings(force) {
+    if (!(await folderReady())) return false;
+    const s = JSON.stringify(localSettings()); if (!force && s === state.setLast) return false;
+    const h = await state.dir.getFileHandle(SET_FILE, { create: true });
+    const w = await h.createWritable(); await w.write(JSON.stringify({ v: 1, updatedAt: Date.now(), values: JSON.parse(s) }, null, 1)); await w.close();
+    state.setLast = s; state.setMod = (await h.getFile()).lastModified;
+    return true;
+  }
+  // 다른 PC가 바꾼 설정을 가져옴. 가져왔으면 true
+  async function pullSettings() {
+    if (!(await folderReady())) return false;
+    let f; try { f = await (await state.dir.getFileHandle(SET_FILE)).getFile(); } catch (e) { return false; }
+    if (state.setMod && f.lastModified <= state.setMod + 500) return false;
+    let j; try { j = JSON.parse(await f.text()); } catch (e) { return false; }
+    const vals = (j && j.values) || {};
+    for (const k of SYNC_KEYS) if (typeof vals[k] === 'string') { try { localStorage.setItem(k, vals[k]); } catch (e) {} }
+    state.setLast = JSON.stringify(localSettings()); state.setMod = f.lastModified;
+    return true;
+  }
+  async function listDocs() {
+    if (!(await folderReady())) return [];
+    const out = [];
+    for await (const [name, h] of state.dir.entries()) {
+      if (h.kind !== 'file' || !/\.design\.json$/i.test(name)) continue;
+      try { const f = await h.getFile(); out.push({ name, handle: h, lastModified: f.lastModified, size: f.size }); } catch (e) {}
+    }
+    return out.sort((a, b) => b.lastModified - a.lastModified);
+  }
+  async function inFolder(h) { if (!state.dir || !h) return false; try { return !!(await state.dir.resolve(h)); } catch (e) { return false; } }
+  async function openHandle(h) { state.handle = h; state.fileName = h.name; await idbSet('fileHandle', h); return readFile(); }
+  // 현재 문서를 폴더에 새 파일로 저장하고 연결 (이름이 겹치면 번호를 붙임)
+  async function saveIntoFolder(doc) {
+    const base = (doc.name || 'design').replace(/[\\/:*?"<>|]/g, '_').trim() || 'design';
+    const names = new Set((await listDocs()).map(d => d.name));
+    let name = base + '.design.json'; for (let i = 2; names.has(name); i++) name = `${base} (${i}).design.json`;
+    const h = await state.dir.getFileHandle(name, { create: true });
+    state.handle = h; state.fileName = h.name; await idbSet('fileHandle', h);
+    await writeFile(doc);
+    return h;
+  }
+
+  return { state, idbGet, idbSet, idbDel, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
+    connectFolder, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, listDocs, inFolder, openHandle, saveIntoFolder };
 })();
