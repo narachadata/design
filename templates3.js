@@ -125,8 +125,11 @@
     }
     if (o.layout === 'banner') {
       els.push(S('rect', 0, 0, w, h * 0.09, { fill: P_.fg })); els.push(S('rect', 0, h * 0.91, w, h * 0.09, { fill: P_.fg }));
-      els.push(T(c.title.replace('\n', ' '), w * 0.04, h * 0.17, w * 0.78, h * 0.4, { font: fT, size: h * 0.46, weight: 900, color: P_.fg, lh: 1, name: '제목' }));
-      els.push(T((c.sub + '   ' + (c.cta ? '☎ ' + PHONE : '')).trim(), w * 0.04, h * 0.62, w * 0.78, h * 0.22, { font: fB, size: h * 0.22, weight: 700, color: P_.ac, lh: 1, name: '부제' }));
+      // 나라차태권도 현수막: 왼쪽에 한글 로고를 세로 가운데로 두고 글은 그 오른쪽부터 (멀리서도 도장 이름이 먼저 보이게)
+      const ours = o.biz.name === '나라차태권도', lgH = h * 0.42, lgW = ours ? lgH * 1.98 : 0, tx = ours ? w * 0.03 + lgW + w * 0.03 : w * 0.04, tw = w * 0.82 - tx;
+      if (ours) { els.push(S('rect', tx - w * 0.015, h * 0.22, Math.max(1, h * 0.005), h * 0.56, { fill: P_.fg, name: '구분선', opacity: 0.3 })); els.push(I(isDark(P_.bg) ? 'asset:brand-korean-white' : 'asset:brand-korean', w * 0.03, (h - lgH) / 2, lgW, lgH, { name: '로고' })); }
+      els.push(T(c.title.replace('\n', ' '), tx, h * 0.17, tw, h * 0.4, { font: fT, size: h * 0.46, weight: 900, color: P_.fg, lh: 1, name: '제목' }));
+      els.push(T((c.sub + '   ' + (c.cta ? '☎ ' + PHONE : '')).trim(), tx, h * 0.62, tw, h * 0.22, { font: fB, size: h * 0.22, weight: 700, color: P_.ac, lh: 1, name: '부제' }));
       els.push(motif(0, w * 0.84, h * 0.18, h * 0.6));
       return P(P_.bg, els, o.label);
     }

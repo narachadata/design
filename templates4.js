@@ -48,6 +48,10 @@
   /* ===== 휴일 날짜 (calendar.js 자동 계산: 대체 휴일 포함) ===== */
   const DOW = '일월화수목금토';
   const lum = c => { const n = parseInt(String(c).slice(1), 16); return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 255000; };
+  // 바탕색에 맞는 로고판: 밝은 바탕 = 원래 색, 어두운·중간 바탕 = 흰색(빨간 점 유지), 빨강·주황 계열 바탕 = 전부 흰색
+  const redish = c => { const n = parseInt(String(c).slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255; return r > 140 && r > g * 1.35 && r > b * 1.25; };
+  function logoFor(base, bg) { if (!/^#[0-9a-f]{6}$/i.test(bg || '')) return 'asset:' + base; const L_ = lum(bg); if (L_ < 0.62) return 'asset:' + base + (redish(bg) ? '-mono' : '-white'); return 'asset:' + base; }
+  NC.logoFor = logoFor; NC.lum = lum;
   const onColor = (bg, a, b) => Math.abs(lum(bg) - lum(a)) >= 0.35 ? a : b; // 바탕 위에서 잘 보이는 쪽 색
   function upcoming(names) {
     const now = new Date(), today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -139,10 +143,11 @@
       const bh = wide ? h : h * (tall ? 0.3 : 0.34), bw = wide ? w * 0.36 : w;
       els.push(S('rect', 0, 0, bw, bh, { fill: p.ac, name: '머리 띠' }));
       els.push(I(A(0), wide ? bw * 0.25 : w - bh * 0.95, wide ? h * 0.42 : bh * 0.12, wide ? bw * 0.5 : bh * 0.8, wide ? bw * 0.5 : bh * 0.8, { name: '그림', opacity: 0.95 }));
-      els.push(T(hol.eyebrow, wide ? 6 * u : 7 * u, wide ? 8 * u : bh * 0.2, wide ? bw - 12 * u : w * 0.6, 4 * u, { font: 'Montserrat', size: pt(2 * u), weight: 700, color: '#FFFFFF', ls: 0.18, align: 'left', opacity: 0.85 }));
-      els.push(T(String(year), wide ? 6 * u : 7 * u, wide ? 13 * u : bh * 0.2 + 4.6 * u, wide ? bw - 12 * u : w * 0.6, 10 * u, { font: 'Montserrat', size: pt(7.5 * u), weight: 800, color: '#FFFFFF', align: 'left', lh: 1, name: '연도' }));
+      const lgH = Math.min(6.5 * u, bh * 0.16), lgY = wide ? 6 * u : bh * 0.12; els.push(I(logoFor('brand-horizontal', p.ac), wide ? 6 * u : 7 * u, lgY, lgH * 5.19, lgH, { name: '로고', pos: '0% 50%' }));
+      els.push(T(hol.eyebrow, wide ? 6 * u : 7 * u, lgY + lgH + 2.4 * u, wide ? bw - 12 * u : w * 0.6, 4 * u, { font: 'Montserrat', size: pt(2 * u), weight: 700, color: onColor(p.ac, '#FFFFFF', '#1F2430'), ls: 0.18, align: 'left', opacity: 0.85 }));
+      els.push(T(String(year), wide ? 6 * u : 7 * u, lgY + lgH + 6.6 * u, wide ? bw - 12 * u : w * 0.6, 10 * u, { font: 'Montserrat', size: pt(7.5 * u), weight: 800, color: onColor(p.ac, '#FFFFFF', '#1F2430'), align: 'left', lh: 1, name: '연도' }));
       box = wide ? { x: bw + w * 0.04, y: h * 0.08, w: w - bw - w * 0.08, h: h * 0.84 } : { x: w * 0.08, y: bh + h * 0.04, w: w * 0.84, h: h - bh - h * 0.06 };
-      o = Object.assign({}, o, { pal: Object.assign({}, p, { ink: '#1F2430', sub: '#5B6472', chip: '#F3F4F7', chipInk: '#1F2430' }), noEyebrow: true }); els.unshift(S('rect', 0, 0, w, h, { fill: '#FFFFFF', name: '바탕', locked: true }));
+      o = Object.assign({}, o, { pal: Object.assign({}, p, { ink: '#1F2430', sub: '#5B6472', chip: '#F3F4F7', chipInk: '#1F2430' }), noEyebrow: true, noLogo: true }); els.unshift(S('rect', 0, 0, w, h, { fill: '#FFFFFF', name: '바탕', locked: true }));
     } else if (o.style === 'type') {
       const word = hol.type(year); const latin = /^[A-Z0-9·.]+$/.test(word); const big = Math.min(w * 0.92 / Math.max(1, textW(word, 1) * (latin ? 1.3 : 1.05)), h * 0.5); // 영문 굵은 대문자는 더 넓게 어림 (한 줄 유지)
       els.push(T(word, -w * 0.02, wide ? -h * 0.06 : -h * 0.02, w * 1.6, big * 1.2, { font: fT === 'MaruBuri' ? 'MaruBuri' : 'GMarketSans', size: pt(big), weight: 700, color: dark ? '#FFFFFF' : p.ac, opacity: dark ? 0.14 : 0.16, align: 'left', lh: 1, name: '큰 글자' }));
@@ -189,7 +194,7 @@
     const note = info ? `${md(info.resume)}부터 정상 수업합니다.\n${hol.note}` : `○월 ○일(○)은 휴관합니다.\n${hol.note}`;
     const nMM = 2.15 * u * kz, nLines = note.split('\n').reduce((a, l) => a + Math.ceil(textW(l, nMM) / cw), 0);
     add(nMM * 1.5 * nLines + 3 * u, (x, y) => els.push(T(note, x, y, cw, nMM * 1.5 * nLines + 1, { font: fB, size: pt(nMM), weight: 500, color: pal.sub, lh: 1.5, name: '안내 문구' })));
-    add(4.6 * u * z, (x, y) => els.push(T(NAME, x, y, cw, 3.6 * u, { font: o.fontT === 'MaruBuri' ? 'MaruBuri' : 'GMarketSans', size: pt(2.2 * u * kz), weight: 700, color: pal.ink, ls: 0.1, name: '도장 이름' })));
+    if (!o.noLogo) { const lh = Math.min(8.5 * u * z, box.h * 0.12), lw = lh * 1.98; add(lh + 1.2 * u, (x, y) => els.push(I(logoFor('brand-korean', contentBg), x + (cw - lw) / 2, y + 1.2 * u, lw, lh, Object.assign({ name: '로고' }, hol.solemn ? { fx: { sat: 0 }, opacity: 0.85 } : {})))); }
     };
     build(1); let total = items.reduce((a, it) => a + it.hh, 0);
     const z = Math.max(0.7, Math.min(wide ? 2.2 : 1.45, box.h * 0.9 / total)); // 가로 현수막은 글자를 더 크게 if (Math.abs(z - 1) > 0.04) build(z);
