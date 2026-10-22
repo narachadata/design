@@ -30,10 +30,11 @@ let histMeta = [];  // 기록마다 그때 보던 쪽·선택
 function commit() { const s_ = snapshot(); if (hist[hptr] === s_) return; hist = hist.slice(0, hptr + 1); histMeta = histMeta.slice(0, hptr + 1); hist.push(s_); histMeta.push({ cur, sel: sel.slice() }); if (hist.length > 120) { hist.shift(); histMeta.shift(); } hptr = hist.length - 1; markDirty(); }
 // 바로 앞 기록을 고쳐 씀 (그림 비율 맞춤처럼 한 동작의 뒷처리)
 function amendCommit() { if (hptr < 0) return commit(); hist[hptr] = snapshot(); markDirty(); }
-let nudgeTimer = null; function commitSoon() { clearTimeout(nudgeTimer); nudgeTimer = setTimeout(commit, 450); }
+let nudgeTimer = null; function commitSoon() { clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { nudgeTimer = null; commit(); }, 450); }
+function flushNudge() { if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; commit(); } }
 function restore(s, meta) { const a = doc.assets; doc = JSON.parse(s); doc.assets = a; if (meta) { cur = meta.cur; sel = meta.sel.slice(); } cur = clamp(cur, 0, doc.pages.length - 1); sel = sel.filter(id => find(id)); cellSel = null; renderAll(); markDirty(); }
-function undo() { clearTimeout(nudgeTimer); if (hptr > 0) { const m = histMeta[hptr]; hptr--; restore(hist[hptr], m); } }
-function redo() { if (hptr < hist.length - 1) { hptr++; restore(hist[hptr], histMeta[hptr]); } }
+function undo() { flushNudge(); if (hptr > 0) { const m = histMeta[hptr]; hptr--; restore(hist[hptr], m); } }
+function redo() { flushNudge(); if (hptr < hist.length - 1) { hptr++; restore(hist[hptr], histMeta[hptr]); } }
 
 /* ---------- 저장 · 동기화 ---------- */
 let idbTimer, fileTimer, freshDraft = false; // freshDraft: 처음 열 때 만든 초안을 아직 고치지 않음
@@ -214,7 +215,7 @@ function renderCanvas() {
   const c = $('#canvas'); const pg = page();
   c.style.setProperty('--pw', doc.w); c.style.setProperty('--ph', doc.h); c.style.setProperty('--b', '0mm');
   c.innerHTML = `<div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, 'edit')).join('')}</div>`;
-  pg.els.forEach(el => { if (el.type === 'text' && !isWarp(el)) { const d = c.querySelector(`[data-id="${el.id}"]`); if (d) { const hh = fitTextH(d, el); if (hh != null) el.h = hh; } } });
+  pg.els.forEach(el => { if (el.type === 'text' && !isWarp(el)) { const d = c.querySelector(`[data-id="${el.id}"]`); if (d) { const hh = fitTextH(d, el, true); if (hh != null) el.h = hh; } } });
   fitCanvas(); renderOverlay();
   $('#pageLabel').textContent = `${cur + 1} / ${doc.pages.length}${pg.label ? ' · ' + pg.label : ''}`;
   $('#stage').classList.toggle('pen', tool === 'pen');
@@ -263,12 +264,13 @@ function calGeom(el) {
   const xs = [x0]; colW.forEach(w => xs.push(xs[xs.length - 1] + W * w / sw)); const ys = [y0]; rowH.forEach(h => ys.push(ys[ys.length - 1] + H * h / sh));
   return { rows, colW, rowH, xs, ys, x0, y0, W, H };
 }
+function selRect() { let { r1: ra, r2, c1, c2 } = cellRect(cellSel.a, cellSel.b); const el = find(cellSel.id); ((el && el.merges) || []).forEach(g => { const gr = Math.floor(g.c / 7), gc = g.c % 7; if (gr >= ra && gr <= r2 && gc >= c1 && gc <= c2) { r2 = Math.max(r2, gr + g.rs - 1); c2 = Math.max(c2, gc + g.cs - 1); } }); return { r1: ra, r2, c1, c2 }; }
 function cellRect(a, b) { const r1_ = Math.min(Math.floor(a / 7), Math.floor(b / 7)), r2 = Math.max(Math.floor(a / 7), Math.floor(b / 7)), c1 = Math.min(a % 7, b % 7), c2 = Math.max(a % 7, b % 7); return { r1: r1_, r2, c1, c2 }; }
-function selCells() { if (!cellSel) return []; const { r1: ra, r2, c1, c2 } = cellRect(cellSel.a, cellSel.b); const out = []; for (let r = ra; r <= r2; r++) for (let c = c1; c <= c2; c++) out.push(r * 7 + c); return out; }
+function selCells() { if (!cellSel) return []; const { r1: ra, r2, c1, c2 } = selRect(); const out = []; for (let r = ra; r <= r2; r++) for (let c = c1; c <= c2; c++) out.push(r * 7 + c); return out; }
 function calOverlay() {
   const el = selEls()[0]; if (!el || el.type !== 'cal' || sel.length !== 1 || el.locked) return '';
   const G = calGeom(el); if (!G) return ''; let h = '';
-  if (cellSel && cellSel.id === el.id) { let { r1: ra, r2, c1, c2 } = cellRect(cellSel.a, cellSel.b); (el.merges || []).forEach(g => { const gr = Math.floor(g.c / 7), gc = g.c % 7; if (gr >= ra && gr <= r2 && gc >= c1 && gc <= c2) { r2 = Math.max(r2, gr + g.rs - 1); c2 = Math.max(c2, gc + g.cs - 1); } }); h += `<div class="csel" style="left:${G.xs[c1]}mm;top:${G.ys[ra]}mm;width:${G.xs[c2 + 1] - G.xs[c1]}mm;height:${G.ys[r2 + 1] - G.ys[ra]}mm"></div>`; }
+  if (cellSel && cellSel.id === el.id) { const { r1: ra, r2, c1, c2 } = selRect(); h += `<div class="csel" style="left:${G.xs[c1]}mm;top:${G.ys[ra]}mm;width:${G.xs[c2 + 1] - G.xs[c1]}mm;height:${G.ys[r2 + 1] - G.ys[ra]}mm"></div>`; }
   for (let i = 1; i < 7; i++) h += `<div class="cgl cgv" data-cgl="c${i}" style="left:${G.xs[i]}mm;top:${G.y0}mm;height:${G.H}mm" title="끌어서 열 너비 조정 · 두 번 누르면 모든 열 같게"></div>`;
   for (let i = 1; i < G.rows; i++) h += `<div class="cgl cgh" data-cgl="r${i}" style="top:${G.ys[i]}mm;left:${G.x0}mm;width:${G.W}mm" title="끌어서 행 높이 조정 · 두 번 누르면 모든 행 같게"></div>`;
   return h;
@@ -296,7 +298,7 @@ function showCellBar() {
   const px = G.xs[c1] * MM * k + cr.left, py = G.ys[ra] * MM * k + cr.top;
   b.style.left = Math.max(8, Math.min(px, innerWidth - b.offsetWidth - 8)) + 'px'; b.style.top = Math.max(60, py - b.offsetHeight - 10) + 'px';
 }
-function cellSet(patch, live) { const el = selEls()[0]; if (!el) return; el.cells = el.cells || {}; selCells().forEach(c0 => { const c = CAL.cellKey(el, c0); el.cells[c] = Object.assign({}, el.cells[c] || {}, patch); Object.keys(el.cells[c]).forEach(k => { if (el.cells[c][k] === undefined) delete el.cells[c][k]; }); if (!Object.keys(el.cells[c]).length) delete el.cells[c]; }); renderCanvas(); if (!live) commit(); showCellBar(); }
+function cellSet(patch, live) { const el = selEls()[0]; if (!el) return; el.cells = el.cells || {}; selCells().forEach(c0 => { const c = CAL.cellKey(el, c0); const old = el.cells[String(c0)]; if (c !== String(c0) && old) { el.cells[c] = Object.assign({}, old, el.cells[c] || {}); delete el.cells[String(c0)]; } el.cells[c] = Object.assign({}, el.cells[c] || {}, patch); Object.keys(el.cells[c]).forEach(k => { if (el.cells[c][k] === undefined) delete el.cells[c][k]; }); if (!Object.keys(el.cells[c]).length) delete el.cells[c]; }); renderCanvas(); if (!live) commit(); showCellBar(); }
 function cellCmd(k) {
   const el = selEls()[0]; if (!el || !cellSel) return; const s = Object.assign({}, CAL.CAL_DEF, el.s || {}); const cs = (el.cells || {})[CAL.cellKey(el, cellSel.a)] || {};
   const rows = CAL.calRows(el);
@@ -309,7 +311,7 @@ function cellCmd(k) {
   if (k === 'evenc') { delete el.colW; commit(); rerender(); }
   if (k === 'evenr') { delete el.rowH; commit(); rerender(); }
   if (k === 'type') openCellEditor(cellSel.a);
-  if (k === 'clear') { selCells().forEach(c => { if (el.cells) delete el.cells[CAL.cellKey(el, c)]; }); commit(); rerender(); }
+  if (k === 'clear') { selCells().forEach(c => { if (el.cells) { delete el.cells[CAL.cellKey(el, c)]; delete el.cells[String(c)]; } }); commit(); rerender(); }
 }
 // 칸에 바로 입력: 날짜 칸은 그날 일정(한 줄에 하나), 빈 칸은 자유 글자
 function openCellEditor(c, append) {
@@ -350,11 +352,11 @@ wrap.addEventListener('pointerdown', e => {
   if (hd && sel.length === 1) { const el = find(sel[0]); drag = { kind: hd.dataset.h === 'rot' ? 'rot' : 'resize', dir: hd.dataset.h, el, start: p, o: clone(el), cx: el.x + el.w / 2, cy: el.y + el.h / 2, moved: false }; e.preventDefault(); return; }
   const gl = e.target.closest('.ovl .cgl');
   if (gl && sel.length === 1) { const el = find(sel[0]); const G = calGeom(el); const isC = gl.dataset.cgl[0] === 'c', i = Number(gl.dataset.cgl.slice(1)); drag = { kind: 'cgl', el, isC, i, G, start: p, moved: false, w0: (isC ? G.colW : G.rowH).slice() }; e.preventDefault(); return; }
-  const dom = (() => { const seen = new Set(); for (const n of document.elementsFromPoint(e.clientX, e.clientY)) { const d = n.closest && n.closest('#canvas .el'); if (!d || seen.has(d)) continue; seen.add(d); const x = find(d.dataset.id); if (x && (!x.locked || sel.includes(x.id))) return d; } return null; })();
+  let hitNode = e.target; const dom = (() => { const seen = new Set(); for (const n of document.elementsFromPoint(e.clientX, e.clientY)) { const d = n.closest && n.closest('#canvas .el'); if (!d || seen.has(d)) continue; seen.add(d); const x = find(d.dataset.id); if (x && (!x.locked || sel.includes(x.id))) { hitNode = n; return d; } } return null; })();
   if (dom) {
     const id = dom.dataset.id, el = find(id); const was = sel.includes(id);
     // 고른 달력의 칸 위를 누르면 칸 선택 (요일 줄을 누르면 달력 이동)
-    if (el.type === 'cal' && was && !el.locked && e.target.closest('.cell')) { const c = Number(e.target.closest('.cell').dataset.c); if (e.shiftKey && cellSel && cellSel.id === id) cellSel.b = c; else cellSel = { id, a: c, b: c }; const dd = e.target.closest('.cell').dataset.day; selDay = dd ? Number(dd) : null; drag = { kind: 'cells', start: p, moved: false }; renderOverlay(); renderInspector(); e.preventDefault(); return; }
+    if (el.type === 'cal' && was && !el.locked && hitNode.closest('.cell')) { const cellNode = hitNode.closest('.cell'); const c = Number(cellNode.dataset.c); if (e.shiftKey && cellSel && cellSel.id === id) cellSel.b = c; else cellSel = { id, a: c, b: c }; const dd = cellNode.dataset.day; selDay = dd ? Number(dd) : null; drag = { kind: 'cells', start: p, moved: false }; renderOverlay(); renderInspector(); e.preventDefault(); return; }
     if (!was || el.type !== 'cal') cellSel = null;
     if (el.type === 'text' && was && !el.locked && !(el.warp && el.warp !== 'none') && lastClick && lastClick.id === id && Date.now() - lastClick.t < 450) { lastClick = null; startEdit(dom, e); e.preventDefault(); return; }
     lastClick = { id, t: Date.now() };
@@ -403,7 +405,7 @@ document.addEventListener('pointermove', e => {
     const B = drag.box, d = drag.dir; const ax = d.includes('w') ? B.x + B.w : B.x, ay = d.includes('n') ? B.y + B.h : B.y;
     const nw = Math.abs(p.x - ax), nh = Math.abs(p.y - ay); const k = Math.max(0.05, Math.max(nw / B.w, nh / B.h));
     const nx = d.includes('w') ? ax - B.w * k : ax, ny = d.includes('n') ? ay - B.h * k : ay;
-    drag.els.forEach((el, i) => { const o = drag.o[i]; el.x = r1(nx + (o.x - B.x) * k); el.y = r1(ny + (o.y - B.y) * k); el.w = r1(o.w * k); el.h = r1(o.h * k); if (o.size) el.size = Math.round(o.size * k * 10) / 10; if (o.strokeW) el.strokeW = Math.round(o.strokeW * k * 100) / 100; if (o.pts) el.pts = o.pts.map(q => [r1(q[0] * k), r1(q[1] * k)]); });
+    drag.els.forEach((el, i) => { const o = drag.o[i]; el.x = r1(nx + (o.x - B.x) * k); el.y = r1(ny + (o.y - B.y) * k); el.w = r1(o.w * k); el.h = r1(o.h * k); if (o.size) el.size = Math.round(o.size * k * 10) / 10; if (o.html) el.html = o.html.replace(/font-size:\s*([\d.]+)pt/g, (_, v) => 'font-size:' + Math.round(v * k * 2) / 2 + 'pt'); if (o.strokeW) el.strokeW = Math.round(o.strokeW * k * 100) / 100; if (o.pts) el.pts = o.pts.map(q => [r1(q[0] * k), r1(q[1] * k)]); });
     renderCanvas(); renderOverlay();
   } else if (drag.kind === 'cells') {
     const c = cellAt(e); if (c != null && cellSel && c !== cellSel.b) { cellSel.b = c; renderOverlay(); }
@@ -437,7 +439,7 @@ function snap(x, y, w, h, selfIds) {
 }
 wrap.addEventListener('dblclick', e => {
   const gl = e.target.closest('.ovl .cgl'); if (gl) { const el = selEls()[0]; if (el) { if (gl.dataset.cgl[0] === 'c') delete el.colW; else delete el.rowH; commit(); rerender(); toast(gl.dataset.cgl[0] === 'c' ? '모든 열 너비를 같게 했습니다' : '모든 행 높이를 같게 했습니다'); } return; }
-  const cell = e.target.closest('.el-cal .cell'); if (cell && sel.length === 1 && find(sel[0]).type === 'cal') { const c = Number(cell.dataset.c); cellSel = { id: sel[0], a: c, b: c }; renderOverlay(); openCellEditor(c); return; }
+  const cell = (document.elementsFromPoint(e.clientX, e.clientY).find(n => n.closest && n.closest('.el-cal .cell')) || e.target).closest('.el-cal .cell'); if (cell && sel.length === 1 && find(sel[0]).type === 'cal') { const c = Number(cell.dataset.c); cellSel = { id: sel[0], a: c, b: c }; renderOverlay(); openCellEditor(c); return; }
 });
 wrap.addEventListener('dblclick', e => { const dom = e.target.closest('.el-text'); if (dom && dom !== editing && !find(dom.dataset.id).locked && !dom.classList.contains('warp')) startEdit(dom, e); });
 function startEdit(dom, ev) {
@@ -503,6 +505,7 @@ function showTextBar() {
       else sizeSel(k === 'bigger' ? 1.2 : 1 / 1.2); });
     $('#tbColor').addEventListener('input', e => { if (!editing) return; editing.focus(); restoreSel(); document.execCommand('foreColor', false, e.target.value); saveSel(); b.querySelector('.sw').style.background = e.target.value; });
     $('#tbColor').addEventListener('change', () => { if (editing) { editing.focus(); restoreSel(); } });
+    $('#tbColor').addEventListener('blur', e => { const t = e.relatedTarget; if (editing && !(t && (editing.contains(t) || t.closest('#textBar')))) setTimeout(() => { if (editing && document.activeElement !== editing && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('#textBar'))) endEdit(); }, 0); });
     $('#tbColor').addEventListener('mousedown', () => saveSel());
   }
   b.hidden = false; placeTextBar(); updTextBar();
@@ -524,7 +527,7 @@ function sizeSel(f) {
   editing.dispatchEvent(new Event('input', { bubbles: true }));
 }
 // 글 상자 높이 맞추기: 위쪽 정렬이면 내용 높이로(늘고 줄어듦), 중앙·아래 정렬이면 내용보다 작을 때만 늘림
-function fitTextH(d, el) { const mh = d.style.minHeight; d.style.minHeight = '0'; const ch = r1(d.offsetHeight / MM); d.style.minHeight = mh; const top = !el.valign || el.valign === 'top'; if (top ? Math.abs(ch - el.h) > 0.05 : ch > el.h + 0.05) return Math.max(2, ch); return null; }
+function fitTextH(d, el, growOnly) { const mh = d.style.minHeight; d.style.minHeight = '0'; const ch = r1(d.offsetHeight / MM); d.style.minHeight = mh; const top = !el.valign || el.valign === 'top'; if (top && !growOnly ? Math.abs(ch - el.h) > 0.05 : ch > el.h + 0.05) return Math.max(2, ch); return null; }
 $('#canvas').addEventListener('input', e => { if (editing && e.target === editing) { const el = find(editing.dataset.id); if (el) { const hh = fitTextH(editing, el); if (hh != null) { el.h = hh; editing.style.minHeight = hh + 'mm'; renderOverlay(); placeTextBar(); } } } });
 // 붙여넣기는 글자만 (다른 곳 서식·글꼴이 섞여 들어오지 않게)
 $('#canvas').addEventListener('paste', e => { if (!editing || !editing.contains(e.target)) return; e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData('text/plain'); document.execCommand('insertText', false, t); });
@@ -535,13 +538,15 @@ function zoomAt(nk, cx, cy) {
   const sr = sc.getBoundingClientRect(); if (cx == null) { cx = sr.left + sr.width / 2; cy = sr.top + sr.height / 2; }
   const px = (cx - cr.left) / k0, py = (cy - cr.top) / k0;  // 확대 전 캔버스 좌표(px)
   zoom = clamp(nk, 0.1, 8); fitCanvas();
-  const cr2 = $('#canvas').getBoundingClientRect(); sc.scrollLeft += (cr2.left + px * zoom) - cx; sc.scrollTop += (cr2.top + py * zoom) - cy;
+  const cr2 = $('#canvas').getBoundingClientRect(); sc.scrollLeft += (cr2.left + px * zoom) - cx; sc.scrollTop += (cr2.top + py * zoom) - cy; placeTextBar(); if (cellSel) renderOverlay();
 }
+$('#scroller').addEventListener('scroll', () => { placeTextBar(); if (cellSel) showCellBar(); });
 $('#scroller').addEventListener('wheel', e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); zoomAt((zoom || kScale()) * (e.deltaY < 0 ? 1.1 : 0.9), e.clientX, e.clientY); }, { passive: false });
 // Space를 누른 채 끌면 화면 이동 (손 도구)
 let spaceDown = false, panDrag = null;
 document.addEventListener('keydown', e => { if (e.code === 'Space' && !editing && !$('#cellEd') && !(e.target.matches && e.target.matches('input,textarea,select,[contenteditable="true"]')) && !document.querySelector('dialog[open]')) { if (!spaceDown) { spaceDown = true; $('#stage').classList.add('panning'); } e.preventDefault(); } });
 document.addEventListener('keyup', e => { if (e.code === 'Space') { spaceDown = false; $('#stage').classList.remove('panning', 'grabbing'); } });
+window.addEventListener('blur', () => { spaceDown = false; panDrag = null; $('#stage').classList.remove('panning', 'grabbing'); });
 $('#scroller').addEventListener('pointerdown', e => { if (!spaceDown) return; e.preventDefault(); e.stopPropagation(); const sc = $('#scroller'); panDrag = { x: e.clientX, y: e.clientY, sl: sc.scrollLeft, st: sc.scrollTop }; $('#stage').classList.add('grabbing'); }, true);
 document.addEventListener('pointermove', e => { if (!panDrag) return; const sc = $('#scroller'); sc.scrollLeft = panDrag.sl - (e.clientX - panDrag.x); sc.scrollTop = panDrag.st - (e.clientY - panDrag.y); });
 document.addEventListener('pointerup', () => { if (panDrag) { panDrag = null; $('#stage').classList.remove('grabbing'); } });
@@ -574,7 +579,7 @@ document.addEventListener('keydown', e => {
   if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicate(); return; }
   if (mod && e.key.toLowerCase() === 'g') { e.preventDefault(); toggleGroup(); return; }
   if (mod && (e.code === 'BracketRight' || e.code === 'BracketLeft')) { e.preventDefault(); reorder(e.code === 'BracketRight' ? (e.shiftKey ? 'front' : 'up') : (e.shiftKey ? 'back' : 'down')); return; }
-  if (mod && (e.code === 'KeyC' || e.code === 'KeyX')) { if (sel.length) { const els = clone(selEls()); const assets = {}; const walk = v => { if (typeof v === 'string' && v.startsWith('a:') && doc.assets[v.slice(2)]) assets[v] = doc.assets[v.slice(2)]; else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(els); clip = { els, assets, page: cur, n: 0 }; if (e.code === 'KeyX') { removeSel(); toast('잘라냈습니다'); } else toast('복사했습니다'); } return; }
+  if (mod && (e.code === 'KeyC' || e.code === 'KeyX')) { if (sel.length) { const els = clone(selEls().filter(x => e.code !== 'KeyX' || !x.locked)); const assets = {}; const walk = v => { if (typeof v === 'string' && v.startsWith('a:') && doc.assets[v.slice(2)]) assets[v] = doc.assets[v.slice(2)]; else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(els); clip = { els, assets, page: cur, n: 0 }; if (e.code === 'KeyX') { removeSel(); toast('잘라냈습니다'); } else toast('복사했습니다'); } return; }
   if (mod && e.code === 'KeyV') { if (clip && clip.els) { e.preventDefault(); const inPlace = e.shiftKey || clip.page !== cur; if (!inPlace) clip.n++; const off = inPlace ? 0 : 5 * clip.n; const amap = {}; Object.entries(clip.assets).forEach(([ref, data]) => { amap[ref] = addAsset(data); }); const gmap = {}; const swap = v => { if (typeof v === 'string' && amap[v]) return amap[v]; if (Array.isArray(v)) return v.map(swap); if (v && typeof v === 'object') { for (const k in v) v[k] = swap(v[k]); } return v; }; const ids = clip.els.map(el => { const n = swap(clone(el)); n.id = uid(); delete n.gen; if (n.group) { gmap[n.group] = gmap[n.group] || uid(); n.group = gmap[n.group]; } n.x = r1(n.x + off); n.y = r1(n.y + off); page().els.push(n); return n.id; }); commit(); select(ids); rerender(); } return; }
   if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); select(page().els.filter(x => !x.hidden && !x.locked).map(x => x.id)); return; }
   if (e.key === 'Delete' || e.key === 'Backspace') { if (sel.length) { e.preventDefault(); removeSel(); } return; }
@@ -623,7 +628,7 @@ function addEl(el, at) { el.id = el.id || uid(); delete el.gen; if (at !== false
 function addEls(els, name) { if (!els.length) return; els.forEach(e => delete e.gen); const xs = els.map(e => e.x), ys = els.map(e => e.y); const bw = Math.max(...els.map(e => e.x + e.w)) - Math.min(...xs), bh = Math.max(...els.map(e => e.y + e.h)) - Math.min(...ys); const ox = r1(clamp((doc.w - bw) / 2, 0, doc.w)) - Math.min(...xs), oy = r1(clamp((doc.h - bh) / 2, 0, doc.h)) - Math.min(...ys); const g = els.length > 1 ? uid() : null; els.forEach(e => { e.id = e.id || uid(); e.x = r1(e.x + ox); e.y = r1(e.y + oy); if (g) e.group = g; page().els.push(e); }); commit(); select(els.map(e => e.id)); rerender(); noteRecentElem(name); }
 function addText(preset, st) { const base = Object.assign({}, TEXT_DEF, lastTextStyle || {}); const p = preset === 'h' ? { text: '제목을 입력하세요', size: 36, weight: 700, w: 120, h: 16 } : preset === 's' ? { text: '부제목을 입력하세요', size: 20, weight: 500, w: 100, h: 10 } : { text: '본문 글을 입력하세요', size: 12, weight: 400, w: 90, h: 8 }; const el = addEl(Object.assign(base, p, st || {})); setTimeout(() => { const d = $(`#canvas [data-id="${el.id}"]`); if (d && !(el.warp && el.warp !== 'none')) startEdit(d); }, 50); return el; }
 function addShape(kind, st) { const def = { type: 'shape', kind, x: 0, y: 0, w: 40, h: kind === 'line' ? 4 : 40, rot: 0, fill: kind === 'line' ? '#333333' : '#F0716B', stroke: '', strokeW: kind === 'line' ? 0.6 : 0, radius: 0, opacity: 1, name: '' }; if (kind === 'line') def.w = 80; if (kind === 'polygon') def.sides = 6; addEl(Object.assign(def, st || {})); }
-function addImage(ref) { const el = { type: 'image', src: ref, x: 0, y: 0, w: 60, h: 60, rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '' }; const s = src(ref); if (s) { const i = new Image(); i.onload = () => { const ar = i.naturalWidth / i.naturalHeight; el.w = Math.min(80, doc.w * 0.6); el.h = r1(el.w / ar); if (el.h > doc.h * 0.8) { el.h = r1(doc.h * 0.8); el.w = r1(el.h * ar); } el.x = r1((doc.w - el.w) / 2); el.y = r1((doc.h - el.h) / 2); rerender(); amendCommit(); }; i.src = s; } addEl(el); }
+function addImage(ref) { const el = { type: 'image', src: ref, x: 0, y: 0, w: 60, h: 60, rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '' }; const s = src(ref); if (s) { const i = new Image(); i.onload = () => { const ar = i.naturalWidth / i.naturalHeight; el.w = Math.min(80, doc.w * 0.6); el.h = r1(el.w / ar); if (el.h > doc.h * 0.8) { el.h = r1(doc.h * 0.8); el.w = r1(el.h * ar); } el.x = r1((doc.w - el.w) / 2); el.y = r1((doc.h - el.h) / 2); rerender(); if (hptr === at && hist.length - 1 === at) amendCommit(); else commit(); }; i.src = s; } addEl(el); const at = hptr; }
 function addCal() { const y = doc.calendar.year || new Date().getFullYear(); ensureHolidays(y, true); addEl({ type: 'cal', year: y, month: 1, x: 0, y: 0, w: Math.min(204, doc.w - 20), h: Math.min(100, doc.h - 30), rot: 0, opacity: 1, s: {}, events: [], notes: [], name: '달력' }); }
 function addMini() { const y = doc.calendar.year || new Date().getFullYear(); addEl({ type: 'mini', year: y, month: 1, x: 0, y: 0, w: 42, h: 24, rot: 0, opacity: 1, s: {}, name: '미니 달력' }); }
 function fileToDataURL(f) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); }); }
@@ -1706,7 +1711,7 @@ function renderDownload() {
   ${img && Number(doc.bleed) > 0 ? `<label class="chk"><input type="checkbox" id="dlImgBleed" ${S.imgBleed ? 'checked' : ''}> 도련 ${doc.bleed}mm 포함 (명함·스티커를 인쇄소에 이미지로 보낼 때)</label>` : ''}
   <div class="dlinfo"><b>다운로드 정보</b><ul><li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${doc.w} × ${doc.h} mm${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${(px(doc.h + 2 * bleed) * (img && S.merge && n > 1 ? n : 1)).toLocaleString()} px · ${Math.round(dpi)}dpi${(img ? Math.round(dpi) < Math.round(96 * S.scale) - 1 : DL_PDF[S.fmt] && Math.round(dpi) < DL_PDF[S.fmt].dpi - 1) ? ' <b>(크기가 커서 브라우저 한계에 맞춰 낮춤)</b>' : ''}</li>` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
   ${S.fmt === 'pdfprint' ? `<p class="hint" style="margin:6px 0 0">${bleed ? `도련 ${bleed}mm 포함 작업 사이즈${doc.cropMarks ? ' + 재단선(도련 바깥)' : ''}.` : '<b>도련이 0mm입니다.</b> 프로젝트 탭에서 도련을 넣으세요 (보통 1.5~3mm).'} 대부분의 인쇄소는 재단선 없는 작업 사이즈 파일을 받습니다.<br>이 PDF는 RGB 색입니다. 인쇄소에 "RGB→CMYK 변환, 검정 글자는 K100 단색"을 요청하고, 밝은 파랑·초록은 인쇄 시 탁해질 수 있으니 시안(교정쇄)으로 확인하세요.</p>` : ''}${S.fmt === 'pdfweb' ? '<p class="hint" style="margin:6px 0 0">확대하거나 인쇄하면 글자가 덜 선명할 수 있습니다. 인쇄·보관용은 "PDF (고화질)"을 쓰세요.</p>' : ''}</div>
-  <div class="dlprog" id="dlProg"></div>
+  <div id="dlWarn"></div><div class="dlprog" id="dlProg"></div>
   <button class="btn primary full" id="dlGo"><svg class="ic"><use href="#i-upload"/></svg>${S.fmt === 'pdfvector' ? '인쇄 창 열기' : '고해상도 다운로드'}</button>`;
   p.onclick = e => { const c = e.target.closest('[data-dl="close"]'); if (c) { p.remove(); return; } const fm = e.target.closest('[data-fmt2]'); if (fm) { S.fmt = fm.dataset.fmt2; renderDownload(); } };
   const sc = $('#dlScale'); if (sc) sc.onchange = e => { S.scale = Number(e.target.value); renderDownload(); };
@@ -1715,6 +1720,20 @@ function renderDownload() {
   const mg = $('#dlMerge'); if (mg) mg.onchange = e => { S.merge = e.target.checked; renderDownload(); };
   const ib = $('#dlImgBleed'); if (ib) ib.onchange = e => { S.imgBleed = e.target.checked; renderDownload(); };
   $('#dlGo').onclick = runDownload;
+  if (S.fmt !== 'jpg' && S.fmt !== 'png' || S.scale >= 3) checkResolution(dlPages()).then(list => { const w = $('#dlWarn'); if (!w || !list.length) return; w.innerHTML = `<div class="dlwarn"><b>⚠ 해상도가 낮은 사진 ${list.length}개</b> — 인쇄하면 흐리게 나올 수 있습니다.<ul>${list.slice(0, 5).map(x => `<li>${x.page}쪽 · ${esc(x.name)} · 약 ${x.ppi}ppi (권장 ${x.need}ppi 이상)</li>`).join('')}</ul>더 큰 원본으로 바꾸거나 그림을 작게 쓰세요.</div>`; });
+}
+// 인쇄 크기 대비 사진 해상도 점검 (보통 인쇄물 150ppi, 현수막처럼 큰 것은 60ppi 이상 권장)
+const imgSizeCache = new Map();
+function imgNatural(u) { if (!imgSizeCache.has(u)) imgSizeCache.set(u, new Promise(res => { const i = new Image(); i.onload = () => res([i.naturalWidth, i.naturalHeight]); i.onerror = () => res(null); i.src = u; })); return imgSizeCache.get(u); }
+async function checkResolution(pages) {
+  const need = Math.max(doc.w, doc.h) >= 1000 ? 60 : 150, out = [];
+  for (const pi of pages) for (const el of doc.pages[pi].els) {
+    if (el.type !== 'image' || el.hidden) continue; const u = src(el.src); if (!u || /^data:image\/svg|\.svg/i.test(u)) continue;
+    const nat = await imgNatural(u); if (!nat) continue;
+    const ar = nat[0] / nat[1], boxAr = el.w / el.h; const fill = el.fit === 'cover' ? (ar > boxAr ? el.h * ar : el.w) : el.fit === 'fill' ? el.w : (ar > boxAr ? el.w : el.h * ar);
+    const ppi = Math.round(nat[0] / ((fill * (el.zoom || 1)) / 25.4)); if (ppi < need) out.push({ page: pi + 1, name: elName(el), ppi, need });
+  }
+  return out;
 }
 // 페이지를 그림으로: 브라우저 자체 렌더링(SVG foreignObject, html-to-image)을 써서 편집 화면과 똑같이 —
 // 광선·그림자·혼합 모드·그라데이션 글자·필터까지 그대로. 실패하면 html2canvas로 대신 그림
@@ -1825,9 +1844,9 @@ async function printVector(pages) {
   const fams = new Set(); root.querySelectorAll('*').forEach(e => getComputedStyle(e).fontFamily.split(',').forEach(f => fams.add(f.trim().replace(/^["']|["']$/g, ''))));
   try { await Promise.all([...fams].flatMap(f => [400, 700].map(w => document.fonts.load(`${w} 12px "${f}"`, '가A').catch(() => {})))); await document.fonts.ready; } catch (e) {}
   await Promise.all(Array.from(root.querySelectorAll('img')).map(i => i.complete ? null : new Promise(r => { i.onload = i.onerror = r; })));
-  const done = () => { window.removeEventListener('afterprint', done); root.innerHTML = ''; renderAll(); setStatus(''); };
+  let fin = false; const done = () => { if (fin) return; fin = true; window.removeEventListener('afterprint', done); root.innerHTML = ''; renderAll(); setStatus(''); };
   window.addEventListener('afterprint', done);
-  setStatus('인쇄 창을 열었습니다 (대상: PDF로 저장, 여백: 없음, 배경 그래픽: 켬)'); window.print();
+  setStatus('인쇄 창을 열었습니다 (대상: PDF로 저장, 여백: 없음, 배경 그래픽: 켬)'); window.print(); setTimeout(() => { if ($('#printRoot').innerHTML) done(); }, 1500);
 }
 $('#btnExport').onclick = () => openDownload();
 
