@@ -240,7 +240,10 @@ function renderCanvas() {
   $('#stage').classList.toggle('pen', tool === 'pen');
 }
 function fitCanvas() {
-  const st = $('#stage'), w = st.clientWidth - 80, h = st.clientHeight - 150;
+  // 위에 떠 있는 도구 막대와 아래 쪽 이동 막대에 페이지가 가리지 않게 그 높이만큼 비워 두고 맞춤
+  const st = $('#stage'), tb = st.querySelector('.toolbar'), top = tb ? tb.offsetTop + tb.offsetHeight + 14 : 24, bot = 64;
+  $('#canvasWrap').style.margin = `${top}px 40px ${bot}px`; // 도구 막대가 두 줄로 접혀도 페이지를 가리지 않게
+  const w = st.clientWidth - 80, h = st.clientHeight - top - bot - 4;
   const k = zoom || Math.min(w / (doc.w * MM), h / (doc.h * MM));
   const c = $('#canvas'); c.style.transform = `scale(${k})`; c.dataset.k = k;
   const wrap = $('#canvasWrap'); wrap.style.width = (doc.w * MM * k) + 'px'; wrap.style.height = (doc.h * MM * k) + 'px';
@@ -884,13 +887,14 @@ function openTplPreview(t) {
   const n = pages.length > 1 && t.theme ? 2 : 1;
   $('#tplBody').innerHTML = `<div class="tprev" id="tprev" data-w="${t.w}" data-h="${t.h}" data-n="${n}">${pages.slice(0, n).map(pg => tplSheet(t, [pg])).join('')}</div>
   <div class="row" style="margin-top:14px;justify-content:flex-end"><span class="hint" style="margin:0;flex:1">${t.theme ? '테마는 표지·인성·달력·뒷표지 전체 디자인입니다. 이미 만든 캘린더에 적용하면 문구·일정·그림은 그대로 두고 디자인만 바뀝니다.' : '만든 뒤 글자·그림·색을 자유롭게 바꿀 수 있습니다. 로고와 연락처는 도장 정보로 고쳐 주세요.'}</span>
-  ${t.theme ? `<button class="btn" id="tplRetheme" ${hasCal ? '' : 'disabled title="현재 문서에 캘린더 페이지가 없습니다"'}>현재 캘린더에 적용</button><button class="btn primary" id="tplWizard">이 테마로 캘린더 만들기</button>` : `<button class="btn" id="tplAppend" ${(t.w === doc.w && t.h === doc.h) ? '' : 'title="현재 문서와 크기가 달라 요소가 어긋날 수 있습니다"'}>현재 문서 뒤에 추가</button><button class="btn primary" id="tplNew">이 템플릿으로 새 문서</button>`}</div>`;
+  ${t.theme ? `<button class="btn" id="tplRetheme" ${hasCal ? '' : 'disabled title="현재 문서에 캘린더 페이지가 없습니다"'}>현재 캘린더에 적용</button><button class="btn primary" id="tplWizard">이 테마로 캘린더 만들기</button>` : `${(() => { const same = Math.abs(t.w - doc.w) < 0.5 && Math.abs(t.h - doc.h) < 0.5, empty = !page().els.length; return `<button class="btn ${empty ? 'primary' : ''}" id="tplHere" title="${same ? '' : `${Math.round(doc.w)}×${Math.round(doc.h)}mm 문서 크기에 맞춰 다시 배치합니다`}">${empty ? '이 쪽에 적용' : '현재 쪽 뒤에 추가'}${same ? '' : ' (크기 맞춤)'}</button><button class="btn ${empty ? '' : 'primary'}" id="tplNew">이 템플릿으로 새 문서</button>`; })()}`}</div>`;
   requestAnimationFrame(() => fitBoxes($('#tplBody'), '.tprev', Math.min(520, window.innerHeight * 0.55)));
   if (t.theme) { $('#tplWizard').onclick = () => { d.close(); openWizard(doc.calendar.year, t.theme.id); }; const rb = $('#tplRetheme'); if (rb) rb.onclick = () => { doc.calendar.theme = clone(t.theme); const y = doc.calendar.year || 2027; const nrep = CAL.retheme(doc, uid, y); ensureAllHolidays(); commit(); renderAll(); d.close(); toast(`"${t.name}" 테마를 ${nrep}쪽에 적용했습니다`); }; }
   else {
     const ready = async () => { if (!t.lib) return true; try { setStatus('자료실 그림을 넣는 중…'); await NC.lib.materialize(pages, addAsset); return true; } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return false; } finally { setStatus(''); } };
     $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm('현재 문서를 닫고 새 문서를 만들까요? (지금 문서는 저장된 상태로 남습니다)')) return; if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const keepAssets = doc.assets; doc.assets = {}; if (!(await ready())) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = t.w; nd.h = t.h; nd.name = t.name; nd.pages = pages; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); if (await store.folderReady()) { try { await store.saveIntoFolder(doc); } catch (e) { toast('폴더에 저장하지 못했습니다: ' + e.message, true); } } renderAll(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다`); };
-    $('#tplAppend').onclick = async () => { if (!(await ready())) return; doc.pages.splice(cur + 1, 0, ...pages); commit(); goto(cur + 1); d.close(); toast(`${pages.length}쪽을 추가했습니다`); };
+    // 지금 문서에 넣기: 크기가 다르면 문서 크기에 맞춰 다시 배치, 지금 쪽이 비어 있으면 그 쪽을 바꿈
+    $('#tplHere').onclick = async () => { if (!(await ready())) return; const same = Math.abs(t.w - doc.w) < 0.5 && Math.abs(t.h - doc.h) < 0.5; const pg = same ? pages : resizedDoc({ w: t.w, h: t.h, pages }, doc.w, doc.h, 'fit').pages; const empty = !page().els.length; doc.pages.splice(empty ? cur : cur + 1, empty ? 1 : 0, ...pg); const at = empty ? cur : cur + 1; commit(); goto(at); d.close(); toast(empty ? `"${t.name}"을(를) 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`); };
   }
   d.showModal();
 }
@@ -1493,9 +1497,9 @@ async function saveAs() {
   gcAssets();
   try {
     if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
-    const prev = doc.name; doc.name = nm.trim(); $('#pname').value = doc.name;
+    const prev = doc.name, prevId = doc.docId; doc.name = nm.trim(); doc.docId = ''; $('#pname').value = doc.name; // 새 파일은 버전 기록을 새로 시작
     if (await store.folderReady()) { await store.saveIntoFolder(doc); }
-    else if (store.state.supported) { try { await store.connectNew(doc); } catch (e) { doc.name = prev; $('#pname').value = prev; throw e; } }
+    else if (store.state.supported) { try { await store.connectNew(doc); } catch (e) { doc.name = prev; doc.docId = prevId; $('#pname').value = prev; throw e; } }
     else { store.download(doc); }
     updateSaveBadge(); setStatus(`새 이름으로 저장됨 · ${store.state.fileName || doc.name}`); toast(`"${doc.name}"(으)로 저장했습니다. 이제 이 파일에서 작업합니다.`);
   } catch (e) { if (e.name !== 'AbortError') toast('저장하지 못했습니다: ' + e.message, true); }
@@ -1519,6 +1523,8 @@ function openFileMenu() {
   <button data-fm="save"><svg class="ic"><use href="#i-save"/></svg>저장<kbd>Ctrl+S</kbd></button>
   <button data-fm="saveas"><svg class="ic"><use href="#i-save"/></svg>새 이름으로 저장…<kbd>Ctrl+Shift+S</kbd></button>
   <button data-fm="dup"><svg class="ic"><use href="#i-dup"/></svg>사본 만들기 (복제)</button>
+  <button data-fm="bulk"><svg class="ic"><use href="#i-dup"/></svg>대량 만들기… (상장·명찰을 명단으로)</button>
+  <button data-fm="versions"><svg class="ic"><use href="#i-pages"/></svg>버전 기록… (예전 상태로 되돌리기)</button>
   <button data-fm="resize"><svg class="ic"><use href="#i-pages"/></svg>크기 조정… (다른 크기로 사본)</button>
   <button data-fm="rename"><svg class="ic"><use href="#i-text"/></svg>이름 바꾸기</button><hr>
   <button data-fm="new"><svg class="ic"><use href="#i-new"/></svg>새 디자인…</button>
@@ -1526,7 +1532,7 @@ function openFileMenu() {
   <button data-fm="down"><svg class="ic"><use href="#i-upload"/></svg>파일로 내려받기 (JSON)</button><hr>
   <button data-fm="sync"><svg class="ic"><use href="#i-folder"/></svg>저장 · 동기화 설정…</button>`;
   document.body.appendChild(m); m.style.left = Math.max(8, Math.min(b.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px'; m.style.top = (b.bottom + 6) + 'px';
-  m.onclick = e => { const x = e.target.closest('[data-fm]'); if (!x) return; m.remove(); ({ save: saveNow, saveas: saveAs, dup: duplicateDoc, resize: openResize, rename: () => { const p = $('#pname'); p.focus(); p.select(); }, new: openNewDesign, open: () => $('#btnOpen').click(), down: () => { gcAssets(); store.download(doc); }, sync: openSaveDialog })[x.dataset.fm](); };
+  m.onclick = e => { const x = e.target.closest('[data-fm]'); if (!x) return; m.remove(); ({ save: saveNow, saveas: saveAs, dup: duplicateDoc, resize: openResize, versions: openVersions, bulk: openBulk, rename: () => { const p = $('#pname'); p.focus(); p.select(); }, new: openNewDesign, open: () => $('#btnOpen').click(), down: () => { gcAssets(); store.download(doc); }, sync: openSaveDialog })[x.dataset.fm](); };
   setTimeout(() => document.addEventListener('pointerdown', function off(ev) { if (!m.contains(ev.target) && ev.target.closest('#btnFileMenu') == null) { m.remove(); } document.removeEventListener('pointerdown', off); }), 0);
 }
 $('#btnFileMenu').onclick = openFileMenu;
@@ -2240,6 +2246,86 @@ function renderResize() {
       if (await store.folderReady()) { const h = await store.copyIntoFolder(nd); if (window.confirm(`"${h.name.replace(/\.design\.json$/i, '')}"을(를) 만들었습니다.\n\n확인: 새 크기 디자인을 열어 다듬기\n취소: 지금 문서에서 계속`)) await openFolderDoc(h, '새 크기 디자인을 열었습니다'); else toast('새 크기 사본을 만들었습니다 (열기 목록에 있습니다)'); }
       else { store.download(nd); toast('새 크기 사본을 파일로 내려받았습니다'); }
     } catch (e) { toast('사본을 만들지 못했습니다: ' + e.message, true); }
+  };
+}
+
+/* ---- 버전 기록 (Canva 'Version history'): 동기화 폴더에 15분마다 남은 문서 상태를 보고 되돌리거나 사본으로 ---- */
+const DOC_KEYS_SKIP = new Set(['saveId', 'lineage', 'savedBy', 'pcId', 'savedAt', 'docId', 'name', '_size']);
+async function openVersions() {
+  if (!(store.state.handle && (await store.folderReady()))) { toast('버전 기록은 동기화 폴더(구글 드라이브)에 저장된 문서에서 쓸 수 있습니다 (저장 ▾ → 저장·동기화 설정)', true); return; }
+  let d = $('#dlgVer'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgVer'; d.className = 'wide'; d.innerHTML = `<div class="dhead"><h2>버전 기록</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="verBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
+  d.showModal(); await renderVersions();
+}
+let verSel = null;
+async function renderVersions() {
+  const B = $('#verBody'); B.innerHTML = '<p class="hint">불러오는 중…</p>';
+  if (!doc.docId) { B.innerHTML = '<p class="hint">아직 남은 버전이 없습니다. 이 문서가 동기화 폴더에 저장되면 15분마다 자동으로 남습니다.</p><button class="btn" id="verNow">지금 상태를 버전으로 남기기</button>'; $('#verNow').onclick = verNow; return; }
+  const list = await store.listSnapshots(doc.docId);
+  const fmt = t => { const x = new Date(t), p2 = n => String(n).padStart(2, '0'); const today = new Date().toDateString() === x.toDateString(); return `${today ? '오늘' : `${x.getMonth() + 1}월 ${x.getDate()}일`} ${p2(x.getHours())}:${p2(x.getMinutes())}`; };
+  B.innerHTML = `<div class="vergrid"><div><div class="row" style="margin-bottom:8px"><span class="hint" style="margin:0;flex:1">${list.length}개 · 15분마다 자동 저장 (최근 40개)</span><button class="btn sm" id="verNow">지금 상태 남기기</button></div>
+    <ul class="list verlist">${list.map((x, i) => `<li data-ver="${i}" class="${verSel === x.name ? 'on' : ''}"><b>${fmt(x.time)}</b><span>${esc(x.pc)}${x.memo ? ' · ' + esc(x.memo) : ''}</span></li>`).join('') || '<li><span>아직 남은 버전이 없습니다</span></li>'}</ul></div>
+    <div class="verprev"><div id="verPrev" class="hint">왼쪽에서 버전을 고르면 미리 봅니다</div><div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" id="verCopy" disabled>사본으로 만들기</button><button class="btn primary" id="verRestore" disabled>이 버전으로 되돌리기</button></div></div></div>`;
+  $('#verNow').onclick = verNow;
+  B.querySelector('.verlist').onclick = async e => {
+    const li = e.target.closest('[data-ver]'); if (!li) return; const x = list[Number(li.dataset.ver)]; verSel = x.name; B.querySelectorAll('.verlist li').forEach(l => l.classList.toggle('on', l === li));
+    $('#verPrev').innerHTML = '<span class="hint">불러오는 중…</span>'; let j; try { j = await store.readSnapshot(x); } catch (err) { $('#verPrev').textContent = '읽지 못했습니다: ' + err.message; return; }
+    const saved = doc; let html = ''; try { doc = Object.assign({}, saved, { w: j.w, h: j.h, assets: j.assets || {}, bleed: 0, cropMarks: false }); const k = Math.min(300 / (j.w * MM), 260 / (j.h * MM)); html = `<div class="verbox" style="width:${j.w * MM * k}px;height:${j.h * MM * k}px"><div style="transform:scale(${k});transform-origin:0 0">${sheetHTML(j.pages[0], 'thumb')}</div></div>`; } finally { doc = saved; }
+    $('#verPrev').innerHTML = `${html}<p class="hint">${fmt(x.time)} · ${esc(x.pc)} · ${j.pages.length}쪽 · ${Math.round(j._size / 1024)}KB</p>`;
+    $('#verRestore').disabled = false; $('#verCopy').disabled = false;
+    $('#verRestore').onclick = async () => {
+      if (!window.confirm(`${fmt(x.time)} 버전으로 되돌릴까요?\n지금 상태는 버전 기록에 먼저 남겨 두고, Ctrl+Z로도 되돌릴 수 있습니다.`)) return;
+      await verNow('되돌리기 전'); Object.keys(j).forEach(k => { if (!DOC_KEYS_SKIP.has(k)) doc[k] = j[k]; }); cur = Math.min(cur, doc.pages.length - 1); sel = []; cellSel = null; commit(); zoom = 0; renderAll(); fitCanvas(); $('#dlgVer').close(); toast(`${fmt(x.time)} 버전으로 되돌렸습니다`);
+    };
+    $('#verCopy').onclick = async () => { const c = Object.assign({}, j, { name: `${doc.name || '디자인'} (${fmt(x.time).replace(':', '시 ')}분 버전)` }); delete c._size; const h = await store.copyIntoFolder(c); toast(`"${h.name.replace(/\.design\.json$/i, '')}"을(를) 만들었습니다 (열기 목록에 있습니다)`); };
+  };
+}
+async function verNow(memo) {
+  if (typeof memo !== 'string') memo = '직접 남김';
+  if (store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
+  if (!doc.docId) doc.docId = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  try { await store.snapshot(doc.docId, JSON.stringify(Object.assign({}, doc, { savedBy: store.pcName(), savedAt: Date.now() })), memo); if ($('#dlgVer') && $('#dlgVer').open && memo === '직접 남김') { toast('지금 상태를 버전으로 남겼습니다'); renderVersions(); } } catch (e) { toast('버전을 남기지 못했습니다: ' + e.message, true); }
+}
+
+/* ---- 대량 만들기 (Canva 'Bulk create'): 명단 표를 붙여 넣으면 지금 쪽을 사람 수만큼 복제하며 {열 이름}을 채움 ----
+   글 상자 안에 {이름}·{띠}처럼 첫 줄의 열 이름을 중괄호로 넣어 두거나, 열마다 바꿀 글 상자를 골라 연결 */
+let bulkState = { raw: '', map: {} };
+function parseTable(raw) {
+  const lines = raw.replace(/\r/g, '').split('\n').filter(l => l.trim()); if (!lines.length) return { head: [], rows: [] };
+  const tab = lines[0].includes('\t'); const split = l => { if (tab) return l.split('\t'); const out = []; let cur_ = '', q = false; for (const ch of l) { if (ch === '"') q = !q; else if (ch === ',' && !q) { out.push(cur_); cur_ = ''; } else cur_ += ch; } out.push(cur_); return out; };
+  const head = split(lines[0]).map(h => h.trim()); return { head, rows: lines.slice(1).map(l => { const c = split(l); return Object.fromEntries(head.map((h, i) => [h, (c[i] || '').trim()])); }) };
+}
+function openBulk() {
+  endEdit(); let d = $('#dlgBulk');
+  if (!d) { d = document.createElement('dialog'); d.id = 'dlgBulk'; d.className = 'wide'; d.innerHTML = `<div class="dhead"><h2>대량 만들기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="bulkBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
+  d.showModal(); renderBulk();
+}
+function renderBulk() {
+  const S = bulkState, T = parseTable(S.raw), texts = page().els.filter(e => e.type === 'text' && !e.locked);
+  const holes = new Set(); texts.forEach(e => (e.text.match(/\{([^{}\n]+)\}/g) || []).forEach(m => holes.add(m.slice(1, -1).trim())));
+  const B = $('#bulkBody');
+  if (!$('#bulkRaw')) {
+    B.innerHTML = `<p class="hint">1) 지금 쪽(${cur + 1}쪽)의 글 상자에 <b>{이름}</b>·<b>{띠}</b>·<b>{날짜}</b>처럼 바꿀 자리를 적어 두세요. 2) 엑셀·구글 시트에서 <b>첫 줄(열 이름)을 포함해</b> 명단을 복사해 아래에 붙여 넣으세요. 3) 사람 수만큼 쪽이 문서 끝에 만들어집니다 (최대 300명).</p>
+    <textarea id="bulkRaw" rows="7" placeholder="이름&#9;띠&#9;날짜&#10;김태권&#9;노란띠&#9;2027. 3. 15.&#10;이도장&#9;초록띠&#9;2027. 3. 15." style="width:100%;font:13px/1.5 ui-monospace,Menlo,monospace"></textarea><div id="bulkInfo"></div>`;
+    $('#bulkRaw').value = S.raw; $('#bulkRaw').addEventListener('input', () => { S.raw = $('#bulkRaw').value; renderBulk(); });
+  }
+  const unmatched = T.head.filter(h => h && !holes.has(h));
+  $('#bulkInfo').innerHTML = !T.head.length ? `<p class="hint" style="margin-top:8px">${holes.size ? `이 쪽에서 찾은 자리: ${[...holes].map(h => `<b>{${esc(h)}}</b>`).join(' ')}` : '이 쪽에는 아직 {자리}가 없습니다. 글 상자를 두 번 눌러 {이름}처럼 적어 넣으세요.'}</p>` : `
+    <p class="hint" style="margin:8px 0">${T.rows.length}명 · 열: ${T.head.map(h => holes.has(h) ? `<b class="ok">{${esc(h)}} ✓</b>` : `<span>${esc(h)}</span>`).join(' · ')}</p>
+    ${unmatched.length ? `<div class="grid2">${unmatched.map(h => `<label class="f"><span>"${esc(h)}" 열을 넣을 글 상자</span><select data-bmap="${esc(h)}"><option value="">넣지 않음</option>${texts.map(e => `<option value="${e.id}" ${S.map[h] === e.id ? 'selected' : ''}>${esc(elName(e).slice(0, 30))}</option>`).join('')}</select></label>`).join('')}</div><p class="hint">연결한 글 상자는 글자 전체가 그 열 값으로 바뀝니다.</p>` : ''}
+    ${T.rows.length ? `<table class="btable"><tr>${T.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr>${T.rows.slice(0, 4).map(r => `<tr>${T.head.map(h => `<td>${esc(r[h])}</td>`).join('')}</tr>`).join('')}${T.rows.length > 4 ? `<tr><td colspan="${T.head.length}">… ${T.rows.length - 4}명 더</td></tr>` : ''}</table>` : ''}
+    <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn primary" id="bulkGo" ${T.rows.length && T.rows.length <= 300 ? '' : 'disabled'}>${Math.min(T.rows.length, 300)}쪽 만들기</button></div>`;
+  B.querySelectorAll('[data-bmap]').forEach(sl => sl.onchange = () => { S.map[sl.dataset.bmap] = sl.value; });
+  const go = $('#bulkGo'); if (go) go.onclick = () => {
+    const src_ = page(), made = [];
+    T.rows.slice(0, 300).forEach(r => {
+      const p = clone(src_); p.els.forEach(e => { e.id = uid(); delete e.gen; }); const gm = {}; p.els.forEach(e => { if (e.group) { gm[e.group] = gm[e.group] || uid(); e.group = gm[e.group]; } });
+      const fill = t => t.replace(/\{([^{}\n]+)\}/g, (m, k) => (k.trim() in r ? r[k.trim()] : m));
+      p.els.forEach((e, i) => { if (e.type !== 'text') return; const srcEl = src_.els[i]; const mapped = Object.keys(S.map).find(h => S.map[h] === srcEl.id); const nv = mapped ? r[mapped] : fill(e.text); if (nv === e.text) return;
+        if (e.html && e.htmlFor === e.text && !mapped) { const dv = document.createElement('div'); dv.innerHTML = e.html; const tw = document.createTreeWalker(dv, NodeFilter.SHOW_TEXT); let n; while ((n = tw.nextNode())) n.nodeValue = fill(n.nodeValue); if (domText(dv) === nv) { e.html = richHTML(dv) || undefined; e.htmlFor = nv; if (!e.html) { delete e.html; delete e.htmlFor; } } else { delete e.html; delete e.htmlFor; } } else { delete e.html; delete e.htmlFor; }
+        e.text = nv; });
+      p.name = (T.head[0] && r[T.head[0]]) || p.name; made.push(p);
+    });
+    doc.pages.push(...made); commit(); const first = doc.pages.length - made.length; $('#dlgBulk').close(); goto(first); toast(`${made.length}쪽을 만들었습니다 (${first + 1}~${doc.pages.length}쪽). 다운로드에서 한꺼번에 PDF로 받으세요`);
   };
 }
 
