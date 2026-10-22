@@ -344,6 +344,8 @@ document.addEventListener('keydown', e => {
   if (mod && e.key.toLowerCase() === 'v') { if (clip) { const gmap = {}; const ids = clip.map(el => { const n = clone(el); n.id = uid(); if (n.group) { gmap[n.group] = gmap[n.group] || uid(); n.group = gmap[n.group]; } n.x += 5; n.y += 5; page().els.push(n); return n.id; }); commit(); select(ids); rerender(); } return; }
   if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); select(page().els.map(x => x.id)); return; }
   if (e.key === 'Delete' || e.key === 'Backspace') { if (sel.length) { e.preventDefault(); removeSel(); } return; }
+  // 선택한 요소가 없으면 ↑↓(←→)로 페이지를 이동 (페이지 목록에서 고른 뒤 계속 넘기기)
+  if (e.key.startsWith('Arrow') && !sel.length) { e.preventDefault(); goto(cur + (e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 1)); const t = document.querySelector(`#thumbs .thumb[data-i="${cur}"]`); if (t) t.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
   if (e.key.startsWith('Arrow')) { if (!sel.length) return; e.preventDefault(); const d = e.shiftKey ? 5 : 1; selEls().forEach(el => { if (el.locked) return; if (e.key === 'ArrowLeft') el.x -= d; if (e.key === 'ArrowRight') el.x += d; if (e.key === 'ArrowUp') el.y -= d; if (e.key === 'ArrowDown') el.y += d; }); commit(); rerender(); return; }
   if (e.key === 'PageDown') goto(cur + 1); if (e.key === 'PageUp') goto(cur - 1);
   if (e.key.toLowerCase() === 'p' && !mod) setTool(tool === 'pen' ? 'select' : 'pen');
@@ -462,7 +464,7 @@ function renderSide() {
     <h3>내보내기</h3><div class="tile"><button data-pj="pdf"><svg class="ic" style="width:22px;height:22px"><use href="#i-pdf"/></svg>PDF</button><button data-pj="png"><svg class="ic" style="width:22px;height:22px"><use href="#i-img"/></svg>현재 쪽 PNG</button></div>
     <h3>공휴일</h3><p class="hint">${Object.keys(doc.holidays).length ? '적용 연도: ' + Object.keys(doc.holidays).sort().map(y => `${y}년(${doc.holidays[y].length})`).join(', ') : '아직 없습니다.'}</p><button class="btn sm" data-pj="hol">공휴일 가져오기·편집</button>
     <h3>반복 일정 규칙</h3><button class="btn sm" data-pj="rules">규칙 편집</button>`;
-    body.onclick = e => { const b = e.target.closest('[data-pj]'); if (!b) return; const k = b.dataset.pj; if (k === 'save') openSaveDialog(); if (k === 'open') $('#btnOpen').click(); if (k === 'new') $('#btnNew').click(); if (k === 'down') { gcAssets(); store.download(doc); } if (k === 'pdf') openDownload('pdfweb'); if (k === 'png') openDownload('png'); if (k === 'hol') openHoliday(); if (k === 'rules') openRules(); };
+    body.onclick = e => { const b = e.target.closest('[data-pj]'); if (!b) return; const k = b.dataset.pj; if (k === 'save') openSaveDialog(); if (k === 'open') $('#btnOpen').click(); if (k === 'new') $('#btnNew').click(); if (k === 'down') { gcAssets(); store.download(doc); } if (k === 'pdf') openDownload('pdfhq'); if (k === 'png') openDownload('png'); if (k === 'hol') openHoliday(); if (k === 'rules') openRules(); };
     body.oninput = e => { const t = e.target, k = t.dataset.k; if (!k) return; const v = t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) : t.value; doc[k.slice(4)] = v; if (k === 'doc.name') $('#pname').value = v; markDirty(); };
   } else if (sideTab === 'ai') {
     body.innerHTML = `<p class="hint">Claude가 문구와 이미지 프롬프트를 만들고, Gemini가 삽화를 그립니다. API 키는 "API 설정"에 넣습니다.</p>
@@ -672,7 +674,14 @@ function renderWizard() {
 const F = (label, k, v, o = {}) => {
   const val = v == null ? '' : v;
   if (o.type === 'textarea') return `<label class="f"><span>${label}</span><textarea data-k="${k}" rows="${o.rows || 3}">${esc(val)}</textarea></label>`;
-  if (o.type === 'range') return `<label class="f"><span>${label} <small>${val}</small></span><input data-k="${k}" type="range" min="${o.min}" max="${o.max}" step="${o.step}" value="${val}"></label>`;
+  if (o.type === 'range' || o.type === 'slider') {
+    // 슬라이더 + 숫자 칸 (pct: 0~1 값을 0~100%로 보여 줌). 이름을 두 번 누르면 기본값으로
+    const sc = o.pct ? 100 : 1, dv = o.def != null ? o.def : '', num = val === '' ? '' : Math.round(Number(val) * sc * 1000) / 1000;
+    const mn = o.min * sc, mx = o.max * sc, st = (o.step || 1) * sc;
+    return `<div class="sl" data-def="${dv}"><div class="slh"><span title="두 번 누르면 기본값">${label}</span><span class="slv"><input class="num" data-k="${k}" type="number" value="${num}" step="${st}" ${sc !== 1 ? `data-scale="${sc}"` : ''}>${o.unit || (o.pct ? '%' : '')}</span></div><input data-k="${k}" type="range" min="${mn}" max="${mx}" step="${st}" value="${num}" ${sc !== 1 ? `data-scale="${sc}"` : ''} style="--p:${Math.max(0, Math.min(100, (num - mn) / (mx - mn) * 100))}%"></div>`;
+  }
+  if (o.type === 'angle') return `<div class="sl ang" data-def="${o.def || 0}"><div class="slh"><span title="두 번 누르면 기본값">${label}</span><span class="slv"><input class="num" data-k="${k}" type="number" value="${val || 0}" step="1">°</span></div><div class="dialrow"><div class="dial" data-dial="${k}" style="--a:${val || 0}deg" title="끌어서 방향 바꾸기 (Shift: 15° 단위)"><i></i></div><div class="dialq">${[0, 45, 90, 135, 180, 270].map(a => `<button type="button" data-setnum="${k}:${a}">${a}°</button>`).join('')}</div></div></div>`;
+  if (o.type === 'xy') { const [kx, ky] = k.split(','); const [vx, vy] = v; const r = o.range || 3; return `<div class="sl xy"><div class="slh"><span>${label}</span></div><div class="xyrow"><div class="xypad" data-xy="${k}" data-r="${r}" data-step="${o.step || 0.1}" title="점을 끌어서 위치 조정"><i style="left:${50 + vx / r * 50}%;top:${50 + vy / r * 50}%"></i></div><div class="xyside"><div class="slv"><small>가로</small><input class="num" data-k="${kx}" type="number" value="${vx}" step="${o.step || 0.1}"><small>세로</small><input class="num" data-k="${ky}" type="number" value="${vy}" step="${o.step || 0.1}"></div><div class="xyq">${(o.presets || []).map(([t, x, y]) => `<button type="button" data-setxy="${k}:${x},${y}">${t}</button>`).join('')}</div></div></div></div>`; }
   if (o.type === 'color') return `<label class="f"><span>${label}</span><input data-k="${k}" type="color" value="${esc(/^#[0-9a-f]{6}$/i.test(val) ? val : '#000000')}"></label>`;
   if (o.type === 'check') return `<label class="chk"><input data-k="${k}" type="checkbox" ${val ? 'checked' : ''}> ${label}</label>`;
   if (o.type === 'select') return `<label class="f"><span>${label}</span><select data-k="${k}">${o.options.map(([a, t]) => `<option value="${a}" ${String(a) === String(val) ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`;
@@ -720,7 +729,7 @@ function renderInspector() {
   if (els.length > 1) {
     const grouped = els.some(e => e.group); const texts = els.filter(e => e.type === 'text');
     ins.innerHTML = `<h2>${els.length}개 선택${grouped ? ' <small>그룹</small>' : ''}</h2><div class="row"><button class="btn sm" id="mGroup">${grouped ? '그룹 해제' : '그룹으로 묶기'}</button><button class="btn sm" id="mLock">모두 잠금</button><button class="btn sm" id="mUnlock">잠금 해제</button></div>
-    ${F('투명도', 'multi.opacity', els[0].opacity == null ? 1 : els[0].opacity, { type: 'range', min: 0, max: 1, step: 0.05 })}
+    ${F('투명도', 'multi.opacity', els[0].opacity == null ? 1 : els[0].opacity, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 1 })}
     ${texts.length ? `<h3>글자 ${texts.length}개 한꺼번에</h3><div class="row"><label class="f" style="flex:1;margin:0"><span>글꼴</span>${fontPicker('font', texts[0].font)}</label></div><div class="grid2">${F('크기(pt)', 'multi.size', texts[0].size, { type: 'number', step: 0.5 })}${F('색', 'multi.color', texts[0].color, { type: 'color' })}</div>` : ''}
     <p class="hint">도구 막대의 정렬·간격 균등 버튼으로 맞추고, 끌어서 함께 옮깁니다.</p>`;
     ins.onclick = e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.fp) { openFontPop(b); return; } if (b.id === 'mGroup') toggleGroup(); if (b.id === 'mLock') { els.forEach(x => x.locked = true); commit(); renderOverlay(); } if (b.id === 'mUnlock') { els.forEach(x => x.locked = false); commit(); renderOverlay(); } };
@@ -728,25 +737,28 @@ function renderInspector() {
   }
   const el = els[0];
   let h = `<h2>${esc(elName(el))} <span class="row"><button class="btn sm icon ${el.locked ? 'on' : ''}" data-k="locked" data-toggle="1" title="잠금">${el.locked ? '🔒' : '🔓'}</button></span></h2>`;
-  const geo = `<h3>위치·크기</h3><div class="grid4">${F('X', 'x', el.x, { type: 'number', step: 0.5 })}${F('Y', 'y', el.y, { type: 'number', step: 0.5 })}${F('너비', 'w', el.w, { type: 'number', step: 0.5 })}${F('높이', 'h', el.h, { type: 'number', step: 0.5 })}</div><div class="grid2">${F('회전(°)', 'rot', el.rot || 0, { type: 'number', step: 1 })}${F('투명도', 'opacity', el.opacity == null ? 1 : el.opacity, { type: 'range', min: 0, max: 1, step: 0.05 })}</div>${el.type !== 'text' ? F('혼합 모드', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['darken', '어둡게'], ['lighten', '밝게'], ['difference', '차이']] }) : ''}${F('이름', 'name', el.name)}`;
-  const shadowBlock = (pfx) => `<details class="fx" ${el.shadow ? 'open' : ''}><summary>${F('그림자', 'shadow', el.shadow, { type: 'check' })}</summary><div class="grid4">${F('색', 'shC', el.shC || '#000000', { type: 'color' })}${F('진하기', 'shA', el.shA == null ? 0.3 : el.shA, { type: 'number', step: 0.05, min: 0, max: 1 })}${F('가로', 'shX', el.shX == null ? 0.6 : el.shX, { type: 'number', step: 0.1 })}${F('세로', 'shY', el.shY == null ? 0.7 : el.shY, { type: 'number', step: 0.1 })}</div>${F('번짐(mm)', 'shB', el.shB == null ? 0.5 : el.shB, { type: 'number', step: 0.1, min: 0 })}</details>`;
-  const fillBlock = `<div class="seg">${[['solid', '단색'], ['gradient', '그라데이션']].map(([a, t]) => `<button data-set="fillType:${a}" aria-pressed="${(el.fillType || 'solid') === a}">${t}</button>`).join('')}</div>${(el.fillType || 'solid') === 'gradient' ? `<div class="grid3">${F('시작 색', 'g1', el.g1 || '#2f5bea', { type: 'color' })}${F('끝 색', 'g2', el.g2 || '#e0564b', { type: 'color' })}${F('각도', 'gAngle', el.gAngle == null ? 90 : el.gAngle, { type: 'number', step: 15 })}</div>${el.type === 'shape' || el.type === 'path' ? F('모양', 'gKind', el.gKind || 'linear', { type: 'select', options: [['linear', '직선'], ['radial', '원형']] }) : ''}` : ''}`;
+  const geo = `<h3>위치·크기</h3><div class="grid4">${F('X', 'x', el.x, { type: 'number', step: 0.5 })}${F('Y', 'y', el.y, { type: 'number', step: 0.5 })}${F('너비', 'w', el.w, { type: 'number', step: 0.5 })}${F('높이', 'h', el.h, { type: 'number', step: 0.5 })}</div>${F('회전', 'rot', el.rot || 0, { type: 'angle', def: 0 })}${F('투명도', 'opacity', el.opacity == null ? 1 : el.opacity, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 1 })}${el.type !== 'text' ? F('혼합 모드', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['darken', '어둡게'], ['lighten', '밝게'], ['difference', '차이']] }) : ''}${F('이름', 'name', el.name)}`;
+  const shadowBlock = (pfx) => `<details class="fx" ${el.shadow ? 'open' : ''}><summary>${F('그림자', 'shadow', el.shadow, { type: 'check' })}</summary>${F('위치 — 점을 끌어 조정', 'shX,shY', [el.shX == null ? 0.6 : el.shX, el.shY == null ? 0.7 : el.shY], { type: 'xy', range: 4, step: 0.1, presets: [['아래', 0, 1], ['오른쪽 아래', 0.8, 0.8], ['왼쪽 아래', -0.8, 0.8], ['위', 0, -1], ['가운데(번짐만)', 0, 0]] })}
+    ${F('번짐', 'shB', el.shB == null ? 0.5 : el.shB, { type: 'slider', min: 0, max: 6, step: 0.1, unit: 'mm', def: 0.5 })}${F('진하기', 'shA', el.shA == null ? 0.3 : el.shA, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 0.3 })}
+    ${F('그림자 색', 'shC', el.shC || '#000000', { type: 'color' })}<div class="shq"><span>빠른 설정</span>${[['부드럽게', 0.4, 0.8, 2.2, 0.22], ['또렷하게', 0.6, 0.7, 0.2, 0.45], ['강하게', 1.2, 1.4, 0.6, 0.6], ['떠 있게', 0, 2.2, 3.5, 0.3]].map(([t, x, y, b, a]) => `<button type="button" class="btn sm" data-shq="${x},${y},${b},${a}">${t}</button>`).join('')}</div></details>`;
+  const fillBlock = `<div class="seg">${[['solid', '단색'], ['gradient', '그라데이션']].map(([a, t]) => `<button data-set="fillType:${a}" aria-pressed="${(el.fillType || 'solid') === a}">${t}</button>`).join('')}</div>${(el.fillType || 'solid') === 'gradient' ? `<div class="grid3">${F('시작 색', 'g1', el.g1 || '#2f5bea', { type: 'color' })}${F('끝 색', 'g2', el.g2 || '#e0564b', { type: 'color' })}</div>${F('방향', 'gAngle', el.gAngle == null ? 90 : el.gAngle, { type: 'angle', def: 90 })}${el.type === 'shape' || el.type === 'path' ? F('모양', 'gKind', el.gKind || 'linear', { type: 'select', options: [['linear', '직선'], ['radial', '원형']] }) : ''}` : ''}`;
   if (el.type === 'text') {
     h += `<h3>스타일 프리셋</h3><div class="tstyles sm">${FX.TEXT_PRESETS.map(p => `<button data-preset="${p.id}" class="tsb"><span style="${FX.textStyle(Object.assign({}, TEXT_DEF, { font: 'Jua', size: 13, weight: 800, align: 'center' }, p.st))}">${esc(p.name)}</span></button>`).join('')}</div>
     <h3>글자</h3>${F('내용', 'text', el.text, { type: 'textarea', rows: 3 })}
     <div class="row"><label class="f" style="flex:1;margin:0"><span>글꼴</span>${fontPicker('font', el.font)}</label><button class="btn sm" id="fontBrowse" style="margin-top:17px">둘러보기</button></div>
-    <div class="grid3">${F('크기(pt)', 'size', el.size, { type: 'number', step: 0.5, min: 2, max: 600 })}${F('굵기', 'weight', el.weight, { type: 'select', options: [[300, '가늘게'], [400, '보통'], [500, '중간'], [600, '약간 굵게'], [700, '굵게'], [800, '아주 굵게'], [900, '최대']] })}${F('줄 간격', 'lh', el.lh, { type: 'number', step: 0.05, min: 0.5, max: 4 })}</div>
+    ${F('글자 크기', 'size', el.size, { type: 'slider', min: 4, max: Math.max(160, el.size || 0), step: 0.5, unit: 'pt', def: 12 })}<div class="grid2">${F('굵기', 'weight', el.weight, { type: 'select', options: [[300, '가늘게'], [400, '보통'], [500, '중간'], [600, '약간 굵게'], [700, '굵게'], [800, '아주 굵게'], [900, '최대']] })}</div>
+    <div class="grid2">${F('줄 간격', 'lh', el.lh, { type: 'slider', min: 0.6, max: 3, step: 0.05, def: 1.35 })}${F('자간', 'ls', el.ls, { type: 'slider', min: -0.2, max: 1, step: 0.01, unit: 'em', def: 0 })}</div>
     <div class="row"><div class="seg" style="flex:1">${[['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']].map(([a, t]) => `<button data-set="align:${a}" aria-pressed="${el.align === a}">${t}</button>`).join('')}</div><div class="seg" style="flex:1">${[['top', '위'], ['middle', '중앙'], ['bottom', '아래']].map(([a, t]) => `<button data-set="valign:${a}" aria-pressed="${(el.valign || 'top') === a}">${t}</button>`).join('')}</div></div>
-    <div class="grid4">${F('자간(em)', 'ls', el.ls, { type: 'number', step: 0.01, min: -0.3, max: 2 })}${F('기울임', 'italic', el.italic, { type: 'check' })}${F('밑줄', 'underline', el.underline, { type: 'check' })}${F('취소선', 'strike', el.strike, { type: 'check' })}</div>
+    <div class="grid4">${F('기울임', 'italic', el.italic, { type: 'check' })}${F('밑줄', 'underline', el.underline, { type: 'check' })}${F('취소선', 'strike', el.strike, { type: 'check' })}</div>
     <div class="grid3">${F('대문자', 'upper', el.upper, { type: 'check' })}${F('세로쓰기', 'vertical', el.vertical, { type: 'check' })}${F('혼합', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['difference', '차이']] })}</div>
     <h3>채우기</h3>${fillBlock}${(el.fillType || 'solid') === 'solid' ? `${F('글자 색', 'color', el.color, { type: 'color' })}${sw('color', el.color)}` : ''}
     <h3>효과 <small>포토샵 레이어 스타일</small></h3>
-    <details class="fx" ${el.strokeW > 0 ? 'open' : ''}><summary><span class="chk">외곽선</span></summary><div class="grid2">${F('두께(pt)', 'strokeW', el.strokeW, { type: 'number', step: 0.25, min: 0, max: 30 })}${F('색', 'strokeC', el.strokeC, { type: 'color' })}</div>${sw('strokeC', el.strokeC)}</details>
+    <details class="fx" ${el.strokeW > 0 ? 'open' : ''}><summary><span class="chk">외곽선</span></summary>${F('두께', 'strokeW', el.strokeW, { type: 'slider', min: 0, max: 12, step: 0.25, unit: 'pt', def: 0 })}${F('색', 'strokeC', el.strokeC, { type: 'color' })}${sw('strokeC', el.strokeC)}</details>
     ${shadowBlock()}
-    <details class="fx" ${el.glow ? 'open' : ''}><summary>${F('광선 (글로우)', 'glow', el.glow, { type: 'check' })}</summary><div class="grid2">${F('색', 'glowC', el.glowC || '#ffd34d', { type: 'color' })}${F('번짐(mm)', 'glowB', el.glowB == null ? 1.2 : el.glowB, { type: 'number', step: 0.1, min: 0 })}</div></details>
-    <details class="fx" ${el.d3 > 0 ? 'open' : ''}><summary><span class="chk">3D 입체·긴 그림자</span></summary><div class="grid4">${F('단수', 'd3', el.d3 || 0, { type: 'number', step: 1, min: 0, max: 30 })}${F('색', 'd3C', el.d3C || '#1e2b5a', { type: 'color' })}${F('가로', 'd3X', el.d3X == null ? 0.3 : el.d3X, { type: 'number', step: 0.05 })}${F('세로', 'd3Y', el.d3Y == null ? 0.3 : el.d3Y, { type: 'number', step: 0.05 })}</div></details>
-    <details class="fx" ${el.warp && el.warp !== 'none' ? 'open' : ''}><summary><span class="chk">휘기 (아치·원형)</span></summary>${F('모양', 'warp', el.warp || 'none', { type: 'select', options: [['none', '없음'], ['arcUp', '위로 아치'], ['arcDown', '아래로 아치'], ['circle', '원형']] })}${F('휘는 정도', 'warpAmt', el.warpAmt == null ? 40 : el.warpAmt, { type: 'range', min: 5, max: 100, step: 5 })}<p class="hint">휘어진 글자는 한 줄만 표시되며 내용은 위 "내용" 칸에서 고칩니다.</p></details>
-    <details class="fx" ${el.bg ? 'open' : ''}><summary><span class="chk">상자 배경</span></summary><div class="grid3">${F('색', 'bg', el.bg || '#ffffff', { type: 'color' })}${F('모서리(mm)', 'bgR', el.bgR || 0, { type: 'number', step: 0.5, min: 0 })}${F('여백(mm)', 'pad', el.pad, { type: 'number', step: 0.5, min: 0 })}</div><button class="btn sm" data-set="bg:">배경 없음</button></details>
+    <details class="fx" ${el.glow ? 'open' : ''}><summary>${F('광선 (글로우)', 'glow', el.glow, { type: 'check' })}</summary>${F('번짐', 'glowB', el.glowB == null ? 1.2 : el.glowB, { type: 'slider', min: 0, max: 10, step: 0.1, unit: 'mm', def: 1.2 })}${F('색', 'glowC', el.glowC || '#ffd34d', { type: 'color' })}</details>
+    <details class="fx" ${el.d3 > 0 ? 'open' : ''}><summary><span class="chk">3D 입체·긴 그림자</span></summary>${F('깊이 (단수)', 'd3', el.d3 || 0, { type: 'slider', min: 0, max: 30, step: 1, def: 0 })}${F('방향 — 점을 끌어 조정', 'd3X,d3Y', [el.d3X == null ? 0.3 : el.d3X, el.d3Y == null ? 0.3 : el.d3Y], { type: 'xy', range: 1, step: 0.05, presets: [['오른쪽 아래', 0.3, 0.3], ['아래', 0, 0.4], ['왼쪽 아래', -0.3, 0.3], ['오른쪽', 0.4, 0]] })}${F('색', 'd3C', el.d3C || '#1e2b5a', { type: 'color' })}</details>
+    <details class="fx" ${el.warp && el.warp !== 'none' ? 'open' : ''}><summary><span class="chk">휘기 (아치·원형)</span></summary>${F('모양', 'warp', el.warp || 'none', { type: 'select', options: [['none', '없음'], ['arcUp', '위로 아치'], ['arcDown', '아래로 아치'], ['circle', '원형']] })}${F('휘는 정도', 'warpAmt', el.warpAmt == null ? 40 : el.warpAmt, { type: 'slider', min: 5, max: 100, step: 1, def: 40 })}<p class="hint">휘어진 글자는 한 줄만 표시되며 내용은 위 "내용" 칸에서 고칩니다.</p></details>
+    <details class="fx" ${el.bg ? 'open' : ''}><summary><span class="chk">상자 배경</span></summary>${F('색', 'bg', el.bg || '#ffffff', { type: 'color' })}${F('모서리', 'bgR', el.bgR || 0, { type: 'slider', min: 0, max: 20, step: 0.5, unit: 'mm', def: 0 })}${F('여백', 'pad', el.pad, { type: 'slider', min: 0, max: 20, step: 0.5, unit: 'mm', def: 0 })}<button class="btn sm" data-set="bg:">배경 없음</button></details>
     ${el.role ? `<p class="hint">역할: ${el.role}${el.month ? ' · ' + el.month + '월' : ''} (AI 문구·테마 적용 대상)</p>` : ''}` + geo;
   } else if (el.type === 'image') {
     const f = el.fx || {};
@@ -754,26 +766,26 @@ function renderInspector() {
     <div class="row"><label class="btn sm">바꾸기(파일)<input type="file" accept="image/*" id="imgReplace" hidden></label><button class="btn sm" id="imgLib">사진 보관함</button><button class="btn sm ai" id="imgAI">AI로 만들기</button></div>
     <div class="row" style="margin-top:6px"><button class="btn sm primary" id="imgEdit" ${src(el.src) ? '' : 'disabled'}>편집기 (배경 지우기·브러시·자르기)</button>${el.srcOrig ? '<button class="btn sm" id="imgOrig">원본으로</button>' : ''}</div>
     <h3>필터 <small>포토샵 조정</small></h3><div class="tstyles sm">${FX.IMG_PRESETS.map(([id, n, fx]) => `<button class="tsb" data-imgpreset="${id}"><span>${n}</span></button>`).join('')}</div>
-    <div class="grid2">${F('밝기 %', 'fx.bri', f.bri == null ? 100 : f.bri, { type: 'range', min: 20, max: 200, step: 5 })}${F('대비 %', 'fx.con', f.con == null ? 100 : f.con, { type: 'range', min: 20, max: 200, step: 5 })}${F('채도 %', 'fx.sat', f.sat == null ? 100 : f.sat, { type: 'range', min: 0, max: 250, step: 5 })}${F('색조 °', 'fx.hue', f.hue || 0, { type: 'range', min: 0, max: 360, step: 5 })}${F('흐림 mm', 'fx.blur', f.blur || 0, { type: 'range', min: 0, max: 5, step: 0.1 })}${F('흑백 %', 'fx.gray', f.gray || 0, { type: 'range', min: 0, max: 100, step: 5 })}${F('세피아 %', 'fx.sepia', f.sepia || 0, { type: 'range', min: 0, max: 100, step: 5 })}${F('반전', 'fx.inv', f.inv, { type: 'check' })}</div>
-    <details class="fx" ${el.tint ? 'open' : ''}><summary><span class="chk">색 입히기 (틴트)</span></summary><div class="grid3">${F('색', 'tint', el.tint || '#1E2B5A', { type: 'color' })}${F('세기', 'tintA', el.tintA == null ? 0.4 : el.tintA, { type: 'range', min: 0, max: 1, step: 0.05 })}${F('방식', 'tintMode', el.tintMode || 'multiply', { type: 'select', options: [['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['color', '색상'], ['normal', '덮기']] })}</div><button class="btn sm" data-set="tint:">틴트 없음</button></details>
+    <div class="grid2 sls">${F('밝기', 'fx.bri', f.bri == null ? 100 : f.bri, { type: 'slider', min: 20, max: 200, step: 1, unit: '%', def: 100 })}${F('대비', 'fx.con', f.con == null ? 100 : f.con, { type: 'slider', min: 20, max: 200, step: 1, unit: '%', def: 100 })}${F('채도', 'fx.sat', f.sat == null ? 100 : f.sat, { type: 'slider', min: 0, max: 250, step: 1, unit: '%', def: 100 })}${F('색조', 'fx.hue', f.hue || 0, { type: 'slider', min: 0, max: 360, step: 1, unit: '°', def: 0 })}${F('흐림', 'fx.blur', f.blur || 0, { type: 'slider', min: 0, max: 5, step: 0.1, unit: 'mm', def: 0 })}${F('흑백', 'fx.gray', f.gray || 0, { type: 'slider', min: 0, max: 100, step: 1, unit: '%', def: 0 })}${F('세피아', 'fx.sepia', f.sepia || 0, { type: 'slider', min: 0, max: 100, step: 1, unit: '%', def: 0 })}${F('반전', 'fx.inv', f.inv, { type: 'check' })}</div>
+    <details class="fx" ${el.tint ? 'open' : ''}><summary><span class="chk">색 입히기 (틴트)</span></summary><div class="grid3">${F('색', 'tint', el.tint || '#1E2B5A', { type: 'color' })}${F('세기', 'tintA', el.tintA == null ? 0.4 : el.tintA, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 0.4 })}${F('방식', 'tintMode', el.tintMode || 'multiply', { type: 'select', options: [['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['color', '색상'], ['normal', '덮기']] })}</div><button class="btn sm" data-set="tint:">틴트 없음</button></details>
     <h3>프레임·모양</h3>${F('모양 마스크', 'clip', el.clip || 'none', { type: 'select', options: FX.CLIPS })}
     <div class="grid2">${F('채우기', 'fit', el.fit, { type: 'select', options: [['contain', '안에 맞춤'], ['cover', '꽉 채움(잘림)'], ['fill', '늘림']] })}${F('정렬', 'pos', el.pos, { type: 'select', options: [['50% 50%', '가운데'], ['50% 100%', '아래'], ['50% 0%', '위'], ['0% 50%', '왼쪽'], ['100% 50%', '오른쪽'], ['0% 100%', '왼쪽 아래'], ['100% 100%', '오른쪽 아래']] })}</div>
-    <div class="grid3">${F('확대', 'zoom', el.zoom || 1, { type: 'range', min: 1, max: 4, step: 0.05 })}${F('가로 이동 %', 'panX', el.panX || 0, { type: 'range', min: -50, max: 50, step: 1 })}${F('세로 이동 %', 'panY', el.panY || 0, { type: 'range', min: -50, max: 50, step: 1 })}</div>
-    <div class="grid3">${F('좌우 뒤집기', 'flip', el.flip, { type: 'check' })}${F('모서리(mm)', 'radius', el.radius, { type: 'number', step: 0.5, min: 0 })}${F('테두리 두께', 'borderW', el.borderW || 0, { type: 'number', step: 0.25, min: 0 })}</div>${F('테두리 색', 'border', el.border || '#000000', { type: 'color' })}<button class="btn sm" data-set="border:">테두리 없음</button>
+    <div>${F('확대', 'zoom', el.zoom || 1, { type: 'slider', min: 1, max: 4, step: 0.05, unit: '배', def: 1 })}${F('가로 이동', 'panX', el.panX || 0, { type: 'slider', min: -50, max: 50, step: 1, unit: '%', def: 0 })}${F('세로 이동', 'panY', el.panY || 0, { type: 'slider', min: -50, max: 50, step: 1, unit: '%', def: 0 })}</div>
+    <div class="grid3">${F('좌우 뒤집기', 'flip', el.flip, { type: 'check' })}</div>${F('모서리', 'radius', el.radius, { type: 'slider', min: 0, max: 40, step: 0.5, unit: 'mm', def: 0 })}${F('테두리 두께', 'borderW', el.borderW || 0, { type: 'slider', min: 0, max: 10, step: 0.25, unit: 'mm', def: 0 })}${F('테두리 색', 'border', el.border || '#000000', { type: 'color' })}<button class="btn sm" data-set="border:">테두리 없음</button>
     ${shadowBlock()}
     <div class="row" style="margin-top:8px"><button class="btn sm" id="imgFitBox">비율대로 상자 맞춤</button><button class="btn sm" id="imgFull">페이지 가득</button></div>` + geo;
   } else if (el.type === 'shape') {
     h += `<h3>도형</h3>${F('종류', 'kind', el.kind, { type: 'select', options: FX.SHAPES })}
-    ${el.kind === 'star' || el.kind === 'burst' ? `<div class="grid2">${F('꼭짓점 수', 'points', el.points || (el.kind === 'star' ? 5 : 12), { type: 'number', step: 1, min: 3, max: 40 })}${F('안쪽 비율', 'inner', el.inner == null ? (el.kind === 'star' ? 0.45 : 0.78) : el.inner, { type: 'range', min: 0.1, max: 0.95, step: 0.05 })}</div>` : ''}
-    ${el.kind === 'polygon' ? F('변의 수', 'sides', el.sides || 6, { type: 'number', step: 1, min: 3, max: 20 }) : ''}
-    ${el.kind === 'ring' || el.kind === 'cross' ? F('굵기 비율', 'inner', el.inner == null ? (el.kind === 'ring' ? 0.3 : 0.34) : el.inner, { type: 'range', min: 0.05, max: 0.9, step: 0.05 }) : ''}
-    ${el.kind === 'arrow' ? `<div class="grid2">${F('머리 길이', 'headL', el.headL == null ? 0.4 : el.headL, { type: 'range', min: 0.1, max: 0.9, step: 0.05 })}${F('몸통 굵기', 'headW', el.headW == null ? 0.5 : el.headW, { type: 'range', min: 0.1, max: 1, step: 0.05 })}</div>` : ''}
-    ${el.kind === 'rect' ? F('모서리(mm)', 'radius', el.radius, { type: 'number', step: 0.5, min: 0 }) : ''}
+    ${el.kind === 'star' || el.kind === 'burst' ? `<div class="grid2">${F('꼭짓점 수', 'points', el.points || (el.kind === 'star' ? 5 : 12), { type: 'slider', min: 3, max: 40, step: 1 })}${F('안쪽 비율', 'inner', el.inner == null ? (el.kind === 'star' ? 0.45 : 0.78) : el.inner, { type: 'slider', min: 0.1, max: 0.95, step: 0.01, pct: true })}</div>` : ''}
+    ${el.kind === 'polygon' ? F('변의 수', 'sides', el.sides || 6, { type: 'slider', min: 3, max: 20, step: 1, def: 6 }) : ''}
+    ${el.kind === 'ring' || el.kind === 'cross' ? F('굵기 비율', 'inner', el.inner == null ? (el.kind === 'ring' ? 0.3 : 0.34) : el.inner, { type: 'slider', min: 0.05, max: 0.9, step: 0.01, pct: true }) : ''}
+    ${el.kind === 'arrow' ? `<div class="grid2">${F('머리 길이', 'headL', el.headL == null ? 0.4 : el.headL, { type: 'slider', min: 0.1, max: 0.9, step: 0.01, pct: true, def: 0.4 })}${F('몸통 굵기', 'headW', el.headW == null ? 0.5 : el.headW, { type: 'slider', min: 0.1, max: 1, step: 0.01, pct: true, def: 0.5 })}</div>` : ''}
+    ${el.kind === 'rect' ? F('모서리', 'radius', el.radius, { type: 'slider', min: 0, max: Math.max(5, Math.round(Math.min(el.w, el.h) / 2)), step: 0.5, unit: 'mm', def: 0 }) : ''}
     ${el.kind === 'line' ? `<div class="grid2">${F('끝 화살표', 'arrowEnd', el.arrowEnd, { type: 'check' })}${F('시작 화살표', 'arrowStart', el.arrowStart, { type: 'check' })}</div>` : `<h3>채우기</h3>${fillBlock}${(el.fillType || 'solid') === 'solid' ? `${F('채우기 색', 'fill', el.fill || '#000000', { type: 'color' })}${sw('fill', el.fill)}<button class="btn sm" data-set="fill:">채우기 없음</button>` : ''}`}
-    <h3>선</h3><div class="grid3">${F('선 색', 'stroke', el.stroke || (el.kind === 'line' ? el.fill : '#000000'), { type: 'color' })}${F('두께(mm)', 'strokeW', el.strokeW || 0, { type: 'number', step: 0.1, min: 0 })}${F('점선', 'dash', el.dash || '', { type: 'select', options: [['', '실선'], ['3 2', '긴 점선'], ['1.5 1.5', '점선'], ['0.1 2', '점점선'], ['6 2 1.5 2', '쇄선']] })}</div>${F('선 끝', 'cap', el.cap || 'butt', { type: 'select', options: [['butt', '각지게'], ['round', '둥글게'], ['square', '네모']] })}${el.kind !== 'line' ? '<button class="btn sm" data-set="stroke:">선 없음</button>' : ''}
+    <h3>선</h3>${F('두께', 'strokeW', el.strokeW || 0, { type: 'slider', min: 0, max: 8, step: 0.1, unit: 'mm', def: 0 })}<div class="grid2">${F('선 색', 'stroke', el.stroke || (el.kind === 'line' ? el.fill : '#000000'), { type: 'color' })}${F('점선', 'dash', el.dash || '', { type: 'select', options: [['', '실선'], ['3 2', '긴 점선'], ['1.5 1.5', '점선'], ['0.1 2', '점점선'], ['6 2 1.5 2', '쇄선']] })}</div>${F('선 끝', 'cap', el.cap || 'butt', { type: 'select', options: [['butt', '각지게'], ['round', '둥글게'], ['square', '네모']] })}${el.kind !== 'line' ? '<button class="btn sm" data-set="stroke:">선 없음</button>' : ''}
     ${shadowBlock()}` + geo;
   } else if (el.type === 'path') {
-    h += `<h3>펜 선</h3><div class="grid3">${F('선 색', 'stroke', el.stroke || '#000000', { type: 'color' })}${F('두께(mm)', 'strokeW', el.strokeW == null ? 0.8 : el.strokeW, { type: 'number', step: 0.1, min: 0 })}${F('점선', 'dash', el.dash || '', { type: 'select', options: [['', '실선'], ['3 2', '긴 점선'], ['1.5 1.5', '점선'], ['0.1 2', '점점선']] })}</div>
+    h += `<h3>펜 선</h3>${F('두께', 'strokeW', el.strokeW == null ? 0.8 : el.strokeW, { type: 'slider', min: 0.1, max: 8, step: 0.1, unit: 'mm', def: 0.8 })}<div class="grid2">${F('선 색', 'stroke', el.stroke || '#000000', { type: 'color' })}${F('점선', 'dash', el.dash || '', { type: 'select', options: [['', '실선'], ['3 2', '긴 점선'], ['1.5 1.5', '점선'], ['0.1 2', '점점선']] })}</div>
     <div class="grid3">${F('부드럽게', 'smooth', el.smooth !== false, { type: 'check' })}${F('닫힌 모양', 'closed', el.closed, { type: 'check' })}${F('선 끝', 'cap', el.cap || 'round', { type: 'select', options: [['round', '둥글게'], ['butt', '각지게'], ['square', '네모']] })}</div>
     ${el.closed ? `<h3>채우기</h3>${fillBlock}${(el.fillType || 'solid') === 'solid' ? `${F('채우기 색', 'fill', el.fill || '#FFE89A', { type: 'color' })}<button class="btn sm" data-set="fill:">채우기 없음</button>` : ''}` : ''}
     ${shadowBlock()}<p class="hint">점 ${(el.pts || []).length}개. 크기를 바꾸면 선도 함께 늘어납니다. 다시 그리려면 P 키로 펜을 켜세요.</p>` + geo;
@@ -838,7 +850,8 @@ function setK(obj, k, v) { const ks = k.split('.'); let a = obj; for (let i = 0;
 $('#inspector').addEventListener('input', e => {
   const t = e.target, k = t.dataset.k; if (!k) return;
   let v = t.type === 'checkbox' ? t.checked : t.value;
-  if (t.type === 'number' || t.type === 'range') v = Number(v);
+  if (t.type === 'number' || t.type === 'range') { v = Number(v); if (t.dataset.scale) v = v / Number(t.dataset.scale); }
+  syncCtl(t);
   if (k.startsWith('pg.')) { page()[k.slice(3)] = v; renderCanvas(); return; }
   if (k.startsWith('multi.')) { const kk = k.slice(6); selEls().forEach(el => { if (kk === 'opacity' || el.type === 'text') el[kk] = v; }); renderCanvas(); return; }
   const el = selEls()[0]; if (!el) return;
@@ -848,8 +861,34 @@ $('#inspector').addEventListener('input', e => {
   if (k === 'chartColors') { el.colors = v.split(',').map(s => s.trim()).filter(Boolean); renderCanvas(); return; }
   setK(el, k, v);
   if (el.type === 'text') lastTextStyle = { font: el.font, size: el.size, weight: el.weight, color: el.color };
-  if (t.type === 'range') { const sm = t.parentElement.querySelector('small'); if (sm) sm.textContent = v; }
   renderCanvas();
+});
+// 슬라이더·숫자 칸·다이얼·패드가 같은 값을 보여 주게 맞춤
+function syncCtl(t) {
+  const box = t.closest('.sl'); if (!box) return;
+  box.querySelectorAll(`[data-k="${t.dataset.k}"]`).forEach(o => { if (o !== t) o.value = t.value; if (o.type === 'range') { const mn = Number(o.min), mx = Number(o.max); o.style.setProperty('--p', Math.max(0, Math.min(100, (Number(o.value) - mn) / (mx - mn) * 100)) + '%'); } });
+  const dial = box.querySelector(`.dial[data-dial="${t.dataset.k}"]`); if (dial) dial.style.setProperty('--a', t.value + 'deg');
+  const pad = box.querySelector('.xypad'); if (pad) { const [kx, ky] = pad.dataset.xy.split(','), r = Number(pad.dataset.r); const vx = Number(box.querySelector(`input[data-k="${kx}"]`).value), vy = Number(box.querySelector(`input[data-k="${ky}"]`).value); const dot = pad.querySelector('i'); dot.style.left = Math.max(0, Math.min(100, 50 + vx / r * 50)) + '%'; dot.style.top = Math.max(0, Math.min(100, 50 + vy / r * 50)) + '%'; }
+}
+// 다이얼·패드 끌기, 빠른 버튼, 이름 두 번 눌러 기본값
+function ctlSet(k, v) { const el = selEls()[0]; if (!el) return; setK(el, k, v); const inp = $(`#inspector input.num[data-k="${k}"]`); if (inp) { inp.value = Math.round(v * 1000) / 1000; syncCtl(inp); } renderCanvas(); }
+$('#inspector').addEventListener('pointerdown', e => {
+  const dial = e.target.closest('.dial'), pad = e.target.closest('.xypad'); if (!dial && !pad) return; e.preventDefault();
+  const tgt = dial || pad; try { tgt.setPointerCapture(e.pointerId); } catch (err) {} tgt.classList.add('drag');
+  const move = ev => { const r = tgt.getBoundingClientRect();
+    if (dial) { let a = Math.atan2(ev.clientY - (r.top + r.height / 2), ev.clientX - (r.left + r.width / 2)) * 180 / Math.PI + 90; a = (a + 360) % 360; a = ev.shiftKey ? Math.round(a / 15) * 15 : Math.round(a); if (dial.dataset.dial === 'rot' && a > 180) a -= 360; ctlSet(dial.dataset.dial, a); }
+    else { const [kx, ky] = pad.dataset.xy.split(','), R = Number(pad.dataset.r), stp = Number(pad.dataset.step); const q = v => Math.round(Math.max(-R, Math.min(R, v)) / stp) * stp; ctlSet(kx, q(((ev.clientX - r.left) / r.width * 2 - 1) * R)); ctlSet(ky, q(((ev.clientY - r.top) / r.height * 2 - 1) * R)); } };
+  const up = () => { tgt.classList.remove('drag'); tgt.removeEventListener('pointermove', move); tgt.removeEventListener('pointerup', up); commit(); };
+  tgt.addEventListener('pointermove', move); tgt.addEventListener('pointerup', up); move(e);
+});
+$('#inspector').addEventListener('click', e => {
+  const sn = e.target.closest('[data-setnum]'); if (sn) { const [k, v] = sn.dataset.setnum.split(':'); ctlSet(k, Number(v)); commit(); return; }
+  const sx = e.target.closest('[data-setxy]'); if (sx) { const [k, v] = sx.dataset.setxy.split(':'); const [kx, ky] = k.split(','); const [x, y] = v.split(',').map(Number); ctlSet(kx, x); ctlSet(ky, y); commit(); return; }
+  const sq = e.target.closest('[data-shq]'); if (sq) { const [x, y, b, a] = sq.dataset.shq.split(',').map(Number); const el = selEls()[0]; if (!el) return; Object.assign(el, { shadow: true, shX: x, shY: y, shB: b, shA: a }); commit(); rerender(); return; }
+});
+$('#inspector').addEventListener('dblclick', e => {
+  const lab = e.target.closest('.slh > span:first-child'); if (!lab) return; const box = lab.closest('.sl'); const def = box.dataset.def; if (def === '' || def == null) return;
+  const inp = box.querySelector('input.num'); const sc = Number(inp.dataset.scale || 1); ctlSet(inp.dataset.k, Number(def)); inp.value = Number(def) * sc; syncCtl(inp); commit();
 });
 $('#inspector').addEventListener('change', e => {
   const t = e.target; const el = selEls()[0];
@@ -1370,8 +1409,10 @@ async function runAI(fn) { const busy = $('#aiBusy'); const btns = $$('#aiBody b
 
 /* ---- 내보내기 ---- */
 /* ---- 다운로드 (미리캔버스식): PNG · JPG · PDF(웹/인쇄) — 작업한 크기 그대로 바로 받기 ---- */
-const DL_FMTS = [['jpg', 'JPG', '공유에 알맞은 이미지', '권장'], ['png', 'PNG', '배경이 투명할 수 있는 고품질 이미지'], ['pdfweb', 'PDF (웹용)', '가볍고 화면·카톡 공유에 알맞은 문서 (150dpi)'], ['pdfprint', 'PDF (인쇄용)', '인쇄소용 고해상도 300dpi · 도련·재단선 포함'], ['pdfvector', 'PDF (벡터 · 인쇄 창)', '글자가 가장 선명 · 브라우저 인쇄 창에서 "PDF로 저장"']];
-let dlState = { fmt: 'jpg', scale: 2, pages: 'all', range: '', merge: false };
+const DL_FMTS = [['pdfhq', 'PDF (고화질)', '보관·인쇄에 알맞은 300dpi 문서', '권장'], ['jpg', 'JPG', '공유에 알맞은 이미지'], ['png', 'PNG', '배경이 투명할 수 있는 고품질 이미지'], ['pdfweb', 'PDF (가벼운 공유용)', '카톡·메일로 보내기 좋은 200dpi 문서'], ['pdfprint', 'PDF (인쇄소용)', '300dpi 최고 화질 · 도련·재단선 포함'], ['pdfvector', 'PDF (벡터 · 인쇄 창)', '글자가 가장 선명 · 브라우저 인쇄 창에서 "PDF로 저장"']];
+// PDF 종류별 해상도·압축 품질
+const DL_PDF = { pdfhq: { dpi: 300, q: 0.92, bleed: false }, pdfweb: { dpi: 200, q: 0.88, bleed: false }, pdfprint: { dpi: 300, q: 0.97, bleed: true } };
+let dlState = { fmt: 'pdfhq', scale: 3, pages: 'all', range: '', merge: false };
 function loadScript(src, test) { if (test()) return Promise.resolve(); return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('모듈을 불러오지 못했습니다 (인터넷 필요)')); document.head.appendChild(s); }); }
 function dlPages() {
   const n = doc.pages.length; if (dlState.pages === 'cur') return [cur];
@@ -1391,16 +1432,16 @@ function openDownload(fmt) {
 function renderDownload() {
   const p = $('#dlPanel'); if (!p) return; const S = dlState, f = DL_FMTS.find(x => x[0] === S.fmt);
   const img = S.fmt === 'jpg' || S.fmt === 'png', n = dlPages().length, bleed = S.fmt === 'pdfprint' || S.fmt === 'pdfvector' ? (Number(doc.bleed) || 0) : 0;
-  const dpi = img ? dlDpi(96 * S.scale, 0) : S.fmt === 'pdfweb' ? dlDpi(150, 0) : S.fmt === 'pdfprint' ? dlDpi(300, bleed) : 0;
+  const dpi = img ? dlDpi(96 * S.scale, 0) : DL_PDF[S.fmt] ? dlDpi(DL_PDF[S.fmt].dpi, bleed) : 0;
   const px = v => Math.round(v / 25.4 * dpi);
   p.innerHTML = `<div class="dlhead"><b>다운로드</b><button class="x" data-dl="close">×</button></div>
   <label class="f"><span>파일 형식</span></label><div class="dlfmts">${DL_FMTS.map(([k, t, d, tag]) => `<button data-fmt2="${k}" class="${S.fmt === k ? 'on' : ''}"><b>${t}${tag ? ` <em>${tag}</em>` : ''}</b><small>${d}</small></button>`).join('')}</div>
-  ${img ? `<label class="f"><span>크기</span><select id="dlScale">${[[1, '1배 (화면용)'], [2, '2배 (선명하게)'], [3, '3배 (인쇄 가능)']].map(([v, t]) => `<option value="${v}" ${S.scale === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>` : ''}
+  ${img ? `<label class="f"><span>크기</span><select id="dlScale">${[[1, '1배 (화면용 96dpi)'], [2, '2배 (선명하게 192dpi)'], [3, '3배 (인쇄 가능 288dpi)']].map(([v, t]) => `<option value="${v}" ${S.scale === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>` : ''}
   <label class="f"><span>페이지 선택</span><select id="dlPages"><option value="all" ${S.pages === 'all' ? 'selected' : ''}>모든 페이지 (1~${doc.pages.length})</option><option value="cur" ${S.pages === 'cur' ? 'selected' : ''}>현재 페이지 (${cur + 1})</option><option value="range" ${S.pages === 'range' ? 'selected' : ''}>직접 입력</option></select></label>
   ${S.pages === 'range' ? `<label class="f"><input id="dlRange" placeholder="예: 1-3, 5" value="${esc(S.range)}"></label>` : ''}
   ${img && n > 1 ? `<label class="chk"><input type="checkbox" id="dlMerge" ${S.merge ? 'checked' : ''}> 한 장의 이미지로 합치기 (세로로 이어 붙임)</label>` : ''}
   <div class="dlinfo"><b>다운로드 정보</b><ul><li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${doc.w} × ${doc.h} mm${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${px(doc.h + 2 * bleed).toLocaleString()} px · ${Math.round(dpi)}dpi${img && Math.round(dpi) < 96 * S.scale - 1 ? ' (크기가 커서 낮춤)' : ''}</li>` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
-  ${S.fmt === 'pdfprint' && !bleed ? '<p class="hint" style="margin:6px 0 0">인쇄소에 맡길 때는 프로젝트 탭에서 도련 3mm와 재단선을 켜세요.</p>' : ''}</div>
+  ${S.fmt === 'pdfprint' && !bleed ? '<p class="hint" style="margin:6px 0 0">인쇄소에 맡길 때는 프로젝트 탭에서 도련 3mm와 재단선을 켜세요.</p>' : ''}${S.fmt === 'pdfweb' ? '<p class="hint" style="margin:6px 0 0">확대하거나 인쇄하면 글자가 덜 선명할 수 있습니다. 인쇄·보관용은 "PDF (고화질)"을 쓰세요.</p>' : ''}</div>
   <div class="dlprog" id="dlProg"></div>
   <button class="btn primary full" id="dlGo"><svg class="ic"><use href="#i-upload"/></svg>${S.fmt === 'pdfvector' ? '인쇄 창 열기' : '고해상도 다운로드'}</button>`;
   p.onclick = e => { const c = e.target.closest('[data-dl="close"]'); if (c) { p.remove(); return; } const fm = e.target.closest('[data-fmt2]'); if (fm) { S.fmt = fm.dataset.fmt2; renderDownload(); } };
@@ -1445,15 +1486,15 @@ async function runDownload() {
       }
     } else {
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => window.jspdf);
-      const print = S.fmt === 'pdfprint', bleed = print ? (Number(doc.bleed) || 0) : 0;
-      const W = doc.w + 2 * bleed, H = doc.h + 2 * bleed, dpi = dlDpi(print ? 300 : 150, bleed);
+      const cfg = DL_PDF[S.fmt], bleed = cfg.bleed ? (Number(doc.bleed) || 0) : 0;
+      const W = doc.w + 2 * bleed, H = doc.h + 2 * bleed, dpi = dlDpi(cfg.dpi, bleed);
       const pdf = new jspdf.jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
       pdf.setProperties({ title: doc.name || 'design', creator: '나라차 디자인 공방' });
       for (let i = 0; i < pages.length; i++) {
         say(`${i + 1}/${pages.length} 페이지 그리는 중…`);
         const c = await renderPageCanvas(doc.pages[pages[i]], dpi, bleed ? 'print' : 'thumb', '#ffffff');
         if (i) pdf.addPage([W, H], W > H ? 'landscape' : 'portrait');
-        pdf.addImage(c.toDataURL('image/jpeg', print ? 0.93 : 0.85), 'JPEG', 0, 0, W, H, undefined, 'FAST');
+        pdf.addImage(c.toDataURL('image/jpeg', cfg.q), 'JPEG', 0, 0, W, H, `p${i}`, 'NONE');
       }
       saveBlob(pdf.output('blob'), `${base}.pdf`);
     }
