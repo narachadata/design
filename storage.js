@@ -49,7 +49,7 @@ NC.store = (function () {
   const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   // 저장본 계보: saveId(이번 저장) + lineage(최근 저장 id들). 다른 PC가 내 마지막 저장을 이어받았는지 판단에 씀
   Object.assign(state, { lastSaveId: '', lineage: [], seq: 0, conflict: false, retries: 0 });
-  function adopt(j) { state.lastSaveId = (j && j.saveId) || ''; state.lineage = (j && j.lineage) || (state.lastSaveId ? [state.lastSaveId] : []); }
+  function adopt(j) { state.lastSnap = 0; state.lastSaveId = (j && j.saveId) || ''; state.lineage = (j && j.lineage) || (state.lastSaveId ? [state.lastSaveId] : []); }
   // 파일 내용 j가 내 마지막 저장본을 이어받은 것인지 (아니면 서로 갈라진 것)
   function descends(j) { return !state.lastSaveId || ((j && j.lineage) || []).includes(state.lastSaveId); }
   async function readFile() {
@@ -71,9 +71,12 @@ NC.store = (function () {
         else if ((j.saveId || '') !== state.lastSaveId) return { conflict: true, file: f0, data: j };
       }
       const seq = state.seq, saveId = rid(), lineage = [saveId].concat(state.lineage).slice(0, 60);
+      if (!doc.docId) doc.docId = rid(); // 버전 기록을 묶는 문서 번호 (이름을 바꾸거나 옮겨도 그대로)
+      const text = JSON.stringify(Object.assign({}, doc, { saveId, lineage, savedBy: pcName(), pcId: pc().id, savedAt: Date.now() }));
       const w = await state.handle.createWritable();
-      await w.write(JSON.stringify(Object.assign({}, doc, { saveId, lineage, savedBy: pcName(), pcId: pc().id, savedAt: Date.now() })));
+      await w.write(text);
       await w.close();
+      if (Date.now() - (state.lastSnap || 0) > SNAP_EVERY) { state.lastSnap = Date.now(); snapshot(doc.docId, text).catch(() => {}); }
       state.lastSaveId = saveId; state.lineage = lineage; state.retries = 0;
       const f = await state.handle.getFile(); state.lastMod = f.lastModified; if (state.seq === seq) state.dirty = false;
       return true;
@@ -87,11 +90,30 @@ NC.store = (function () {
     const name = `${base} (충돌 사본 ${stamp} ${String(label || '').replace(/[\\/:*?"<>|]/g, '_')})`;
     if (state.dir && (await folderReady())) {
       const h = await state.dir.getFileHandle(name + '.design.json', { create: true });
-      const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign({}, data, { name, saveId: '', lineage: [] }))); await w.close();
+      const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign({}, data, { name, saveId: '', lineage: [], docId: rid() }))); await w.close();
       return name + '.design.json';
     }
     download(Object.assign({}, data, { name })); return name + '.design.json (내려받기)';
   }
+  /* ---------- 버전 기록: 동기화 폴더/.기록/<문서 번호>/<날짜-시각>_<PC>[_메모].json ----------
+     저장할 때 15분에 한 번 남기고 문서마다 최근 40개만 둠. 점(.)으로 시작해 내 드라이브 목록에는 안 보임 */
+  const SNAP_DIR = '.기록', SNAP_EVERY = 15 * 60 * 1000, SNAP_KEEP = 40;
+  async function snapDir(docId, create) { if (!state.dir || !(await folderReady())) return null; const h = await state.dir.getDirectoryHandle(SNAP_DIR, { create: !!create }); return h.getDirectoryHandle(docId, { create: !!create }); }
+  const clean = v => String(v || '').replace(/[\\/:*?"<>|_]/g, ' ').trim().slice(0, 40);
+  async function snapshot(docId, text, memo) {
+    const d = await snapDir(docId, true); if (!d) return false;
+    const t = new Date(), p2 = n => String(n).padStart(2, '0'); const stamp = `${t.getFullYear()}${p2(t.getMonth() + 1)}${p2(t.getDate())}-${p2(t.getHours())}${p2(t.getMinutes())}${p2(t.getSeconds())}`;
+    const h = await d.getFileHandle(`${stamp}_${clean(pcName())}${memo ? '_' + clean(memo) : ''}.json`, { create: true }); const w = await h.createWritable(); await w.write(text); await w.close();
+    const all = (await listSnapshots(docId)); for (const x of all.slice(SNAP_KEEP)) { try { await d.removeEntry(x.name); } catch (e) {} }
+    return true;
+  }
+  async function listSnapshots(docId) {
+    let d; try { d = await snapDir(docId, false); } catch (e) { return []; } if (!d) return [];
+    const out = [];
+    for await (const [name, h] of d.entries()) { const m = name.match(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)(\d\d)_([^_]*)(?:_(.*))?\.json$/); if (!m || h.kind !== 'file') continue; out.push({ name, handle: h, time: new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime(), pc: m[7], memo: m[8] || '' }); }
+    return out.sort((a, b) => b.time - a.time);
+  }
+  async function readSnapshot(x) { const f = await x.handle.getFile(); return Object.assign(JSON.parse(await f.text()), { _size: f.size }); }
   async function disconnect() { state.handle = null; state.fileName = ''; state.lastMod = 0; adopt(null); await idbDel('fileHandle'); }
   // 다른 PC(동기화 폴더)에서 파일이 바뀌었는지 확인
   async function checkExternal() {
@@ -195,7 +217,7 @@ NC.store = (function () {
   // 사본: 폴더에 새 파일로만 쓰고, 지금 작업 파일은 그대로 둠
   async function copyIntoFolder(data) {
     const h = await state.dir.getFileHandle(await uniqueName(data.name), { create: true });
-    const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign({}, data, { saveId: '', lineage: [], savedBy: pcName(), savedAt: Date.now() }))); await w.close();
+    const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign({}, data, { saveId: '', lineage: [], docId: rid(), savedBy: pcName(), savedAt: Date.now() }))); await w.close(); // 사본은 버전 기록을 따로
     return h;
   }
   async function saveIntoFolder(doc, path) {
@@ -274,7 +296,7 @@ NC.store = (function () {
   }
   async function emptyEntry(name) { const t = await state.dir.getDirectoryHandle(TRASH); await t.removeEntry(name, { recursive: true }); }
 
-  return { state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
+  return { snapshot, listSnapshots, readSnapshot, state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
     writeCopy, pcName, setPcName, adopt, descends,
     connectFolder, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
 })();
