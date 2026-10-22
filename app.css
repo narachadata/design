@@ -496,3 +496,30 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .sl .xyside input.num{width:50px}
 .shq{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:4px}
 .shq span{font-size:12px;color:var(--ui-muted);width:100%}
+/* 글자 서식: B I U S 토글 + 편집 중 떠 있는 도구 막대 */
+.tfmt{display:flex;gap:4px;align-items:center;margin:4px 0 6px;flex-wrap:wrap}
+.tfmt button{min-width:32px;height:32px;border:1px solid var(--ui-line2);background:#fff;border-radius:8px;cursor:pointer;font:inherit;font-size:14px;color:var(--ui-fg)}
+.tfmt button.on{background:var(--ui-accent);border-color:var(--ui-accent);color:#fff}
+.tfmt select{margin-left:auto;padding:6px 8px;border:1px solid var(--ui-line2);border-radius:8px;font:inherit;font-size:12.5px}
+.textbar{position:fixed;z-index:80;display:flex;align-items:center;gap:2px;background:#1f2433;color:#fff;border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.textbar[hidden]{display:none}
+.textbar button{min-width:30px;height:30px;border:0;background:transparent;color:#fff;border-radius:7px;cursor:pointer;font:inherit;font-size:13.5px;padding:0 6px}
+.textbar button:hover{background:rgba(255,255,255,.12)}
+.textbar button.on{background:#2f5bea}
+.textbar .sep{width:1px;height:20px;background:rgba(255,255,255,.2);margin:0 3px}
+.textbar label{position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.textbar label input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.textbar label .sw{width:16px;height:16px;border-radius:50%;background:#e0564b;border:2px solid #fff}
+/* 달력 칸 편집 */
+.ovl .csel{position:absolute;background:rgba(47,111,228,.14);outline:calc(2px / var(--k)) solid #2f6fe4;pointer-events:none}
+.ovl .cgl{position:absolute;pointer-events:auto;z-index:2}
+.ovl .cgl.cgv{width:calc(9px / var(--k));margin-left:calc(-4.5px / var(--k));cursor:col-resize}
+.ovl .cgl.cgh{height:calc(9px / var(--k));margin-top:calc(-4.5px / var(--k));cursor:row-resize}
+.ovl .cgl:hover::after{content:'';position:absolute;background:#2f6fe4}
+.ovl .cgl.cgv:hover::after{left:50%;top:0;bottom:0;width:calc(2px / var(--k));margin-left:calc(-1px / var(--k))}
+.ovl .cgl.cgh:hover::after{top:50%;left:0;right:0;height:calc(2px / var(--k));margin-top:calc(-1px / var(--k))}
+.el-cal .cell{cursor:cell}
+.celled{position:absolute;z-index:20;resize:none;border:2px solid #2f6fe4;border-radius:2px;background:rgba(255,255,255,.96);padding:1mm;line-height:1.35;outline:none;box-shadow:0 4px 14px rgba(47,111,228,.25)}
+.cellbar .sw{font-weight:800;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;width:auto;height:auto;border-radius:0}
+.cellbar .bgsw{width:16px;height:16px;border-radius:4px;background:#fff3c4;border:2px solid #fff}
+.cellbar button{font-size:12.5px}

@@ -159,7 +159,7 @@ function elHTML(el, mode, ext) {
   const blend = el.blend && el.blend !== 'normal' && el.type !== 'text' ? `mix-blend-mode:${el.blend};` : '';
   if (el.type === 'text') {
     if (el.warp && el.warp !== 'none') return `<div class="el el-text warp${lock}" data-id="${el.id}" style="${base}${el.blend && el.blend !== 'normal' ? `mix-blend-mode:${el.blend};` : ''}">${FX.warpSVG(el)}</div>`;
-    return `<div class="el el-text${lock}" data-id="${el.id}" style="${base}${FX.textStyle(el)}">${esc(el.upper ? el.text : el.text)}</div>`;
+    return `<div class="el el-text${lock}" data-id="${el.id}" style="${base}${FX.textStyle(el)}">${el.html && el.htmlFor === el.text ? el.html : esc(el.text)}</div>`;
   }
   if (el.type === 'image') {
     const s = src(el.src); const clip = FX.clipPath(el.clip); const z = el.zoom || 1;
@@ -226,7 +226,8 @@ function renderOverlay(guides) {
   els.forEach(el => { const single = els.length === 1; h += `<div class="sel${single ? '' : ' multi'}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map(d => `<div class="h ${d}" data-h="${d}"></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; h += '</div>'; });
   if (els.length > 1) { const bx = Math.min(...els.map(e => e.x)), by = Math.min(...els.map(e => e.y)), bw = Math.max(...els.map(e => e.x + e.w)) - bx, bh = Math.max(...els.map(e => e.y + e.h)) - by; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm"></div>`; }
   (guides || []).forEach(g => { h += g.v != null ? `<div class="guide v" style="left:${g.v}mm"></div>` : `<div class="guide h" style="top:${g.h}mm"></div>`; });
-  o.innerHTML = h;
+  h += calOverlay();
+  o.innerHTML = h; showCellBar();
 }
 let thumbTimer;
 function renderThumbs() {
@@ -237,10 +238,95 @@ function renderThumbs() {
 }
 function renderAll() { renderCanvas(); renderSide(); renderInspector(); }
 function rerender(opts) { opts = opts || {}; renderCanvas(); if (!opts.noPanel) renderInspector(); clearTimeout(thumbTimer); thumbTimer = setTimeout(() => { if (sideTab === 'pages') renderThumbs(); else if (sideTab === 'layers') renderSide(); }, 150); }
-function goto(i) { endEdit(); cur = clamp(i, 0, doc.pages.length - 1); sel = []; selDay = null; renderAll(); }
-function select(ids) { endEdit(); sel = ids.filter(id => find(id)); selDay = null; renderOverlay(); renderInspector(); if (sideTab === 'layers') renderSide(); updateToolbarState(); }
+function goto(i) { endEdit(); cur = clamp(i, 0, doc.pages.length - 1); sel = []; selDay = null; cellSel = null; renderAll(); }
+function select(ids) { endEdit(); sel = ids.filter(id => find(id)); selDay = null; if (cellSel && !sel.includes(cellSel.id)) cellSel = null; renderOverlay(); renderInspector(); if (sideTab === 'layers') renderSide(); updateToolbarState(); }
 function groupOf(id) { const el = find(id); if (!el || !el.group) return [id]; return page().els.filter(e => e.group === el.group).map(e => e.id); }
 function updateToolbarState() { const n = sel.length; const g = selEls().some(e => e.group); const b = $('#btnGroup'); if (b) { b.hidden = n < 2 && !g; b.textContent = g ? '그룹 해제' : '그룹'; } const ds = $('#btnDist'); if (ds) ds.hidden = n < 3; }
+
+/* ---- 달력 칸 편집 (일러스트레이터·인디자인 표처럼) ----
+   달력을 고른 상태에서: 칸 누르기·끌기·Shift+누르기 = 칸 선택 / 칸 경계선 끌기 = 너비·높이 / 두 번 누르기 = 칸에 바로 입력
+   요일 줄을 끌면 달력 전체가 움직임 */
+let cellSel = null; // { id, a, b } 두 꼭짓점 칸 번호
+function calGeom(el) {
+  const dom = $('#canvas').querySelector(`[data-id="${el.id}"]`); if (!dom) return null;
+  const k = kScale(), cr = $('#canvas').getBoundingClientRect(), mm = v => v / k / MM;
+  const g = dom.querySelector('.cg'); if (!g) return null; const gr = g.getBoundingClientRect();
+  const rows = CAL.calRows(el), colW = (el.colW && el.colW.length === 7) ? el.colW : Array(7).fill(1), rowH = (el.rowH && el.rowH.length === rows) ? el.rowH : Array(rows).fill(1);
+  const sw = colW.reduce((a, b) => a + b, 0), sh = rowH.reduce((a, b) => a + b, 0);
+  const x0 = mm(gr.left - cr.left), y0 = mm(gr.top - cr.top), W = mm(gr.width), H = mm(gr.height);
+  const xs = [x0]; colW.forEach(w => xs.push(xs[xs.length - 1] + W * w / sw)); const ys = [y0]; rowH.forEach(h => ys.push(ys[ys.length - 1] + H * h / sh));
+  return { rows, colW, rowH, xs, ys, x0, y0, W, H };
+}
+function cellRect(a, b) { const r1_ = Math.min(Math.floor(a / 7), Math.floor(b / 7)), r2 = Math.max(Math.floor(a / 7), Math.floor(b / 7)), c1 = Math.min(a % 7, b % 7), c2 = Math.max(a % 7, b % 7); return { r1: r1_, r2, c1, c2 }; }
+function selCells() { if (!cellSel) return []; const { r1: ra, r2, c1, c2 } = cellRect(cellSel.a, cellSel.b); const out = []; for (let r = ra; r <= r2; r++) for (let c = c1; c <= c2; c++) out.push(r * 7 + c); return out; }
+function calOverlay() {
+  const el = selEls()[0]; if (!el || el.type !== 'cal' || sel.length !== 1 || el.locked) return '';
+  const G = calGeom(el); if (!G) return ''; let h = '';
+  if (cellSel && cellSel.id === el.id) { const { r1: ra, r2, c1, c2 } = cellRect(cellSel.a, cellSel.b); h += `<div class="csel" style="left:${G.xs[c1]}mm;top:${G.ys[ra]}mm;width:${G.xs[c2 + 1] - G.xs[c1]}mm;height:${G.ys[r2 + 1] - G.ys[ra]}mm"></div>`; }
+  for (let i = 1; i < 7; i++) h += `<div class="cgl cgv" data-cgl="c${i}" style="left:${G.xs[i]}mm;top:${G.y0}mm;height:${G.H}mm" title="끌어서 열 너비 조정 · 두 번 누르면 모든 열 같게"></div>`;
+  for (let i = 1; i < G.rows; i++) h += `<div class="cgl cgh" data-cgl="r${i}" style="top:${G.ys[i]}mm;left:${G.x0}mm;width:${G.W}mm" title="끌어서 행 높이 조정 · 두 번 누르면 모든 행 같게"></div>`;
+  return h;
+}
+function cellAt(e) { const t = document.elementFromPoint(e.clientX, e.clientY); const c = t && t.closest('.el-cal .cell'); return c ? Number(c.dataset.c) : null; }
+// 칸 도구 막대
+function showCellBar() {
+  const el = selEls()[0]; let b = $('#cellBar');
+  if (!el || el.type !== 'cal' || !cellSel || cellSel.id !== el.id) { if (b) b.hidden = true; return; }
+  if (!b) {
+    b = document.createElement('div'); b.id = 'cellBar'; b.className = 'textbar cellbar'; document.body.appendChild(b);
+    b.innerHTML = `<label title="칸 색"><input type="color" id="cbBg" value="#fff3c4"><span class="sw bgsw"></span></label><button data-cb="nobg" title="칸 색 없애기">⊘</button><span class="sep"></span>
+    <label title="칸 글자 색"><input type="color" id="cbColor" value="#1f5bd6"><span class="sw">A</span></label><button data-cb="smaller" title="칸 글자 작게">가−</button><button data-cb="bigger" title="칸 글자 크게">가+</button><button data-cb="bold" title="칸 글자 굵게"><b>B</b></button>
+    <span class="sep"></span><button data-cb="left" title="왼쪽 정렬">⇤</button><button data-cb="center" title="가운데 정렬">↔</button><button data-cb="right" title="오른쪽 정렬">⇥</button>
+    <span class="sep"></span><button data-cb="merge" title="고른 칸 합치기">합치기</button><button data-cb="split" title="합친 칸 나누기">나누기</button><button data-cb="evenc" title="모든 열 너비 같게">열 같게</button><button data-cb="evenr" title="모든 행 높이 같게">행 같게</button>
+    <span class="sep"></span><button data-cb="type" title="칸에 글자 넣기 (두 번 누르기)">✎ 입력</button><button data-cb="clear" title="고른 칸 서식·글자 지우기">지우기</button>`;
+    b.addEventListener('mousedown', e => { if (!e.target.closest('input')) e.preventDefault(); });
+    b.addEventListener('click', e => { const t = e.target.closest('[data-cb]'); if (t) cellCmd(t.dataset.cb); });
+    $('#cbBg').addEventListener('input', e => { cellSet({ bg: e.target.value }, true); b.querySelector('.bgsw').style.background = e.target.value; });
+    $('#cbBg').addEventListener('change', () => commit());
+    $('#cbColor').addEventListener('input', e => cellSet({ color: e.target.value }, true)); $('#cbColor').addEventListener('change', () => commit());
+  }
+  b.hidden = false;
+  const G = calGeom(el); const { r1: ra, c1 } = cellRect(cellSel.a, cellSel.b); const cr = $('#canvas').getBoundingClientRect(), k = kScale();
+  const px = G.xs[c1] * MM * k + cr.left, py = G.ys[ra] * MM * k + cr.top;
+  b.style.left = Math.max(8, Math.min(px, innerWidth - b.offsetWidth - 8)) + 'px'; b.style.top = Math.max(60, py - b.offsetHeight - 10) + 'px';
+}
+function cellSet(patch, live) { const el = selEls()[0]; if (!el) return; el.cells = el.cells || {}; selCells().forEach(c => { el.cells[c] = Object.assign({}, el.cells[c] || {}, patch); Object.keys(el.cells[c]).forEach(k => { if (el.cells[c][k] === undefined) delete el.cells[c][k]; }); if (!Object.keys(el.cells[c]).length) delete el.cells[c]; }); renderCanvas(); if (!live) commit(); showCellBar(); }
+function cellCmd(k) {
+  const el = selEls()[0]; if (!el || !cellSel) return; const s = Object.assign({}, CAL.CAL_DEF, el.s || {}); const cs = (el.cells || {})[cellSel.a] || {};
+  const rows = CAL.calRows(el);
+  if (k === 'nobg') cellSet({ bg: undefined });
+  if (k === 'smaller' || k === 'bigger') cellSet({ size: Math.max(4, Math.round(((cs.size || s.evSize) * (k === 'bigger' ? 1.15 : 1 / 1.15)) * 2) / 2) });
+  if (k === 'bold') cellSet({ bold: cs.bold ? undefined : true });
+  if (k === 'left' || k === 'center' || k === 'right') cellSet({ align: k === 'left' ? undefined : k });
+  if (k === 'merge') { const { r1: ra, r2, c1, c2 } = cellRect(cellSel.a, cellSel.b); if (ra === r2 && c1 === c2) { toast('합칠 칸을 두 개 이상 끌어서 고르세요'); return; } const tl = ra * 7 + c1; const box = g => { const gr = Math.floor(g.c / 7), gc = g.c % 7; return !(gr > r2 || gr + g.rs - 1 < ra || gc > c2 || gc + g.cs - 1 < c1); }; el.merges = (el.merges || []).filter(g => !box(g)); el.merges.push({ c: tl, cs: c2 - c1 + 1, rs: Math.min(rows, r2 + 1) - ra }); cellSel = { id: el.id, a: tl, b: tl }; commit(); rerender(); toast('칸을 합쳤습니다. 합친 칸 안의 날짜·일정은 그대로 함께 보입니다.'); }
+  if (k === 'split') { const cs_ = selCells(); const before = (el.merges || []).length; el.merges = (el.merges || []).filter(g => !cs_.includes(g.c)); if (el.merges.length === before) toast('고른 칸에 합친 칸이 없습니다'); commit(); rerender(); }
+  if (k === 'evenc') { delete el.colW; commit(); rerender(); }
+  if (k === 'evenr') { delete el.rowH; commit(); rerender(); }
+  if (k === 'type') openCellEditor(cellSel.a);
+  if (k === 'clear') { selCells().forEach(c => { if (el.cells) delete el.cells[c]; }); commit(); rerender(); }
+}
+// 칸에 바로 입력: 날짜 칸은 그날 일정(한 줄에 하나), 빈 칸은 자유 글자
+function openCellEditor(c) {
+  const el = selEls()[0]; if (!el) return; closeCellEditor(true);
+  const G = calGeom(el); const r = Math.floor(c / 7), q = c % 7; const g = (el.merges || []).find(x => x.c === c) || { cs: 1, rs: 1 };
+  const s = Object.assign({}, CAL.CAL_DEF, el.s || {}); const first = (new Date(el.year, el.month - 1, 1).getDay() - s.weekStart + 7) % 7; const n = c - first + 1, dim = CAL.daysIn(el.year, el.month);
+  const isDay = n >= 1 && n <= dim; const cs = (el.cells || {})[c] || {};
+  const val = isDay ? (el.events || []).filter(e => e.d === n).map(e => e.text).join('\n') : (cs.text || '');
+  const ta = document.createElement('textarea'); ta.id = 'cellEd'; ta.className = 'celled'; ta.value = val;
+  ta.placeholder = isDay ? `${el.month}월 ${n}일 일정 (한 줄에 하나)` : '칸에 넣을 글자';
+  ta.style.cssText = `left:${G.xs[q]}mm;top:${G.ys[r] + (isDay ? s.daySize * 0.45 : 0)}mm;width:${G.xs[Math.min(7, q + g.cs)] - G.xs[q]}mm;height:${G.ys[Math.min(G.rows, r + g.rs)] - G.ys[r] - (isDay ? s.daySize * 0.45 : 0)}mm;font-size:${cs.size || s.evSize}pt;font-family:'${s.fontBody}'`;
+  ta.dataset.c = c; ta.dataset.day = isDay ? n : ''; ta.dataset.id = el.id;
+  $('#canvas').appendChild(ta); ta.focus(); ta.select();
+  ta.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); closeCellEditor(false); } if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); closeCellEditor(true); } e.stopPropagation(); });
+  ta.addEventListener('blur', () => closeCellEditor(true));
+}
+function closeCellEditor(save) {
+  const ta = $('#cellEd'); if (!ta) return; ta.id = ''; const el = find(ta.dataset.id); const v = ta.value.replace(/\s+$/, ''); ta.remove(); if (!save || !el) return;
+  const c = Number(ta.dataset.c), d = Number(ta.dataset.day);
+  if (d) { const old = (el.events || []).filter(e => e.d === d); const lines = v ? v.split('\n').map(x => x.trim()).filter(Boolean) : []; el.events = (el.events || []).filter(e => e.d !== d).concat(lines.map((t, i) => ({ d, text: t, color: (old[i] || {}).color || '' }))); }
+  else { el.cells = el.cells || {}; el.cells[c] = Object.assign({}, el.cells[c] || {}, { text: v || undefined }); if (!v) delete el.cells[c].text; if (!Object.keys(el.cells[c]).length) delete el.cells[c]; }
+  commit(); rerender();
+}
 
 /* ---------- 포인터 조작 ---------- */
 const wrap = $('#canvasWrap');
@@ -248,14 +334,21 @@ function toMM(e) { const r = $('#canvas').getBoundingClientRect(); const k = kSc
 let drag = null, lastClick = null, pen = null;
 wrap.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
+  if ($('#cellEd') && !e.target.closest('#cellEd')) closeCellEditor(true);
+  if (e.target.closest('#cellEd')) return;
   if (editing) { if (e.target.closest('.el-text.editing')) return; endEdit(); }
   const p = toMM(e);
   if (tool === 'pen') { pen = { pts: [[r1(p.x), r1(p.y)]] }; $('#ovl').insertAdjacentHTML('beforeend', `<svg class="penprev" viewBox="0 0 ${doc.w} ${doc.h}" style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible"><path d="" fill="none" stroke="#2f5bea" stroke-width="0.6" vector-effect="non-scaling-stroke"/></svg>`); e.preventDefault(); return; }
   const hd = e.target.closest('.ovl .h');
   if (hd && sel.length === 1) { const el = find(sel[0]); drag = { kind: hd.dataset.h === 'rot' ? 'rot' : 'resize', dir: hd.dataset.h, el, start: p, o: clone(el), cx: el.x + el.w / 2, cy: el.y + el.h / 2, moved: false }; e.preventDefault(); return; }
+  const gl = e.target.closest('.ovl .cgl');
+  if (gl && sel.length === 1) { const el = find(sel[0]); const G = calGeom(el); const isC = gl.dataset.cgl[0] === 'c', i = Number(gl.dataset.cgl.slice(1)); drag = { kind: 'cgl', el, isC, i, G, start: p, moved: false, w0: (isC ? G.colW : G.rowH).slice() }; e.preventDefault(); return; }
   const dom = e.target.closest('.el');
   if (dom) {
     const id = dom.dataset.id, el = find(id); const was = sel.includes(id);
+    // 고른 달력의 칸 위를 누르면 칸 선택 (요일 줄을 누르면 달력 이동)
+    if (el.type === 'cal' && was && !el.locked && e.target.closest('.cell')) { const c = Number(e.target.closest('.cell').dataset.c); if (e.shiftKey && cellSel && cellSel.id === id) cellSel.b = c; else cellSel = { id, a: c, b: c }; const dd = e.target.closest('.cell').dataset.day; selDay = dd ? Number(dd) : null; drag = { kind: 'cells', start: p, moved: false }; renderOverlay(); renderInspector(); e.preventDefault(); return; }
+    if (!was || el.type !== 'cal') cellSel = null;
     if (el.type === 'text' && was && !el.locked && !(el.warp && el.warp !== 'none') && lastClick && lastClick.id === id && Date.now() - lastClick.t < 450) { lastClick = null; startEdit(dom); return; }
     lastClick = { id, t: Date.now() };
     const ids = e.altKey ? [id] : groupOf(id);
@@ -266,7 +359,7 @@ wrap.addEventListener('pointerdown', e => {
     drag = { kind: 'move', els: selEls().filter(x => !x.locked), start: p, orig: selEls().map(x => ({ id: x.id, x: x.x, y: x.y })), moved: false };
     e.preventDefault(); return;
   }
-  if (!e.shiftKey) select([]);
+  if (!e.shiftKey) { cellSel = null; select([]); }
   drag = { kind: 'marq', start: p, moved: false };
 });
 document.addEventListener('pointermove', e => {
@@ -295,6 +388,12 @@ document.addEventListener('pointermove', e => {
     renderOverlay();
   } else if (drag.kind === 'rot') {
     const el = drag.el; let a = Math.atan2(p.y - drag.cy, p.x - drag.cx) * 180 / Math.PI + 90; if (e.shiftKey) a = Math.round(a / 15) * 15; el.rot = Math.round(((a % 360) + 360) % 360); liveUpdate([el]); renderOverlay();
+  } else if (drag.kind === 'cells') {
+    const c = cellAt(e); if (c != null && cellSel && c !== cellSel.b) { cellSel.b = c; renderOverlay(); }
+  } else if (drag.kind === 'cgl') {
+    const G = drag.G, i = drag.i, w = drag.w0.slice(), tot = w.reduce((a, b) => a + b, 0), span = drag.isC ? G.W : G.H;
+    const d = (drag.isC ? dx : dy) / span * tot, mn = tot * 0.04; let a = w[i - 1] + d, b = w[i] - d; if (a < mn) { b -= mn - a; a = mn; } if (b < mn) { a -= mn - b; b = mn; }
+    w[i - 1] = Math.round(a * 1000) / 1000; w[i] = Math.round(b * 1000) / 1000; drag.el[drag.isC ? 'colW' : 'rowH'] = w; renderCanvas();
   } else if (drag.kind === 'marq') {
     const x = Math.min(drag.start.x, p.x), y = Math.min(drag.start.y, p.y), w = Math.abs(dx), h = Math.abs(dy);
     sel = page().els.filter(el => !el.hidden && el.x < x + w && el.x + el.w > x && el.y < y + h && el.y + el.h > y).map(el => el.id); renderOverlay(); $('#ovl').insertAdjacentHTML('beforeend', `<div class="marq" style="left:${x}mm;top:${y}mm;width:${w}mm;height:${h}mm"></div>`);
@@ -303,6 +402,8 @@ document.addEventListener('pointermove', e => {
 document.addEventListener('pointerup', e => {
   if (pen) { const pts = pen.pts; pen = null; const pv = $('#ovl .penprev'); if (pv) pv.remove(); if (pts.length < 3) return; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); const x0 = Math.min(...xs) - 1, y0 = Math.min(...ys) - 1, w = Math.max(2, Math.max(...xs) - x0 + 1), h = Math.max(2, Math.max(...ys) - y0 + 1); const el = { id: uid(), type: 'path', pts: pts.map(p => [r1(p[0] - x0), r1(p[1] - y0)]), x: r1(x0), y: r1(y0), w: r1(w), h: r1(h), rot: 0, stroke: penStyle.stroke, strokeW: penStyle.strokeW, fill: '', closed: false, smooth: true, opacity: 1, name: '펜 선' }; page().els.push(el); commit(); select([el.id]); rerender(); return; }
   if (!drag) return; const d = drag; drag = null;
+  if (d.kind === 'cells') { renderInspector(); showCellBar(); return; }
+  if (d.kind === 'cgl') { if (d.moved) commit(); rerender(); return; }
   if (d.kind === 'marq') { renderInspector(); if (sideTab === 'layers') renderSide(); renderOverlay(); updateToolbarState(); return; }
   if (d.moved) { commit(); rerender(); } else renderOverlay();
 });
@@ -317,9 +418,84 @@ function snap(x, y, w, h, selfIds) {
   if (gx != null) guides.push({ v: gx }); if (gy != null) guides.push({ h: gy });
   return { x: bx != null ? bx : x, y: by != null ? by : y, guides };
 }
+wrap.addEventListener('dblclick', e => {
+  const gl = e.target.closest('.ovl .cgl'); if (gl) { const el = selEls()[0]; if (el) { if (gl.dataset.cgl[0] === 'c') delete el.colW; else delete el.rowH; commit(); rerender(); toast(gl.dataset.cgl[0] === 'c' ? '모든 열 너비를 같게 했습니다' : '모든 행 높이를 같게 했습니다'); } return; }
+  const cell = e.target.closest('.el-cal .cell'); if (cell && sel.length === 1 && find(sel[0]).type === 'cal') { const c = Number(cell.dataset.c); cellSel = { id: sel[0], a: c, b: c }; renderOverlay(); openCellEditor(c); return; }
+});
 wrap.addEventListener('dblclick', e => { const dom = e.target.closest('.el-text'); if (dom && !find(dom.dataset.id).locked && !dom.classList.contains('warp')) startEdit(dom); });
-function startEdit(dom) { editing = dom; dom.contentEditable = 'true'; dom.classList.add('editing'); dom.focus(); const r = document.createRange(); r.selectNodeContents(dom); const s = getSelection(); s.removeAllRanges(); s.addRange(r); renderOverlay(); }
-function endEdit() { if (!editing) return; const dom = editing; editing = null; const el = find(dom.dataset.id); const t = dom.innerText.replace(/\n$/, ''); dom.contentEditable = 'false'; dom.classList.remove('editing'); if (el && t !== el.text) { el.text = t; commit(); } rerender(); }
+function startEdit(dom) { editing = dom; dom.contentEditable = 'true'; dom.classList.add('editing'); dom.focus(); try { document.execCommand('styleWithCSS', false, true); } catch (e) {} const r = document.createRange(); r.selectNodeContents(dom); const s = getSelection(); s.removeAllRanges(); s.addRange(r); renderOverlay(); showTextBar(); }
+function endEdit() {
+  if (!editing) return; const dom = editing; editing = null; hideTextBar(); const el = find(dom.dataset.id);
+  const t = dom.innerText.replace(/\n$/, ''); const html = richHTML(dom); dom.contentEditable = 'false'; dom.classList.remove('editing');
+  if (el && (t !== el.text || (html || '') !== (el.html || ''))) { el.text = t; if (html) { el.html = html; el.htmlFor = t; } else { delete el.html; delete el.htmlFor; } commit(); }
+  rerender();
+}
+/* ---- 서식 있는 글자 (부분 굵게·기울임·밑줄·취소선·색·크기) ---- */
+// 편집 상자 내용을 안전한 최소 마크업으로: b·i·u·s·br + span(색·크기·굵기·기울임·밑줄·취소선). 서식이 없으면 '' 반환
+function richHTML(dom) {
+  const out = []; let formatted = false;
+  const styleOf = n => { const st = n.style || {}, o = []; const tag = n.tagName;
+    const fw = st.fontWeight; if (tag === 'B' || tag === 'STRONG' || (fw && (fw === 'bold' || Number(fw) >= 600))) o.push('font-weight:700'); else if (fw && Number(fw) < 600) o.push('font-weight:400');
+    if (tag === 'I' || tag === 'EM' || st.fontStyle === 'italic') o.push('font-style:italic');
+    const td = (st.textDecorationLine || st.textDecoration || '') + (tag === 'U' ? ' underline' : '') + (tag === 'S' || tag === 'STRIKE' ? ' line-through' : '');
+    const dec = ['underline', 'line-through'].filter(x => td.includes(x)); if (dec.length) o.push('text-decoration:' + dec.join(' '));
+    if (st.color) o.push('color:' + st.color); if (tag === 'FONT' && n.getAttribute('color')) o.push('color:' + n.getAttribute('color'));
+    if (st.fontSize && /pt|px|em|%/.test(st.fontSize)) o.push('font-size:' + st.fontSize);
+    return o.join(';'); };
+  const walk = (n, top) => {
+    if (n.nodeType === 3) { out.push(esc(n.nodeValue)); return; }
+    if (n.nodeType !== 1) return;
+    const tag = n.tagName; if (tag === 'BR') { out.push('<br>'); return; }
+    const block = tag === 'DIV' || tag === 'P';
+    if (block && out.length && !/<br>$/.test(out[out.length - 1])) out.push('<br>');
+    const st = block ? '' : styleOf(n); if (st) { formatted = true; out.push(`<span style="${st}">`); }
+    n.childNodes.forEach(c => walk(c));
+    if (st) out.push('</span>');
+  };
+  dom.childNodes.forEach(c => walk(c, true));
+  let h = out.join('').replace(/(<br>)+$/, ''); return formatted ? h : '';
+}
+// 상자 전체에 켜고 끌 때, 부분 서식 중 같은 속성은 지움
+function stripRich(el, prop) { if (!el.html) return; const d = document.createElement('div'); d.innerHTML = el.html; d.querySelectorAll('span').forEach(sp => { if (prop === 'bold') sp.style.fontWeight = ''; if (prop === 'italic') sp.style.fontStyle = ''; if (prop === 'underline' || prop === 'strike') { const keep = (sp.style.textDecoration || '').split(' ').filter(x => x && x !== (prop === 'underline' ? 'underline' : 'line-through')); sp.style.textDecoration = keep.join(' '); } if (prop === 'color') sp.style.color = ''; if (prop === 'size') sp.style.fontSize = ''; }); const h = richHTML(d); if (h) el.html = h; else { delete el.html; delete el.htmlFor; } }
+const FMT_CMD = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strikeThrough' };
+// B·I·U·S: 편집 중이면 고른 글자만, 아니면 상자 전체
+function toggleFmt(kind) {
+  if (editing) { document.execCommand(FMT_CMD[kind], false, null); updTextBar(); return; }
+  const els = selEls().filter(x => x.type === 'text'); if (!els.length) return;
+  const on = !fmtOn(els[0], kind);
+  els.forEach(el => { if (kind === 'bold') el.weight = on ? 700 : 400; else el[kind] = on; stripRich(el, kind); });
+  commit(); rerender();
+}
+function fmtOn(el, kind) { return kind === 'bold' ? Number(el.weight) >= 600 : !!el[kind]; }
+function showTextBar() {
+  let b = $('#textBar'); if (!b) { b = document.createElement('div'); b.id = 'textBar'; b.className = 'textbar'; document.body.appendChild(b);
+    b.innerHTML = `<button data-tf="bold" title="굵게 (Ctrl+B)"><b>B</b></button><button data-tf="italic" title="기울임 (Ctrl+I)"><i>I</i></button><button data-tf="underline" title="밑줄 (Ctrl+U)"><u>U</u></button><button data-tf="strike" title="취소선"><s>S</s></button><span class="sep"></span><label title="고른 글자 색"><input type="color" id="tbColor" value="#e0564b"><span class="sw"></span></label><button data-tf="smaller" title="고른 글자 작게">가−</button><button data-tf="bigger" title="고른 글자 크게">가+</button><span class="sep"></span><button data-tf="clear" title="고른 글자 서식 지우기">서식 지우기</button>`;
+    b.addEventListener('mousedown', e => { if (!e.target.closest('input')) e.preventDefault(); });
+    b.addEventListener('click', e => { const t = e.target.closest('[data-tf]'); if (!t || !editing) return; const k = t.dataset.tf;
+      if (FMT_CMD[k]) toggleFmt(k);
+      else if (k === 'clear') { document.execCommand('removeFormat', false, null); updTextBar(); }
+      else sizeSel(k === 'bigger' ? 1.2 : 1 / 1.2); });
+    $('#tbColor').addEventListener('input', e => { if (!editing) return; editing.focus(); restoreSel(); document.execCommand('foreColor', false, e.target.value); b.querySelector('.sw').style.background = e.target.value; });
+    $('#tbColor').addEventListener('mousedown', () => saveSel());
+  }
+  b.hidden = false; placeTextBar(); updTextBar();
+}
+let savedRange = null; function saveSel() { const s = getSelection(); if (s.rangeCount) savedRange = s.getRangeAt(0).cloneRange(); } function restoreSel() { if (!savedRange) return; const s = getSelection(); s.removeAllRanges(); s.addRange(savedRange); }
+function hideTextBar() { const b = $('#textBar'); if (b) b.hidden = true; }
+function placeTextBar() { const b = $('#textBar'); if (!b || !editing) return; const r = editing.getBoundingClientRect(); b.style.left = Math.max(8, Math.min(r.left, innerWidth - b.offsetWidth - 8)) + 'px'; b.style.top = Math.max(60, r.top - b.offsetHeight - 10) + 'px'; }
+function updTextBar() { const b = $('#textBar'); if (!b || !editing) return; Object.entries(FMT_CMD).forEach(([k, c]) => { const x = b.querySelector(`[data-tf="${k}"]`); try { x.classList.toggle('on', document.queryCommandState(c)); } catch (e) {} }); $$('#inspector [data-tfi]').forEach(x => { try { x.classList.toggle('on', document.queryCommandState(FMT_CMD[x.dataset.tfi])); } catch (e) {} }); }
+document.addEventListener('selectionchange', () => { if (editing) updTextBar(); });
+// 편집 중이 아닐 때 Ctrl+B·I·U는 고른 글 상자 전체에
+document.addEventListener('keydown', e => { if (editing || !(e.ctrlKey || e.metaKey) || e.target.matches('input,textarea,select') || document.querySelector('dialog[open]')) return; const k = { b: 'bold', i: 'italic', u: 'underline' }[e.key.toLowerCase()]; if (k && selEls().some(x => x.type === 'text')) { e.preventDefault(); toggleFmt(k); } }, true);
+// 고른 글자 크기 바꾸기: 임시 font 태그로 감싼 뒤 pt 크기 span으로 바꿈
+function sizeSel(f) {
+  const el = find(editing.dataset.id); if (!el) return; const sel = getSelection(); if (!sel.rangeCount || sel.isCollapsed) { toast('크기를 바꿀 글자를 먼저 드래그해 고르세요'); return; }
+  const n0 = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement);
+  const curPt = n0 ? parseFloat(getComputedStyle(n0).fontSize) * 0.75 / (kScale() || 1) : el.size;
+  document.execCommand('styleWithCSS', false, false); document.execCommand('fontSize', false, '7'); document.execCommand('styleWithCSS', false, true);
+  editing.querySelectorAll('font[size="7"]').forEach(fn => { const sp = document.createElement('span'); sp.style.fontSize = (Math.round(Math.max(4, curPt * f) * 2) / 2) + 'pt'; while (fn.firstChild) sp.appendChild(fn.firstChild); fn.replaceWith(sp); });
+  editing.dispatchEvent(new Event('input', { bubbles: true }));
+}
 $('#canvas').addEventListener('input', e => { if (editing && e.target === editing) { const el = find(editing.dataset.id); if (el) { const hh = r1(editing.offsetHeight / MM); if (hh !== el.h) { el.h = hh; renderOverlay(); } } } });
 $('#canvas').addEventListener('blur', e => { if (editing && e.target === editing) endEdit(); }, true);
 wrap.addEventListener('wheel', e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); zoom = clamp((zoom || kScale()) * (e.deltaY < 0 ? 1.1 : 0.9), 0.1, 8); fitCanvas(); }, { passive: false });
@@ -335,6 +511,15 @@ document.addEventListener('keydown', e => {
   if (editing) { if (e.key === 'Escape') { e.preventDefault(); endEdit(); } return; }
   if (e.target.matches('input,textarea,select') || document.querySelector('dialog[open]')) return;
   const mod = e.ctrlKey || e.metaKey;
+  // 달력 칸이 골라져 있을 때: Delete=칸 글자·서식 지우기, Esc=칸 선택 해제, 글자 입력=칸에 바로 쓰기
+  if (cellSel && sel.length === 1 && sel[0] === cellSel.id) {
+    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); cellCmd('clear'); return; }
+    if (e.key === 'Escape') { e.preventDefault(); cellSel = null; renderOverlay(); return; }
+    if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); openCellEditor(cellSel.a); return; }
+    if (!mod && e.key.length === 1) { e.preventDefault(); openCellEditor(cellSel.a); const ta = $('#cellEd'); if (ta) { ta.value = ta.value ? ta.value + '\n' + e.key : e.key; ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
+    if (e.key.startsWith('Arrow') && !e.shiftKey) { e.preventDefault(); const el = find(cellSel.id), rows = CAL.calRows(el); let c = cellSel.b; if (e.key === 'ArrowLeft') c = Math.max(0, c - 1); if (e.key === 'ArrowRight') c = Math.min(rows * 7 - 1, c + 1); if (e.key === 'ArrowUp') c = Math.max(0, c - 7); if (e.key === 'ArrowDown') c = Math.min(rows * 7 - 1, c + 7); cellSel = { id: cellSel.id, a: c, b: c }; renderOverlay(); return; }
+    if (e.key.startsWith('Arrow') && e.shiftKey) { e.preventDefault(); const el = find(cellSel.id), rows = CAL.calRows(el); let c = cellSel.b; if (e.key === 'ArrowLeft') c = Math.max(0, c - 1); if (e.key === 'ArrowRight') c = Math.min(rows * 7 - 1, c + 1); if (e.key === 'ArrowUp') c = Math.max(0, c - 7); if (e.key === 'ArrowDown') c = Math.min(rows * 7 - 1, c + 7); cellSel.b = c; renderOverlay(); return; }
+  }
   if (e.key === 'Escape') { if (tool !== 'select') setTool('select'); else select([]); return; }
   if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
@@ -746,11 +931,13 @@ function renderInspector() {
     h += `<h3>스타일 프리셋</h3><div class="tstyles sm">${FX.TEXT_PRESETS.map(p => `<button data-preset="${p.id}" class="tsb"><span style="${FX.textStyle(Object.assign({}, TEXT_DEF, { font: 'Jua', size: 13, weight: 800, align: 'center' }, p.st))}">${esc(p.name)}</span></button>`).join('')}</div>
     <h3>글자</h3>${F('내용', 'text', el.text, { type: 'textarea', rows: 3 })}
     <div class="row"><label class="f" style="flex:1;margin:0"><span>글꼴</span>${fontPicker('font', el.font)}</label><button class="btn sm" id="fontBrowse" style="margin-top:17px">둘러보기</button></div>
-    ${F('글자 크기', 'size', el.size, { type: 'slider', min: 4, max: Math.max(160, el.size || 0), step: 0.5, unit: 'pt', def: 12 })}<div class="grid2">${F('굵기', 'weight', el.weight, { type: 'select', options: [[300, '가늘게'], [400, '보통'], [500, '중간'], [600, '약간 굵게'], [700, '굵게'], [800, '아주 굵게'], [900, '최대']] })}</div>
+    ${F('글자 크기', 'size', el.size, { type: 'slider', min: 4, max: Math.max(160, el.size || 0), step: 0.5, unit: 'pt', def: 12 })}
+    <div class="tfmt"><button type="button" data-tfi="bold" class="${fmtOn(el, 'bold') ? 'on' : ''}" title="굵게 (Ctrl+B)"><b>B</b></button><button type="button" data-tfi="italic" class="${el.italic ? 'on' : ''}" title="기울임 (Ctrl+I)"><i>I</i></button><button type="button" data-tfi="underline" class="${el.underline ? 'on' : ''}" title="밑줄 (Ctrl+U)"><u>U</u></button><button type="button" data-tfi="strike" class="${el.strike ? 'on' : ''}" title="취소선"><s>S</s></button><button type="button" data-tfi2="upper" class="${el.upper ? 'on' : ''}" title="영문 대문자">AA</button><button type="button" data-tfi2="vertical" class="${el.vertical ? 'on' : ''}" title="세로쓰기">세로</button>
+    <select data-k="weight" title="굵기 단계 (글꼴이 지원하는 굵기)">${[[300, '가늘게'], [400, '보통'], [500, '중간'], [600, '약간 굵게'], [700, '굵게'], [800, '아주 굵게'], [900, '최대']].map(([a, t]) => `<option value="${a}" ${String(a) === String(el.weight) ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <p class="hint" style="margin:2px 0 8px">글자를 두 번 눌러 편집하면서 일부만 드래그하면, 위에 뜨는 작은 도구 막대(또는 여기 B·I·U·S)로 <b>고른 글자만</b> 굵게·기울임·밑줄·색·크기를 바꿀 수 있습니다.</p>
     <div class="grid2">${F('줄 간격', 'lh', el.lh, { type: 'slider', min: 0.6, max: 3, step: 0.05, def: 1.35 })}${F('자간', 'ls', el.ls, { type: 'slider', min: -0.2, max: 1, step: 0.01, unit: 'em', def: 0 })}</div>
     <div class="row"><div class="seg" style="flex:1">${[['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']].map(([a, t]) => `<button data-set="align:${a}" aria-pressed="${el.align === a}">${t}</button>`).join('')}</div><div class="seg" style="flex:1">${[['top', '위'], ['middle', '중앙'], ['bottom', '아래']].map(([a, t]) => `<button data-set="valign:${a}" aria-pressed="${(el.valign || 'top') === a}">${t}</button>`).join('')}</div></div>
-    <div class="grid4">${F('기울임', 'italic', el.italic, { type: 'check' })}${F('밑줄', 'underline', el.underline, { type: 'check' })}${F('취소선', 'strike', el.strike, { type: 'check' })}</div>
-    <div class="grid3">${F('대문자', 'upper', el.upper, { type: 'check' })}${F('세로쓰기', 'vertical', el.vertical, { type: 'check' })}${F('혼합', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['difference', '차이']] })}</div>
+    ${F('혼합 모드', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['difference', '차이']] })}
     <h3>채우기</h3>${fillBlock}${(el.fillType || 'solid') === 'solid' ? `${F('글자 색', 'color', el.color, { type: 'color' })}${sw('color', el.color)}` : ''}
     <h3>효과 <small>포토샵 레이어 스타일</small></h3>
     <details class="fx" ${el.strokeW > 0 ? 'open' : ''}><summary><span class="chk">외곽선</span></summary>${F('두께', 'strokeW', el.strokeW, { type: 'slider', min: 0, max: 12, step: 0.25, unit: 'pt', def: 0 })}${F('색', 'strokeC', el.strokeC, { type: 'color' })}${sw('strokeC', el.strokeC)}</details>
@@ -798,7 +985,8 @@ function renderInspector() {
     const s = Object.assign({}, CAL.CAL_DEF, el.s || {}); const dim = CAL.daysIn(el.year, el.month);
     const hol = (doc.holidays[el.year] || []); const holNames = selDay ? hol.filter(x => x.date === `${el.year}-${String(el.month).padStart(2, '0')}-${String(selDay).padStart(2, '0')}`).map(x => x.name) : [];
     const evs = selDay ? (el.events || []).map((e, k) => ({ e, k })).filter(x => x.e.d === selDay) : []; const allEv = (el.events || []).map((e, k) => ({ e, k })).sort((a, b) => a.e.d - b.e.d);
-    h += `<h3>달력</h3><div class="grid2">${F('연도', 'year', el.year, { type: 'number', min: 1900, max: 2100 })}${F('월', 'month', el.month, { type: 'select', options: Array.from({ length: 12 }, (_, i) => [i + 1, (i + 1) + '월']) })}</div>
+    h += `<p class="hint cal-tip"><b>칸 편집</b> · 칸을 누르거나 끌면 칸이 골라지고 위에 칸 도구(칸 색·글자 색·크기·정렬·합치기·나누기)가 뜹니다. Shift+누르기·Shift+화살표로 범위, 두 번 누르기·Enter·바로 타자로 칸에 입력, 칸 경계선을 끌면 너비·높이 조정(두 번 누르면 같게). 달력을 옮길 때는 요일 줄을 끕니다.</p>
+    <h3>달력</h3><div class="grid2">${F('연도', 'year', el.year, { type: 'number', min: 1900, max: 2100 })}${F('월', 'month', el.month, { type: 'select', options: Array.from({ length: 12 }, (_, i) => [i + 1, (i + 1) + '월']) })}</div>
     <p class="hint">${hol.length ? `${el.year}년 공휴일 ${hol.length}개 자동 적용 중` : `${el.year}년 공휴일 정보가 없습니다.`} <button class="btn sm" id="calHol">편집</button></p>
     <h3>일정</h3><label class="f"><span>날짜 (달력 칸을 눌러도 됩니다)</span><select id="daySel"><option value="">날짜 선택</option>${Array.from({ length: dim }, (_, d) => d + 1).map(d => `<option value="${d}" ${d === selDay ? 'selected' : ''}>${el.month}월 ${d}일 (${CAL.WD.ko1[new Date(el.year, el.month - 1, d).getDay()]})</option>`).join('')}</select></label>
     ${selDay ? `${holNames.length ? `<p class="hint">공휴일: ${holNames.join(', ')}</p>` : ''}<div class="evlist">${evs.map(({ e, k }) => `<div class="evrow"><input type="text" data-ev="${k}" value="${esc(e.text)}" placeholder="일정 내용"><select data-evc="${k}">${Object.entries(COLOR_NAMES).map(([c, t]) => `<option value="${c}" ${(e.color || '') === c ? 'selected' : ''}>${t}</option>`).join('')}</select><button class="x" data-evdel="${k}">×</button></div>`).join('')}</div><button class="btn sm primary" id="evAdd">+ 이 날짜에 일정 추가</button>` : ''}
@@ -821,8 +1009,11 @@ function renderInspector() {
   }
   h += `<h3>동작</h3><div class="row"><button class="btn sm" id="iDup">복제</button><button class="btn sm" id="iFront">맨 앞</button><button class="btn sm" id="iBack">맨 뒤</button><button class="btn sm danger" id="iDel">삭제</button></div>`;
   ins.innerHTML = h;
+  ins.onmousedown = e => { if (e.target.closest('[data-tfi]') && editing) e.preventDefault(); };
   ins.onclick = async e => {
     const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.tfi) { toggleFmt(b.dataset.tfi); if (!editing) return; b.classList.toggle('on'); return; }
+    if (b.dataset.tfi2) { const k = b.dataset.tfi2; selEls().forEach(x => { if (x.type === 'text') x[k] = !x[k]; }); commit(); rerender(); return; }
     if (b.dataset.fp) { openFontPop(b); return; }
     if (b.dataset.toggle) { el.locked = !el.locked; commit(); renderOverlay(); renderInspector(); return; }
     if (b.dataset.set != null) { const i = b.dataset.set.indexOf(':'); const k = b.dataset.set.slice(0, i), v = b.dataset.set.slice(i + 1); if (k === 'chartColors') el.colors = v.split(',').map(s => s.trim()); else setK(el, k, v); commit(); rerender(); return; }
@@ -860,6 +1051,7 @@ $('#inspector').addEventListener('input', e => {
   if (k === 'chartData') { el.data = v.split('\n').map(l => l.split(/[,\t]/)).filter(a => a[0] && a[0].trim()).map(a => ({ l: a[0].trim(), v: Number((a[1] || '0').trim()) || 0 })); renderCanvas(); return; }
   if (k === 'chartColors') { el.colors = v.split(',').map(s => s.trim()).filter(Boolean); renderCanvas(); return; }
   setK(el, k, v);
+  if (el.type === 'text' && el.html && (k === 'color' || k === 'size')) stripRich(el, k === 'color' ? 'color' : 'size');
   if (el.type === 'text') lastTextStyle = { font: el.font, size: el.size, weight: el.weight, color: el.color };
   renderCanvas();
 });

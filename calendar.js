@@ -94,27 +94,44 @@ NC.cal = (function () {
     const notes = (el.notes || []).filter(Boolean);
     const blanks = []; for (let i = 0; i < total; i++) { const n = i - first + 1; if (n < 1 || n > dim) blanks.push(i); }
     const noteCell = notes.length ? (blanks.length ? (blanks[0] < first ? blanks[0] : blanks[blanks.length - 1]) : total - 1) : -1;
-    let cells = '';
-    for (let c = 0; c < total; c++) {
-      const n = c - first + 1, dow = (c + s.weekStart) % 7;
+    // 칸 편집(일러스트레이터 표처럼): 열 너비·행 높이 비율, 칸 합치기, 칸별 색·글자
+    const colW = (el.colW && el.colW.length === 7) ? el.colW : [1, 1, 1, 1, 1, 1, 1];
+    const rowH = (el.rowH && el.rowH.length === rows) ? el.rowH : Array(rows).fill(1);
+    const merges = (el.merges || []).filter(g => g.c < total);
+    const cover = {}; merges.forEach(g => { const r0 = Math.floor(g.c / 7), c0 = g.c % 7; for (let r = r0; r < Math.min(rows, r0 + g.rs); r++) for (let q = c0; q < Math.min(7, c0 + g.cs); q++) if (r * 7 + q !== g.c) cover[r * 7 + q] = g.c; });
+    const cst = el.cells || {};
+    const content = c => {
+      const n = c - first + 1, dow = (c + s.weekStart) % 7, cs = cst[c] || {};
       let inner = '';
       if (n >= 1 && n <= dim) {
         const days = [n]; if (s.rows === 'merge' && c >= total - 7 && n + 7 <= dim) days.push(n + 7);
         const isHol = days.some(d => (hol[`${y}-${pad(m)}-${pad(d)}`] || []).length);
-        const col = (dow === 0 || isHol) ? s.sunColor : dow === 6 ? s.satColor : s.dayColor;
+        const col = cs.numColor || ((dow === 0 || isHol) ? s.sunColor : dow === 6 ? s.satColor : s.dayColor);
         inner += `<div class="d" style="font-family:'${s.fontNum}';font-size:${s.daySize}pt;color:${col}">${days.join(' / ')}</div>`;
         days.forEach(d => {
-          if (s.showHolName) (hol[`${y}-${pad(m)}-${pad(d)}`] || []).forEach(hn => { inner += `<div class="ev" style="font-size:${s.evSize}pt;color:${s.holColor}">${esc(hn)}</div>`; });
-          (el.events || []).filter(e => e.d === d).forEach(e => { inner += `<div class="ev" style="font-size:${s.evSize}pt;color:${COLORS[e.color] || s.evColor}">${esc(e.text)}</div>`; });
+          if (s.showHolName) (hol[`${y}-${pad(m)}-${pad(d)}`] || []).forEach(hn => { inner += `<div class="ev" style="font-size:${cs.size || s.evSize}pt;color:${s.holColor}">${esc(hn)}</div>`; });
+          (el.events || []).filter(e => e.d === d).forEach(e => { inner += `<div class="ev" style="font-size:${cs.size || s.evSize}pt;color:${COLORS[e.color] || e.color || cs.color || s.evColor}">${esc(e.text)}</div>`; });
         });
       }
-      if (c === noteCell) inner += notes.map(t => `<div class="note" style="font-size:${s.evSize}pt;color:${s.noteColor}">${esc(t)}</div>`).join('');
-      const bg = dow === 0 && s.sunBg ? `background:${s.sunBg};` : dow === 6 && s.satBg ? `background:${s.satBg};` : '';
-      const border = `border-right:${s.lineW}mm solid ${s.line};border-bottom:${(c >= total - 7) ? s.outerW : s.lineW}mm solid ${(c >= total - 7) ? s.outer : s.line};`;
-      cells += `<div class="cell" data-day="${n >= 1 && n <= dim ? n : ''}" style="${bg}${border}padding:${s.cellPad}mm ${s.cellPad + 0.2}mm">${inner}</div>`;
+      if (c === noteCell) inner += notes.map(t => `<div class="note" style="font-size:${cs.size || s.evSize}pt;color:${s.noteColor}">${esc(t)}</div>`).join('');
+      if (cs.text) inner += `<div class="ct" style="font-size:${cs.size || s.evSize}pt;color:${cs.color || s.evColor};${cs.bold ? 'font-weight:700;' : ''}">${esc(cs.text).replace(/\n/g, '<br>')}</div>`;
+      return inner;
+    };
+    let cells = '';
+    for (let c = 0; c < total; c++) {
+      if (cover[c] != null) continue;
+      const n = c - first + 1, dow = (c + s.weekStart) % 7, r = Math.floor(c / 7), q = c % 7, cs = cst[c] || {};
+      const g = merges.find(x => x.c === c) || { cs: 1, rs: 1 };
+      let inner = content(c);
+      if (g.cs > 1 || g.rs > 1) for (let rr = r; rr < Math.min(rows, r + g.rs); rr++) for (let qq = q; qq < Math.min(7, q + g.cs); qq++) { const k = rr * 7 + qq; if (k !== c) inner += content(k); }
+      const bgc = cs.bg != null ? cs.bg : dow === 0 && s.sunBg ? s.sunBg : dow === 6 && s.satBg ? s.satBg : '';
+      const last = r + g.rs >= rows;
+      const border = `border-right:${s.lineW}mm solid ${s.line};border-bottom:${last ? s.outerW : s.lineW}mm solid ${last ? s.outer : s.line};`;
+      const al = cs.align ? `text-align:${cs.align};` : '';
+      cells += `<div class="cell" data-c="${c}" data-day="${n >= 1 && n <= dim ? n : ''}" style="grid-row:${r + 1}/span ${g.rs};grid-column:${q + 1}/span ${g.cs};${bgc ? `background:${bgc};` : ''}${border}${al}padding:${s.cellPad}mm ${s.cellPad + 0.2}mm">${inner}</div>`;
     }
-    const wd = s.showWd ? `<div class="wd" style="height:${s.wdH}mm;font-family:'${s.fontNum}';font-size:${s.wdSize}pt;color:${s.wdColor}">${Array.from({ length: 7 }, (_, i) => { const d = (i + s.weekStart) % 7; return `<span style="${d === 0 ? `color:${s.sunColor}` : ''}">${(WD[s.wdLang] || WD.en)[d]}</span>`; }).join('')}</div>` : '';
-    return `${wd}<div class="cg" style="grid-template-rows:repeat(${rows},1fr);border-top:${s.outerW}mm solid ${s.outer};border-left:${s.lineW}mm solid ${s.line};font-family:'${s.fontBody}'">${cells}</div>`;
+    const wd = s.showWd ? `<div class="wd" style="grid-template-columns:${colW.map(w => w + 'fr').join(' ')};height:${s.wdH}mm;font-family:'${s.fontNum}';font-size:${s.wdSize}pt;color:${s.wdColor}">${Array.from({ length: 7 }, (_, i) => { const d = (i + s.weekStart) % 7; return `<span style="${d === 0 ? `color:${s.sunColor}` : ''}">${(WD[s.wdLang] || WD.en)[d]}</span>`; }).join('')}</div>` : '';
+    return `${wd}<div class="cg" style="grid-template-columns:${colW.map(w => w + 'fr').join(' ')};grid-template-rows:${rowH.map(w => w + 'fr').join(' ')};border-top:${s.outerW}mm solid ${s.outer};border-left:${s.lineW}mm solid ${s.line};font-family:'${s.fontBody}'">${cells}</div>`;
   }
   function miniHTML(el) {
     const s = Object.assign({}, MINI_DEF, el.s || {});
@@ -364,5 +381,6 @@ NC.cal = (function () {
     });
     return replaced;
   }
-  return { builtinHolidays, autoHolidays, canAuto, AUTO_RANGE, fetchHolidays, holidayMap, calHTML, miniHTML, applyRules, buildPages, retheme, syncFromPages, themeOf, THEMES, CAL_DEF, MINI_DEF, MONTHS_EN, daysIn, WD };
+  function calRows(el) { const s = Object.assign({}, CAL_DEF, el.s || {}); const first = (new Date(el.year, el.month - 1, 1).getDay() - s.weekStart + 7) % 7; return s.rows === '6' ? 6 : s.rows === 'auto' ? Math.ceil((first + daysIn(el.year, el.month)) / 7) : 5; }
+  return { calRows, builtinHolidays, autoHolidays, canAuto, AUTO_RANGE, fetchHolidays, holidayMap, calHTML, miniHTML, applyRules, buildPages, retheme, syncFromPages, themeOf, THEMES, CAL_DEF, MINI_DEF, MONTHS_EN, daysIn, WD };
 })();
