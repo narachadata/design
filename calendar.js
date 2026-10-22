@@ -100,8 +100,9 @@ NC.cal = (function () {
     const merges = (el.merges || []).filter(g => g.c < total);
     const cover = {}; merges.forEach(g => { const r0 = Math.floor(g.c / 7), c0 = g.c % 7; for (let r = r0; r < Math.min(rows, r0 + g.rs); r++) for (let q = c0; q < Math.min(7, c0 + g.cs); q++) if (r * 7 + q !== g.c) cover[r * 7 + q] = g.c; });
     const cst = el.cells || {};
+    const ckey = c => { const n = c - first + 1; return n >= 1 && n <= dim ? 'd' + n : String(c); };
     const content = c => {
-      const n = c - first + 1, dow = (c + s.weekStart) % 7, cs = cst[c] || {};
+      const n = c - first + 1, dow = (c + s.weekStart) % 7, cs = cst[ckey(c)] || cst[c] || {};  // cst[c]: 이전 방식(칸 번호)으로 저장된 서식
       let inner = '';
       if (n >= 1 && n <= dim) {
         const days = [n]; if (s.rows === 'merge' && c >= total - 7 && n + 7 <= dim) days.push(n + 7);
@@ -110,7 +111,7 @@ NC.cal = (function () {
         inner += `<div class="d" style="font-family:'${s.fontNum}';font-size:${s.daySize}pt;color:${col}">${days.join(' / ')}</div>`;
         days.forEach(d => {
           if (s.showHolName) (hol[`${y}-${pad(m)}-${pad(d)}`] || []).forEach(hn => { inner += `<div class="ev" style="font-size:${cs.size || s.evSize}pt;color:${s.holColor}">${esc(hn)}</div>`; });
-          (el.events || []).filter(e => e.d === d).forEach(e => { inner += `<div class="ev" style="font-size:${cs.size || s.evSize}pt;color:${COLORS[e.color] || e.color || cs.color || s.evColor}">${esc(e.text)}</div>`; });
+          (el.events || []).filter(e => e.d === d).forEach(e => { inner += `<div class="ev" style="font-size:${cs.size || s.evSize}pt;color:${COLORS[e.color] || e.color || cs.color || s.evColor};${cs.bold ? 'font-weight:700;' : ''}">${esc(e.text)}</div>`; });
         });
       }
       if (c === noteCell) inner += notes.map(t => `<div class="note" style="font-size:${cs.size || s.evSize}pt;color:${s.noteColor}">${esc(t)}</div>`).join('');
@@ -120,7 +121,7 @@ NC.cal = (function () {
     let cells = '';
     for (let c = 0; c < total; c++) {
       if (cover[c] != null) continue;
-      const n = c - first + 1, dow = (c + s.weekStart) % 7, r = Math.floor(c / 7), q = c % 7, cs = cst[c] || {};
+      const n = c - first + 1, dow = (c + s.weekStart) % 7, r = Math.floor(c / 7), q = c % 7, cs = cst[ckey(c)] || cst[c] || {};
       const g = merges.find(x => x.c === c) || { cs: 1, rs: 1 };
       let inner = content(c);
       if (g.cs > 1 || g.rs > 1) for (let rr = r; rr < Math.min(rows, r + g.rs); rr++) for (let qq = q; qq < Math.min(7, q + g.cs); qq++) { const k = rr * 7 + qq; if (k !== c) inner += content(k); }
@@ -339,6 +340,7 @@ NC.cal = (function () {
     else if (kind === 'back') out.push(back());
     else if (kind === 'virtue') out.push(virtue(opts.month || 1));
     else if (kind === 'cal') out.push(calendar(opts.month || 1));
+    out.forEach(p => p.els.forEach(e => { e.gen = 1; }));  // 자동으로 만든 요소 표시 (테마를 바꿀 때 사용자가 넣은 요소와 구분)
     return out;
   }
   function isDark(hex) { if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return false; const n = parseInt(hex.slice(1), 16); const r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (r * 299 + g * 587 + b * 114) / 1000 < 120; }
@@ -377,10 +379,21 @@ NC.cal = (function () {
       let np = null;
       if (p.kind === 'cover') np = byKind.cover.shift(); else if (p.kind === 'back') np = byKind.back.shift();
       else { const m = (p.els.find(e => e.month) || {}).month; if (p.kind === 'virtue') np = vir.find(x => x.els.some(e => e.month === m)); if (p.kind === 'cal') np = cal.find(x => x.els.some(e => e.month === m)); }
-      if (np) { replaced++; return np; } return p;
+      if (np) {
+        replaced++;
+        // 달력 칸 편집(합치기·너비·높이·칸 색·칸 글자)은 그대로 옮김
+        const oc = p.els.find(e => e.type === 'cal'), nc = np.els.find(e => e.type === 'cal');
+        if (oc && nc) ['cells', 'merges', 'colW', 'rowH'].forEach(k => { if (oc[k] != null) nc[k] = JSON.parse(JSON.stringify(oc[k])); });
+        // 사용자가 직접 넣은 요소(스티커·사진·글 상자 등)는 새 디자인 위에 그대로 둠
+        if (p.els.some(e => e.gen)) np.els.push(...p.els.filter(e => !e.gen));
+        return np;
+      }
+      return p;
     });
     return replaced;
   }
+  // 칸 번호 → 칸 서식 키 (날짜 칸은 날짜로 고정해 달·주 시작이 바뀌어도 그 날짜를 따라감)
+  function cellKey(el, c) { const s = Object.assign({}, CAL_DEF, el.s || {}); const first = (new Date(el.year, el.month - 1, 1).getDay() - s.weekStart + 7) % 7; const n = c - first + 1; return n >= 1 && n <= daysIn(el.year, el.month) ? 'd' + n : String(c); }
   function calRows(el) { const s = Object.assign({}, CAL_DEF, el.s || {}); const first = (new Date(el.year, el.month - 1, 1).getDay() - s.weekStart + 7) % 7; return s.rows === '6' ? 6 : s.rows === 'auto' ? Math.ceil((first + daysIn(el.year, el.month)) / 7) : 5; }
-  return { calRows, builtinHolidays, autoHolidays, canAuto, AUTO_RANGE, fetchHolidays, holidayMap, calHTML, miniHTML, applyRules, buildPages, retheme, syncFromPages, themeOf, THEMES, CAL_DEF, MINI_DEF, MONTHS_EN, daysIn, WD };
+  return { cellKey, calRows, builtinHolidays, autoHolidays, canAuto, AUTO_RANGE, fetchHolidays, holidayMap, calHTML, miniHTML, applyRules, buildPages, retheme, syncFromPages, themeOf, THEMES, CAL_DEF, MINI_DEF, MONTHS_EN, daysIn, WD };
 })();
