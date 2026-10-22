@@ -1821,8 +1821,11 @@ function renderDownload() {
 // 글 상자 안 실제 글자 폭(mm) 어림: 가장 긴 줄을 그 글꼴로 재어 봄
 const _tm = document.createElement('canvas').getContext('2d');
 function textWidthMM(el) { _tm.font = `${el.italic ? 'italic ' : ''}${el.weight || 400} 100px "${el.font}", sans-serif`; const w = Math.max(...String(el.text || '').split('\n').map(l => _tm.measureText(l).width + (el.ls || 0) * 100 * l.length)); return w / 100 * el.size * 25.4 / 72; }
+// 인쇄(CMYK)로 거의 못 내는 선명한 RGB 색: 형광 초록·하늘·파랑 계열 (채도·명도가 모두 높은 색)
+function outOfGamut(c) { if (!/^#[0-9a-f]{6}$/i.test(c || '')) return false; const n = parseInt(c.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, bl = (n & 255) / 255, mx = Math.max(r, g, bl), mn = Math.min(r, g, bl), sat = mx ? (mx - mn) / mx : 0; if (sat < 0.8 || mx < 0.8) return false; let h = 0; const d = mx - mn; if (mx === r) h = ((g - bl) / d) % 6; else if (mx === g) h = (bl - r) / d + 2; else h = (r - g) / d + 4; h = (h * 60 + 360) % 360; return (h >= 75 && h <= 250) || (h >= 270 && h <= 320); }
 function printIssues(pages) {
   const out = [], b = Number(doc.bleed) || 0;
+  for (const pi of pages) { const bad = new Set(); const pg = doc.pages[pi]; if (outOfGamut(pg.bg)) bad.add(pg.bg.toUpperCase()); pg.els.forEach(el => { if (el.hidden) return; ['color', 'fill', 'stroke', 'g1', 'g2'].forEach(k => { if (outOfGamut(el[k])) bad.add(el[k].toUpperCase()); }); }); if (bad.size) out.push({ page: pi + 1, id: '', name: '색', msg: `· ${[...bad].slice(0, 4).join(', ')} — 아주 선명한 RGB 색은 인쇄하면 탁해집니다 (시안으로 확인하거나 조금 덜 선명한 색으로)` }); }
   for (const pi of pages) for (const el of doc.pages[pi].els) {
     if (el.hidden) continue; const add = msg => out.push({ page: pi + 1, id: el.id, name: elName(el), msg });
     let x0 = el.x, y0 = el.y, x1 = el.x + el.w, y1 = el.y + el.h;
@@ -1857,7 +1860,7 @@ async function checkResolution(pages) {
     if (el.type !== 'image' || el.hidden) continue; const u = src(el.src); if (!u || /^data:image\/svg|\.svg/i.test(u)) continue;
     const nat = await imgNatural(u); if (!nat) continue;
     const ar = nat[0] / nat[1], boxAr = el.w / el.h; const fill = el.fit === 'cover' ? (ar > boxAr ? el.h * ar : el.w) : el.fit === 'fill' ? el.w : (ar > boxAr ? el.w : el.h * ar);
-    const ppi = Math.round(nat[0] / ((fill * (el.zoom || 1)) / 25.4)); if (ppi < need) out.push({ page: pi + 1, id: el.id, name: elName(el), ppi, need });
+    const ppi = Math.round(nat[0] / ((fill * (el.zoom || 1)) / 25.4)); if (ppi < need * 0.9) out.push({ page: pi + 1, id: el.id, name: elName(el), ppi, need }); // 10% 여유: 경계값(197/200ppi)은 인쇄 차이가 없음
   }
   return out;
 }
