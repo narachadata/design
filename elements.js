@@ -14,7 +14,7 @@ NC.elems = (function () {
   const D = { logo: 'asset:logo-wordmark', swoosh: 'asset:swoosh', group: 'asset:cover-group', back: 'asset:backcover-logo', target: 'asset:target-icon' };
 
   /* 일러스트 (내장 그림) */
-  const ILLU = [['illu-01-pride', '긍지 펭귄'], ['illu-02-morality', '도덕성 소년'], ['illu-03-consideration', '배려 악수'], ['illu-04-responsibility', '책임감 소년'], ['illu-05-respect', '존경 두 아이'], ['illu-06-humility', '겸손 소녀'], ['illu-07-forgiveness', '용서 포옹'], ['illu-09-justice', '정의 소녀'], ['illu-10-honesty', '정직 펭귄'], ['illu-11-fairness', '공평 저울'], ['illu-12-cooperation', '협동 상자'], ['cover-group', '단체 뒷모습'], ['backcover-logo', '펭귄 로고']];
+  const ILLU = [['illu-01-pride', '긍지 펭귄'], ['illu-02-morality', '도덕성 소년'], ['illu-03-consideration', '배려 악수'], ['illu-04-responsibility', '책임감 소년'], ['illu-05-respect', '존경 두 아이'], ['illu-06-humility', '겸손 소녀'], ['illu-07-forgiveness', '용서 포옹'], ['illu-08-friendship', '우정 친구'], ['illu-09-justice', '정의 소녀'], ['illu-10-honesty', '정직 펭귄'], ['illu-11-fairness', '공평 저울'], ['illu-12-cooperation', '협동 상자'], ['cover-group', '단체 뒷모습'], ['backcover-logo', '펭귄 로고']];
   ILLU.forEach(([k, n]) => add('illust', 'il-' + k, n, 60, 60, (uid) => { const { I } = H(uid); return [I('asset:' + k, 0, 0, 60, 60, { name: n })]; }, '일러스트 그림 태권도 펭귄'));
   ['01', '03', '04', '05', '07', '08', '09', '11'].forEach(k => add('illust', 'ms-' + k, '마스코트 ' + k, 30, 30, (uid) => { const { I } = H(uid); return [I('asset:mascot-' + k, 0, 0, 30, 30, { name: '마스코트' })]; }, '마스코트 펭귄 발차기'));
   add('illust', 'il-logo', '로고 워드마크', 60, 15, (uid) => { const { I } = H(uid); return [I(D.logo, 0, 0, 60, 15, { name: '로고' })]; }, '로고');
