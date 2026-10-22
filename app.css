@@ -530,3 +530,8 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 #printRoot .sheet,#printRoot .marks{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 #printRoot .sheet{break-inside:avoid}
 .dlpanel .dlwarn{background:#fff5e6;border:1px solid #f3c27a;border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.55;margin:0 0 10px;color:#7a4b00}.dlpanel .dlwarn ul{margin:4px 0 4px 16px;padding:0}
+/* 인쇄 안내선 */
+.ovl .pg-bleed{position:absolute;border:calc(1px / var(--k)) dashed #e0564b;pointer-events:none}
+.ovl .pg-safe{position:absolute;border:calc(1px / var(--k)) dashed rgba(47,111,228,.55);pointer-events:none}
+.stage .ovl{overflow:visible}
+.stage .canvas-wrap{overflow:visible}
