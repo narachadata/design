@@ -734,10 +734,11 @@ function renderSide() {
     $('#pgUp').onclick = () => { if (cur === 0) return; [doc.pages[cur - 1], doc.pages[cur]] = [doc.pages[cur], doc.pages[cur - 1]]; commit(); goto(cur - 1); };
     $('#pgDown').onclick = () => { if (cur >= doc.pages.length - 1) return; [doc.pages[cur + 1], doc.pages[cur]] = [doc.pages[cur], doc.pages[cur + 1]]; commit(); goto(cur + 1); };
   } else if (sideTab === 'tpl') {
-    body.innerHTML = `<div class="wz-card"><div class="wz-year">${yearNow}<small>년</small></div><p class="hint" style="margin:0 0 8px">연도별 달력 모양과 테마를 미리 보며 표지·인성·달력 26쪽을 한 번에 만듭니다.</p><button class="btn primary full" id="wzOpen"><svg class="ic"><use href="#i-cal"/></svg>캘린더 마법사 열기</button></div>
-    <h3>템플릿 갤러리 <small id="tcount"></small></h3>
+    const filt = tplFiltered();
+    body.innerHTML = `${filt ? tplNavHTML() : ''}<div class="wz-card" ${filt ? 'hidden' : ''}><div class="wz-year">${yearNow}<small>년</small></div><p class="hint" style="margin:0 0 8px">연도별 달력 모양과 테마를 미리 보며 표지·인성·달력 26쪽을 한 번에 만듭니다.</p><button class="btn primary full" id="wzOpen"><svg class="ic"><use href="#i-cal"/></svg>캘린더 마법사 열기</button></div>
+    <h3 ${filt ? 'hidden' : ''}>템플릿 갤러리 <small id="tcount"></small></h3>
     <label class="f"><input type="text" id="tplSearch" placeholder="템플릿 검색 (예: 가을 모집 포스터, 유아, 카페 오픈)" value="${esc(tplQ)}"></label>
-    <div class="facets">${[['format', '제작 형태'], ['season', '계절'], ['age', '연령'], ['occasion', '상황'], ['biz', '직종']].map(([k, t]) => `<select data-facet="${k}"><option value="">${t}: 전체</option>${NC.tpl.facets[k].map(v => `<option value="${esc(v)}" ${tplF[k] === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>`).join('')}${Object.values(tplF).some(Boolean) || tplQ ? '<button class="btn sm" id="tplClear">초기화</button>' : ''}</div>
+    <div class="facets">${[['format', '제작 형태'], ['season', '계절'], ['age', '연령'], ['occasion', '상황'], ['biz', '직종']].map(([k, t]) => `<select data-facet="${k}"><option value="">${t}: 전체</option>${NC.tpl.facets[k].map(v => `<option value="${esc(v)}" ${tplF[k] === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>`).join('')}</div><div class="tcats" id="tplcats">${NC.tpl.cats.map(([k, t]) => `<button data-tcat="${k}" class="${tplCat === k ? 'on' : ''}">${t}</button>`).join('')}<button data-tcat="holiday" class="${tplCat === 'holiday' ? 'on' : ''}">명절·휴일 휴관</button></div>
     <div class="tgal" id="tgal"></div>
     <h3>문서 크기</h3>
     <label class="f"><select id="docSize">${SIZES.map(s => `<option value="${s[0]}" ${s[2] === doc.w && s[3] === doc.h ? 'selected' : ''}>${s[1]}</option>`).join('')}<option value="custom">직접 입력</option></select></label>
@@ -745,9 +746,10 @@ function renderSide() {
     <button class="btn full" id="docSizeApply">크기 적용 (모든 페이지)</button><button class="btn full" id="docResize" style="margin-top:6px">크기 조정… (내용 맞춰 배치 · 다른 크기로 사본)</button>`;
     $('#wzOpen').onclick = () => openWizard(yearNow);
     renderGallery();
-    body.querySelectorAll('[data-facet]').forEach(sl => sl.onchange = () => { tplF[sl.dataset.facet] = sl.value; renderSide(); });
-    const tc_ = $('#tplClear'); if (tc_) tc_.onclick = () => { tplF = { format: '', season: '', age: '', occasion: '', biz: '' }; tplQ = ''; tplCat = 'all'; renderSide(); };
-    let tq; $('#tplSearch').oninput = e => { tplQ = e.target.value; clearTimeout(tq); tq = setTimeout(renderGallery, 250); };
+    body.querySelectorAll('[data-facet]').forEach(sl => sl.onchange = () => tplGo(() => { tplF[sl.dataset.facet] = sl.value; }));
+    $('#tplcats').onclick = e => { const b = e.target.closest('[data-tcat]'); if (!b || b.dataset.tcat === tplCat) return; tplGo(() => { tplCat = b.dataset.tcat; }); };
+    const nav = $('#tplNav'); if (nav) nav.onclick = e => { if (e.target.closest('#tplBack')) { tplBackBtn(); return; } if (e.target.closest('#tplHome')) { tplGo(() => { tplCat = 'all'; tplQ = ''; tplF = { format: '', season: '', age: '', occasion: '', biz: '' }; }); return; } const x = e.target.closest('[data-tx]'); if (x) tplGo(() => { const k = x.dataset.tx; if (k === 'cat') tplCat = 'all'; else if (k === 'q') tplQ = ''; else tplF[k] = ''; }); };
+    let tq; $('#tplSearch').oninput = e => { if (!tplQ.trim() && e.target.value.trim()) tplPush(); tplQ = e.target.value; clearTimeout(tq); tq = setTimeout(() => { if (!!tplQ.trim() !== !!$('#tplNav')) { const pos = e.target.selectionStart; renderSide(); const n = $('#tplSearch'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } } else renderGallery(); }, 250); };
     $('#docSize').onchange = e => { const s = SIZES.find(x => x[0] === e.target.value); if (s) { $('#docW').value = s[2]; $('#docH').value = s[3]; } };
     $('#docSizeApply').onclick = () => { const w = Number($('#docW').value), h = Number($('#docH').value); if (!(w > 10 && h > 10)) return; const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, w, h, 'fit'); doc.pages = nd.pages; doc.w = w; doc.h = h; doc.fmt = (SIZES.find(x => x[2] === w && x[3] === h) || [''])[0] === 'desk' ? 'desk-cal' : ''; commit(); zoom = 0; renderAll(); toast('문서 크기를 바꾸고 내용을 맞춰 배치했습니다 (Ctrl+Z로 되돌리기)'); };
     $('#docResize').onclick = openResize;
@@ -890,24 +892,41 @@ function libPhotoHTML() {
   return h + '<p class="hint">사진을 누르면 원본 크기(최대 2400px)로 문서에 들어갑니다. 게티이미지 사진은 도장 홍보물에만 쓰세요.</p>';
 }
 
+/* ---- 템플릿 패널 이동 기록: 들어갈 때마다 남기고 '‹ 뒤로'·브라우저 뒤로로 한 단계씩 돌아감 ---- */
+let tplHist = [];
+const TPLF0 = () => ({ format: '', season: '', age: '', occasion: '', biz: '' });
+function tplFiltered() { return tplCat !== 'all' || !!tplQ.trim() || Object.values(tplF).some(Boolean); }
+function tplPush() { tplHist.push({ c: tplCat, f: Object.assign({}, tplF), q: tplQ, sc: ($('#sidebody') || {}).scrollTop || 0 }); if (tplHist.length > 40) tplHist.shift(); try { history.pushState({ ncPanel: tplHist.length }, ''); } catch (e) {} }
+function tplGo(mut) { tplPush(); mut(); renderSide(); const b = $('#sidebody'); if (b) b.scrollTop = 0; }
+function tplBack() { const h = tplHist.pop(); if (!h) { if (tplFiltered()) { tplCat = 'all'; tplQ = ''; tplF = TPLF0(); if (sideTab === 'tpl') renderSide(); } return; } tplCat = h.c; tplF = h.f; tplQ = h.q; if (sideTab === 'tpl') { renderSide(); requestAnimationFrame(() => { const b = $('#sidebody'); if (b) b.scrollTop = h.sc; }); } }
+function tplBackBtn() { if (tplHist.length && history.state && history.state.ncPanel) history.back(); else tplBack(); } // 기록이 있으면 브라우저 기록과 함께 한 단계
+window.addEventListener('popstate', () => { if (tplHist.length) tplBack(); });
+document.addEventListener('keydown', e => { if (e.altKey && e.key === 'ArrowLeft' && sideTab === 'tpl' && tplFiltered() && !editing && !(e.target.matches && e.target.matches('input,textarea,select,[contenteditable="true"]'))) { e.preventDefault(); tplBackBtn(); } });
+function tplNavHTML() {
+  const cats = Object.fromEntries(NC.tpl.cats.concat([['holiday', '명절·휴일 휴관']]));
+  const chips = []; if (tplCat !== 'all') chips.push(['cat', cats[tplCat] || tplCat]); if (tplQ.trim()) chips.push(['q', `"${tplQ.trim()}"`]); Object.entries(tplF).forEach(([k, v]) => { if (v) chips.push([k, v]); });
+  const title = chips.length ? chips.map(c => c[1]).join(' · ') : '전체';
+  return `<div class="tnav" id="tplNav"><div class="tnav-top"><button class="btn sm" id="tplBack" title="이전 화면으로 (Alt+← · 마우스 뒤로 단추)">‹ 뒤로</button><b class="tnav-t">${esc(title)}</b><button class="lnk" id="tplHome">템플릿 홈</button></div>${chips.length > 1 ? `<div class="tchips">${chips.map(([k, t]) => `<button data-tx="${k}" title="이 조건 지우기">${esc(t)} ×</button>`).join('')}</div>` : ''}</div>`;
+}
 /* ---- 템플릿 갤러리 ---- */
 function tplItems() {
   const y = doc.calendar.year || 2027;
   const themeItems = CAL.THEMES.map(th => ({ id: 'theme-' + th.id, cat: 'calendar', theme: th, name: th.name + ' 캘린더', desc: th.desc, w: 224, h: 154, build: () => { const saved = doc; const tmp = Object.assign({}, doc, { calendar: Object.assign(clone(doc.calendar), { theme: clone(th) }) }); doc = tmp; try { return CAL.buildPages(tmp, uid, { year: y, kind: 'virtue', month: 1 }).concat(CAL.buildPages(tmp, uid, { year: y, kind: 'cal', month: 1 })); } finally { doc = saved; } } }));
   const calItems = [['cal-cover', '캘린더 표지', () => CAL.buildPages(doc, uid, { year: y, kind: 'cover' })], ['cal-virtue', '인성 페이지 (1월)', () => CAL.buildPages(doc, uid, { year: y, kind: 'virtue', month: 1 })], ['cal-month', '달력 페이지 (1월)', () => CAL.buildPages(doc, uid, { year: y, kind: 'cal', month: 1 })], ['cal-back', '캘린더 뒷표지', () => CAL.buildPages(doc, uid, { year: y, kind: 'back' })]].map(([id, name, build]) => ({ id, cat: 'calpage', name, w: 224, h: 154, build }));
-  const items = themeItems.concat(calItems, NC.tpl.list.map(t => ({ id: t.id, cat: t.cat, name: t.name, w: t.w, h: t.h, tags: t.tags, kw: t.kw || t.name, build: () => t.build(uid, t.pal || null, { year: y }) })));
+  const items = themeItems.concat(calItems, NC.tpl.list.map(t => ({ id: t.id, cat: t.cat, name: t.name, w: t.w, h: t.h, tags: t.tags, kw: t.kw || t.name, responsive: t.responsive, holiday: t.holiday, build: sz => t.responsive && sz ? t.build(uid, sz) : t.build(uid, t.pal || null, { year: y }) })));
   // 나라차 자료실 템플릿 (동기화 폴더의 디자인자료)
   const fresh = pg => Object.assign(clone(pg), { id: uid(), els: pg.els.map(e => Object.assign(clone(e), { id: uid() })) });
   NC.lib.templates().forEach(t => items.unshift({ id: t.id, cat: t.cat, name: t.name, w: t.w, h: t.h, tags: t.tags, kw: t.kw, lib: true, build: () => t.pages.map(fresh) }));
   themeItems.concat(calItems).forEach(t => { t.tags = { format: '달력', season: '사계절', age: '전체', occasion: '안내', biz: '태권도장' }; t.kw = t.name + ' 달력 캘린더 ' + (t.desc || ''); });
   const q = (tplQ || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
-  return items.filter(t => (tplCat === 'all' || t.cat === tplCat) && Object.keys(tplF).every(k => !tplF[k] || (t.tags && t.tags[k] === tplF[k])) && (!q.length || q.every(w => (t.name + ' ' + (t.kw || '')).toLowerCase().includes(w))));
+  if (tplCat === 'holiday') { const order = NC.tpl.nextHolidays ? NC.tpl.nextHolidays() : []; const rank = t => { const i = order.indexOf(t.holiday); return i < 0 ? 99 : i; }; items.sort((a, b) => (a.holiday ? 0 : 1) - (b.holiday ? 0 : 1) || rank(a) - rank(b)); }
+  return items.filter(t => (tplCat === 'all' || (tplCat === 'holiday' ? !!t.holiday : t.cat === tplCat)) && Object.keys(tplF).every(k => !tplF[k] || (t.tags && t.tags[k] === tplF[k])) && (!q.length || q.every(w => (t.name + ' ' + (t.kw || '')).toLowerCase().includes(w))));
 }
 function tplSheet(t, pages) { const tmp = Object.assign({}, doc, { w: t.w, h: t.h, bleed: 0, cropMarks: false }); const saved = doc; doc = tmp; try { return sheetHTML(pages[0], 'thumb'); } finally { doc = saved; } }
 function recentTpls() { try { return JSON.parse(localStorage.getItem('naracal-recent-tpls') || '[]'); } catch (e) { return []; } }
 function noteRecentTpl(id) { const r = recentTpls().filter(x => x !== id); r.unshift(id); try { localStorage.setItem('naracal-recent-tpls', JSON.stringify(r.slice(0, 8))); } catch (e) {} }
 let galObs = null;
-function tplCard(t) { const two = !!t.theme; return `<button class="tcard lazy ${two ? 'two' : ''}" data-tid="${t.id}" title="${esc(t.name)}"><div class="tbox" data-w="${t.w}" data-h="${t.h}" data-n="${two ? 2 : 1}"></div><span>${esc(t.name)}</span><small>${t.theme ? esc(t.desc) : (t.w >= 1000 ? (t.w / 10) + '×' + (t.h / 10) + 'cm' : Math.round(t.w) + '×' + Math.round(t.h) + 'mm')}</small></button>`; }
+function tplCard(t) { const two = !!t.theme; return `<button class="tcard lazy ${two ? 'two' : ''}" data-tid="${t.id}" title="${esc(t.name)}"><div class="tbox" data-w="${t.w}" data-h="${t.h}" data-n="${two ? 2 : 1}"></div><span>${esc(t.name)}</span><small>${t.theme ? esc(t.desc) : (t.w >= 1000 ? (t.w / 10) + '×' + (t.h / 10) + 'cm' : isScreenSize(t.w, t.h) ? Math.round(t.w * 96 / 25.4) + '×' + Math.round(t.h * 96 / 25.4) + 'px' : Math.round(t.w) + '×' + Math.round(t.h) + 'mm')}</small></button>`; }
 function fillCard(card, t) { if (!card.classList.contains('lazy')) return; card.classList.remove('lazy'); const pages = t.build(); const two = t.theme && pages.length > 1; const bx = card.querySelector('.tbox'); bx.innerHTML = tplSheet(t, pages) + (two ? tplSheet(t, pages.slice(1)) : ''); fitBoxes(card, '.tbox', 110); }
 function renderGallery() {
   const g = $('#tgal'); if (!g) return; const items = tplItems(); const tc = $('#tcount'); if (tc) tc.textContent = `${items.length}개`;
@@ -917,7 +936,8 @@ function renderGallery() {
   if (!filtered) {
     const rec = recentTpls().map(id => byId[id]).filter(Boolean);
     const sNow = NC.tpl.seasonNow(); const seasonal = items.filter(t => t.tags.season === sNow).slice(0, 6);
-    const rows = [['최근 사용', rec, null], ['나라차 브랜드', items.filter(t => t.lib), null], [`${sNow} 추천`, seasonal, { season: sNow }], ['달력 테마', items.filter(t => t.theme), null, 'calendar'], ['모집·홍보', items.filter(t => t.tags.occasion === '모집').slice(0, 6), { occasion: '모집' }], ['행사·축하', items.filter(t => ['행사', '축하', '심사·대회'].includes(t.tags.occasion)).slice(0, 6), { occasion: '행사' }], ['명절·인사·감사', items.filter(t => ['명절·인사', '감사'].includes(t.tags.occasion)).slice(0, 6), { occasion: '명절·인사' }], ['다른 직종', items.filter(t => t.tags.biz !== '태권도장').slice(0, 6), { biz: '학원' }], ['SNS·카드뉴스', items.filter(t => ['SNS', '카드뉴스'].includes(t.tags.format)).slice(0, 6), { format: 'SNS' }], ['포스터', items.filter(t => t.tags.format === '포스터').slice(0, 6), { format: '포스터' }], ['안내문·서식', items.filter(t => ['안내문', '서식·활동지'].includes(t.tags.format)).slice(0, 6), { format: '안내문' }]];
+    const nextH = (NC.tpl.nextHolidays ? NC.tpl.nextHolidays() : []).slice(0, 2); const holOrder = NC.tpl.nextHolidays ? NC.tpl.nextHolidays() : [];
+    const rows = [['최근 사용', rec, null], [`다가오는 휴일 휴관 카드${nextH.length ? ' · ' + nextH.map(k => k === '크리스마스' ? '성탄절' : k).join('·') : ''}`, items.filter(t => t.holiday && nextH.includes(t.holiday)).sort((a, b) => nextH.indexOf(a.holiday) - nextH.indexOf(b.holiday)), { occasion: '휴관' }], ['나라차 브랜드', items.filter(t => t.lib), null], [`${sNow} 추천`, seasonal, { season: sNow }], ['달력 테마', items.filter(t => t.theme), null, 'calendar'], ['모집·홍보', items.filter(t => t.tags.occasion === '모집').slice(0, 6), { occasion: '모집' }], ['행사·축하', items.filter(t => ['행사', '축하', '심사·대회'].includes(t.tags.occasion)).slice(0, 6), { occasion: '행사' }], ['명절·인사·감사', items.filter(t => ['명절·인사', '감사'].includes(t.tags.occasion)).slice(0, 6), { occasion: '명절·인사' }], ['다른 직종', items.filter(t => t.tags.biz !== '태권도장').slice(0, 6), { biz: '학원' }], ['SNS·카드뉴스', items.filter(t => ['SNS', '카드뉴스'].includes(t.tags.format)).slice(0, 6), { format: 'SNS' }], ['포스터', items.filter(t => t.tags.format === '포스터').slice(0, 6), { format: '포스터' }], ['안내문·서식', items.filter(t => ['안내문', '서식·활동지'].includes(t.tags.format)).slice(0, 6), { format: '안내문' }]];
     rows.forEach(([title, list, facet, cat]) => { if (!list.length) return; h += `<div class="esec"><h3>${title} <small>${list.length}</small></h3><button class="more" ${facet ? `data-more='${JSON.stringify(facet)}'` : cat ? `data-morecat="${cat}"` : ''}>${facet || cat ? '더보기 ›' : ''}</button></div><div class="tgal-row">${list.map(tplCard).join('')}</div>`; });
     g.innerHTML = h;
   } else {
@@ -926,26 +946,41 @@ function renderGallery() {
   if (galObs) galObs.disconnect();
   galObs = new IntersectionObserver(ents => { ents.forEach(en => { if (en.isIntersecting) { const t = byId[en.target.dataset.tid]; if (t) fillCard(en.target, t); galObs.unobserve(en.target); } }); }, { root: $('#sidebody'), rootMargin: '200px' });
   g.querySelectorAll('.tcard.lazy').forEach(c => galObs.observe(c));
-  g.onclick = e => { const m = e.target.closest('[data-more]'); if (m) { Object.assign(tplF, JSON.parse(m.dataset.more)); renderSide(); return; } const mc = e.target.closest('[data-morecat]'); if (mc) { tplCat = mc.dataset.morecat; renderSide(); return; } const b = e.target.closest('[data-tid]'); if (b) openTplPreview(byId[b.dataset.tid]); };
+  g.onclick = e => { const m = e.target.closest('[data-more]'); if (m) { const f = JSON.parse(m.dataset.more); tplGo(() => { if (f.occasion === '휴관') tplCat = 'holiday'; else Object.assign(tplF, f); }); return; } const mc = e.target.closest('[data-morecat]'); if (mc) { tplGo(() => { tplCat = mc.dataset.morecat; }); return; } const b = e.target.closest('[data-tid]'); if (b) openTplPreview(byId[b.dataset.tid]); };
+}
+// 템플릿을 원하는 크기로: 반응형 템플릿(자동 생성·명절 카드)은 그 크기로 새로 짜고, 나머지는 크기 조정 규칙으로 맞춤
+const isScreenSize = (w, h, fmt) => { const f = FORMATS.find(x => x[0] === fmt); if (f) return f[5] === 'px'; return w > 150 && Math.abs(w * 96 / 25.4 - Math.round(w * 96 / 25.4)) < 0.05 && Math.abs(h * 96 / 25.4 - Math.round(h * 96 / 25.4)) < 0.05; };
+function tplPagesFor(t, S) {
+  if (t.theme) return t.build();
+  if (t.responsive) return t.build({ w: S.w, h: S.h, screen: S.screen });
+  const pages = t.build(); if (Math.abs(t.w - S.w) < 0.5 && Math.abs(t.h - S.h) < 0.5) return pages;
+  return resizedDoc({ w: t.w, h: t.h, pages }, S.w, S.h, 'fit').pages;
 }
 function openTplPreview(t) {
   noteRecentTpl(t.id);
   let d = $('#dlgTpl'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgTpl'; d.innerHTML = `<div class="dhead"><h2 id="tplTitle"></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="tplBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
-  const pages = t.build(); const hasCal = doc.pages.some(p => p.kind);
-  $('#tplTitle').innerHTML = `${esc(t.name)} <small>${t.theme ? esc(t.desc) : (t.w >= 1000 ? (t.w / 10) + '×' + (t.h / 10) + 'cm' : Math.round(t.w) + '×' + Math.round(t.h) + 'mm') + ' · ' + pages.length + '쪽'}</small>`;
-  const n = pages.length > 1 && t.theme ? 2 : 1;
-  $('#tplBody').innerHTML = `<div class="tprev" id="tprev" data-w="${t.w}" data-h="${t.h}" data-n="${n}">${pages.slice(0, n).map(pg => tplSheet(t, [pg])).join('')}</div>
-  <div class="row" style="margin-top:14px;justify-content:flex-end"><span class="hint" style="margin:0;flex:1">${t.theme ? '테마는 표지·인성·달력·뒷표지 전체 디자인입니다. 이미 만든 캘린더에 적용하면 문구·일정·그림은 그대로 두고 디자인만 바뀝니다.' : '만든 뒤 글자·그림·색을 자유롭게 바꿀 수 있습니다. 로고와 연락처는 도장 정보로 고쳐 주세요.'}</span>
-  ${t.theme ? `<button class="btn" id="tplRetheme" ${hasCal ? '' : 'disabled title="현재 문서에 캘린더 페이지가 없습니다"'}>현재 캘린더에 적용</button><button class="btn primary" id="tplWizard">이 테마로 캘린더 만들기</button>` : `${(() => { const same = Math.abs(t.w - doc.w) < 0.5 && Math.abs(t.h - doc.h) < 0.5, empty = !page().els.length; return `<button class="btn ${empty ? 'primary' : ''}" id="tplHere" title="${same ? '' : `${Math.round(doc.w)}×${Math.round(doc.h)}mm 문서 크기에 맞춰 다시 배치합니다`}">${empty ? '이 쪽에 적용' : '현재 쪽 뒤에 추가'}${same ? '' : ' (크기 맞춤)'}</button><button class="btn ${empty ? '' : 'primary'}" id="tplNew">이 템플릿으로 새 문서</button>`; })()}`}</div>`;
-  requestAnimationFrame(() => fitBoxes($('#tplBody'), '.tprev', Math.min(520, window.innerHeight * 0.55)));
-  if (t.theme) { $('#tplWizard').onclick = () => { d.close(); openWizard(doc.calendar.year, t.theme.id); }; const rb = $('#tplRetheme'); if (rb) rb.onclick = () => { doc.calendar.theme = clone(t.theme); const y = doc.calendar.year || 2027; const nrep = CAL.retheme(doc, uid, y); ensureAllHolidays(); commit(); renderAll(); d.close(); toast(`"${t.name}" 테마를 ${nrep}쪽에 적용했습니다`); }; }
-  else {
-    const ready = async () => { if (!t.lib) return true; try { setStatus('자료실 그림을 넣는 중…'); await NC.lib.materialize(pages, addAsset); return true; } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return false; } finally { setStatus(''); } };
-    $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm('현재 문서를 닫고 새 문서를 만들까요? (지금 문서는 저장된 상태로 남습니다)')) return; if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const keepAssets = doc.assets; doc.assets = {}; if (!(await ready())) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = t.w; nd.h = t.h; nd.name = t.name; nd.pages = pages; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); if (await store.folderReady()) { try { await store.saveIntoFolder(doc); } catch (e) { toast('폴더에 저장하지 못했습니다: ' + e.message, true); } } renderAll(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다`); };
-    // 지금 문서에 넣기: 크기가 다르면 문서 크기에 맞춰 다시 배치, 지금 쪽이 비어 있으면 그 쪽을 바꿈
-    $('#tplHere').onclick = async () => { if (!(await ready())) return; const same = Math.abs(t.w - doc.w) < 0.5 && Math.abs(t.h - doc.h) < 0.5; const pg = same ? pages : resizedDoc({ w: t.w, h: t.h, pages }, doc.w, doc.h, 'fit').pages; const empty = !page().els.length; doc.pages.splice(empty ? cur : cur + 1, empty ? 1 : 0, ...pg); const at = empty ? cur : cur + 1; commit(); goto(at); d.close(); toast(empty ? `"${t.name}"을(를) 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`); };
-  }
-  d.showModal();
+  const hasCal = doc.pages.some(p => p.kind), empty = !page().els.length;
+  const docS = { w: doc.w, h: doc.h, screen: isScreenSize(doc.w, doc.h, doc.fmt), fmt: doc.fmt || '' }, origS = { w: t.w, h: t.h, screen: isScreenSize(t.w, t.h) };
+  const sameDocSize = Math.abs(t.w - doc.w) < 0.5 && Math.abs(t.h - doc.h) < 0.5;
+  let choice = t.theme ? 'orig' : (empty || sameDocSize ? 'doc' : 'orig'); // 빈 쪽이면 지금 문서 크기에 맞춰 보여 줌
+  const sizeOf = v => { if (v === 'doc') return docS; if (v === 'orig') return origS; const f = FORMATS.find(x => x[0] === v); const [w, h] = fmtMM(f); return { w, h, screen: f[5] === 'px', fmt: v }; };
+  const label = S => S.w >= 1000 || S.h >= 1000 ? `${Math.round(S.w / 10)}×${Math.round(S.h / 10)}cm` : S.screen ? `${Math.round(S.w * 96 / 25.4)}×${Math.round(S.h * 96 / 25.4)}px` : `${Math.round(S.w)}×${Math.round(S.h)}mm`;
+  const draw = () => {
+    const S = sizeOf(choice); const pages = tplPagesFor(t, S); const n = pages.length > 1 && t.theme ? 2 : 1;
+    $('#tplTitle').innerHTML = `${esc(t.name)} <small>${t.theme ? esc(t.desc) : label(S) + ' · ' + pages.length + '쪽'}</small>`;
+    $('#tplBody').innerHTML = `<div class="tprev" id="tprev" data-w="${S.w}" data-h="${S.h}" data-n="${n}">${pages.slice(0, n).map(pg => tplSheet(Object.assign({}, t, { w: S.w, h: S.h }), [pg])).join('')}</div>
+    ${t.theme ? '' : `<div class="row tsize"><label class="f" style="flex:1;margin:0"><span>만들 크기 (문서 형식에 맞춰 다시 배치${t.responsive ? ' · 이 템플릿은 크기마다 새로 짭니다' : ''})</span><select id="tplSize"><option value="doc" ${choice === 'doc' ? 'selected' : ''}>지금 문서 크기 · ${label(docS)}</option><option value="orig" ${choice === 'orig' ? 'selected' : ''}>템플릿 원래 크기 · ${label(origS)}</option>${ND_GROUPS.filter(g => g[0] !== 'rec').map(([g, tt]) => `<optgroup label="${tt}">${FORMATS.filter(f => f[2] === g).map(f => `<option value="${f[0]}" ${choice === f[0] ? 'selected' : ''}>${esc(f[1])} · ${fmtLabel(f)}</option>`).join('')}</optgroup>`).join('')}</select></label></div>`}
+    <div class="row" style="margin-top:10px;justify-content:flex-end"><span class="hint" style="margin:0;flex:1">${t.theme ? '테마는 표지·인성·달력·뒷표지 전체 디자인입니다. 이미 만든 캘린더에 적용하면 문구·일정·그림은 그대로 두고 디자인만 바뀝니다.' : t.holiday ? '날짜 칸은 다가오는 휴일(대체 휴일 포함)로 자동으로 채워집니다. 글자·그림·색은 자유롭게 바꿀 수 있습니다.' : '만든 뒤 글자·그림·색을 자유롭게 바꿀 수 있습니다. 로고와 연락처는 도장 정보로 고쳐 주세요.'}</span>
+    ${t.theme ? `<button class="btn" id="tplRetheme" ${hasCal ? '' : 'disabled title="현재 문서에 캘린더 페이지가 없습니다"'}>현재 캘린더에 적용</button><button class="btn primary" id="tplWizard">이 테마로 캘린더 만들기</button>` : (choice === 'doc' ? `<button class="btn ${empty ? 'primary' : ''}" id="tplHere">${empty ? '이 쪽에 적용' : '현재 쪽 뒤에 추가'}</button><button class="btn ${empty ? '' : 'primary'}" id="tplNew">이 크기로 새 문서</button>` : `<button class="btn" id="tplHere" title="지금 문서 크기(${label(docS)})에 맞춰 넣습니다">${empty ? '지금 문서에 맞춰 적용' : '지금 문서 뒤에 추가 (문서 크기)'}</button><button class="btn primary" id="tplNew">${label(S)} 새 문서</button>`)}</div>`;
+    requestAnimationFrame(() => fitBoxes($('#tplBody'), '.tprev', Math.min(500, window.innerHeight * 0.5)));
+    const ss = $('#tplSize'); if (ss) ss.onchange = () => { choice = ss.value; draw(); };
+    if (t.theme) { $('#tplWizard').onclick = () => { d.close(); openWizard(doc.calendar.year, t.theme.id); }; const rb = $('#tplRetheme'); if (rb) rb.onclick = () => { doc.calendar.theme = clone(t.theme); const y = doc.calendar.year || 2027; const nrep = CAL.retheme(doc, uid, y); ensureAllHolidays(); commit(); renderAll(); d.close(); toast(`"${t.name}" 테마를 ${nrep}쪽에 적용했습니다`); }; return; }
+    const ready = async pgs => { if (!t.lib) return true; try { setStatus('자료실 그림을 넣는 중…'); await NC.lib.materialize(pgs, addAsset); return true; } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return false; } finally { setStatus(''); } };
+    $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm('현재 문서를 닫고 새 문서를 만들까요? (지금 문서는 저장된 상태로 남습니다)')) return; if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const pgs = tplPagesFor(t, S); const keepAssets = doc.assets; doc.assets = {}; if (!(await ready(pgs))) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = S.w; nd.h = S.h; nd.fmt = S.fmt || ''; nd.name = t.name; nd.pages = pgs; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; if (!S.screen && ['print', 'doc', 'cal', 'sign'].includes((FORMATS.find(f => f[0] === S.fmt) || [])[2])) nd.bleed = 3; doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); if (await store.folderReady()) { try { await store.saveIntoFolder(doc); } catch (e) { toast('폴더에 저장하지 못했습니다: ' + e.message, true); } } zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다 (${label(S)})`); };
+    // 지금 문서에 넣기: 늘 지금 문서 크기로 다시 짜서 넣음. 지금 쪽이 비어 있으면 그 쪽을 바꿈
+    $('#tplHere').onclick = async () => { const pg = tplPagesFor(t, docS); if (!(await ready(pg))) return; const emp = !page().els.length; doc.pages.splice(emp ? cur : cur + 1, emp ? 1 : 0, ...pg); const at = emp ? cur : cur + 1; commit(); goto(at); d.close(); toastUndo(emp ? `"${t.name}"을(를) 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`); };
+  };
+  draw(); d.showModal();
 }
 
 /* ---- 캘린더 마법사 ---- */
@@ -998,10 +1033,10 @@ function renderWizard() {
   body.querySelectorAll('[data-wzview]').forEach(b => b.onclick = () => { wz.view = b.dataset.wzview; renderWizard(); });
   $('#wzGrid').onclick = e => { const b = e.target.closest('[data-m]'); if (b) { wz.month = Number(b.dataset.m); renderWizard(); } };
   $('#wzGo').onclick = () => {
-    doc.calendar.year = wz.year; doc.calendar.theme = wizardTheme();
+    const oldName = doc.name, oldW = doc.w, oldH = doc.h; doc.calendar.year = wz.year; doc.calendar.theme = wizardTheme();
     if (wz.mode === 'replace') { if (doc.pages.some(p => p.els.length) && !window.confirm('현재 문서의 페이지를 모두 지우고 새로 만듭니다. 계속할까요?')) return; doc.w = 224; doc.h = 154; doc.pages = []; doc.name = `${wz.year} 인성 캘린더`; $('#pname').value = doc.name; }
     const pages = wizardPages(wz.kind); doc.pages.push(...pages); ensureAllHolidays(); commit(); goto(wz.mode === 'replace' ? 0 : doc.pages.length - pages.length);
-    $('#dlgWizard').close(); toast(`${wz.year}년 ${pages.length}쪽을 만들었습니다`);
+    $('#dlgWizard').close(); { const nm0 = oldName, w0 = oldW, h0 = oldH; toastUndo(`${wz.year}년 ${pages.length}쪽을 만들었습니다`, () => { doc.name = nm0; doc.w = w0; doc.h = h0; $('#pname').value = nm0; zoom = 0; renderAll(); fitCanvas(); }); }
     if (!doc.holidays[wz.year]) setTimeout(() => openHoliday(wz.year), 400);
   };
   const rt = $('#wzRetheme'); if (rt) rt.onclick = () => { doc.calendar.year = wz.year; doc.calendar.theme = wizardTheme(); const nrep = CAL.retheme(doc, uid, wz.year); ensureAllHolidays(); commit(); renderAll(); $('#dlgWizard').close(); toast(`디자인을 ${nrep}쪽에 적용했습니다 (문구·일정·그림 유지)`); };
@@ -2084,7 +2119,7 @@ function findClick(e) {
   const sc = e.target.closest('[data-fscope]'); if (sc) { S.scope = sc.dataset.fscope; renderFindRes(); return; }
   const one = e.target.closest('[data-fone]'); if (one) { const x = slots[Number(one.dataset.fone)]; x.set(x.get().split(S.q).join(S.r)); commit(); rerender(); renderFindRes(); return; }
   const go = e.target.closest('[data-fgo]'); if (go) { const x = slots[Number(go.dataset.fgo)]; if (x.pi !== cur) goto(x.pi); select([x.el.id]); return; }
-  if (e.target.id === 'fAll') { slots.forEach(x => x.set(x.get().split(S.q).join(S.r))); commit(); renderAll(); toast(`${cnt}곳을 바꿨습니다`); renderFindRes(); }
+  if (e.target.id === 'fAll') { slots.forEach(x => x.set(x.get().split(S.q).join(S.r))); commit(); renderAll(); toastUndo(`${cnt}곳을 바꿨습니다`); renderFindRes(); }
   if (e.target.id === 'fFont') { const a = $('#fFrom').value, b = $('#fTo').value; if (!a || a === b) return; let n = 0; doc.pages.forEach(p => p.els.forEach(el => { if (el.locked) return; if (el.type === 'text' && el.font === a) { el.font = b; n++; } if ((el.type === 'cal' || el.type === 'mini') && el.s) { if (el.s.fontNum === a) { el.s.fontNum = b; n++; } if (el.s.fontBody === a) { el.s.fontBody = b; n++; } } })); commit(); renderAll(); toast(`${n}곳의 글꼴을 바꿨습니다`); renderFindRes(); }
 }
 
@@ -2319,7 +2354,7 @@ function renderResize() {
   $('#rsU').onchange = e => { const u = e.target.value; if (u !== S.unit) { const f = u === 'px' ? 96 / 25.4 : 25.4 / 96; S.w = Math.round(S.w * f * 10) / 10; S.h = Math.round(S.h * f * 10) / 10; S.unit = u; } renderResize(); };
   $('#rsSwap').onclick = () => { [S.w, S.h] = [S.h, S.w]; S.fmt = ''; renderResize(); };
   B.querySelectorAll('[name=rsMode]').forEach(r => r.onchange = () => { S.mode = r.value; renderResize(); });
-  $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode); doc.pages = nd.pages; doc.w = W; doc.h = H; doc.fmt = S.fmt || ''; commit(); zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toast(`크기를 ${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm로 바꿨습니다 (Ctrl+Z로 되돌리기)`); };
+  $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode); doc.pages = nd.pages; doc.w = W; doc.h = H; doc.fmt = S.fmt || ''; commit(); zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toastUndo(`크기를 ${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm로 바꿨습니다`, () => { zoom = 0; fitCanvas(); }); };
   $('#rsCopy').onclick = async () => {
     const f = FORMATS.find(x => x[0] === S.fmt); const nd = resizedDoc(doc, W, H, S.mode); nd.fmt = S.fmt || ''; nd.name = `${doc.name || '새 디자인'} (${f ? f[1] : `${Math.round(W)}×${Math.round(H)}`})`;
     if (f && !['print', 'doc', 'cal'].includes(f[2])) nd.bleed = 0;
@@ -2407,7 +2442,7 @@ function renderBulk() {
         e.text = nv; });
       p.name = (T.head[0] && r[T.head[0]]) || p.name; made.push(p);
     });
-    doc.pages.push(...made); commit(); const first = doc.pages.length - made.length; $('#dlgBulk').close(); goto(first); toast(`${made.length}쪽을 만들었습니다 (${first + 1}~${doc.pages.length}쪽). 다운로드에서 한꺼번에 PDF로 받으세요`);
+    doc.pages.push(...made); commit(); const first = doc.pages.length - made.length; $('#dlgBulk').close(); goto(first); toastUndo(`${made.length}쪽을 만들었습니다 (${first + 1}~${doc.pages.length}쪽)`);
   };
 }
 
@@ -2515,11 +2550,11 @@ function gridCmd(k) {
   const idx = [...gridSel].sort((a, b) => a - b); if (!idx.length) return;
   if (k === 'go') { $('#dlgGrid').close(); goto(idx[0]); return; }
   if (k === 'dup') { const copies = idx.map(i => dupPage(doc.pages[i])); const at = idx[idx.length - 1] + 1; doc.pages.splice(at, 0, ...copies); gridSel = new Set(copies.map((_, j) => at + j)); commit(); renderAll(); renderPageGrid(); toast(`${copies.length}쪽을 복제했습니다`); return; }
-  if (k === 'del') { if (idx.length >= doc.pages.length) { toast('모든 쪽을 지울 수는 없습니다', true); return; } if (!window.confirm(`${idx.length}쪽을 지울까요? (Ctrl+Z로 되돌릴 수 있습니다)`)) return; const curPg = page(); doc.pages = doc.pages.filter((p, i) => !gridSel.has(i)); cur = Math.max(0, Math.min(doc.pages.indexOf(curPg) >= 0 ? doc.pages.indexOf(curPg) : idx[0], doc.pages.length - 1)); sel = []; cellSel = null; gridSel = new Set([Math.min(idx[0], doc.pages.length - 1)]); commit(); renderAll(); renderPageGrid(); toast(`${idx.length}쪽을 지웠습니다`); }
+  if (k === 'del') { if (idx.length >= doc.pages.length) { toast('모든 쪽을 지울 수는 없습니다', true); return; } if (!window.confirm(`${idx.length}쪽을 지울까요? (Ctrl+Z로 되돌릴 수 있습니다)`)) return; const curPg = page(); doc.pages = doc.pages.filter((p, i) => !gridSel.has(i)); cur = Math.max(0, Math.min(doc.pages.indexOf(curPg) >= 0 ? doc.pages.indexOf(curPg) : idx[0], doc.pages.length - 1)); sel = []; cellSel = null; gridSel = new Set([Math.min(idx[0], doc.pages.length - 1)]); commit(); renderAll(); renderPageGrid(); toastUndo(`${idx.length}쪽을 지웠습니다`, () => { if ($('#dlgGrid') && $('#dlgGrid').open) renderPageGrid(); }); }
 }
 
 // 점검용 (주소에 ?qa 가 있을 때만): 자동 시험에서 문서 상태를 읽음
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { get doc() { return doc; }, get sel() { return sel; }, get cur() { return cur; }, select, goto, commit, undo, renderAll };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { get doc() { return doc; }, get sel() { return sel; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML };
 
 /* ---- 패널 너비 조절 ---- */
 (function () {
@@ -2547,6 +2582,8 @@ if (/[?&]qa\b/.test(location.search)) window.NCQA = { get doc() { return doc; },
 
 /* ---- 기타 ---- */
 let toastTimer; function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, err ? 5000 : 2200); }
+// 큰 동작 뒤: 알림에 '되돌리기' 단추 (Ctrl+Z와 같음). after: 되돌린 뒤 할 일
+function toastUndo(msg, after) { const t = $('#toast'); t.className = 'toast act'; t.innerHTML = `<span>${esc(msg)}</span><button type="button">되돌리기</button>`; t.hidden = false; t.querySelector('button').onclick = () => { t.hidden = true; undo(); if (after) after(); toast('되돌렸습니다 (다시 하려면 Ctrl+Shift+Z)'); }; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 7000); }
 
 /* ---- 시작 ---- */
 // 같은 문서인지 (문서 번호가 있으면 번호로, 없으면 이름으로)
