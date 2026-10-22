@@ -414,3 +414,54 @@ dialog.nd[open]{display:flex;flex-direction:column}
 .nd .custom label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ui-muted)}
 .nd .custom input,.nd .custom select{padding:8px 10px;border:1px solid var(--ui-line2);border-radius:8px;font:inherit;width:110px}
 .aiimgs figcaption{flex-wrap:wrap}
+/* 내 드라이브 */
+dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
+.drive .crumbs{display:flex;align-items:center;gap:4px;flex-wrap:wrap;font-size:20px;font-weight:800;margin:4px 0 12px}
+.drive .crumbs button{border:0;background:none;font:inherit;cursor:pointer;color:var(--ui-fg);padding:2px 4px;border-radius:6px}
+.drive .crumbs button:hover{background:var(--ui-field)}
+.drive .crumbs span{color:var(--ui-muted);font-weight:400}
+.drive .dvbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+.drive .dvbar .chips{margin:0}
+.drive .dvbar input{flex:1;min-width:160px;padding:8px 12px;border:1px solid var(--ui-line2);border-radius:999px;font:inherit}
+.drive .dvbar select{padding:8px 10px;border:1px solid var(--ui-line2);border-radius:8px;font:inherit}
+.drive .dvfolders{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:10px 0 18px}
+.drive .dvfolder{display:flex;align-items:center;gap:12px;padding:12px 10px 12px 12px;border:1px solid var(--ui-line);border-radius:12px;background:#fff;cursor:pointer;position:relative}
+.drive .dvfolder:hover,.drive .dvfolder.over{border-color:var(--ui-accent);background:var(--ui-accent-soft)}
+.drive .dvfolder svg{width:38px;height:38px;flex:none;padding:8px;border:1px solid var(--ui-line2);border-radius:10px;fill:none;stroke:var(--ui-fg2);stroke-width:1.7}
+.drive .dvfolder div{flex:1;min-width:0}
+.drive .dvfolder b{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drive .dvfolder small{color:var(--ui-muted);font-size:12px}
+.drive .dvfolder.up{margin:6px 0;max-width:260px;background:var(--ui-field)}
+.drive .dvdocs{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+.drive .dvdoc{border:1px solid var(--ui-line);border-radius:12px;background:#fff;cursor:pointer;overflow:hidden;position:relative;transition:.12s}
+.drive .dvdoc:hover{border-color:var(--ui-accent);box-shadow:0 6px 18px rgba(47,91,234,.12)}
+.drive .dvdoc.cur{border-color:#3a8a3a;box-shadow:0 0 0 2px #cfe8cf}
+.drive .dvthumb{height:150px;background:var(--ui-stage);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.drive .dvthumb .tbox{width:100%;position:relative}
+.drive .dvthumb .tbox .sheet{position:absolute;top:0;transform-origin:0 0;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.18)}
+.drive .dvthumb .pg{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;padding:2px 6px;border-radius:6px}
+.drive .dvmeta{padding:8px 34px 10px 10px}
+.drive .dvmeta b{display:block;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drive .dvmeta small{font-size:11.5px;color:var(--ui-muted)}
+.drive .dvmeta em{color:#3a8a3a;font-style:normal;font-weight:700}
+.drive .dvmore{position:absolute;right:6px;bottom:8px;border:0;background:transparent;font-size:18px;line-height:1;padding:4px 6px;border-radius:6px;cursor:pointer;color:var(--ui-muted)}
+.drive .dvfolder .dvmore{position:static}
+.drive .dvmore:hover{background:var(--ui-field);color:var(--ui-fg)}
+.drive .dvempty{padding:40px 10px;text-align:center}
+#dvPop{min-width:170px}
+#dvPop button.danger{color:var(--ui-danger)}
+/* 다운로드 패널 */
+.dlpanel{position:fixed;z-index:70;width:340px;max-height:calc(100vh - 90px);overflow:auto;background:#fff;border:1px solid var(--ui-line2);border-radius:14px;box-shadow:0 18px 50px rgba(16,24,40,.22);padding:14px 16px 16px}
+.dlpanel .dlhead{display:flex;align-items:center;margin-bottom:8px}
+.dlpanel .dlhead b{flex:1;font-size:16px}
+.dlpanel .x{border:0;background:none;font-size:22px;cursor:pointer;color:var(--ui-muted)}
+.dlpanel .dlfmts{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.dlpanel .dlfmts button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 10px;border:1px solid var(--ui-line);border-radius:9px;background:#fff;cursor:pointer;font:inherit;text-align:left}
+.dlpanel .dlfmts button.on{border-color:var(--ui-accent);background:var(--ui-accent-soft)}
+.dlpanel .dlfmts b{font-size:13.5px}
+.dlpanel .dlfmts em{font-style:normal;font-size:11px;background:#dff3ef;color:#21877a;padding:1px 6px;border-radius:6px;margin-left:4px}
+.dlpanel .dlfmts small{font-size:11.5px;color:var(--ui-muted)}
+.dlpanel .dlinfo{background:var(--ui-field);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:12.5px}
+.dlpanel .dlinfo ul{margin:6px 0 0 16px;padding:0;line-height:1.7}
+.dlpanel .dlprog{font-size:12.5px;color:var(--ui-fg2);min-height:18px;margin-bottom:6px}
+.btn.full{width:100%;justify-content:center}
