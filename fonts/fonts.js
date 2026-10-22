@@ -292,5 +292,41 @@ window.NARACAL_FONTS = [
    400,
    700
   ]
+ },
+ {
+  "family": "Noto Serif KR",
+  "label": "본명조 (Noto Serif KR)",
+  "cat": "body",
+  "weights": [
+   400,
+   700
+  ]
+ },
+ {
+  "family": "Gasoek One",
+  "label": "가속 원 (두꺼운 제목)",
+  "cat": "title",
+  "weights": [
+   400
+  ]
+ },
+ {
+  "family": "NanumSquare",
+  "label": "나눔스퀘어",
+  "cat": "body",
+  "weights": [
+   400,
+   700,
+   800
+  ]
+ },
+ {
+  "family": "Pretendard GOV",
+  "label": "프리텐다드 GOV (공공)",
+  "cat": "body",
+  "weights": [
+   400,
+   700
+  ]
  }
 ];
