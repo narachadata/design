@@ -33,12 +33,46 @@ function redo() { if (hptr < hist.length - 1) { hptr++; restore(hist[hptr]); } }
 /* ---------- 저장 · 동기화 ---------- */
 let idbTimer, fileTimer, freshDraft = false; // freshDraft: 처음 열 때 만든 초안을 아직 고치지 않음
 function markDirty() {
-  freshDraft = false; doc.updatedAt = Date.now(); store.state.dirty = true;
+  freshDraft = false; doc.updatedAt = Date.now(); store.state.dirty = true; store.state.seq++;
   clearTimeout(idbTimer); idbTimer = setTimeout(async () => { try { await store.idbSet('doc', doc); if (!store.state.handle) setStatus('브라우저에 저장됨 ' + tnow()); } catch (e) { setStatus('브라우저 저장 실패'); } }, 500);
   if (store.state.handle) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 1200); }
   updateSaveBadge();
 }
-async function saveFileNow() { try { const ok = await store.writeFile(doc); if (ok) setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); } catch (e) { setStatus('파일 저장 실패: ' + e.message); toast('파일 저장 실패: ' + e.message, true); } updateSaveBadge(); }
+async function saveFileNow() {
+  if (store.state.conflict) return;
+  if (store.state.saving) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 800); return; } // 저장 중이면 끝난 뒤 다시
+  try {
+    const r = await store.writeFile(doc);
+    if (r === true) setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`);
+    else if (r && r.conflict) await resolveConflict(r.data, r.file);
+    else if (r && r.retry) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 3000); }
+  } catch (e) { setStatus('파일 저장 실패: ' + e.message); toast('파일 저장 실패: ' + e.message, true); }
+  updateSaveBadge();
+}
+// 두 PC가 같은 문서를 고쳐 갈라졌을 때: 어느 쪽을 고르든 다른 쪽은 "충돌 사본" 파일로 남겨 아무것도 잃지 않음
+async function resolveConflict(theirs, file) {
+  const st = store.state; if (st.conflict) return;
+  st.conflict = true; clearTimeout(fileTimer);
+  try {
+    const who = theirs.savedBy || '다른 PC', at = theirs.savedAt ? new Date(theirs.savedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '';
+    const takeTheirs = window.confirm(`같은 문서를 ${who}에서도 고쳤습니다${at ? ` (${at} 저장)` : ''}.\n두 PC의 내용이 서로 달라 하나로 합칠 수 없습니다.\n\n확인: ${who}의 내용으로 계속합니다 — 이 PC(${store.pcName()})의 내용은 "충돌 사본" 파일로 따로 보관\n취소: 이 PC의 내용으로 계속합니다 — ${who}의 내용은 "충돌 사본" 파일로 따로 보관\n\n어느 쪽을 골라도 지워지는 내용은 없습니다.`);
+    gcAssets();
+    const copy = takeTheirs ? await store.writeCopy(doc, store.pcName()) : await store.writeCopy(theirs, who);
+    st.lastMod = file.lastModified; store.adopt(theirs);
+    if (takeTheirs) { st.dirty = false; await loadDoc(theirs); }
+    st.conflict = false;
+    if (!takeTheirs) await saveFileNow(); // 이 PC 내용을 상대 저장본 다음 판으로 저장
+    toast(`충돌 사본을 보관했습니다: ${copy}`);
+    if ($('#dlgSave') && $('#dlgSave').open) renderSaveDialog();
+  } catch (e) { toast('충돌 처리 중 오류: ' + e.message, true); }
+  finally { st.conflict = false; }
+}
+// 다른 PC가 방금까지 이 문서를 고치고 있었으면 알려 줌 (동시에 고치는 걸 미리 막기 위해)
+function warnIfRecentOther(j) {
+  if (!j || !j.savedAt || !j.savedBy || j.savedBy === store.pcName()) return;
+  const min = Math.round((Date.now() - j.savedAt) / 60000);
+  if (min <= 5) toast(`${j.savedBy}에서 ${min < 1 ? '방금' : min + '분 전'} 이 문서를 저장했습니다. 그쪽에서 아직 작업 중이면 한쪽을 닫아 주세요.`, true);
+}
 function tnow() { return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }); }
 function setStatus(t) { $('#status').textContent = t; }
 function updateSaveBadge() { const b = $('#btnSave'); if (!b) return; b.querySelector('span').textContent = store.state.handle ? `${store.state.dir ? '동기화' : '저장됨'} · ${store.state.fileName.replace(/\.design\.json$/i, '')}` : '저장·동기화'; b.classList.toggle('on', !!store.state.handle); }
@@ -54,11 +88,14 @@ async function loadDoc(j, from) {
   renderAll(); if (from) toast(from);
 }
 async function checkExternalChange() {
+  const st = store.state; if (st.conflict) return;
   const ch = await store.checkExternal(); if (!ch) return;
-  let j; try { j = JSON.parse(ch.text); } catch (e) { return; }
-  if (store.state.dirty && !window.confirm('다른 곳(다른 PC)에서 이 파일이 바뀌었습니다. 여기서 저장하지 않은 변경이 있습니다.\n\n확인: 파일의 새 내용을 불러옵니다 (여기 변경은 사라짐)\n취소: 여기 내용을 유지하고 파일에 덮어씁니다')) { store.state.lastMod = ch.file.lastModified; saveFileNow(); return; }
-  store.state.lastMod = ch.file.lastModified; store.state.dirty = false;
-  await loadDoc(j, '다른 PC에서 바뀐 내용을 불러왔습니다');
+  let j; try { j = JSON.parse(ch.text); } catch (e) { return; } // 동기화 중인 파일: 다음에 다시 확인
+  if ((j.saveId || '') === st.lastSaveId) { st.lastMod = ch.file.lastModified; return; } // 내용은 그대로(시각만 바뀜)
+  // 여기 저장 안 한 변경이 있거나, 상대가 내 마지막 저장을 못 보고 저장했으면 충돌
+  if (st.dirty || !store.descends(j)) { await resolveConflict(j, ch.file); return; }
+  st.lastMod = ch.file.lastModified; store.adopt(j);
+  await loadDoc(j, `${j.savedBy || '다른 PC'}에서 바뀐 내용을 불러왔습니다`);
 }
 // 동기화 폴더의 설정값(API 키·모델·최근 사용 목록): 다른 PC가 바꾼 건 가져오고, 여기서 바뀐 건 올림
 function applySyncedSettings() { try { Object.assign(AI.cfg, JSON.parse(localStorage.getItem('naracal-ai-v1') || '{}')); } catch (e) {} }
@@ -72,7 +109,7 @@ async function syncTick() { await checkExternalChange(); if (store.state.dir) aw
 window.addEventListener('focus', syncTick);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) syncTick(); });
 setInterval(() => { if (!document.hidden) syncTick(); }, 20000);
-setInterval(() => { if (store.state.dir) store.pushSettings().catch(() => {}); }, 4000);
+setInterval(() => { if (store.state.dir) store.pushSettings().then(r => { if (r === 'merged') applySyncedSettings(); }).catch(() => {}); }, 4000);
 // 폴더가 연결된 뒤: 설정 맞추고, 문서가 폴더 밖이면 폴더의 최근 문서를 열거나 지금 문서를 폴더에 저장
 async function afterFolderReady(opts) {
   opts = opts || {};
@@ -95,7 +132,7 @@ async function afterFolderReady(opts) {
 }
 async function openFolderDoc(h, msg) {
   if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
-  const j = await store.openHandle(h); await loadDoc(j, msg || `"${h.name}"를 열었습니다`); updateSaveBadge(); setStatus(`연결된 파일: ${store.state.fileName}`);
+  const j = await store.openHandle(h); await loadDoc(j, msg || `"${h.name}"를 열었습니다`); warnIfRecentOther(j); updateSaveBadge(); setStatus(`연결된 파일: ${store.state.fileName}`);
 }
 async function registerDocFonts() { for (const f of doc.fonts) { try { const ff = new FontFace(f.family, `url(${f.data})`); await ff.load(); document.fonts.add(ff); } catch (e) {} } }
 function allFonts() { return FONTS.concat(doc.fonts.map(f => ({ family: f.family, label: f.family + ' (내 글꼴)', cat: 'mine', weights: [400, 700] }))); }
@@ -814,6 +851,7 @@ async function renderSaveDialog() {
   const curIn = ready && st.handle && await store.inFolder(st.handle);
   const when = t => new Date(t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const folderPart = ready ? `<p><b>동기화 폴더:</b> <code>${esc(st.dirName)}</code> — 설정값과 아래 문서들이 이 폴더를 통해 모든 PC에서 같아집니다.</p>
+    <label class="f" style="max-width:320px"><span>이 PC 이름 (충돌 안내에 표시, 예: 도장 PC·집 맥북)</span><input type="text" id="svPcName" value="${esc(store.pcName())}" maxlength="20"></label>
     <h3>폴더 안의 문서 (${docs.length})</h3>
     ${docs.length ? `<ul class="list">${docs.map((x, i) => `<li data-doc="${i}" title="누르면 엽니다"><span>${esc(x.name.replace(/\.design\.json$/i, ''))}</span><small class="hint" style="margin:0">${when(x.lastModified)} · ${Math.max(1, Math.round(x.size / 1024)).toLocaleString()}KB</small>${st.handle && x.name === st.fileName && curIn ? '<b style="min-width:auto">작업 중</b>' : ''}</li>`).join('')}</ul>` : '<p class="hint">아직 문서가 없습니다.</p>'}
     <div class="row" style="margin-top:10px">${curIn ? '' : '<button class="btn primary" id="svIntoDir">지금 문서를 이 폴더에 저장</button>'}<button class="btn" id="svNow" ${st.handle ? '' : 'disabled'}>지금 저장</button><button class="btn" id="svOther">다른 위치의 파일 열기</button><button class="btn" id="svDown">내려받기 (JSON 사본)</button><button class="btn danger" id="svDiscDir">폴더 연결 해제</button></div>`
@@ -823,7 +861,7 @@ async function renderSaveDialog() {
     <ol style="margin:0 0 10px 18px;line-height:1.7"><li>각 PC에 <b>Google Drive 데스크톱 앱</b>을 설치하고 같은 계정으로 로그인합니다.</li><li>아래 <b>"동기화 폴더 연결"</b>을 누르고 <b>내 드라이브 → 나라차디자인공방</b> 폴더를 고릅니다 (없으면 그 창에서 새 폴더로 만듭니다). Windows는 보통 <code>G:\\내 드라이브</code>, Mac은 Finder 왼쪽의 <code>Google Drive → 내 드라이브</code>입니다.</li><li>그러면 <b>설정값(API 키·모델·최근 사용 글꼴·요소·템플릿)</b>과 <b>모든 문서</b>가 그 폴더에 저장되고, 다른 PC에서 같은 폴더를 연결하면 그대로 이어집니다.</li><li>PC마다 처음 한 번만 연결하면 됩니다. 브라우저가 "방문할 때마다 허용"을 물으면 허용해 두면 편합니다.</li></ol>
     ${st.dirSupported ? '' : '<p class="hint">이 브라우저는 폴더 연결을 지원하지 않습니다. Chrome 또는 Edge를 쓰세요. 지금은 "내려받기"로 저장하세요.</p>'}
     <div class="row"><button class="btn primary" id="svDir" ${st.dirSupported ? '' : 'disabled'}>동기화 폴더 연결</button><button class="btn" id="svConnect" ${st.supported ? '' : 'disabled'}>${st.handle ? '다른 파일에 연결' : '파일 하나만 연결'}</button><button class="btn" id="svNow" ${st.handle ? '' : 'disabled'}>지금 저장</button><button class="btn" id="svDown">내려받기 (JSON 사본)</button>${st.handle ? '<button class="btn danger" id="svDisc">파일 연결 해제</button>' : ''}</div>`;
-  $('#saveBody').innerHTML = folderPart + `<p class="hint" style="margin-top:10px">문서 파일에는 올린 이미지와 AI 이미지가 함께 들어갑니다. 내장 글꼴과 2026 삽화는 프로그램에 있으므로 파일이 가벼워집니다. 같은 문서를 두 PC에서 동시에 고치면 나중에 저장한 쪽이 남으니, 한 PC에서 마치고 옮겨 가세요.</p>`;
+  $('#saveBody').innerHTML = folderPart + `<p class="hint" style="margin-top:10px">문서 파일에는 올린 이미지와 AI 이미지가 함께 들어갑니다. 내장 글꼴과 2026 삽화는 프로그램에 있으므로 파일이 가벼워집니다. 두 PC에서 같은 문서를 동시에 고쳐 내용이 갈라지면 어느 쪽으로 계속할지 묻고, 다른 쪽은 "충돌 사본" 파일로 보관해 지워지는 내용이 없습니다.</p>`;
   const on = (id, fn) => { const b = $('#' + id); if (b) b.onclick = async () => { try { await fn(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } }; };
   on('svDir', async () => { await store.connectFolder(); await afterFolderReady(); updateSaveBadge(); toast('동기화 폴더를 연결했습니다. 설정과 문서가 이 폴더로 동기화됩니다.'); renderSaveDialog(); });
   on('svReDir', async () => { if (await store.requestFolderPermission()) { await afterFolderReady({ loadCurrent: true }); updateSaveBadge(); renderSaveDialog(); } });
@@ -834,6 +872,7 @@ async function renderSaveDialog() {
   on('svOther', async () => { d.close(); await openOtherFile(); });
   on('svDown', async () => { gcAssets(); store.download(doc); toast('사본을 내려받았습니다'); });
   on('svDisc', async () => { await store.disconnect(); updateSaveBadge(); setStatus('브라우저에만 저장됩니다'); d.close(); });
+  const pn = $('#svPcName'); if (pn) pn.onchange = () => { store.setPcName(pn.value); pn.value = store.pcName(); toast('이 PC 이름을 저장했습니다'); };
   const ul = d.querySelector('.list'); if (ul) ul.onclick = async e => { const li = e.target.closest('[data-doc]'); if (!li) return; const x = docs[Number(li.dataset.doc)]; if (st.handle && x.name === st.fileName && curIn) { d.close(); return; } try { await openFolderDoc(x.handle); d.close(); } catch (err) { toast('열 수 없습니다: ' + err.message, true); } };
 }
 
@@ -998,7 +1037,7 @@ let toastTimer; function toast(msg, err) { const t = $('#toast'); t.textContent 
   let loaded = false;
   try {
     const p = await store.reconnect();
-    if (p === 'granted') { const j = await store.readFile(); await loadDoc(j); loaded = true; setStatus(`연결된 파일: ${store.state.fileName}`); }
+    if (p === 'granted') { const j = await store.readFile(); await loadDoc(j); loaded = true; setStatus(`연결된 파일: ${store.state.fileName}`); setTimeout(() => warnIfRecentOther(j), 1500); }
     else if (p === 'prompt') { const saved = await store.idbGet('doc'); if (saved) { await loadDoc(saved); loaded = true; } const st = $('#status'); st.innerHTML = `<button class="btn sm" id="reconn">연결된 파일 "${esc(store.state.fileName)}" 다시 열기</button>`; $('#reconn').onclick = async () => { if (await store.requestPermission()) { const j = await store.readFile(); await loadDoc(j, '연결된 파일을 열었습니다'); updateSaveBadge(); } }; }
   } catch (e) { console.warn(e); }
   if (!loaded) { try { const saved = await store.idbGet('doc'); if (saved) { await loadDoc(saved); loaded = true; setStatus('브라우저 저장본을 불러왔습니다'); } } catch (e) {} }
