@@ -68,15 +68,18 @@
       els.push(T(`${o.biz.name}  ·  ${ADDR}  ·  ${PHONE}`, m, h - m - 3 * u, w - 2 * m, 4 * u, { font: fB, size: 2.9 * u, color: tx, align: 'center', name: '하단 정보' }));
       return P(P_.bg, els, o.label);
     }
-    if (o.layout === 'center') {
-      els.push(S('ellipse', w / 2 - 32 * u, (tall ? 14 : 10) * u, 64 * u, 64 * u, { fill: P_.bg2, name: '원' }));
-      els.push(motif(0, w / 2 - 12 * u, (tall ? 22 : 18) * u, 24 * u));
-      if (o.biz.illu && o.useIllu) els.push(I(o.biz.illu, w / 2 - 26 * u, (tall ? 20 : 16) * u, 52 * u, 56 * u, { pos: '50% 100%', name: '삽화' }));
-      els.push(T(c.eyebrow, m, (tall ? 86 : 80) * u, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3.4 * u, weight: 700, color: P_.ac, ls: 0.3, align: 'center' }));
-      els.push(T(c.title.replace('\n', ' '), m, (tall ? 89 : 83) * u, w - 2 * m, 16 * u, { font: fT, size: (tall ? 17 : 14) * u, weight: 800, color: dark ? WHITE : P_.fg, lh: 1.1, align: 'center', name: '제목' }));
-      els.push(T(c.sub, m, (tall ? 108 : 100) * u, w - 2 * m, 6 * u, { font: fB, size: 4.4 * u, weight: 500, color: sub, align: 'center', name: '부제' }));
-      els.push(T(c.body, m + 6 * u, (tall ? 118 : 110) * u, w - 2 * m - 12 * u, 20 * u, { font: fB, size: 3.9 * u, lh: 1.7, weight: 500, color: tx, align: 'center', name: '본문' }));
-      if (c.cta) { els.push(S('pill', w / 2 - 20 * u, h - m - 14 * u, 40 * u, 8 * u, { fill: P_.fg })); els.push(T(c.cta, w / 2 - 20 * u, h - m - 12 * u, 40 * u, 5 * u, { font: fB, size: 4 * u, weight: 700, color: P_.ac, align: 'center', name: '버튼' })); }
+    if (o.layout === 'center') { // 위에서 아래로 차례로 쌓음 (정사각형에서도 쪽 밖으로 넘치거나 버튼이 제목을 가리지 않게)
+      const Hu = h / u, D = tall ? 60 : 44, cy0 = tall ? 10 : 6;
+      els.push(S('ellipse', w / 2 - D / 2 * u, cy0 * u, D * u, D * u, { fill: P_.bg2, name: '원' }));
+      els.push(motif(0, w / 2 - D * 0.19 * u, (cy0 + D * 0.12) * u, D * 0.38 * u));
+      if (o.biz.illu && o.useIllu) els.push(I(o.biz.illu, w / 2 - D * 0.41 * u, (cy0 + D * 0.09) * u, D * 0.82 * u, D * 0.88 * u, { pos: '50% 100%', name: '삽화' }));
+      let y = cy0 + D + (tall ? 5 : 3); const ctaY = Hu - 6 - 14;
+      els.push(T(c.eyebrow, m, y * u, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3.4 * u, weight: 700, color: P_.ac, ls: 0.3, align: 'center' })); y += 5;
+      const tS = tall ? 15 : 12; els.push(T(c.title.replace('\n', ' '), m, y * u, w - 2 * m, (tS * 0.45 + 2) * u, { font: fT, size: tS * u, weight: 800, color: dark ? WHITE : P_.fg, lh: 1.1, align: 'center', name: '제목' })); y += tS * 0.45 + 3;
+      els.push(T(c.sub, m, y * u, w - 2 * m, 6 * u, { font: fB, size: 4.4 * u, weight: 500, color: sub, align: 'center', name: '부제' })); y += 7;
+      const bodyH = c.body.split('\n').length * 3.9 * 0.3528 * 1.7 + 2;
+      if (y + bodyH <= (c.cta ? ctaY : Hu - 10) - 1) els.push(T(c.body, m + 6 * u, y * u, w - 2 * m - 12 * u, bodyH * u, { font: fB, size: 3.9 * u, lh: 1.7, weight: 500, color: tx, align: 'center', name: '본문' }));
+      if (c.cta) { els.push(S('pill', w / 2 - 20 * u, ctaY * u, 40 * u, 8 * u, { fill: P_.fg })); els.push(T(c.cta, w / 2 - 20 * u, (ctaY + 1.5) * u, 40 * u, 5 * u, { font: fB, size: 4 * u, weight: 700, color: P_.ac, align: 'center', valign: 'middle', name: '버튼' })); }
       els.push(motif(1, m, m, 10 * u)); els.push(motif(2, w - m - 10 * u, m * 0.8, 10 * u)); els.push(motif(3, m * 0.8, h - m - 12 * u, 9 * u));
       els.push(T(o.biz.name, m, h - m - 3 * u, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3 * u, weight: 700, color: dark ? WHITE : P_.fg, align: 'center', ls: 0.2 }));
       return P(P_.bg, els, o.label);
@@ -98,7 +101,9 @@
       els.push(S('rect', m * 0.7 + 1.6 * u, m * 0.7 + 1.6 * u, w - 1.4 * m - 3.2 * u, h - 1.4 * m - 3.2 * u, { fill: '', stroke: P_.ac, strokeW: 0.15 * u, radius: 1 * u, name: '안쪽 테두리' }));
       [[m, m], [w - m - 10 * u, m], [m, h - m - 10 * u], [w - m - 10 * u, h - m - 10 * u]].forEach((p, i) => els.push(motif(i, p[0], p[1], 10 * u)));
       els.push(T(c.eyebrow, m, h * 0.2, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3.4 * u, weight: 700, color: P_.ac, ls: 0.35, align: 'center' }));
-      els.push(T(c.title, m, h * 0.2 + 6 * u, w - 2 * m, h * 0.3, { font: fT, size: (tall ? 16 : 13) * u, weight: 800, color: dark ? WHITE : P_.fg, lh: 1.1, align: 'center', name: '제목' }));
+      // 제목은 자리(높이 h*0.3)를 채우는 크기로 (작은 엽서에서 위아래가 비지 않게), 줄 길이도 넘지 않게
+      const tl = c.title.split('\n'), tByH = (h * 0.3) / (tl.length * 1.1) * 0.9 / 0.3528, tByW = (w - 2 * m) * 0.92 / (Math.max(...tl.map(l => [...l].length)) * 0.95) / 0.3528, tSz = Math.min(tByH, tByW, (tall ? 16 : 13) * u * 1.7);
+      els.push(T(c.title, m, h * 0.2 + 6 * u, w - 2 * m, h * 0.3, { font: fT, size: Math.max((tall ? 16 : 13) * u, tSz), weight: 800, color: dark ? WHITE : P_.fg, lh: 1.1, align: 'center', valign: 'middle', name: '제목' }));
       els.push(S('line', w / 2 - 12 * u, h * 0.56, 24 * u, 1, { fill: P_.ac, stroke: P_.ac, strokeW: 0.4 * u }));
       els.push(T(c.sub, m, h * 0.58, w - 2 * m, 6 * u, { font: fB, size: 4.4 * u, weight: 600, color: dark ? WHITE : P_.fg, align: 'center', name: '부제' }));
       els.push(T(c.body, m + 6 * u, h * 0.65, w - 2 * m - 12 * u, h * 0.2, { font: fB, size: 3.9 * u, lh: 1.75, weight: 500, color: tx, align: 'center', name: '본문' }));
@@ -136,6 +141,23 @@
     }
     return P(P_.bg, els, o.label);
   }
+  // 글자 크기 바닥: SNS·카드뉴스·스토리·썸네일은 휴대폰 화면에서 읽히게, 작은 인쇄물은 7pt 이상.
+  // 글 상자의 폭(가장 긴 줄)과 높이를 넘지 않는 만큼만 키워 레이아웃이 깨지지 않게 함
+  const emW = ch => /[\u3131-\uD7A3\u4E00-\u9FFF]/.test(ch) ? 0.95 : /[A-Z0-9]/.test(ch) ? 0.66 : ch === ' ' ? 0.3 : 0.52;
+  function typeFloor(pg, fmt, w, h) {
+    const screen = ['sns', 'story', 'card4x5', 'yt'].includes(fmt), u = Math.min(w, h) / 100;
+    pg.els.forEach(e => {
+      if (e.type !== 'text' || e.name === '장식' || !e.size) return;
+      const k = e.size / u; let f = screen ? (k >= 10 ? 1.25 : k >= 5 ? 1.7 : 2.1) : (e.size < 7 ? 7 / e.size : 1);
+      if (f <= 1) return;
+      const mm = e.size * 0.3528, lines = String(e.text).split('\n');
+      const longest = Math.max(...lines.map(l => [...l].reduce((a, ch) => a + emW(ch), 0) + (e.ls || 0) * l.length)) * mm;
+      if (longest > 0) f = Math.min(f, (e.w * 0.98) / longest);
+      const tall = lines.length * mm * (e.lh || 1.35); if (tall > 0) f = Math.min(f, Math.max(1, (e.h * 1.05) / tall));
+      if (f > 1.02) { e.size = Math.round(e.size * f * 10) / 10; }
+    });
+    return pg;
+  }
   function isDark(hex) { if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return false; const n = parseInt(hex.slice(1), 16); return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 < 120; }
   const SIZE = { poster: [210, 297, '포스터'], flyer: [148, 210, '전단지'], sns: [285.75, 285.75, 'SNS'], story: [285.75, 508, 'SNS'], card4x5: [285.75, 357.19, '카드뉴스'], postcard: [148, 105, '명함·카드'], banner: [3000, 700, '현수막·입간판'], yt: [338.67, 190.5, '웹·영상'] };
   const LAYOUT_FOR = { poster: ['band', 'center', 'split', 'frame', 'minimal'], flyer: ['band', 'center', 'minimal', 'frame'], sns: ['center', 'minimal', 'frame', 'split'], story: ['story'], card4x5: ['center', 'band'], postcard: ['frame', 'minimal'], banner: ['banner'], yt: ['split', 'minimal'] };
@@ -144,7 +166,7 @@
     const [w, h, fmtName] = SIZE[o.fmt]; const pal = Object.assign({}, SEASON[o.season || '사계절'], o.pal || {}); const biz = BIZ[o.biz || '태권도장']; const copy = Object.assign((COPY[o.copy || o.occasion] || COPY['모집'])(biz), o.text || {});
     const af = AGE_FONT[o.age || '전체']; const fontT = o.fontT || af[0] || pal.fontT; const fontB = af[1];
     const label = o.name; const id = 'g-' + (++n) + '-' + o.fmt;
-    L.push({ id, cat: o.cat || (o.fmt === 'story' || o.fmt === 'card4x5' ? 'sns' : o.fmt === 'postcard' ? 'card' : o.fmt === 'banner' ? 'banner' : o.fmt === 'yt' ? 'web' : o.fmt), name: o.name, w, h, tags: { format: fmtName === 'SNS' && o.fmt === 'card4x5' ? '카드뉴스' : fmtName, season: o.season || '사계절', age: o.age || '전체', occasion: o.occasion, biz: o.biz || '태권도장' }, kw: [o.season, o.age, o.occasion, o.biz, fmtName, o.name].filter(Boolean).join(' '), build: (uid) => [compose(uid, { w, h, pal, copy, layout: o.layout, fontT, fontB, biz, label, useIllu: o.useIllu })] });
+    L.push({ id, cat: o.cat || (o.fmt === 'story' || o.fmt === 'card4x5' ? 'sns' : o.fmt === 'postcard' ? 'card' : o.fmt === 'banner' ? 'banner' : o.fmt === 'yt' ? 'web' : o.fmt), name: o.name, w, h, tags: { format: fmtName === 'SNS' && o.fmt === 'card4x5' ? '카드뉴스' : fmtName, season: o.season || '사계절', age: o.age || '전체', occasion: o.occasion, biz: o.biz || '태권도장' }, kw: [o.season, o.age, o.occasion, o.biz, fmtName, o.name].filter(Boolean).join(' '), build: (uid) => [typeFloor(compose(uid, { w, h, pal, copy, layout: o.layout, fontT, fontB, biz, label, useIllu: o.useIllu }), o.fmt, w, h)] });
   }
   /* ===== 생성 목록 ===== */
   // 1) 계절 × 형태 (태권도장 기본, 삽화 사용)
