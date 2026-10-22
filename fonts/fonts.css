@@ -1,0 +1,46 @@
+/* 무료 한글 글꼴 (SIL Open Font License). 출처: github.com/google/fonts, github.com/orioncactus/pretendard */
+@font-face{font-family:"Jua";src:url("Jua.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Do Hyeon";src:url("DoHyeon.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Black Han Sans";src:url("BlackHanSans.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Gugi";src:url("Gugi.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Bagel Fat One";src:url("BagelFatOne.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Moirai One";src:url("MoiraiOne.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Single Day";src:url("SingleDay.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Stylish";src:url("Stylish.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Yeon Sung";src:url("YeonSung.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Sunflower";src:url("Sunflower.ttf") format("truetype");font-weight:500;font-display:swap}
+@font-face{font-family:"Sunflower";src:url("Sunflower-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"Dongle";src:url("Dongle.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Dongle";src:url("Dongle-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"Cute Font";src:url("CuteFont.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Orbit";src:url("Orbit.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Diphylleia";src:url("Diphylleia.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Black And White Picture";src:url("BlackAndWhitePicture.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Kirang Haerang";src:url("KirangHaerang.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"East Sea Dokdo";src:url("EastSeaDokdo.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Nanum Brush Script";src:url("NanumBrushScript.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Nanum Pen Script";src:url("NanumPenScript.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Gaegu";src:url("Gaegu.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Gaegu";src:url("Gaegu-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"Poor Story";src:url("PoorStory.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Hi Melody";src:url("HiMelody.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Gamja Flower";src:url("GamjaFlower.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Noto Sans KR";src:url("NotoSansKR.ttf") format("truetype");font-weight:100 900;font-display:swap}
+@font-face{font-family:"Pretendard";src:url("PretendardVariable.woff2") format("woff2");font-weight:45 920;font-display:swap}
+@font-face{font-family:"Nanum Gothic";src:url("NanumGothic.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Nanum Gothic";src:url("NanumGothic-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"Nanum Gothic";src:url("NanumGothic-ExtraBold.ttf") format("truetype");font-weight:800;font-display:swap}
+@font-face{font-family:"Gothic A1";src:url("GothicA1.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Gothic A1";src:url("GothicA1-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"Gothic A1";src:url("GothicA1-Black.ttf") format("truetype");font-weight:900;font-display:swap}
+@font-face{font-family:"IBM Plex Sans KR";src:url("IBMPlexSansKR.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"IBM Plex Sans KR";src:url("IBMPlexSansKR-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"Gowun Dodum";src:url("GowunDodum.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Gowun Batang";src:url("GowunBatang.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Gowun Batang";src:url("GowunBatang-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"Nanum Myeongjo";src:url("NanumMyeongjo.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Nanum Myeongjo";src:url("NanumMyeongjo-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"Song Myung";src:url("SongMyung.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Hahmlet";src:url("Hahmlet.ttf") format("truetype");font-weight:100 900;font-display:swap}
+@font-face{font-family:"Nanum Gothic Coding";src:url("NanumGothicCoding.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Montserrat";src:url("Montserrat.ttf") format("truetype");font-weight:100 900;font-display:swap}
