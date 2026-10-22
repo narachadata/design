@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 VER=$(date +%Y%m%d.%H%M)
 echo "window.NARACAL_VER = \"$VER\";" > version.js
 echo "{\"ver\":\"$VER\"}" > version.json
-sed -i '' -E "s/(app\.(js|css)\?v=)[0-9a-z.]+/\1$VER/g; s/(effects|imgedit|elements|templates|templates2|templates3|calendar|storage|lib|ai|defaults|assets|webfonts)\.js\?v=[0-9a-z.]+/\1.js?v=$VER/g" index.html
+sed -i '' -E "s/(app\.(js|css)\?v=)[0-9a-z.]+/\1$VER/g; s/(effects|imgedit|elements|templates|templates2|templates3|calendar|storage|lib|ai|defaults|assets|webfonts|fonts)\.js\?v=[0-9a-z.]+/\1.js?v=$VER/g" index.html
 git add -A
 git -c user.name=narachadata -c user.email=masterlim01@gmail.com commit -q -m "${1:-업데이트} ($VER)
 
