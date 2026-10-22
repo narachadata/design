@@ -1451,11 +1451,36 @@ function renderDownload() {
   const mg = $('#dlMerge'); if (mg) mg.onchange = e => { S.merge = e.target.checked; renderDownload(); };
   $('#dlGo').onclick = runDownload;
 }
+// 페이지를 그림으로: 브라우저 자체 렌더링(SVG foreignObject, html-to-image)을 써서 편집 화면과 똑같이 —
+// 광선·그림자·혼합 모드·그라데이션 글자·필터까지 그대로. 실패하면 html2canvas로 대신 그림
+const fontDataCache = new Map(); let fontCssText = null;
+async function fontCSSFor(node) {
+  const used = new Set(); node.querySelectorAll('*').forEach(e => getComputedStyle(e).fontFamily.split(',').forEach(f => used.add(f.trim().replace(/^["']|["']$/g, ''))));
+  if (fontCssText == null) { try { fontCssText = await (await fetch('fonts/fonts.css')).text(); } catch (e) { fontCssText = ''; } }
+  const toData = async url => { if (!fontDataCache.has(url)) fontDataCache.set(url, fetch(url).then(r => r.blob()).then(b => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); }))); return fontDataCache.get(url); };
+  const out = [];
+  for (const block of fontCssText.match(/@font-face\s*{[^}]*}/g) || []) {
+    const fam = (block.match(/font-family:\s*['"]?([^;'"]+)['"]?/) || [])[1]; if (!fam || !used.has(fam.trim())) continue;
+    let css = block; for (const m of block.matchAll(/url\(['"]?([^'")]+)['"]?\)/g)) { const u = new URL(m[1], new URL('fonts/fonts.css', location.href)).href; try { css = css.replace(m[0], `url(${await toData(u)})`); } catch (e) {} }
+    out.push(css);
+  }
+  doc.fonts.forEach(f => { if (used.has(f.family)) out.push(`@font-face{font-family:'${f.family}';src:url(${f.data})}`); });
+  return out.join('\n');
+}
 async function renderPageCanvas(pg, dpi, mode, bg) {
   const tmp = document.createElement('div'); tmp.style.cssText = 'position:fixed;left:-99999px;top:0'; tmp.innerHTML = sheetHTML(pg, mode); document.body.appendChild(tmp);
   try {
     await Promise.all(Array.from(tmp.querySelectorAll('img')).map(i => i.complete ? null : new Promise(r => { i.onload = i.onerror = r; })));
-    return await html2canvas(tmp.firstElementChild, { scale: dpi / 96, backgroundColor: bg, logging: false, useCORS: true });
+    const node = tmp.firstElementChild;
+    try {
+      await loadScript('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js', () => window.htmlToImage);
+      const r = node.getBoundingClientRect();
+      return await htmlToImage.toCanvas(node, { pixelRatio: dpi / 96, width: Math.ceil(r.width), height: Math.ceil(r.height), backgroundColor: bg || undefined, fontEmbedCSS: await fontCSSFor(node), cacheBust: false, skipAutoScale: true });
+    } catch (err) {
+      console.warn('브라우저 렌더링 실패, html2canvas로 대신 그림', err);
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', () => window.html2canvas);
+      return await html2canvas(node, { scale: dpi / 96, backgroundColor: bg, logging: false, useCORS: true });
+    }
   } finally { tmp.remove(); }
 }
 async function runDownload() {
