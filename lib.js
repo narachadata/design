@@ -29,6 +29,7 @@ NC.lib = (function () {
       st.data.templates.forEach(t => walk(t.pages));
       await pool([...want], 8, async p => { if (st.urls[p]) return; try { st.urls[p] = URL.createObjectURL(await blob(p)); } catch (e) {} });
       await loadMine();
+      await loadFonts();
       st.ready = true; st.listeners.forEach(f => { try { f(); } catch (e) {} });
       return true;
     })();
@@ -100,7 +101,32 @@ NC.lib = (function () {
     await writeBlob(d, id + '.json', new Blob([JSON.stringify(m, null, 1)], { type: 'application/json' }));
   }
 
+  /* ---------- 자료실 글꼴 (디자인자료/글꼴/fonts.json) ----------
+     공개 사이트에 올리면 안 되는 글꼴이라 동기화 폴더에만 둠. 목록에는 미리 만든 견본 그림만 보여 주고,
+     글꼴 파일은 문서에서 실제로 쓸 때 그 글꼴만 읽어 @font-face(blob 주소)로 등록 */
+  st.fonts = []; const fontLoading = {};
+  async function loadFonts() {
+    st.fonts = [];
+    let meta; try { meta = JSON.parse(await (await blob('글꼴/fonts.json')).text()); } catch (e) { return; }
+    for (const f of meta.fonts || []) { try { st.urls[f.preview] = st.urls[f.preview] || URL.createObjectURL(await blob(f.preview)); } catch (e) {} st.fonts.push(Object.assign({}, f, { previewUrl: st.urls[f.preview] || '' })); }
+  }
+  function fontInfo(family) { return st.fonts.find(f => f.family === family); }
+  // 그 글꼴의 모든 굵기를 읽어 등록 (한 번만). 등록되면 true
+  function ensureFont(family) {
+    const f = fontInfo(family); if (!f) return Promise.resolve(false);
+    if (!fontLoading[family]) fontLoading[family] = (async () => {
+      let css = '';
+      for (const fc of f.faces) { try { const u = st.urls[fc.file] || (st.urls[fc.file] = URL.createObjectURL(await blob(fc.file))); css += `@font-face{font-family:'${family}';src:url('${u}') format('${fc.format || 'woff2'}');font-weight:${fc.weight};font-display:block}\n`; } catch (e) {} }
+      if (!css) return false;
+      let el = document.getElementById('libfontCss'); if (!el) { el = document.createElement('style'); el.id = 'libfontCss'; document.head.appendChild(el); } el.textContent += css;
+      try { await Promise.all(f.faces.map(fc => document.fonts.load(`${fc.weight} 20px '${family}'`, '가A'))); } catch (e) {}
+      return true;
+    })();
+    return fontLoading[family];
+  }
+
   return {
+    fonts() { return st.fonts || []; }, ensureFont, isLibFont: fam => !!fontInfo(fam),
     st, load, url, dataURL, materialize, reset, saveMine, removeMine, renameMine, loadMine,
     mine() { return st.mine || []; },
     onReady(f) { st.listeners.push(f); },

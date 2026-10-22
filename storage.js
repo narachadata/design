@@ -115,7 +115,7 @@ NC.store = (function () {
   /* ---------- 동기화 폴더 (Google Drive 등): 설정값 + 모든 문서 ---------- */
   // 폴더 안: 설정.naracha.json(API 키·모델·최근 사용 목록) + *.design.json(문서들)
   const SET_FILE = '설정.naracha.json';
-  const SYNC_KEYS = ['naracal-ai-v1', 'naracal-recent-fonts', 'naracal-recent-elems', 'naracal-recent-tpls', 'naracal-recent-formats'];
+  const SYNC_KEYS = ['naracal-ai-v1', 'naracal-brand-colors', 'naracal-recent-colors', 'naracal-recent-fonts', 'naracal-recent-elems', 'naracal-recent-tpls', 'naracal-recent-formats'];
   Object.assign(state, { dir: null, dirName: '', dirSupported: !!window.showDirectoryPicker, setMod: 0, setBase: {} });
   async function connectFolder() {
     if (!state.dirSupported) throw new Error('이 브라우저는 폴더 연결을 지원하지 않습니다 (Chrome, Edge 권장).');
