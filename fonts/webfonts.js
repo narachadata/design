@@ -710,5 +710,110 @@ window.NARACAL_WEBFONTS = [
   ],
   "license": "네이버 나눔글꼴 라이선스: 개인·상업 무료, 임베딩 가능, 수정·재배포 가능, 폰트 파일 유료 판매 금지",
   "source": "https://noonnu.cc/font_page/487"
+ },
+ {
+  "family": "Bebas Neue",
+  "label": "베바스 노이 (영문 스포츠 제목)",
+  "cat": "latin",
+  "preview": "fonts/preview/bebas-neue.png",
+  "faces": [
+   {
+    "weight": 400,
+    "url": "https://cdn.jsdelivr.net/fontsource/fonts/bebas-neue@5.2.5/latin-400-normal.woff2",
+    "format": "woff2"
+   }
+  ],
+  "license": "SIL Open Font License 1.1: 상업 사용·웹·PDF 임베딩 가능, 글꼴 파일 판매만 금지",
+  "source": "https://fontsource.org/fonts/bebas-neue"
+ },
+ {
+  "family": "Oswald",
+  "label": "오스왈드 (영문 좁은 제목)",
+  "cat": "latin",
+  "preview": "fonts/preview/oswald.png",
+  "faces": [
+   {
+    "weight": 500,
+    "url": "https://cdn.jsdelivr.net/fontsource/fonts/oswald@5.2.5/latin-500-normal.woff2",
+    "format": "woff2"
+   },
+   {
+    "weight": 700,
+    "url": "https://cdn.jsdelivr.net/fontsource/fonts/oswald@5.2.5/latin-700-normal.woff2",
+    "format": "woff2"
+   }
+  ],
+  "license": "SIL Open Font License 1.1: 상업 사용·웹·PDF 임베딩 가능, 글꼴 파일 판매만 금지",
+  "source": "https://fontsource.org/fonts/oswald"
+ },
+ {
+  "family": "Anton",
+  "label": "앤턴 (영문 굵은 제목)",
+  "cat": "latin",
+  "preview": "fonts/preview/anton.png",
+  "faces": [
+   {
+    "weight": 400,
+    "url": "https://cdn.jsdelivr.net/fontsource/fonts/anton@5.2.5/latin-400-normal.woff2",
+    "format": "woff2"
+   }
+  ],
+  "license": "SIL Open Font License 1.1: 상업 사용·웹·PDF 임베딩 가능, 글꼴 파일 판매만 금지",
+  "source": "https://fontsource.org/fonts/anton"
+ },
+ {
+  "family": "Cinzel",
+  "label": "신젤 (영문 상장·증서)",
+  "cat": "latin",
+  "preview": "fonts/preview/cinzel.png",
+  "faces": [
+   {
+    "weight": 400,
+    "url": "https://cdn.jsdelivr.net/fontsource/fonts/cinzel@5.2.5/latin-400-normal.woff2",
+    "format": "woff2"
+   },
+   {
+    "weight": 700,
+    "url": "https://cdn.jsdelivr.net/fontsource/fonts/cinzel@5.2.5/latin-700-normal.woff2",
+    "format": "woff2"
+   }
+  ],
+  "license": "SIL Open Font License 1.1: 상업 사용·웹·PDF 임베딩 가능, 글꼴 파일 판매만 금지",
+  "source": "https://fontsource.org/fonts/cinzel"
+ },
+ {
+  "family": "Playfair Display",
+  "label": "플레이페어 (영문 우아한 세리프)",
+  "cat": "latin",
+  "preview": "fonts/preview/playfair-display.png",
+  "faces": [
+   {
+    "weight": 400,
+    "url": "https://cdn.jsdelivr.net/fontsource/fonts/playfair-display@5.2.5/latin-400-normal.woff2",
+    "format": "woff2"
+   },
+   {
+    "weight": 700,
+    "url": "https://cdn.jsdelivr.net/fontsource/fonts/playfair-display@5.2.5/latin-700-normal.woff2",
+    "format": "woff2"
+   }
+  ],
+  "license": "SIL Open Font License 1.1: 상업 사용·웹·PDF 임베딩 가능, 글꼴 파일 판매만 금지",
+  "source": "https://fontsource.org/fonts/playfair-display"
+ },
+ {
+  "family": "Great Vibes",
+  "label": "그레이트 바이브스 (영문 필기체)",
+  "cat": "latin",
+  "preview": "fonts/preview/great-vibes.png",
+  "faces": [
+   {
+    "weight": 400,
+    "url": "https://cdn.jsdelivr.net/fontsource/fonts/great-vibes@5.2.5/latin-400-normal.woff2",
+    "format": "woff2"
+   }
+  ],
+  "license": "SIL Open Font License 1.1: 상업 사용·웹·PDF 임베딩 가능, 글꼴 파일 판매만 금지",
+  "source": "https://fontsource.org/fonts/great-vibes"
  }
 ];
