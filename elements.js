@@ -34,9 +34,10 @@ NC.elems = (function () {
   add('line', 'ln-divider', '구분선 (가운데 점)', 60, 6, (uid) => { const { S } = H(uid); return [S('line', 0, 2.7, 26, 0.6, { fill: '#999', stroke: '#999', strokeW: 0.4 }), S('ellipse', 28.5, 1.5, 3, 3, { fill: RED }), S('line', 34, 2.7, 26, 0.6, { fill: '#999', stroke: '#999', strokeW: 0.4 })]; }, '구분선');
   add('line', 'ln-vert', '세로 선', 6, 60, (uid) => { const { S } = H(uid); return [S('rect', 2.5, 0, 1, 60, { fill: NAVY, name: '세로 선' })]; }, '세로선');
 
-  /* 아이콘 (이모지) — 인쇄 시 그 PC의 컬러 이모지 글꼴 사용 */
+  /* 아이콘 (이모지) — Noto Emoji 벡터 그림(Apache 2.0)으로 넣어 어느 PC에서나 같은 모양, 크게 인쇄해도 선명 */
+  const emojiSVG = ch => 'https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u' + [...ch].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f').join('_') + '.svg';
   const EMOJI = { '태권도·운동': '🥋🥇🥈🥉🏆🎖️🏅🥊⚽🏀⚾🎯🏃‍♂️🤸‍♀️💪🔥⭐🌟✨', '학교·공부': '📚✏️📝🎒🏫🧑‍🏫👩‍🎓📖🖍️📌📎🔔⏰📅', '축하·행사': '🎉🎊🎈🎂🎁🎀🎵🎶🎤🎬🥳🙌👏💐', '마음·날씨': '❤️💛💙💚🧡💜🌈☀️🌙⛅🌸🍀🌻🍁❄️', '표시·화살표': '✅❌⭕❗❓➡️⬅️⬆️⬇️↗️🔁📍💡✔️➕', '음식·생활': '🍎🥛🍚🍱🚌🏠📞📱💬🕐🧼🩹🧴' };
-  Object.entries(EMOJI).forEach(([g, s]) => [...new Intl.Segmenter ? new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(s) : s].map(x => x.segment || x).forEach((e, i) => add('icon', `em-${g}-${i}`, e, 16, 16, (uid) => { const { T } = H(uid); return [T(e, 0, 0, 16, 16, { size: 34, lh: 1, align: 'center', name: '아이콘 ' + e, font: 'Noto Sans KR' })]; }, '아이콘 이모지 ' + g)));
+  Object.entries(EMOJI).forEach(([g, s]) => [...new Intl.Segmenter ? new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(s) : s].map(x => x.segment || x).forEach((e, i) => add('icon', `em-${g}-${i}`, e, 16, 16, (uid) => { const { I } = H(uid); return [I(emojiSVG(e), 0, 0, 16, 16, { name: '아이콘 ' + e, fit: 'contain' })]; }, '아이콘 이모지 ' + g)));
   /* 번호 배지 */
   for (let i = 1; i <= 10; i++) add('icon', 'num-' + i, '번호 ' + i, 14, 14, (uid) => { const { S, T } = H(uid); return [S('ellipse', 0, 0, 14, 14, { fill: NAVY }), T(String(i), 0, 3, 14, 8, { font: 'Montserrat', size: 16, weight: 800, color: YEL, align: 'center', lh: 1 })]; }, '번호 숫자 배지');
   ['①', '②', '③', '④', '⑤', 'A', 'B', 'C', 'D', 'E'].forEach((c, i) => add('icon', 'ltr-' + i, c, 12, 12, (uid) => { const { T } = H(uid); return [T(c, 0, 0, 12, 12, { size: 24, weight: 800, color: NAVY, align: 'center', lh: 1, font: 'Montserrat' })]; }, '번호 문자'));

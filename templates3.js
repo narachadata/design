@@ -55,7 +55,7 @@
     const { T, I, S, P } = H(uid); const w = o.w, h = o.h, u = Math.min(w, h) / 100, m = 6 * u; const P_ = o.pal, c = o.copy, fT = o.fontT, fB = o.fontB;
     const dark = isDark(P_.bg); const tx = dark ? WHITE : P_.tx, sub = dark ? '#dde3f0' : P_.sub;
     const els = []; const tall = h / w > 1.2, wide = w / h > 1.6;
-    const motif = (i, x, y, s) => T(P_.motifs[i % P_.motifs.length], x, y, s, s, { size: s * 2.4, lh: 1, align: 'center', name: '장식', opacity: 0.95 });
+    const motif = (i, x, y, s) => I(emojiSVG(P_.motifs[i % P_.motifs.length]), x, y, s, s, { name: '장식', fit: 'contain', opacity: 0.95 }); // 벡터 이모지: 현수막처럼 크게 인쇄해도 선명
     if (o.layout === 'band') {
       els.push(S('rect', 0, 0, w, h * 0.42, { fill: P_.fg, name: '상단 띠' }));
       els.push(T(c.eyebrow, m, m * 0.9, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3.6 * u, weight: 700, color: P_.ac, ls: 0.3 }));
@@ -158,6 +158,9 @@
     });
     return pg;
   }
+  // 이모지 → Noto Emoji 벡터 그림 주소 (Apache 2.0). 기기마다 모양이 달라지거나 크게 인쇄할 때 깨지지 않게
+  const emojiSVG = ch => 'https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u' + [...ch].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f').join('_') + '.svg';
+  NC.emojiSVG = emojiSVG;
   function isDark(hex) { if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return false; const n = parseInt(hex.slice(1), 16); return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 < 120; }
   const SIZE = { poster: [210, 297, '포스터'], flyer: [148, 210, '전단지'], sns: [285.75, 285.75, 'SNS'], story: [285.75, 508, 'SNS'], card4x5: [285.75, 357.19, '카드뉴스'], postcard: [148, 105, '명함·카드'], banner: [3000, 700, '현수막·입간판'], yt: [338.67, 190.5, '웹·영상'] };
   const LAYOUT_FOR = { poster: ['band', 'center', 'split', 'frame', 'minimal'], flyer: ['band', 'center', 'minimal', 'frame'], sns: ['center', 'minimal', 'frame', 'split'], story: ['story'], card4x5: ['center', 'band'], postcard: ['frame', 'minimal'], banner: ['banner'], yt: ['split', 'minimal'] };
