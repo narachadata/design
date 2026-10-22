@@ -8,64 +8,114 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-new" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14h6"/></symbol>
+<symbol id="i-open" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+<symbol id="i-save" viewBox="0 0 24 24"><path d="M7 18a4 4 0 0 1-.6-7.95A6 6 0 0 1 18 8a4.5 4.5 0 0 1 .5 9H7z"/><path d="M12 12v6M9.5 14.5 12 12l2.5 2.5"/></symbol>
+<symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 14h2M12 14h2M16 14h2M8 18h2M12 18h2"/></symbol>
+<symbol id="i-font" viewBox="0 0 24 24"><path d="M5 19 11 5h2l6 14M7.5 14h9"/></symbol>
+<symbol id="i-ai" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8zM5 15l.6 1.6L7 17l-1.4.5L5 19l-.6-1.5L3 17l1.4-.4z"/></symbol>
+<symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17h.01"/></symbol>
+<symbol id="i-img" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 16-5-5-7 7-2.5-2.5L3 19"/></symbol>
+<symbol id="i-pdf" viewBox="0 0 24 24"><path d="M6 9V4h12v5M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2"/><rect x="6" y="14" width="12" height="6"/></symbol>
+<symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+<symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></symbol>
+<symbol id="i-pages" viewBox="0 0 24 24"><rect x="3" y="4" width="13" height="16" rx="2"/><path d="M16 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-9"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
+<symbol id="i-tpl" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5M3 17l9 5 9-5"/></symbol>
+<symbol id="i-dup" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+<symbol id="i-del" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+<symbol id="i-front" viewBox="0 0 24 24"><path d="M12 4v10M8 10l4 4 4-4"/><path d="M5 20h14"/></symbol>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="M12 20V10M8 14l4-4 4 4"/><path d="M5 4h14"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></symbol>
+<symbol id="i-al" viewBox="0 0 24 24"><path d="M4 3v18"/><rect x="7" y="6" width="12" height="4"/><rect x="7" y="14" width="7" height="4"/></symbol>
+<symbol id="i-ac" viewBox="0 0 24 24"><path d="M12 3v18"/><rect x="5" y="6" width="14" height="4"/><rect x="8" y="14" width="8" height="4"/></symbol>
+<symbol id="i-ar" viewBox="0 0 24 24"><path d="M20 3v18"/><rect x="5" y="6" width="12" height="4"/><rect x="10" y="14" width="7" height="4"/></symbol>
+<symbol id="i-at" viewBox="0 0 24 24"><path d="M3 4h18"/><rect x="6" y="7" width="4" height="12"/><rect x="14" y="7" width="4" height="7"/></symbol>
+<symbol id="i-am" viewBox="0 0 24 24"><path d="M3 12h18"/><rect x="6" y="5" width="4" height="14"/><rect x="14" y="8" width="4" height="8"/></symbol>
+<symbol id="i-ab" viewBox="0 0 24 24"><path d="M3 20h18"/><rect x="6" y="5" width="4" height="12"/><rect x="14" y="10" width="4" height="7"/></symbol>
+<symbol id="i-zin" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4M11 8v6M8 11h6"/></symbol>
+<symbol id="i-zout" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4M8 11h6"/></symbol>
+<symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></symbol>
+<symbol id="i-prev" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+<symbol id="i-next" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+</defs></svg>
 <div class="app">
   <header class="topbar">
-    <div class="brand">나라차 디자인 공방</div>
+    <div class="brand"><span class="logo">N</span><span>나라차 디자인 공방</span></div>
     <input class="pname" id="pname" type="text" aria-label="문서 이름" placeholder="문서 이름">
     <span class="status" id="status"></span>
     <div class="grow"></div>
-    <button class="btn" id="btnUndo" title="실행 취소 (Ctrl+Z)">↶</button>
-    <button class="btn" id="btnRedo" title="다시 실행 (Ctrl+Shift+Z)">↷</button>
-    <button class="btn" id="btnNew">새 문서</button>
-    <button class="btn" id="btnOpen">열기</button>
-    <button class="btn" id="btnSave">저장 (JSON)</button>
-    <button class="btn" id="btnHoliday">공휴일</button>
-    <button class="btn" id="btnFonts">글꼴</button>
-    <button class="btn" id="btnAI">AI 도우미</button>
-    <button class="btn" id="btnHelp">도움말</button>
-    <button class="btn" id="btnPNG">PNG</button>
-    <button class="btn primary" id="btnExport">PDF 내보내기</button>
+    <div class="tgroup">
+      <button class="btn icon" id="btnUndo" title="실행 취소 (Ctrl+Z)"><svg class="ic"><use href="#i-undo"/></svg></button>
+      <button class="btn icon" id="btnRedo" title="다시 실행 (Ctrl+Shift+Z)"><svg class="ic"><use href="#i-redo"/></svg></button>
+    </div>
+    <div class="tgroup">
+      <button class="btn" id="btnNew"><svg class="ic"><use href="#i-new"/></svg>새 문서</button>
+      <button class="btn" id="btnOpen"><svg class="ic"><use href="#i-open"/></svg>열기</button>
+      <button class="btn" id="btnSave"><svg class="ic"><use href="#i-save"/></svg>저장·동기화</button>
+    </div>
+    <div class="tgroup">
+      <button class="btn" id="btnHoliday"><svg class="ic"><use href="#i-cal"/></svg>공휴일</button>
+      <button class="btn" id="btnFonts"><svg class="ic"><use href="#i-font"/></svg>글꼴</button>
+      <button class="btn ai" id="btnAI"><svg class="ic"><use href="#i-ai"/></svg>AI 도우미</button>
+      <button class="btn icon" id="btnHelp" title="도움말"><svg class="ic"><use href="#i-help"/></svg></button>
+    </div>
+    <div class="tgroup">
+      <button class="btn" id="btnPNG"><svg class="ic"><use href="#i-img"/></svg>PNG</button>
+      <button class="btn primary" id="btnExport"><svg class="ic"><use href="#i-pdf"/></svg>PDF 내보내기</button>
+    </div>
   </header>
 
   <nav class="side" aria-label="도구">
     <div class="sidetabs" role="tablist">
-      <button data-tab="pages" aria-selected="true">페이지</button>
-      <button data-tab="add" aria-selected="false">추가</button>
-      <button data-tab="tpl" aria-selected="false">템플릿</button>
-      <button data-tab="img" aria-selected="false">이미지</button>
-      <button data-tab="layers" aria-selected="false">레이어</button>
+      <button data-tab="pages" aria-selected="true"><svg class="ic"><use href="#i-pages"/></svg><span>페이지</span></button>
+      <button data-tab="add" aria-selected="false"><svg class="ic"><use href="#i-plus"/></svg><span>추가</span></button>
+      <button data-tab="tpl" aria-selected="false"><svg class="ic"><use href="#i-tpl"/></svg><span>템플릿</span></button>
+      <button data-tab="img" aria-selected="false"><svg class="ic"><use href="#i-img"/></svg><span>이미지</span></button>
+      <button data-tab="layers" aria-selected="false"><svg class="ic"><use href="#i-layers"/></svg><span>레이어</span></button>
     </div>
     <div class="sidebody" id="sidebody"></div>
   </nav>
 
+  <div class="rsz" id="rszL" title="끌어서 너비 조절"></div>
   <main class="stage" id="stage">
     <div class="toolbar">
-      <button class="btn sm" id="zoomOut" aria-label="축소">−</button>
-      <button class="btn sm" id="zoomFit">맞춤</button>
-      <button class="btn sm" id="zoomIn" aria-label="확대">＋</button>
-      <span class="sep"></span>
-      <button class="btn sm" id="btnDup" title="복제 (Ctrl+D)">복제</button>
-      <button class="btn sm" id="btnDel" title="삭제 (Delete)">삭제</button>
-      <button class="btn sm" id="btnFront" title="맨 앞으로">맨 앞</button>
-      <button class="btn sm" id="btnUp" title="앞으로">앞</button>
-      <button class="btn sm" id="btnDown" title="뒤로">뒤</button>
-      <button class="btn sm" id="btnBack" title="맨 뒤로">맨 뒤</button>
-      <span class="sep"></span>
-      <button class="btn sm" data-align="l" title="왼쪽 정렬">⇤</button>
-      <button class="btn sm" data-align="c" title="가로 가운데">↔</button>
-      <button class="btn sm" data-align="r" title="오른쪽 정렬">⇥</button>
-      <button class="btn sm" data-align="t" title="위 정렬">⤒</button>
-      <button class="btn sm" data-align="m" title="세로 가운데">↕</button>
-      <button class="btn sm" data-align="b" title="아래 정렬">⤓</button>
+      <div class="tgroup">
+        <button class="btn icon" id="zoomOut" title="축소"><svg class="ic"><use href="#i-zout"/></svg></button>
+        <button class="btn" id="zoomFit" title="화면에 맞춤"><svg class="ic"><use href="#i-fit"/></svg>맞춤</button>
+        <button class="btn icon" id="zoomIn" title="확대"><svg class="ic"><use href="#i-zin"/></svg></button>
+      </div>
+      <div class="tgroup">
+        <button class="btn" id="btnDup" title="복제 (Ctrl+D)"><svg class="ic"><use href="#i-dup"/></svg>복제</button>
+        <button class="btn" id="btnDel" title="삭제 (Delete)"><svg class="ic"><use href="#i-del"/></svg>삭제</button>
+      </div>
+      <div class="tgroup" title="순서">
+        <button class="btn icon" id="btnFront" title="맨 앞으로"><svg class="ic"><use href="#i-front"/></svg></button>
+        <button class="btn icon" id="btnUp" title="한 칸 앞으로"><svg class="ic"><use href="#i-up"/></svg></button>
+        <button class="btn icon" id="btnDown" title="한 칸 뒤로"><svg class="ic"><use href="#i-down"/></svg></button>
+        <button class="btn icon" id="btnBack" title="맨 뒤로"><svg class="ic"><use href="#i-back"/></svg></button>
+      </div>
+      <div class="tgroup" title="정렬">
+        <button class="btn icon" data-align="l" title="왼쪽 정렬"><svg class="ic"><use href="#i-al"/></svg></button>
+        <button class="btn icon" data-align="c" title="가로 가운데"><svg class="ic"><use href="#i-ac"/></svg></button>
+        <button class="btn icon" data-align="r" title="오른쪽 정렬"><svg class="ic"><use href="#i-ar"/></svg></button>
+        <button class="btn icon" data-align="t" title="위 정렬"><svg class="ic"><use href="#i-at"/></svg></button>
+        <button class="btn icon" data-align="m" title="세로 가운데"><svg class="ic"><use href="#i-am"/></svg></button>
+        <button class="btn icon" data-align="b" title="아래 정렬"><svg class="ic"><use href="#i-ab"/></svg></button>
+      </div>
     </div>
     <div class="canvas-wrap" id="canvasWrap"><div class="sheet" id="canvas"></div><div class="ovl" id="ovl"></div></div>
     <div class="pagenav">
-      <button class="btn sm" id="prevPage" aria-label="이전 페이지">‹</button>
+      <button class="btn icon" id="prevPage" aria-label="이전 페이지"><svg class="ic"><use href="#i-prev"/></svg></button>
       <span id="pageLabel"></span>
-      <button class="btn sm" id="nextPage" aria-label="다음 페이지">›</button>
+      <button class="btn icon" id="nextPage" aria-label="다음 페이지"><svg class="ic"><use href="#i-next"/></svg></button>
     </div>
   </main>
 
+  <div class="rsz" id="rszR" title="끌어서 너비 조절"></div>
   <aside class="inspector" id="inspector" aria-label="속성"></aside>
 </div>
 
