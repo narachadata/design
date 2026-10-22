@@ -288,3 +288,13 @@ dialog.wide{max-width:1180px;width:95vw}
 .tprev{position:relative;width:100%;overflow:hidden;background:var(--ui-stage);border-radius:12px}
 .tprev .sheet{position:absolute;top:0;transform-origin:0 0;box-shadow:0 10px 30px rgba(16,24,40,.22)}
 #dlgTpl{max-width:900px}
+
+/* 테마 선택·두 쪽 미리보기 */
+.wz-themes{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.wz-th{border:2px solid transparent;border-radius:8px;padding:4px;background:#fff;cursor:pointer;display:flex;flex-direction:column;gap:3px;font-size:11.5px;font-weight:600;color:var(--ui-fg2);text-align:left;box-shadow:var(--sh)}
+.wz-th:hover{border-color:var(--ui-line2)}
+.wz-th.on{border-color:var(--ui-accent);background:var(--ui-accent-soft);color:var(--ui-accent)}
+.wz-thbox{position:relative;width:100%;overflow:hidden;background:#fff;border-radius:3px}
+.wz-thbox .sheet{position:absolute;left:0;top:0;transform-origin:0 0;box-shadow:none}
+.tcard.two{grid-column:1/-1}
+.tprev.two .sheet{box-shadow:0 6px 18px rgba(16,24,40,.2)}
