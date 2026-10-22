@@ -5,11 +5,11 @@ cd "$(dirname "$0")"
 VER=$(date +%Y%m%d.%H%M)
 echo "window.NARACAL_VER = \"$VER\";" > version.js
 echo "{\"ver\":\"$VER\"}" > version.json
-sed -i '' -E "s/(app\.(js|css)\?v=)[0-9a-z.]+/\1$VER/g; s/(effects|imgedit|elements|templates|templates2|templates3|calendar|storage|lib|ai|defaults|assets)\.js\?v=[0-9a-z.]+/\1.js?v=$VER/g" index.html
+sed -i '' -E "s/(app\.(js|css)\?v=)[0-9a-z.]+/\1$VER/g; s/(effects|imgedit|elements|templates|templates2|templates3|calendar|storage|lib|ai|defaults|assets|webfonts)\.js\?v=[0-9a-z.]+/\1.js?v=$VER/g" index.html
 git add -A
 git -c user.name=narachadata -c user.email=masterlim01@gmail.com commit -q -m "${1:-업데이트} ($VER)
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>" || true
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" || true
 git push -q origin main
 echo "pushed $VER"
 for i in $(seq 1 30); do if curl -s "https://narachadata.github.io/design/version.json?t=$i" | grep -q "$VER"; then echo "live after $((i*10))s"; exit 0; fi; sleep 10; done

@@ -536,3 +536,45 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .stage .ovl{overflow:visible}
 .stage .canvas-wrap{overflow:visible}
 .el-cal .cg .cglines{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.fontrow,#fpPop .fp-row{content-visibility:auto;contain-intrinsic-size:auto 44px}
+/* 페이지·레이어 끌어 옮기기, 우클릭 메뉴 */
+#thumbs .thumb.dragging,#sidebody .layer.dragging{opacity:.4}
+#thumbs .thumb.dropb{box-shadow:0 -3px 0 #2f6fe4}#thumbs .thumb.dropa{box-shadow:0 3px 0 #2f6fe4}
+#sidebody .layer.dropb{box-shadow:inset 0 2px 0 #2f6fe4}#sidebody .layer.dropa{box-shadow:inset 0 -2px 0 #2f6fe4}
+.fmenu.ctx{min-width:220px;z-index:90}
+.fmenu.ctx button[disabled]{opacity:.4;cursor:default}
+/* 색 고르기 */
+.cfield{display:flex;align-items:center;gap:4px}
+.cfield input[type=color]{flex:0 0 34px;width:34px;height:30px;padding:2px}
+.cfield .hexin{flex:1;min-width:0;font:12px/1 ui-monospace,Menlo,monospace;text-transform:uppercase;padding:6px}
+.cfield .cpal{flex:0 0 26px;height:30px;border:1px solid #d6d9e0;background:#fff;border-radius:6px;cursor:pointer}
+.cpalpop{position:fixed;z-index:95;width:236px;background:#fff;border:1px solid #d6d9e0;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:10px;font-size:12px}
+.cpalpop h4{margin:10px 0 6px;font-size:11px;color:#555;display:flex;justify-content:space-between;align-items:center}
+.cpalpop .cph{display:flex;align-items:center;gap:8px}.cpalpop .cph b{flex:1;font-family:ui-monospace,Menlo,monospace}
+.cpalpop .cgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+.cpalpop .csw{width:100%;aspect-ratio:1;border-radius:50%;border:1px solid rgba(0,0,0,.15);cursor:pointer;padding:0}
+.cpalpop .csw:hover{transform:scale(1.12)}
+.cpalpop .csw.big{width:26px;height:26px;flex:0 0 26px;border-radius:6px}
+.cpalpop .lnk{border:0;background:none;color:#2f6fe4;cursor:pointer;font-size:11px;padding:0}
+.cpalpop .cpall{display:flex;align-items:center;gap:6px;margin-top:10px;border-top:1px solid #eee;padding-top:8px}
+.cpalpop .cpall select{font-size:11px;padding:2px}
+#canvas .el.dropon{outline:3px dashed #2f6fe4;outline-offset:-3px}
+.dlok{font-size:12px;color:#1b7f3b;background:#eaf7ee;border-radius:8px;padding:8px 10px;margin:8px 0}
+.dlwarn .lnk{border:0;background:none;color:#2f6fe4;cursor:pointer;padding:0;font:inherit;text-decoration:underline}
+.sheet.transp{background:transparent}.sheet.transp .bgfill{background:transparent}
+/* 크기 조정 */
+#dlgResize{width:min(760px,96vw)}
+.rsgrid{display:grid;grid-template-columns:1fr 250px;gap:18px}
+@media (max-width:640px){.rsgrid{grid-template-columns:1fr}}
+.rsmodes{display:grid;gap:6px}
+.rsmode{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;border:1px solid #d6d9e0;border-radius:8px;padding:8px 10px;cursor:pointer}
+.rsmode input{grid-row:span 2;margin-top:3px}.rsmode small{color:#666}
+.rsmode.on{border-color:#2f6fe4;background:#f2f6ff}
+.rsprev{display:flex;flex-direction:column;align-items:center;gap:6px;background:#f3f4f7;border-radius:10px;padding:12px}
+.rsbox{position:relative;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.15)}
+.rsbox .sheet{box-shadow:none}
+/* 글꼴 견본 그림 */
+#fpPop .fp-row .fpimg,.fontrow .fpimg{height:24px;width:auto;max-width:100%;object-fit:contain;object-position:left center;display:block}
+.fontrow .fpimg{height:28px}
+.ftag{font-style:normal;font-size:10px;background:#e8eefc;color:#2f5bea;border-radius:4px;padding:0 4px;margin-left:4px}
+.ftag.web{background:#fdecef;color:#c0304f}
