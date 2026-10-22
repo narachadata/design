@@ -261,6 +261,7 @@ function fitCanvas() {
   const wrap = $('#canvasWrap'); wrap.style.width = (doc.w * MM * k) + 'px'; wrap.style.height = (doc.h * MM * k) + 'px';
   const o = $('#ovl'); o.style.transform = `scale(${k})`; o.style.setProperty('--k', k); o.style.width = (doc.w * MM) + 'px'; o.style.height = (doc.h * MM) + 'px';
   const z = $('#zoomPct'); if (z) z.textContent = Math.round(k * 100) + '%';
+  try { if (showRulers()) requestAnimationFrame(drawRulers); } catch (e) {}
 }
 const SAFE = 3;
 // 형식별 안전 여백(mm): 현수막은 미싱·아일렛, X배너는 거치대 자리. 나머지는 3mm
@@ -282,7 +283,7 @@ function renderOverlay(guides) {
   els.forEach(el => { const single = els.length === 1; h += `<div class="sel${single ? '' : ' multi'}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map(d => `<div class="h ${d}" data-h="${d}"></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; h += '</div>'; });
   if (els.length > 1) { const bx = Math.min(...els.map(e => e.x)), by = Math.min(...els.map(e => e.y)), bw = Math.max(...els.map(e => e.x + e.w)) - bx, bh = Math.max(...els.map(e => e.y + e.h)) - by; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm">${els.some(e => e.locked) ? '' : ['nw', 'ne', 'se', 'sw'].map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="함께 크기 조절 (비율 유지)"></div>`).join('')}</div>`; }
   (guides || []).forEach(g => { h += g.v != null ? `<div class="guide v" style="left:${g.v}mm"></div>` : `<div class="guide h" style="top:${g.h}mm"></div>`; });
-  h += calOverlay();
+  h += calOverlay(); h += userGuidesHTML(); try { if (showRulers()) requestAnimationFrame(drawRulers); } catch (e) {} // 고른 요소 범위를 눈금자에 표시
   // 인쇄 안내선: 도련(잘려 나가는 영역)·안전 여백(글자를 두지 않을 영역)
   if (showGuides() && Number(doc.bleed) > 0) { const b = Number(doc.bleed); h += `<div class="pg-bleed" style="left:${-b}mm;top:${-b}mm;width:${doc.w + 2 * b}mm;height:${doc.h + 2 * b}mm" title="도련 ${b}mm: 이 선까지 배경을 채우세요"></div><div class="pg-safe" style="left:${safeMM()}mm;top:${safeMM()}mm;width:${doc.w - 2 * safeMM()}mm;height:${doc.h - 2 * safeMM()}mm" title="안전 여백 ${safeMM()}mm: 글자·로고는 이 안쪽에"></div>`; }
   if (showGuides()) h += formatGuides();
@@ -496,6 +497,7 @@ function liveUpdate(els) { const c = $('#canvas'); els.forEach(el => { const dom
 function snap(x, y, w, h, selfIds) {
   const T = Math.max(0.1, 6 / (kScale() * MM)), guides = []; const xs = [0, doc.w / 2, doc.w], ys = [0, doc.h / 2, doc.h];
   if (showGuides() && (Number(doc.bleed) > 0 || doc.fmt)) { const m = safeMM(); xs.push(m, doc.w - m); ys.push(m, doc.h - m); } // 안전 여백 선에도 붙음
+  if (doc.guides && showGuides()) { xs.push(...(doc.guides.x || [])); ys.push(...(doc.guides.y || [])); } // 사용자 안내선
   page().els.forEach(el => { if (selfIds.includes(el.id) || el.hidden) return; xs.push(el.x, el.x + el.w / 2, el.x + el.w); ys.push(el.y, el.y + el.h / 2, el.y + el.h); });
   let bx = null, by = null, bdx = T, bdy = T, gx = null, gy = null;
   [[x, 0], [x + w / 2, w / 2], [x + w, w]].forEach(([v, off]) => xs.forEach(g => { const dd = Math.abs(v - g); if (dd < bdx) { bdx = dd; bx = g - off; gx = g; } }));
@@ -2104,14 +2106,14 @@ function ctxDo(k) {
     lock: () => { const on = !els.every(x => x.locked); els.forEach(x => x.locked = on); commit(); renderOverlay(); renderInspector(); if (sideTab === 'layers') renderSide(); toast(on ? '잠갔습니다 (Ctrl+L로 풀기)' : '잠금을 풀었습니다'); },
     flipH: () => flipSel('h'), flipV: () => flipSel('v'),
     asbg: () => { if (!el || el.type !== 'image') return; el.x = 0; el.y = 0; el.w = doc.w; el.h = doc.h; el.fit = 'cover'; el.rot = 0; el.locked = true; reorder('back'); toast('배경으로 만들고 잠갔습니다 (레이어에서 잠금 해제)'); },
-    all: () => select(page().els.filter(x => !x.hidden && !x.locked).map(x => x.id)), find: openFind })[k]();
+    all: () => select(page().els.filter(x => !x.hidden && !x.locked).map(x => x.id)), find: openFind, rulers: toggleRulers, clrguides: () => { doc.guides = { x: [], y: [] }; commit(); renderOverlay(); toast('안내선을 모두 지웠습니다'); } })[k]();
 }
 function flipSel(dir) { const els = selEls().filter(x => !x.locked && x.type === 'image'); if (!els.length) { toast('뒤집기는 그림에 쓸 수 있습니다', true); return; } els.forEach(x => { if (dir === 'h') x.flip = !x.flip; else x.flipV = !x.flipV; }); commit(); rerender(); }
 $('#scroller').addEventListener('contextmenu', e => {
   if (e.target.closest('#cellEd') || editing) return; e.preventDefault();
   const d = (document.elementsFromPoint(e.clientX, e.clientY).map(n => n.closest && n.closest('#canvas .el')).filter(Boolean)).find(x => { const el = find(x.dataset.id); return el && (!el.locked || sel.includes(el.id)); });
   if (d && !sel.includes(d.dataset.id)) select(groupOf(d.dataset.id));
-  if (!d) { if (sel.length) select([]); openCtx(e, [['paste', '붙여넣기', 'Ctrl+V', !clip], ['pastein', '같은 자리에 붙여넣기', 'Ctrl+Shift+V', !clip], '-', ['all', '모두 선택', 'Ctrl+A'], ['find', '찾아 바꾸기…', 'Ctrl+F']]); return; }
+  if (!d) { if (sel.length) select([]); openCtx(e, [['paste', '붙여넣기', 'Ctrl+V', !clip], ['pastein', '같은 자리에 붙여넣기', 'Ctrl+Shift+V', !clip], '-', ['all', '모두 선택', 'Ctrl+A'], ['find', '찾아 바꾸기…', 'Ctrl+F'], '-', ['rulers', showRulers() ? '눈금자 끄기' : '눈금자 보이기', 'Shift+R'], ...(doc.guides && (doc.guides.x.length || doc.guides.y.length) ? [['clrguides', '안내선 모두 지우기', '']] : [])]); return; }
   const els = selEls(), img = els.length === 1 && els[0].type === 'image', locked = els.every(x => x.locked);
   openCtx(e, [['copy', '복사', 'Ctrl+C'], ['cut', '잘라내기', 'Ctrl+X'], ['paste', '붙여넣기', 'Ctrl+V', !clip], ['dup', '복제', 'Ctrl+D'], ['del', '삭제', 'Delete'], '-', ['cstyle', '스타일 복사', 'Ctrl+Alt+C'], ['pstyle', '스타일 붙여넣기', 'Ctrl+Alt+V', !styleClip], '-',
     ['front', '맨 앞으로', 'Ctrl+Shift+]'], ['up', '앞으로', 'Ctrl+]'], ['down', '뒤로', 'Ctrl+['], ['back', '맨 뒤로', 'Ctrl+Shift+['], '-',
@@ -2422,6 +2424,56 @@ document.addEventListener('paste', async e => {
   if (/^https?:\/\/\S+\.(png|jpe?g|gif|webp|svg)(\?\S*)?$/i.test(t)) { addImage(t); return; }
   addText('b', { text: t.slice(0, 2000), noEdit: true });
 });
+
+/* ---- 눈금자·사용자 안내선 (Shift+R): 눈금자에서 끌어 안내선을 만들고, 안내선을 끌어 옮기거나 눈금자로 되돌려 지움 ----
+   안내선은 문서(doc.guides, mm)에 저장되어 실행 취소·동기화되고, 자석 정렬 대상이 됨 */
+const RULER = 18;
+const showRulers = () => { try { return localStorage.getItem('naracal-rulers') === '1'; } catch (e) { return false; } };
+function toggleRulers() { try { localStorage.setItem('naracal-rulers', showRulers() ? '0' : '1'); } catch (e) {} drawRulers(); fitCanvas(); toast(showRulers() ? '눈금자를 켰습니다 — 눈금자에서 끌어 안내선을 만드세요 (Shift+R로 끄기)' : '눈금자를 껐습니다'); }
+function ensureRulers() {
+  if ($('#rulerH')) return;
+  $('#stage').insertAdjacentHTML('beforeend', `<canvas id="rulerH" class="ruler rh" title="아래로 끌어 가로 안내선 만들기"></canvas><canvas id="rulerV" class="ruler rv" title="오른쪽으로 끌어 세로 안내선 만들기"></canvas><button id="rulerC" class="ruler rc" title="눈금자 끄기 (Shift+R)">mm</button>`);
+  $('#rulerH').addEventListener('pointerdown', e => startGuide(e, 'y', null));
+  $('#rulerV').addEventListener('pointerdown', e => startGuide(e, 'x', null));
+  $('#rulerC').onclick = toggleRulers;
+}
+function drawRulers() {
+  ensureRulers(); const on = showRulers(); ['#rulerH', '#rulerV', '#rulerC'].forEach(s => { $(s).hidden = !on; }); $('#stage').classList.toggle('rulers', on); if (!on) return;
+  const st = $('#stage').getBoundingClientRect(), cv = $('#canvas').getBoundingClientRect(), pxmm = kScale() * MM, dpr = devicePixelRatio || 1;
+  const major = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find(s => s * pxmm >= 64) || 5000, minor = major / (String(major)[0] === '2' ? 4 : 5);
+  const els = selEls(), sb = els.length ? [Math.min(...els.map(e => e.x)), Math.max(...els.map(e => e.x + e.w)), Math.min(...els.map(e => e.y)), Math.max(...els.map(e => e.y + e.h))] : null;
+  [['#rulerH', st.width, cv.left - st.left, doc.w, sb && [sb[0], sb[1]]], ['#rulerV', st.height - RULER, cv.top - st.top - RULER, doc.h, sb && [sb[2], sb[3]]]].forEach(([id, len, o, size, band], vi) => {
+    const c = $(id), W = vi ? RULER : len, H = vi ? len : RULER; c.width = W * dpr; c.height = H * dpr; c.style.width = W + 'px'; c.style.height = H + 'px';
+    const g = c.getContext('2d'); g.scale(dpr, dpr); g.fillStyle = '#f4f5f7'; g.fillRect(0, 0, W, H);
+    const P = mm => o + mm * pxmm; // 화면 위치(px)
+    g.fillStyle = '#ffffff'; vi ? g.fillRect(0, P(0), RULER, size * pxmm) : g.fillRect(P(0), 0, size * pxmm, RULER); // 쪽 영역은 흰색
+    if (band) { g.fillStyle = 'rgba(47,111,228,.18)'; vi ? g.fillRect(0, P(band[0]), RULER, (band[1] - band[0]) * pxmm) : g.fillRect(P(band[0]), 0, (band[1] - band[0]) * pxmm, RULER); }
+    g.strokeStyle = '#9aa1ad'; g.fillStyle = '#5b6270'; g.font = '9px system-ui, sans-serif'; g.lineWidth = 1; g.beginPath();
+    const a = Math.floor(-o / pxmm / minor) * minor, b = (len - o) / pxmm;
+    for (let mm = a; mm <= b; mm = Math.round((mm + minor) * 1000) / 1000) {
+      const p = Math.round(P(mm)) + 0.5, isMaj = Math.abs(mm / major - Math.round(mm / major)) < 1e-6, tl = isMaj ? RULER : RULER * 0.35;
+      if (vi) { g.moveTo(RULER - tl, p); g.lineTo(RULER, p); } else { g.moveTo(p, RULER - tl); g.lineTo(p, RULER); }
+      if (isMaj) { const t = String(Math.round(mm)); if (vi) { g.save(); g.translate(9, p + 2); g.rotate(-Math.PI / 2); g.fillText(t, 0, 0); g.restore(); } else g.fillText(t, p + 2, 9); }
+    }
+    g.stroke(); g.fillStyle = '#d6d9e0'; vi ? g.fillRect(RULER - 1, 0, 1, H) : g.fillRect(0, RULER - 1, W, 1);
+  });
+}
+// 안내선 끌기: axis 'x'(세로선) / 'y'(가로선), idx가 null이면 새로 만듦. 눈금자 위에 놓으면 지움
+function startGuide(e, axis, idx) {
+  e.preventDefault(); e.stopPropagation(); flushNudge();
+  doc.guides = doc.guides || { x: [], y: [] }; const list = doc.guides[axis]; if (idx == null) { list.push(axis === 'x' ? toMM(e).x : toMM(e).y); idx = list.length - 1; }
+  const st = $('#stage').getBoundingClientRect();
+  const mv = ev => { const p = toMM(ev); let v = axis === 'x' ? p.x : p.y; const T = 6 / (kScale() * MM); const cand = axis === 'x' ? [0, doc.w / 2, doc.w] : [0, doc.h / 2, doc.h]; page().els.forEach(el => { if (el.hidden) return; if (axis === 'x') cand.push(el.x, el.x + el.w / 2, el.x + el.w); else cand.push(el.y, el.y + el.h / 2, el.y + el.h); }); const near = cand.find(c => Math.abs(c - v) < T); if (near != null && !ev.altKey) v = near; list[idx] = Math.round(v * 10) / 10; renderOverlay(); showGuideTip(ev, `${axis === 'x' ? 'X' : 'Y'} ${list[idx]}mm`); };
+  const up = ev => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); hideGuideTip(); const over = axis === 'x' ? ev.clientX < st.left + RULER : ev.clientY < st.top + RULER; if (over || !showRulers() && false) { list.splice(idx, 1); toast('안내선을 지웠습니다'); } commit(); renderOverlay(); };
+  window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+}
+function showGuideTip(ev, t) { let d = $('#guideTip'); if (!d) { d = document.createElement('div'); d.id = 'guideTip'; document.body.appendChild(d); } d.textContent = t; d.style.left = (ev.clientX + 12) + 'px'; d.style.top = (ev.clientY + 12) + 'px'; d.hidden = false; }
+function hideGuideTip() { const d = $('#guideTip'); if (d) d.hidden = true; }
+function userGuidesHTML() { const g = doc.guides; if (!g || !showGuides()) return ''; return (g.x || []).map((v, i) => `<div class="uguide ugv" data-ug="x:${i}" style="left:${v}mm;top:-60mm;height:${doc.h + 120}mm" title="끌어서 옮기기 · 눈금자로 끌어 지우기"></div>`).join('') + (g.y || []).map((v, i) => `<div class="uguide ugh" data-ug="y:${i}" style="top:${v}mm;left:-60mm;width:${doc.w + 120}mm" title="끌어서 옮기기 · 눈금자로 끌어 지우기"></div>`).join(''); }
+wrap.addEventListener('pointerdown', e => { const u = e.target.closest && e.target.closest('.uguide'); if (!u || e.button !== 0) return; const [ax, i] = u.dataset.ug.split(':'); startGuide(e, ax, Number(i)); }, true);
+$('#scroller').addEventListener('scroll', () => { if (showRulers()) drawRulers(); }, { passive: true });
+window.addEventListener('resize', () => { if (showRulers()) drawRulers(); });
+document.addEventListener('keydown', e => { if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.code === 'KeyR' && !editing && !$('#cellEd') && !cellSel && !(e.target.matches && e.target.matches('input,textarea,select,[contenteditable="true"]')) && !document.querySelector('dialog[open]')) { e.preventDefault(); toggleRulers(); } });
 
 // 점검용 (주소에 ?qa 가 있을 때만): 자동 시험에서 문서 상태를 읽음
 if (/[?&]qa\b/.test(location.search)) window.NCQA = { get doc() { return doc; }, get sel() { return sel; }, get cur() { return cur; }, select, goto, commit, undo, renderAll };
