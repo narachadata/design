@@ -186,3 +186,22 @@ kbd{background:var(--ui-field);border:1px solid var(--ui-line);border-radius:4px
   #printRoot .sheet{box-shadow:none;break-after:page;page-break-after:always;transform:none}
   #printRoot .sheet:last-child{break-after:auto;page-break-after:auto}
 }
+
+/* ===== 글꼴 고르기 목록 ===== */
+.fp-btn{width:100%;display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--ui-line);border-radius:6px;background:var(--ui-field);cursor:pointer;font-size:15px;text-align:left;min-width:0}
+.fp-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fp-btn i{font-style:normal;color:var(--ui-muted);font-size:11px;font-family:var(--font-ui)}
+.fp-btn:hover{border-color:var(--ui-muted)}
+#fpPop{position:fixed;z-index:70;width:320px;background:#fff;border:1px solid var(--ui-line);border-radius:10px;box-shadow:0 12px 36px rgba(0,0,0,.22);display:flex;flex-direction:column;overflow:hidden}
+#fpPop .fp-head{padding:8px;border-bottom:1px solid var(--ui-line);display:flex;flex-direction:column;gap:6px}
+#fpPop .fp-head input{width:100%;padding:6px 8px;border:1px solid var(--ui-line);border-radius:6px;background:var(--ui-field)}
+#fpPop .fp-cats{display:flex;gap:3px;flex-wrap:wrap}
+#fpPop .fp-cats button{border:1px solid var(--ui-line);background:#fff;border-radius:999px;padding:2px 8px;font-size:11.5px;cursor:pointer;color:var(--ui-muted)}
+#fpPop .fp-cats button.on{background:#eef2fb;border-color:var(--ui-accent);color:var(--ui-accent)}
+#fpPop .fp-list{overflow-y:auto;flex:1;min-height:0}
+#fpPop .fp-row{display:flex;flex-direction:column;gap:1px;padding:7px 10px;cursor:pointer;border-bottom:1px solid #f0f1f4}
+#fpPop .fp-row:hover{background:var(--ui-field)}
+#fpPop .fp-row.on{background:#eef2fb}
+#fpPop .fp-row .sm{font-size:19px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#fpPop .fp-row .nm{font-family:var(--font-ui);font-size:11px;color:var(--ui-muted)}
+#fpPop .fp-foot{padding:6px 8px;border-top:1px solid var(--ui-line);background:var(--ui-field)}

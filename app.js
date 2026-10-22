@@ -350,7 +350,38 @@ const F = (label, k, v, o = {}) => {
   if (o.type === 'select') return `<label class="f"><span>${label}</span><select data-k="${k}">${o.options.map(([a, t]) => `<option value="${a}" ${String(a) === String(val) ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`;
   return `<label class="f"><span>${label}</span><input data-k="${k}" type="${o.type || 'text'}" value="${esc(val)}" ${o.step ? `step="${o.step}"` : ''} ${o.min != null ? `min="${o.min}" max="${o.max}"` : ''}></label>`;
 };
-const fontOptions = cur_ => allFonts().map(f => [f.family, f.label]).map(([a, t]) => `<option value="${a}" ${a === cur_ ? 'selected' : ''}>${t}</option>`).join('') + (allFonts().some(f => f.family === cur_) ? '' : `<option value="${esc(cur_)}" selected>${esc(cur_)}</option>`);
+// 글꼴 고르기: 각 항목이 자기 글꼴 모양으로 보이는 목록
+function fontLabel(fam) { const f = allFonts().find(x => x.family === fam); return f ? f.label : fam; }
+const fontPicker = (k, cur_) => `<button type="button" class="fp-btn" data-fp="${k}" data-cur="${esc(cur_)}" style="font-family:'${esc(cur_)}'"><span>${esc(fontLabel(cur_))}</span><i>▾</i></button>`;
+let fpState = { cat: 'all', q: '' };
+function openFontPop(btn) {
+  closeFontPop();
+  const k = btn.dataset.fp, cur_ = btn.dataset.cur;
+  const pop = document.createElement('div'); pop.id = 'fpPop';
+  const cats = [['all', '전체'], ['title', '제목'], ['brush', '붓'], ['hand', '손글씨'], ['body', '본문'], ['latin', '영문'], ['mine', '내 글꼴']];
+  const render = () => {
+    const list = allFonts().filter(f => (fpState.cat === 'all' || f.cat === fpState.cat) && (!fpState.q || (f.label + f.family).toLowerCase().includes(fpState.q.toLowerCase())));
+    pop.innerHTML = `<div class="fp-head"><input type="text" id="fpQ" placeholder="글꼴 찾기" value="${esc(fpState.q)}"><div class="fp-cats">${cats.map(([c, t]) => `<button type="button" data-fc="${c}" class="${fpState.cat === c ? 'on' : ''}">${t}</button>`).join('')}</div></div>
+    <div class="fp-list">${list.map(f => `<div class="fp-row ${f.family === cur_ ? 'on' : ''}" data-font="${esc(f.family)}" style="font-family:'${esc(f.family)}'"><span class="sm">나라차 태권도 가나다 ABC 123</span><span class="nm">${esc(f.label)}</span></div>`).join('') || '<div class="hint" style="padding:10px">맞는 글꼴이 없습니다</div>'}</div>
+    <div class="fp-foot"><button type="button" class="btn sm" id="fpMore">글꼴 둘러보기·내 글꼴 올리기</button></div>`;
+    const q = pop.querySelector('#fpQ'); q.oninput = () => { fpState.q = q.value; const pos = q.selectionStart; render(); const q2 = pop.querySelector('#fpQ'); q2.focus(); q2.setSelectionRange(pos, pos); };
+  };
+  render();
+  const r = btn.getBoundingClientRect(); document.body.appendChild(pop);
+  const h = Math.min(380, window.innerHeight - 20); pop.style.maxHeight = h + 'px';
+  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 328)) + 'px';
+  pop.style.top = (r.bottom + h + 8 > window.innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4) + 'px';
+  pop.onclick = e => {
+    const c = e.target.closest('[data-fc]'); if (c) { fpState.cat = c.dataset.fc; render(); return; }
+    const row = e.target.closest('[data-font]'); if (row) { applyFontChoice(k, row.dataset.font); closeFontPop(); return; }
+    if (e.target.id === 'fpMore') { closeFontPop(); openFonts(); }
+  };
+  setTimeout(() => { const q = pop.querySelector('#fpQ'); if (q) q.focus(); }, 0);
+}
+function closeFontPop() { const p = $('#fpPop'); if (p) p.remove(); }
+function applyFontChoice(k, fam) { const el = selEls()[0]; if (!el) return; setK(el, k, fam); if (el.type === 'text') lastTextStyle = Object.assign({}, lastTextStyle || {}, { font: fam }); commit(); rerender(); }
+document.addEventListener('pointerdown', e => { if ($('#fpPop') && !e.target.closest('#fpPop') && !e.target.closest('.fp-btn')) closeFontPop(); }, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#fpPop')) { closeFontPop(); e.stopPropagation(); } }, true);
 function renderInspector() {
   const ins = $('#inspector'); const els = selEls();
   if (!els.length) {
@@ -370,7 +401,7 @@ function renderInspector() {
   const geo = `<h3>위치·크기</h3><div class="grid4">${F('X', 'x', el.x, { type: 'number', step: 0.5 })}${F('Y', 'y', el.y, { type: 'number', step: 0.5 })}${F('너비', 'w', el.w, { type: 'number', step: 0.5 })}${F('높이', 'h', el.h, { type: 'number', step: 0.5 })}</div><div class="grid2">${F('회전(°)', 'rot', el.rot || 0, { type: 'number', step: 1 })}${F('투명도', 'opacity', el.opacity == null ? 1 : el.opacity, { type: 'range', min: 0, max: 1, step: 0.05 })}</div>${F('이름', 'name', el.name)}`;
   if (el.type === 'text') {
     h += `<h3>글자</h3>${F('내용', 'text', el.text, { type: 'textarea', rows: 4 })}
-    <div class="row"><label class="f" style="flex:1;margin:0"><span>글꼴</span><select data-k="font">${fontOptions(el.font)}</select></label><button class="btn sm" id="fontBrowse" style="margin-top:16px">둘러보기</button></div>
+    <div class="row"><label class="f" style="flex:1;margin:0"><span>글꼴</span>${fontPicker('font', el.font)}</label><button class="btn sm" id="fontBrowse" style="margin-top:16px">둘러보기</button></div>
     <div class="grid3">${F('크기(pt)', 'size', el.size, { type: 'number', step: 0.5, min: 2, max: 400 })}${F('굵기', 'weight', el.weight, { type: 'select', options: [[300, '가늘게'], [400, '보통'], [500, '중간'], [600, '약간 굵게'], [700, '굵게'], [800, '아주 굵게'], [900, '최대']] })}${F('색', 'color', el.color, { type: 'color' })}</div>
     <div class="row"><div class="seg" style="flex:1">${[['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']].map(([a, t]) => `<button data-set="align:${a}" aria-pressed="${el.align === a}">${t}</button>`).join('')}</div><div class="seg" style="flex:1">${[['top', '위'], ['middle', '중앙'], ['bottom', '아래']].map(([a, t]) => `<button data-set="valign:${a}" aria-pressed="${(el.valign || 'top') === a}">${t}</button>`).join('')}</div></div>
     <div class="grid3">${F('줄 간격', 'lh', el.lh, { type: 'number', step: 0.05, min: 0.5, max: 4 })}${F('자간(em)', 'ls', el.ls, { type: 'number', step: 0.01, min: -0.2, max: 1 })}${F('기울임', 'italic', el.italic, { type: 'check' })}</div>
@@ -402,7 +433,7 @@ function renderInspector() {
     <h3>모양</h3><div class="grid2">${F('주 시작', 's.weekStart', s.weekStart, { type: 'select', options: [[0, '일요일'], [1, '월요일']] })}${F('줄 수', 's.rows', s.rows, { type: 'select', options: [['merge', '5줄 (24/31 합침)'], ['6', '6줄'], ['auto', '자동']] })}</div>
     <div class="grid2">${F('요일 표기', 's.wdLang', s.wdLang, { type: 'select', options: [['en', 'SUNDAY'], ['short', 'SUN'], ['ko', '일요일'], ['ko1', '일']] })}${F('요일 줄 높이(mm)', 's.wdH', s.wdH, { type: 'number', step: 0.5 })}</div>
     <div class="grid3">${F('요일 크기', 's.wdSize', s.wdSize, { type: 'number', step: 0.5 })}${F('날짜 크기', 's.daySize', s.daySize, { type: 'number', step: 0.5 })}${F('일정 크기', 's.evSize', s.evSize, { type: 'number', step: 0.5 })}</div>
-    <div class="grid2"><label class="f"><span>숫자·요일 글꼴</span><select data-k="s.fontNum">${fontOptions(s.fontNum)}</select></label><label class="f"><span>일정 글꼴</span><select data-k="s.fontBody">${fontOptions(s.fontBody)}</select></label></div>
+    <div class="grid2"><label class="f"><span>숫자·요일 글꼴</span>${fontPicker('s.fontNum', s.fontNum)}</label><label class="f"><span>일정 글꼴</span>${fontPicker('s.fontBody', s.fontBody)}</label></div>
     <div class="grid4">${F('일요일 색', 's.sunColor', s.sunColor, { type: 'color' })}${F('토요일 색', 's.satColor', s.satColor, { type: 'color' })}${F('날짜 색', 's.dayColor', s.dayColor, { type: 'color' })}${F('공휴일 색', 's.holColor', s.holColor, { type: 'color' })}</div>
     <div class="grid4">${F('일요일 칸', 's.sunBg', s.sunBg || '#ffffff', { type: 'color' })}${F('안쪽 선', 's.line', s.line, { type: 'color' })}${F('바깥 선', 's.outer', s.outer, { type: 'color' })}${F('메모 색', 's.noteColor', s.noteColor, { type: 'color' })}</div>
     <div class="grid3">${F('안쪽 선 두께', 's.lineW', s.lineW, { type: 'number', step: 0.05, min: 0 })}${F('바깥 선 두께', 's.outerW', s.outerW, { type: 'number', step: 0.05, min: 0 })}${F('칸 여백(mm)', 's.cellPad', s.cellPad, { type: 'number', step: 0.2, min: 0 })}</div>
@@ -411,12 +442,13 @@ function renderInspector() {
     const s = Object.assign({}, CAL.MINI_DEF, el.s || {});
     h += `<h3>미니 달력</h3><div class="grid2">${F('연도', 'year', el.year, { type: 'number' })}${F('월', 'month', el.month, { type: 'select', options: Array.from({ length: 12 }, (_, i) => [i + 1, (i + 1) + '월']) })}</div>
     <div class="grid3">${F('제목 크기', 's.titleSize', s.titleSize, { type: 'number', step: 0.5 })}${F('요일 크기', 's.wdSize', s.wdSize, { type: 'number', step: 0.5 })}${F('숫자 크기', 's.numSize', s.numSize, { type: 'number', step: 0.5 })}</div>
-    <div class="grid2">${F('글자 색', 's.color', s.color, { type: 'color' })}${F('일요일 색', 's.sunColor', s.sunColor, { type: 'color' })}</div><div class="grid2">${F('월 제목 보이기', 's.showTitle', s.showTitle, { type: 'check' })}${F('주 시작', 's.weekStart', s.weekStart, { type: 'select', options: [[0, '일요일'], [1, '월요일']] })}</div><label class="f"><span>글꼴</span><select data-k="s.fontNum">${fontOptions(s.fontNum)}</select></label>` + geo;
+    <div class="grid2">${F('글자 색', 's.color', s.color, { type: 'color' })}${F('일요일 색', 's.sunColor', s.sunColor, { type: 'color' })}</div><div class="grid2">${F('월 제목 보이기', 's.showTitle', s.showTitle, { type: 'check' })}${F('주 시작', 's.weekStart', s.weekStart, { type: 'select', options: [[0, '일요일'], [1, '월요일']] })}</div><label class="f"><span>글꼴</span>${fontPicker('s.fontNum', s.fontNum)}</label>` + geo;
   }
   h += `<h3>동작</h3><div class="row"><button class="btn sm" id="iDup">복제</button><button class="btn sm danger" id="iDel">삭제</button></div>`;
   ins.innerHTML = h;
   ins.onclick = async e => {
     const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.fp) { openFontPop(b); return; }
     if (b.dataset.toggle) { el.locked = !el.locked; commit(); renderOverlay(); renderInspector(); return; }
     if (b.dataset.set != null) { const [k, v] = b.dataset.set.split(':'); setK(el, k, v); commit(); rerender(); return; }
     if (b.id === 'iDup') duplicate(); if (b.id === 'iDel') removeSel();
