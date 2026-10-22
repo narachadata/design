@@ -595,3 +595,4 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .btable th,.btable td{border:1px solid #e3e5ea;padding:4px 6px;text-align:left}
 .btable th{background:#f3f4f7}
 #bulkInfo b.ok{color:#1b7f3b}
+.textbar .cfield .hexin{display:none}.textbar .cfield .cpal{height:26px;flex-basis:20px;padding:0}

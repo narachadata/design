@@ -334,6 +334,7 @@ function showCellBar() {
     $('#cbBg').addEventListener('input', e => { cellSet({ bg: e.target.value }, true); b.querySelector('.bgsw').style.background = e.target.value; });
     $('#cbBg').addEventListener('change', () => commit());
     $('#cbColor').addEventListener('input', e => cellSet({ color: e.target.value }, true)); $('#cbColor').addEventListener('change', () => commit());
+    decorateColors(b);
   }
   b.hidden = false;
   const G = calGeom(el); const { r1: ra, c1 } = cellRect(cellSel.a, cellSel.b); const cr = $('#canvas').getBoundingClientRect(), k = kScale();
@@ -367,7 +368,7 @@ function openCellEditor(c, append) {
   ta.style.cssText = `left:${G.xs[q]}mm;top:${G.ys[r] + (isDay ? s.daySize * 0.45 : 0)}mm;width:${G.xs[Math.min(7, q + g.cs)] - G.xs[q]}mm;height:${G.ys[Math.min(G.rows, r + g.rs)] - G.ys[r] - (isDay ? s.daySize * 0.45 : 0)}mm;font-size:${cs.size || s.evSize}pt;font-family:'${s.fontBody}'`;
   ta.dataset.c = c; ta.dataset.day = isDay ? n : ''; ta.dataset.id = el.id;
   $('#canvas').appendChild(ta); ta.focus(); if (append) { if (ta.value) ta.value += '\n'; ta.setSelectionRange(ta.value.length, ta.value.length); } else ta.select();
-  ta.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); closeCellEditor(false); } if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); closeCellEditor(true); } e.stopPropagation(); });
+  ta.addEventListener('keydown', e => { if (e.isComposing || e.keyCode === 229) { e.stopPropagation(); return; } /* 한글 조합 중 Esc·Enter는 조합만 끝냄 */ if (e.key === 'Escape') { e.preventDefault(); closeCellEditor(false); } if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); closeCellEditor(true); } e.stopPropagation(); });
   ta.addEventListener('blur', () => closeCellEditor(true));
 }
 function closeCellEditor(save) {
@@ -508,9 +509,12 @@ function startEdit(dom, ev) {
 function endEdit() {
   if (!editing) return; const dom = editing; editing = null; hideTextBar(); const el = find(dom.dataset.id);
   const t = domText(dom); const html = richHTML(dom); dom.contentEditable = 'false'; dom.classList.remove('editing');
-  if (el && (t !== el.text || (html || '') !== (el.html || ''))) { el.text = t; if (html) { el.html = html; el.htmlFor = t; } else { delete el.html; delete el.htmlFor; } commit(); }
+  const fresh = el && freshText === el.id; freshText = null; // 방금 만든 글 상자: 넣은 글자까지 한 번의 실행 취소로
+  if (el && !t.trim()) { page().els = page().els.filter(x => x !== el); sel = sel.filter(id => id !== el.id); fresh ? amendCommit() : commit(); rerender(); return; } // 비운 글 상자는 지움 (Figma와 같음)
+  if (el && (t !== el.text || (html || '') !== (el.html || ''))) { el.text = t; if (html) { el.html = html; el.htmlFor = t; } else { delete el.html; delete el.htmlFor; } fresh ? amendCommit() : commit(); }
   rerender();
 }
+let freshText = null;
 /* ---- 서식 있는 글자 (부분 굵게·기울임·밑줄·취소선·색·크기) ---- */
 // 편집 상자의 실제 글자 (text-transform 대문자 등 화면 변형 없이, 줄바꿈 유지)
 function domText(dom) { let out = ''; const walk = (n, first) => { if (n.nodeType === 3) { out += n.nodeValue; return; } if (n.nodeType !== 1) return; if (n.tagName === 'BR') { out += '\n'; return; } const block = /^(DIV|P|LI|H[1-6]|TR)$/.test(n.tagName); if (block && out && !out.endsWith('\n')) out += '\n'; n.childNodes.forEach(c => walk(c)); }; dom.childNodes.forEach(c => walk(c)); return out.replace(/\n+$/, ''); }
@@ -562,6 +566,7 @@ function showTextBar() {
     $('#tbColor').addEventListener('change', () => { if (editing) { editing.focus(); restoreSel(); } });
     $('#tbColor').addEventListener('blur', e => { const t = e.relatedTarget; if (editing && !(t && (editing.contains(t) || t.closest('#textBar')))) setTimeout(() => { if (editing && document.activeElement !== editing && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('#textBar'))) endEdit(); }, 0); });
     $('#tbColor').addEventListener('mousedown', () => saveSel());
+    decorateColors(b);
   }
   b.hidden = false; placeTextBar(); updTextBar();
 }
@@ -687,7 +692,7 @@ function addEl(el, at) { el.id = el.id || uid(); delete el.gen; if (at !== false
 function addEls(els, name) { if (!els.length) return; els.forEach(e => delete e.gen); const xs = els.map(e => e.x), ys = els.map(e => e.y); const bw = Math.max(...els.map(e => e.x + e.w)) - Math.min(...xs), bh = Math.max(...els.map(e => e.y + e.h)) - Math.min(...ys); const ox = r1(clamp((doc.w - bw) / 2, 0, doc.w)) - Math.min(...xs), oy = r1(clamp((doc.h - bh) / 2, 0, doc.h)) - Math.min(...ys); const g = els.length > 1 ? uid() : null; els.forEach(e => { e.id = e.id || uid(); e.x = r1(e.x + ox); e.y = r1(e.y + oy); if (g) e.group = g; page().els.push(e); }); commit(); select(els.map(e => e.id)); rerender(); noteRecentElem(name); }
 // 새 요소 크기는 문서 크기에 맞춤 (A5 기준. 현수막에서 너무 작거나 스티커에서 너무 크지 않게)
 const docK = () => clamp(Math.min(doc.w, doc.h) / 148, 0.35, 20);
-function addText(preset, st) { const base = Object.assign({}, TEXT_DEF, lastTextStyle || {}); const k = docK(); const p0 = preset === 'h' ? { text: '제목을 입력하세요', size: 36, weight: 700, w: 120, h: 16, ls: -0.02 } : preset === 's' ? { text: '부제목을 입력하세요', size: 20, weight: 500, w: 100, h: 10 } : { text: '본문 글을 입력하세요', size: 12, weight: 400, w: 90, h: 8 }; const p = Object.assign({}, p0, { size: Math.round(p0.size * k * 2) / 2, w: r1(Math.min(p0.w * k, doc.w * 0.9)), h: r1(p0.h * k) }); if (st && st.text && !st.w) p.w = r1(Math.min(doc.w * 0.8, Math.max(p.w, 20 * k))); const el = addEl(Object.assign(base, p, st || {})); setTimeout(() => { const d = $(`#canvas [data-id="${el.id}"]`); if (d && !(el.warp && el.warp !== 'none')) startEdit(d); }, 50); return el; }
+function addText(preset, st) { const base = Object.assign({}, TEXT_DEF, lastTextStyle || {}); const k = docK(); const p0 = preset === 'h' ? { text: '제목을 입력하세요', size: 36, weight: 700, w: 120, h: 16, ls: -0.02 } : preset === 's' ? { text: '부제목을 입력하세요', size: 20, weight: 500, w: 100, h: 10 } : { text: '본문 글을 입력하세요', size: 12, weight: 400, w: 90, h: 8 }; const p = Object.assign({}, p0, { size: Math.round(p0.size * k * 2) / 2, w: r1(Math.min(p0.w * k, doc.w * 0.9)), h: r1(p0.h * k) }); if (st && st.text && !st.w) p.w = r1(Math.min(doc.w * 0.8, Math.max(p.w, 20 * k))); const noEdit = st && st.noEdit; if (st) delete st.noEdit; const el = addEl(Object.assign(base, p, st || {})); if (noEdit) return el; freshText = el.id; setTimeout(() => { const d = $(`#canvas [data-id="${el.id}"]`); if (d && !(el.warp && el.warp !== 'none')) startEdit(d); }, 50); return el; }
 function addShape(kind, st) { const k = docK(); const def = { type: 'shape', kind, x: 0, y: 0, w: r1(40 * k), h: kind === 'line' ? r1(4 * k) : r1(40 * k), rot: 0, fill: kind === 'line' ? '#333333' : '#F0716B', stroke: '', strokeW: kind === 'line' ? 0.6 : 0, radius: 0, opacity: 1, name: '' }; if (kind === 'line') { def.w = r1(80 * k); def.strokeW = 0.6 * k; } if (kind === 'polygon') def.sides = 6; addEl(Object.assign(def, st || {})); }
 function addImage(ref) { const el = { type: 'image', src: ref, x: 0, y: 0, w: 60, h: 60, rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '' }; const s = src(ref); if (s) { const i = new Image(); i.onload = () => { const ar = i.naturalWidth / i.naturalHeight; el.w = Math.min(80, doc.w * 0.6); el.h = r1(el.w / ar); if (el.h > doc.h * 0.8) { el.h = r1(doc.h * 0.8); el.w = r1(el.h * ar); } el.x = r1((doc.w - el.w) / 2); el.y = r1((doc.h - el.h) / 2); rerender(); if (hptr === at && hist.length - 1 === at) amendCommit(); else commit(); }; i.src = s; } addEl(el); const at = hptr; }
 function addCal() { const y = doc.calendar.year || new Date().getFullYear(); ensureHolidays(y, true); addEl({ type: 'cal', year: y, month: 1, x: 0, y: 0, w: Math.min(204, doc.w - 20), h: Math.min(100, doc.h - 30), rot: 0, opacity: 1, s: {}, events: [], notes: [], name: '달력' }); }
@@ -2166,6 +2171,7 @@ function decorateColors(root) {
     hex.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); hex.blur(); } e.stopPropagation(); });
     hex.addEventListener('change', () => { let v = hex.value.trim(); if (!v.startsWith('#')) v = '#' + v; if (/^#[0-9a-f]{3}$/i.test(v)) v = '#' + v.slice(1).split('').map(c => c + c).join(''); if (!isHex(v)) { hex.value = inp.value.toUpperCase(); toast('색 코드는 #RRGGBB 꼴로 넣으세요', true); return; } applyColor(inp, v); });
     btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openPalette(inp, btn); });
+    if (root.id === 'textBar') [btn, hex].forEach(x => x.addEventListener('mousedown', () => { try { saveSel(); } catch (err) {} }));
   });
 }
 function applyColor(inp, c, opt) {
@@ -2189,7 +2195,7 @@ function openPalette(inp, anchor) {
       <div class="cpall"><label class="chk"><input type="checkbox" data-all ${palAll ? 'checked' : ''}> 같은 색 모두 바꾸기</label><select data-allsc ${palAll ? '' : 'disabled'}><option value="page" ${palAll === 'page' ? 'selected' : ''}>이 쪽만</option><option value="doc" ${palAll === 'doc' ? 'selected' : ''}>모든 쪽</option></select></div>
       <p class="hint" style="margin:4px 0 0">켜 두면 지금 색(${cur_})을 쓴 다른 요소도 함께 바뀝니다.</p>`;
   };
-  draw(); document.body.appendChild(m);
+  draw(); (anchor.closest('#textBar, #cellBar') || document.body).appendChild(m);
   const r = anchor.getBoundingClientRect(); m.style.left = Math.max(8, Math.min(r.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px'; m.style.top = (r.bottom + m.offsetHeight + 8 > innerHeight ? Math.max(8, r.top - m.offsetHeight - 4) : r.bottom + 4) + 'px';
   m.addEventListener('click', async e => {
     const c = e.target.closest('[data-c]'); if (c) { applyColor(T(), c.dataset.c, { all: palAll === 'doc' ? 'doc' : palAll ? 'page' : '' }); draw(); return; }
@@ -2398,7 +2404,7 @@ document.addEventListener('paste', async e => {
   if (clip && clip.els && (t === clip.mark || !t)) { e.preventDefault(); doPaste(pasteShift); pasteShift = false; return; } // 앱 안에서 복사한 요소
   if (!t) return; e.preventDefault();
   if (/^https?:\/\/\S+\.(png|jpe?g|gif|webp|svg)(\?\S*)?$/i.test(t)) { addImage(t); return; }
-  addText('b', { text: t.slice(0, 2000) });
+  addText('b', { text: t.slice(0, 2000), noEdit: true });
 });
 
 // 점검용 (주소에 ?qa 가 있을 때만): 자동 시험에서 문서 상태를 읽음
