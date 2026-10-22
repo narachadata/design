@@ -612,3 +612,13 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .ovl .uguide.ugv{width:calc(9px / var(--k,1));margin-left:calc(-4.5px / var(--k,1));cursor:col-resize;background:linear-gradient(90deg,transparent 44%,#e0369a 44%,#e0369a 56%,transparent 56%)}
 .ovl .uguide.ugh{height:calc(9px / var(--k,1));margin-top:calc(-4.5px / var(--k,1));cursor:row-resize;background:linear-gradient(180deg,transparent 44%,#e0369a 44%,#e0369a 56%,transparent 56%)}
 #guideTip{position:fixed;z-index:200;background:#1f2430;color:#fff;font:600 11px/1 system-ui,sans-serif;padding:4px 6px;border-radius:4px;pointer-events:none}
+/* 쪽 모아 보기 */
+#dlgGrid{width:min(1180px,96vw)}
+#dlgGrid .dhead{gap:10px;flex-wrap:wrap}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(186px,1fr));gap:14px;max-height:70vh;overflow:auto;padding:4px}
+.gtile{display:flex;flex-direction:column;gap:4px;align-items:center;padding:6px;border-radius:10px;border:2px solid transparent;cursor:pointer;user-select:none}
+.gtile:hover{background:#f3f5f9}.gtile.on{border-color:#2f6fe4;background:#eef3fd}.gtile.cur span b{color:#2f6fe4}
+.gtile .gbox{position:relative;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.18);background:#fff;pointer-events:none}
+.gtile .gbox .sheet{position:absolute;left:0;top:0;transform-origin:0 0;box-shadow:none}
+.gtile span{font-size:11px;color:#555;max-width:170px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.gtile.dropl{box-shadow:-4px 0 0 #2f6fe4}.gtile.dropr{box-shadow:4px 0 0 #2f6fe4}
