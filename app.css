@@ -643,3 +643,13 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .ovl .lockbadge:hover{background:#2f5bea}
 
 #aiBody .keysaved{margin-top:8px;font-size:12px;color:#1b7f3b;background:#eaf7ee;border-radius:8px;padding:7px 10px}
+
+/* 라차 동작 만들기 */
+#dlgRacha{width:min(860px,96vw)}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 10px}
+.rchk{font-size:13px;display:flex;align-items:center;gap:6px;padding:3px 0}.rchk.done{color:#1b7f3b}.rchk small{color:#1b7f3b}
+.rres{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:10px}
+.rcard{border:1px solid #e3e5ea;background:#fff;border-radius:10px;padding:6px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;font-size:12px}
+.rcard img{width:100%;aspect-ratio:1;object-fit:contain;background:repeating-conic-gradient(#f2f3f5 0 25%,#fff 0 50%) 0 0/12px 12px}
+.rcard.fail{border-color:#f0b4b4;background:#fff5f5;cursor:default}.rcard.fail small{color:#b42318}
+#dlgRacha .lnk{border:0;background:none;color:#2f6fe4;cursor:pointer;font-size:12px;padding:0}

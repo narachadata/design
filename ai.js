@@ -115,11 +115,12 @@ Output the prompt text only.`;
     if (!cfg.geminiKey) throw new Error('Gemini API 키를 먼저 넣어 주세요 (AI 도우미 > API 설정).');
     const model = cfg.geminiModel.trim();
     aspect = aspect || cfg.aspect; size = size || cfg.size;
-    const ref = refImage ? await toBase64(refImage) : null;
-    if (/^gemini-2\.5-flash-image/.test(model)) return geminiLegacy({ model, prompt, ref, aspect });
+    // 참고 그림은 한 장 또는 여러 장 (여러 장이면 같은 캐릭터의 다른 동작을 보여 줘 모습이 더 일정함)
+    const refs = await Promise.all((Array.isArray(refImage) ? refImage : refImage ? [refImage] : []).map(toBase64)); const ref = refs[0] || null;
+    if (/^gemini-2\.5-flash-image/.test(model)) return geminiLegacy({ model, prompt, ref, refs, aspect });
     const input = [];
-    if (ref) input.push({ type: 'image', data: ref.data, mime_type: ref.mime });
-    input.push({ type: 'text', text: (ref ? 'Use the attached image as the exact character reference (same mascot design, colors and proportions). ' : '') + prompt });
+    refs.forEach(rf => input.push({ type: 'image', data: rf.data, mime_type: rf.mime }));
+    input.push({ type: 'text', text: (refs.length ? `Use the attached image${refs.length > 1 ? 's' : ''} as the exact character reference (same mascot design, colors and proportions). ` : '') + prompt });
     const body = { model, input, response_format: { type: 'image', mime_type: 'image/png', aspect_ratio: aspect, image_size: size } };
     const r = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': cfg.geminiKey }, body: JSON.stringify(body),
@@ -132,9 +133,9 @@ Output the prompt text only.`;
     if (!imgs.length) throw new Error('Gemini가 이미지를 돌려주지 않았습니다. 상태: ' + (j.status || '알 수 없음'));
     return imgs;
   }
-  async function geminiLegacy({ model, prompt, ref, aspect }) {
+  async function geminiLegacy({ model, prompt, ref, refs, aspect }) {
     const parts = [];
-    if (ref) parts.push({ inline_data: { mime_type: ref.mime, data: ref.data } });
+    (refs && refs.length ? refs : ref ? [ref] : []).forEach(rf => parts.push({ inline_data: { mime_type: rf.mime, data: rf.data } }));
     parts.push({ text: (ref ? 'Use the attached image as the exact character reference. ' : '') + prompt });
     const body = { contents: [{ parts }], generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: aspect } } };
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {

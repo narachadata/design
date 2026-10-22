@@ -82,7 +82,7 @@ NC.lib = (function () {
     const id = 'ai-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const png = await (await fetch(dataURL)).blob(); const t = await thumbBlob(dataURL);
     await writeBlob(d, id + '.png', png); await writeBlob(d, id + '.thumb.jpg', t.blob);
-    const m = { id, name: meta.name || 'AI 그림', kw: meta.kw || '', prompt: meta.prompt || '', style: meta.style || '', created: Date.now(), by: NC.store.pcName(), ratio: Math.round(t.ratio * 10000) / 10000 };
+    const m = { id, name: meta.name || 'AI 그림', kw: meta.kw || '', prompt: meta.prompt || '', style: meta.style || '', created: Date.now(), by: NC.store.pcName(), ratio: Math.round(t.ratio * 10000) / 10000 }; if (meta.cat) m.cat = meta.cat; if (meta.tag) m.tag = meta.tag;
     await writeBlob(d, id + '.json', new Blob([JSON.stringify(m, null, 1)], { type: 'application/json' }));
     const file = `${MINE}/${id}.png`, thumb = `${MINE}/${id}.thumb.jpg`;
     st.urls[file] = URL.createObjectURL(png); st.urls[thumb] = URL.createObjectURL(t.blob);
@@ -97,7 +97,7 @@ NC.lib = (function () {
   async function renameMine(id, name) {
     const it = st.mine.find(x => x.id === id); if (!it) return;
     it.name = name; const d = await mineDir(true);
-    const m = { id: it.id, name, kw: it.kw, prompt: it.prompt, style: it.style, created: it.created, by: it.by, ratio: it.ratio };
+    const m = { id: it.id, name, kw: it.kw, prompt: it.prompt, style: it.style, created: it.created, by: it.by, ratio: it.ratio }; if (it.cat && it.cat !== 'aiimg') m.cat = it.cat; if (it.tag) m.tag = it.tag;
     await writeBlob(d, id + '.json', new Blob([JSON.stringify(m, null, 1)], { type: 'application/json' }));
   }
 

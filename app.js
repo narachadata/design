@@ -808,9 +808,9 @@ function renderSide() {
     body.oninput = e => { const t = e.target, k = t.dataset.k; if (!k) return; const v = t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) : t.value; doc[k.slice(4)] = v; if (k === 'doc.name') $('#pname').value = v; markDirty(); };
   } else if (sideTab === 'ai') {
     body.innerHTML = `<p class="hint">Claude가 문구와 이미지 프롬프트를 만들고, Gemini가 삽화를 그립니다. API 키는 "API 설정"에 넣습니다.</p>
-    <div class="tile"><button data-ai="content"><svg class="ic" style="width:22px;height:22px"><use href="#i-ai"/></svg>인성 문구 제안</button><button data-ai="image"><svg class="ic" style="width:22px;height:22px"><use href="#i-img"/></svg>AI 이미지 생성</button><button data-ai="keys"><svg class="ic" style="width:22px;height:22px"><use href="#i-help"/></svg>API 설정</button><button data-ai="edit"><svg class="ic" style="width:22px;height:22px"><use href="#i-elems"/></svg>이미지 편집기</button></div>
+    <div class="tile"><button data-ai="content"><svg class="ic" style="width:22px;height:22px"><use href="#i-ai"/></svg>인성 문구 제안</button><button data-ai="image"><svg class="ic" style="width:22px;height:22px"><use href="#i-img"/></svg>AI 이미지 생성</button><button data-ai="keys"><svg class="ic" style="width:22px;height:22px"><use href="#i-help"/></svg>API 설정</button><button data-racha><span style="font-size:20px">🐧</span>라차 동작 만들기</button><button data-ai="edit"><svg class="ic" style="width:22px;height:22px"><use href="#i-elems"/></svg>이미지 편집기</button></div>
     <h3>이미지 편집기</h3><p class="hint">선택한 이미지의 배경을 색으로 지정해 지우고(스포이트·허용 범위·부드러운 가장자리), 지우개·복원 브러시로 세밀하게 다듬고, 자를 수 있습니다.</p>`;
-    body.onclick = e => { const b = e.target.closest('[data-ai]'); if (!b) return; if (b.dataset.ai === 'edit') { const el = selEls()[0]; if (el && el.type === 'image' && src(el.src)) openImgEditor(el); else toast('먼저 이미지 요소를 선택하세요', true); } else openAI(b.dataset.ai); };
+    body.onclick = e => { if (e.target.closest('[data-racha]')) { openRachaMaker(); return; } const b = e.target.closest('[data-ai]'); if (!b) return; if (b.dataset.ai === 'edit') { const el = selEls()[0]; if (el && el.type === 'image' && src(el.src)) openImgEditor(el); else toast('먼저 이미지 요소를 선택하세요', true); } else openAI(b.dataset.ai); };
   } else if (sideTab === 'bg') {
     const pg = page();
     const grads = [['linear-gradient(135deg,#FFE89A,#FFD34D)', '옐로'], ['linear-gradient(135deg,#1E2B5A,#2F5BEA)', '네이비'], ['linear-gradient(135deg,#E0564B,#FFB199)', '선셋'], ['linear-gradient(180deg,#DDF3EA,#FFFFFF)', '민트 페이드'], ['linear-gradient(135deg,#6B3FD1,#E0564B)', '퍼플 레드'], ['linear-gradient(180deg,#E6EDF2,#FFFFFF)', '스카이 페이드'], ['radial-gradient(circle at 30% 20%,#FFF7CC,#FFE89A)', '빛 번짐'], ['linear-gradient(135deg,#1B1B1B,#3A3A3A)', '블랙']];
@@ -848,6 +848,7 @@ function libElemItems() {
     return { id: 'lib-' + it.id, cat: 'naracha', sub: it.cat, name: it.name, kw: '나라차 자료실 ' + it.kw, w: Math.max(w, 4), h: Math.max(h, 4), dark: it.dark, lib: it,
       make: (uid) => [{ id: uid(), type: 'image', src: 'lib:' + it.file, x: 0, y: 0, w: Math.max(w, 4), h: Math.max(h, 4), rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: it.name }] }; });
 }
+const rachaBtn = '<div class="row" style="margin:4px 0 2px"><button class="btn sm ai" data-racha>🐧 라차 동작 한 번에 만들기</button></div>';
 function libHint(short) { const st = NC.lib.st; const msg = store.state.dir ? (st.error === 'none' ? '동기화 폴더에 "디자인자료" 폴더가 없습니다.' : st.ready ? '' : '나라차 자료실을 불러오는 중…') : '저장·동기화에서 구글 드라이브 폴더를 연결하면 나라차 로고·마스코트·사진·템플릿(나라차 자료실)이 여기에 나옵니다.'; return msg ? `<p class="hint">${short ? '<b>나라차 자료실</b> · ' : ''}${msg}</p>` : ''; }
 function getElem(id) { return NC.elems.get(id) || libElemItems().find(x => x.id === id); }
 async function insertElem(id) { const it = getElem(id); if (!it) return; let els = it.make(uid, { year: doc.calendar.year || 2027 }); if (it.lib) { setStatus('자료실에서 불러오는 중…'); try { els = await NC.lib.materialize(els, addAsset); } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return; } finally { setStatus(''); } } addEls(els, it.id); }
@@ -858,10 +859,10 @@ function renderElems() {
   const recent = recentElems().map(getElem).filter(Boolean);
   let h = `<label class="f"><input type="text" id="elSearch" placeholder="요소 검색 (예: 로고, 라차, 별, 말풍선)" value="${esc(elQ)}"></label><div class="tcats" id="elcats">${cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
   if (elCat === 'naracha' && !q) {
-    h += libEls.length ? `<div class="row" style="margin:4px 0 2px"><button class="btn sm ai" data-aistudio>✨ AI로 태권도 그림 만들기</button></div><p class="hint">사진 포즈는 배경을 지운 사람만 들어갑니다. 실루엣은 이미지 속성의 "색 입히기"로 색을 바꿀 수 있습니다. AI로 만든 그림은 우클릭으로 이름 바꾸기·삭제를 합니다.</p>` + LIB_ECATS.map(([k, t]) => { const list = libEls.filter(i => i.sub === k); return list.length ? `<h3>${t} <small>${list.length}</small></h3><div class="egrid">${list.map(elemCard).join('')}</div>` : ''; }).join('') : libHint();
+    h += libEls.length ? `<div class="row" style="margin:4px 0 2px"><button class="btn sm ai" data-aistudio>✨ AI로 태권도 그림 만들기</button><button class="btn sm ai" data-racha>🐧 라차 동작 한 번에 만들기</button></div><p class="hint">사진 포즈는 배경을 지운 사람만 들어갑니다. 실루엣은 이미지 속성의 "색 입히기"로 색을 바꿀 수 있습니다. AI로 만든 그림은 우클릭으로 이름 바꾸기·삭제를 합니다.</p>` + LIB_ECATS.map(([k, t]) => { const list = libEls.filter(i => i.sub === k); return list.length ? `<h3>${t} <small>${list.length}</small></h3><div class="egrid">${list.map(elemCard).join('')}</div>` : ''; }).join('') : rachaBtn + libHint();
   } else if (elCat === 'all' && !q) {
     if (recent.length) h += `<h3>최근 사용</h3><div class="egrid">${recent.map(elemCard).join('')}</div>`;
-    h += libEls.length ? `<div class="esec"><h3>나라차 자료실 <small>${libEls.length}</small></h3><button class="more" data-ec="naracha">더보기 ›</button></div><div class="egrid">${['cartoon', 'pose', 'illust', 'mascot', 'silhouette'].flatMap(k => libEls.filter(i => i.sub === k).slice(0, k === 'cartoon' ? 3 : 2)).slice(0, 9).map(elemCard).join('')}</div>` : libHint(true);
+    h += libEls.length ? `<div class="esec"><h3>나라차 자료실 <small>${libEls.length}</small></h3><button class="more" data-ec="naracha">더보기 ›</button></div><div class="egrid">${['cartoon', 'pose', 'illust', 'mascot', 'silhouette'].flatMap(k => libEls.filter(i => i.sub === k).slice(0, k === 'cartoon' ? 3 : 2)).slice(0, 9).map(elemCard).join('')}</div>` : rachaBtn + libHint(true);
     NC.elems.cats.slice(1).forEach(([k, t]) => { const list = all.filter(i => i.cat === k); if (!list.length) return; h += `<div class="esec"><h3>${t} <small>${list.length}</small></h3><button class="more" data-ec="${k}">더보기 ›</button></div><div class="egrid ${k === 'icon' ? 'icons' : ''}">${list.slice(0, k === 'icon' ? 16 : 6).map(elemCard).join('')}</div>`; });
   } else {
     const list = all.filter(i => elCat === 'all' || i.cat === elCat);
@@ -870,7 +871,7 @@ function renderElems() {
   h += `<p class="hint" style="margin-top:12px">요소를 누르면 페이지 가운데에 들어갑니다. 여러 조각으로 된 요소는 자동으로 그룹이 되어 함께 움직입니다 (Ctrl+G로 그룹 해제·묶기).</p>`;
   body.innerHTML = h;
   requestAnimationFrame(() => fitBoxes(body, '.ebox', 64));
-  body.onclick = e => { if (e.target.closest('[data-aistudio]')) { openAI('image'); return; } const c = e.target.closest('[data-ec]'); if (c) { elCat = c.dataset.ec; renderElems(); return; } const b = e.target.closest('[data-el]'); if (b) insertElem(b.dataset.el); };
+  body.onclick = e => { if (e.target.closest('[data-aistudio]')) { openAI('image'); return; } if (e.target.closest('[data-racha]')) { openRachaMaker(); return; } const c = e.target.closest('[data-ec]'); if (c) { elCat = c.dataset.ec; renderElems(); return; } const b = e.target.closest('[data-el]'); if (b) insertElem(b.dataset.el); };
   // 내 그림(AI로 만든 그림): 우클릭으로 이름 바꾸기·지우기
   body.oncontextmenu = async e => { const b = e.target.closest('[data-el^="lib-ai-"]'); if (!b) return; e.preventDefault(); const it = getElem(b.dataset.el); if (!it) return;
     const nm = window.prompt(`"${it.name}"\n\n새 이름을 넣으면 이름을 바꿉니다. "삭제"라고 쓰면 내 그림에서 지웁니다 (두 PC 모두에서 사라짐).`, it.name); if (nm == null) return;
@@ -2629,6 +2630,97 @@ function gridCmd(k) {
   if (k === 'go') { $('#dlgGrid').close(); goto(idx[0]); return; }
   if (k === 'dup') { const copies = idx.map(i => dupPage(doc.pages[i])); const at = idx[idx.length - 1] + 1; doc.pages.splice(at, 0, ...copies); gridSel = new Set(copies.map((_, j) => at + j)); commit(); renderAll(); renderPageGrid(); toast(`${copies.length}쪽을 복제했습니다`); return; }
   if (k === 'del') { if (idx.length >= doc.pages.length) { toast('모든 쪽을 지울 수는 없습니다', true); return; } if (!window.confirm(`${idx.length}쪽을 지울까요? (Ctrl+Z로 되돌릴 수 있습니다)`)) return; const curPg = page(); doc.pages = doc.pages.filter((p, i) => !gridSel.has(i)); cur = Math.max(0, Math.min(doc.pages.indexOf(curPg) >= 0 ? doc.pages.indexOf(curPg) : idx[0], doc.pages.length - 1)); sel = []; cellSel = null; gridSel = new Set([Math.min(idx[0], doc.pages.length - 1)]); commit(); renderAll(); renderPageGrid(); toastUndo(`${idx.length}쪽을 지웠습니다`, () => { if ($('#dlgGrid') && $('#dlgGrid').open) renderPageGrid(); }); }
+}
+
+/* ---- 라차(도장 캐릭터) 동작 요소 한 번에 만들기: 지금 있는 라차 그림을 참고 그림으로 같은 모습의 새 동작을 그려 '마스코트 라차'에 보관 ---- */
+const RACHA = [
+  ['tkd', '태권도 동작', [
+    ['front-kick', '앞차기', 'performing a high front snap kick (ap chagi), one leg raised straight forward, arms in guard'],
+    ['roundhouse', '돌려차기', 'performing a roundhouse kick (dollyeo chagi) at head height, hips turned, kicking leg swinging horizontally, motion lines'],
+    ['side-kick', '옆차기', 'performing a powerful side kick (yeop chagi), body sideways, kicking leg fully extended to the side'],
+    ['back-kick', '뒤차기', 'performing a back kick (dwi chagi), looking over the shoulder, leg thrust straight backward'],
+    ['axe-kick', '내려차기', 'performing an axe kick (naeryeo chagi), leg raised straight up high above the head, about to strike down'],
+    ['jump-kick', '뛰어 앞차기', 'performing a jumping front kick in mid-air, both feet off the ground, dynamic motion lines'],
+    ['punch', '몸통 지르기', 'doing a middle punch (momtong jireugi) in a long front stance, fist extended forward, shouting kihap'],
+    ['low-block', '아래막기', 'doing a low block (arae makgi) in a front stance, serious focused face'],
+    ['high-block', '얼굴막기', 'doing a high block (eolgul makgi), forearm raised above the head'],
+    ['knife-hand', '손날치기', 'doing a knife-hand strike (sonnal chigi) to the side in a back stance'],
+    ['breaking', '격파', 'breaking a wooden board held in front with a punch, board splitting with small wood splinters'],
+    ['sparring', '겨루기 자세', 'in a sparring fighting stance, light on the feet, both fists up, confident smile'],
+    ['ready', '품새 준비', 'standing in poomsae ready stance (junbi seogi), fists in front of the belt, calm and serious'],
+    ['bow', '인사', 'bowing politely at 30 degrees in taekwondo greeting (gyeongnye), hands at the sides'],
+    ['kihap', '기합', 'shouting a loud kihap with fists clenched at the waist, energy burst effect lines'],
+    ['flag-salute', '국기에 대한 경례', 'standing straight with the right hand on the chest, saluting respectfully'],
+  ]],
+  ['guide', '안내·상황', [
+    ['guide', '손으로 안내하기', 'smiling and presenting to the right side with an open hand palm up, like a guide introducing information'],
+    ['point-up', '위 가리키기', 'pointing up with one hand, explaining something with a cheerful face'],
+    ['sign-board', '빈 공지판 들기', 'holding a large blank white sign board with both hands in front of the body, the board is empty with no text'],
+    ['megaphone', '확성기 공지', 'making an announcement through a red megaphone, excited'],
+    ['wave', '손 흔들기', 'waving hello cheerfully with one hand'],
+    ['thumbs-up', '엄지척', 'giving a big thumbs up with a wink'],
+    ['clap', '박수 응원', 'clapping hands and cheering happily'],
+    ['celebrate', '축하', 'jumping with both arms up celebrating, colorful confetti around'],
+    ['trophy', '트로피', 'holding a gold trophy up proudly'],
+    ['medal', '메달', 'proudly showing a gold medal hanging on the chest'],
+    ['certificate', '상장 들기', 'holding up a framed certificate with both hands, proud smile'],
+    ['heart', '하트', 'making a big heart shape above the head with both arms'],
+    ['thinking', '생각하기', 'thinking with one hand on the chin, a question mark above the head'],
+    ['ok', 'OK', 'making an OK sign with one hand and smiling'],
+    ['calendar', '달력 가리키기', 'pointing at a big wall calendar page with one hand (calendar has no readable text)'],
+    ['gift', '선물', 'holding a wrapped gift box with a ribbon'],
+    ['reading', '책 읽기', 'sitting and reading a book happily'],
+    ['water', '물 마시기', 'drinking water from a bottle after training, small sweat drops'],
+    ['holiday', '쉬는 날', 'relaxed holiday mood, waving goodbye with a small travel bag'],
+    ['sebae', '한복 세배', 'wearing a colorful Korean hanbok instead of the dobok, kneeling and bowing deeply for the New Year (sebae)'],
+  ]],
+];
+const RACHA_STYLE = 'Draw the exact same penguin mascot character as in the reference images: round gray head with a white face patch, big round eyes, orange beak and orange feet, gray flipper-hands, wearing a white taekwondo dobok with a black belt tied at the waist, a bronze medal on a red-white-blue ribbon, and a small Korean flag patch on the left shoulder. Keep the same hand-drawn cartoon style: clean black outlines, flat colors, light gray shading. Full body, centered, generous margin around the character, plain pure white background, no text, no letters, no frame, no ground line, no extra characters.';
+let rachaBusy = false, rachaStop = false;
+const rachaDone = id => NC.lib.mine().some(x => x.tag === 'racha:' + id);
+function openRachaMaker() {
+  let d = $('#dlgRacha');
+  if (!d) { d = document.createElement('dialog'); d.id = 'dlgRacha'; d.className = 'wide'; d.innerHTML = `<div class="dhead"><h2>라차 동작 요소 만들기 <small>도장 캐릭터를 같은 모습으로 새 동작으로</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="rachaBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => { rachaStop = true; d.close(); }; }
+  renderRacha(); d.showModal();
+}
+function renderRacha() {
+  const B = $('#rachaBody'); const keyOK = !!AI.cfg.geminiKey, libOK = NC.lib.ready || !!store.state.dir;
+  B.innerHTML = `${keyOK ? '' : `<div class="lockbar">Gemini API 키가 필요합니다 — AI 도우미 → API 설정에 넣어 주세요<button class="btn sm" id="rkKey">키 넣기</button></div>`}
+  ${libOK ? '' : '<div class="lockbar">동기화 폴더가 연결되어 있지 않아 만든 그림은 이 창에서만 쓸 수 있습니다 (저장 ▾ → 동기화 폴더 연결)</div>'}
+  <p class="hint" style="margin-top:0">지금 있는 라차 그림 2장(준비 자세·앞차기)을 참고 그림으로 보내 같은 캐릭터로 그립니다. 흰 배경은 자동으로 지우고, 요소 → 나라차 → <b>마스코트 라차</b>에 보관되어 모든 PC에서 씁니다. 한 장에 수십 초, Gemini 요금이 장마다 듭니다.</p>
+  ${RACHA.map(([gid, gname, list]) => `<h3 class="phead"><span>${gname} <small>${list.length}가지</small></span><span><button class="lnk" data-rall="${gid}">모두 고르기</button> · <button class="lnk" data-rnone="${gid}">모두 빼기</button></span></h3><div class="rgrid">${list.map(([id, name]) => `<label class="rchk ${rachaDone(id) ? 'done' : ''}"><input type="checkbox" data-rid="${id}" ${rachaDone(id) ? '' : 'checked'}> ${name}${rachaDone(id) ? ' <small>✓ 있음</small>' : ''}</label>`).join('')}</div>`).join('')}
+  <div class="row" style="margin-top:12px;justify-content:flex-end"><span class="hint" id="rStat" style="margin:0;flex:1"></span><button class="btn" id="rStop" hidden>멈추기</button><button class="btn primary" id="rGo" ${keyOK ? '' : 'disabled'}>고른 동작 만들기</button></div>
+  <div class="rres" id="rRes"></div>`;
+  const cnt = () => { const n = B.querySelectorAll('[data-rid]:checked').length; $('#rGo').textContent = `고른 ${n}가지 만들기`; return n; }; cnt();
+  B.onchange = cnt;
+  B.onclick = async e => {
+    const a = e.target.closest('[data-rall],[data-rnone]'); if (a) { const g = a.dataset.rall || a.dataset.rnone, on = !!a.dataset.rall; RACHA.find(x => x[0] === g)[2].forEach(([id]) => { const c = B.querySelector(`[data-rid="${id}"]`); if (c) c.checked = on; }); cnt(); return; }
+    if (e.target.id === 'rkKey') { $('#dlgRacha').close(); openAI('keys'); return; }
+    if (e.target.id === 'rStop') { rachaStop = true; e.target.disabled = true; return; }
+    const ins = e.target.closest('[data-rins]'); if (ins) { addImage(addAsset(ins.dataset.rins.startsWith('data:') ? ins.dataset.rins : ins.querySelector('img').src)); return; }
+    if (e.target.id === 'rGo') runRacha();
+  };
+}
+async function runRacha() {
+  if (rachaBusy) return; const B = $('#rachaBody'); const ids = [...B.querySelectorAll('[data-rid]:checked')].map(c => c.dataset.rid); if (!ids.length) return;
+  const all = RACHA.flatMap(g => g[2]); rachaBusy = true; rachaStop = false; $('#rGo').disabled = true; $('#rStop').hidden = false; $('#rStop').disabled = false;
+  const refs = [ASSETS['mascot-03'], ASSETS['mascot-01']].filter(Boolean); const res = $('#rRes'); let ok = 0, fail = [];
+  for (let i = 0; i < ids.length; i++) {
+    if (rachaStop) break;
+    const [id, name, pose] = all.find(x => x[0] === ids[i]);
+    $('#rStat').innerHTML = `<span class="spin"></span>${i + 1}/${ids.length} · ${name} 그리는 중…`;
+    try {
+      const imgs = await AI.geminiImage({ prompt: `The penguin mascot is ${pose}. ${RACHA_STYLE}`, refImage: refs, aspect: '1:1', size: '1K' });
+      let s = imgs[0]; try { s = await NC.imgedit.removeColorFromSrc(s, '#ffffff'); } catch (err) {}
+      const meta = { name: `라차 · ${name}`, kw: `라차 마스코트 펭귄 캐릭터 ${name} ${id}`, prompt: pose, style: 'racha', cat: 'mascot', tag: 'racha:' + id };
+      try { if (NC.lib.ready || store.state.dir) await NC.lib.saveMine(s, meta); } catch (err) { toast('보관하지 못했습니다: ' + err.message, true); }
+      res.insertAdjacentHTML('beforeend', `<button class="rcard" data-rins="" title="눌러서 페이지에 넣기"><img src="${s}" alt=""><span>${esc(name)}</span></button>`); ok++;
+      const lbl = B.querySelector(`[data-rid="${id}"]`); if (lbl) { lbl.checked = false; lbl.closest('.rchk').classList.add('done'); }
+    } catch (err) { fail.push(name); res.insertAdjacentHTML('beforeend', `<div class="rcard fail"><span>${esc(name)}</span><small>${esc(err.message).slice(0, 80)}</small></div>`); if (/키|key|quota|할당|billing|PERMISSION/i.test(err.message) && ok === 0) break; }
+  }
+  rachaBusy = false; $('#rGo').disabled = false; $('#rStop').hidden = true;
+  $('#rStat').textContent = `${ok}가지를 만들었습니다${fail.length ? ` · 실패 ${fail.length}가지(${fail.join(', ')}) — 다시 고르고 만들기를 누르면 다시 합니다` : ''}${rachaStop ? ' · 멈춤' : ''}`;
+  if (ok && sideTab === 'elems') renderSide();
 }
 
 // 점검용 (주소에 ?qa 가 있을 때만): 자동 시험에서 문서 상태를 읽음
