@@ -535,3 +535,4 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .ovl .pg-safe{position:absolute;border:calc(1px / var(--k)) dashed rgba(47,111,228,.55);pointer-events:none}
 .stage .ovl{overflow:visible}
 .stage .canvas-wrap{overflow:visible}
+.el-cal .cg .cglines{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none}

@@ -119,6 +119,11 @@ NC.cal = (function () {
       return inner;
     };
     let cells = '';
+    // 칸 선은 SVG 벡터로 (CSS 테두리는 화면 픽셀로 반올림돼 인쇄 두께가 달라짐)
+    const sw = colW.reduce((a, b) => a + b, 0), shh = rowH.reduce((a, b) => a + b, 0);
+    const XS = [0]; colW.forEach(w => XS.push(XS[XS.length - 1] + w / sw * 1000)); const YS = [0]; rowH.forEach(h => YS.push(YS[YS.length - 1] + h / shh * 1000));
+    const ln = (x1, y1, x2, y2, col, w) => `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="${col}" stroke-width="${w}mm" vector-effect="non-scaling-stroke" stroke-linecap="square"/>`;
+    let lines = '';
     for (let c = 0; c < total; c++) {
       if (cover[c] != null) continue;
       const n = c - first + 1, dow = (c + s.weekStart) % 7, r = Math.floor(c / 7), q = c % 7, cs = cst[ckey(c)] || cst[c] || {};
@@ -126,13 +131,19 @@ NC.cal = (function () {
       let inner = content(c);
       if (g.cs > 1 || g.rs > 1) for (let rr = r; rr < Math.min(rows, r + g.rs); rr++) for (let qq = q; qq < Math.min(7, q + g.cs); qq++) { const k = rr * 7 + qq; if (k !== c) inner += content(k); }
       const bgc = cs.bg != null ? cs.bg : dow === 0 && s.sunBg ? s.sunBg : dow === 6 && s.satBg ? s.satBg : '';
-      const last = r + g.rs >= rows;
-      const border = `border-right:${s.lineW}mm solid ${s.line};border-bottom:${last ? s.outerW : s.lineW}mm solid ${last ? s.outer : s.line};`;
+      const last = r + g.rs >= rows, qe = Math.min(7, q + g.cs), re = Math.min(rows, r + g.rs);
+      if (s.lineW > 0 && qe < 7) lines += ln(XS[qe], YS[r], XS[qe], YS[re], s.line, s.lineW);
+      if (qe === 7 && s.lineW > 0) lines += ln(XS[7], YS[r], XS[7], YS[re], s.line, s.lineW);
+      if (!last && s.lineW > 0) lines += ln(XS[q], YS[re], XS[qe], YS[re], s.line, s.lineW);
+      const border = '';
       const al = cs.align ? `text-align:${cs.align};` : '';
       cells += `<div class="cell" data-c="${c}" data-day="${n >= 1 && n <= dim ? n : ''}" style="grid-row:${r + 1}/span ${g.rs};grid-column:${q + 1}/span ${g.cs};${bgc ? `background:${bgc};` : ''}${border}${al}padding:${s.cellPad}mm ${s.cellPad + 0.2}mm">${inner}</div>`;
     }
     const wd = s.showWd ? `<div class="wd" style="grid-template-columns:${colW.map(w => w + 'fr').join(' ')};height:${s.wdH}mm;font-family:'${s.fontNum}';font-size:${s.wdSize}pt;color:${s.wdColor}">${Array.from({ length: 7 }, (_, i) => { const d = (i + s.weekStart) % 7; return `<span style="${d === 0 ? `color:${s.sunColor}` : ''}">${(WD[s.wdLang] || WD.en)[d]}</span>`; }).join('')}</div>` : '';
-    return `${wd}<div class="cg" style="grid-template-columns:${colW.map(w => w + 'fr').join(' ')};grid-template-rows:${rowH.map(w => w + 'fr').join(' ')};border-top:${s.outerW}mm solid ${s.outer};border-left:${s.lineW}mm solid ${s.line};font-family:'${s.fontBody}'">${cells}</div>`;
+    // 바깥선(위·아래)과 왼쪽 선
+    if (s.outerW > 0) { lines += ln(0, 0, 1000, 0, s.outer, s.outerW); lines += ln(0, 1000, 1000, 1000, s.outer, s.outerW); }
+    if (s.lineW > 0) lines += ln(0, 0, 0, 1000, s.line, s.lineW);
+    return `${wd}<div class="cg" style="position:relative;grid-template-columns:${colW.map(w => w + 'fr').join(' ')};grid-template-rows:${rowH.map(w => w + 'fr').join(' ')};font-family:'${s.fontBody}'">${cells}<svg class="cglines" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">${lines}</svg></div>`;
   }
   function miniHTML(el) {
     const s = Object.assign({}, MINI_DEF, el.s || {});
