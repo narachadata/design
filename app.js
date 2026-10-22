@@ -2347,7 +2347,7 @@ async function renderVersions() {
   $('#verNow').onclick = verNow;
   B.querySelector('.verlist').onclick = async e => {
     const li = e.target.closest('[data-ver]'); if (!li) return; const x = list[Number(li.dataset.ver)]; verSel = x.name; B.querySelectorAll('.verlist li').forEach(l => l.classList.toggle('on', l === li));
-    $('#verPrev').innerHTML = '<span class="hint">불러오는 중…</span>'; let j; try { j = await store.readSnapshot(x); } catch (err) { $('#verPrev').textContent = '읽지 못했습니다: ' + err.message; return; }
+    $('#verPrev').innerHTML = '<span class="hint">불러오는 중…</span>'; let j; try { j = await store.readSnapshot(x, doc.docId); } catch (err) { $('#verPrev').textContent = '읽지 못했습니다: ' + err.message; return; }
     const saved = doc; let html = ''; try { doc = Object.assign({}, saved, { w: j.w, h: j.h, assets: j.assets || {}, bleed: 0, cropMarks: false }); const k = Math.min(300 / (j.w * MM), 260 / (j.h * MM)); html = `<div class="verbox" style="width:${j.w * MM * k}px;height:${j.h * MM * k}px"><div style="transform:scale(${k});transform-origin:0 0">${sheetHTML(j.pages[0], 'thumb')}</div></div>`; } finally { doc = saved; }
     $('#verPrev').innerHTML = `${html}<p class="hint">${fmt(x.time)} · ${esc(x.pc)} · ${j.pages.length}쪽 · ${Math.round(j._size / 1024)}KB</p>`;
     $('#verRestore').disabled = false; $('#verCopy').disabled = false;
