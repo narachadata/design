@@ -20,7 +20,14 @@ function newDoc(sz) { sz = sz || SIZES[0]; return { v: 2, name: '새 디자인',
 const page = () => doc.pages[cur];
 const find = id => page().els.find(e => e.id === id);
 const selEls = () => sel.map(find).filter(Boolean);
-function src(ref) { if (!ref) return ''; if (ref.startsWith('asset:')) return ASSETS[ref.slice(6)] || ''; if (ref.startsWith('a:')) return doc.assets[ref.slice(2)] || ''; if (ref.startsWith('lib:')) return NC.lib.url(ref.slice(4)); return ref; }
+// 화면에 그릴 때는 긴 data URL 대신 한 번 만든 blob 주소를 씀 (26쪽 캘린더도 수십 MB 문자열을 매번 다시 만들지 않게)
+const blobOf = new Map(); // 그림 키 → { data, url }
+function blobURL(key, d) {
+  if (!d || !d.startsWith('data:') || d.length < 3000) return d || '';
+  const c = blobOf.get(key); if (c && c.data === d) return c.url;
+  try { const i = d.indexOf(','), meta = d.slice(5, i), mime = meta.split(';')[0], raw = /;base64/.test(meta) ? atob(d.slice(i + 1)) : decodeURIComponent(d.slice(i + 1)); const arr = new Uint8Array(raw.length); for (let k = 0; k < raw.length; k++) arr[k] = raw.charCodeAt(k) & 255; const url = URL.createObjectURL(new Blob([arr], { type: mime })); blobOf.set(key, { data: d, url }); /* 예전 주소는 다른 화면(미리보기 등)이 쓰고 있을 수 있어 해제하지 않음 */ return url; } catch (e) { return d; }
+}
+function src(ref) { if (!ref) return ''; if (ref.startsWith('asset:')) return blobURL(ref, ASSETS[ref.slice(6)]); if (ref.startsWith('a:')) return blobURL(ref, doc.assets[ref.slice(2)]); if (ref.startsWith('lib:')) return NC.lib.url(ref.slice(4)); return ref; }
 function addAsset(dataURL) { for (const k in doc.assets) if (doc.assets[k] === dataURL) return 'a:' + k; const id = uid(); doc.assets[id] = dataURL; return 'a:' + id; }
 function gcAssets() { const used = new Set(); const walk = v => { if (typeof v === 'string' && v.startsWith('a:')) used.add(v.slice(2)); else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(doc.pages); walk(doc.calendar); hist.forEach(h => { for (const m of h.matchAll(/"a:([^"]+)"/g)) used.add(m[1]); }); for (const k in doc.assets) if (!used.has(k)) delete doc.assets[k]; } // 실행 취소 기록에 남은 그림도 지키기 (저장 뒤 Ctrl+Z로 지운 사진 되살리기)
 
@@ -45,8 +52,8 @@ addEventListener('beforeunload', e => { try { flushNudge(); store.idbSet('doc', 
 let idbTimer, fileTimer, freshDraft = false; // freshDraft: 처음 열 때 만든 초안을 아직 고치지 않음
 function markDirty() {
   freshDraft = false; doc.updatedAt = Date.now(); store.state.dirty = true; store.state.seq++;
-  clearTimeout(idbTimer); idbTimer = setTimeout(async () => { try { await store.idbSet('doc', doc); if (!store.state.handle) setStatus('브라우저에 저장됨 ' + tnow()); } catch (e) { setStatus('브라우저 저장 실패'); } }, 500);
-  if (store.state.handle && !store.state.needPerm) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 1200); } // 파일 권한을 다시 받기 전에는 브라우저에만 저장
+  clearTimeout(idbTimer); idbTimer = setTimeout(async () => { try { await store.idbSet('doc', doc); if (!store.state.handle) setStatus('브라우저에 저장됨 ' + tnow()); } catch (e) { setStatus('브라우저 저장 실패'); } }, 900);
+  if (store.state.handle && !store.state.needPerm) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 1500); } // 파일 권한을 다시 받기 전에는 브라우저에만 저장
   updateSaveBadge();
 }
 async function saveFileNow() {
