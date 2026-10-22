@@ -19,7 +19,7 @@ function newDoc(sz) { sz = sz || SIZES[0]; return { v: 2, name: '새 디자인',
 const page = () => doc.pages[cur];
 const find = id => page().els.find(e => e.id === id);
 const selEls = () => sel.map(find).filter(Boolean);
-function src(ref) { if (!ref) return ''; if (ref.startsWith('asset:')) return ASSETS[ref.slice(6)] || ''; if (ref.startsWith('a:')) return doc.assets[ref.slice(2)] || ''; return ref; }
+function src(ref) { if (!ref) return ''; if (ref.startsWith('asset:')) return ASSETS[ref.slice(6)] || ''; if (ref.startsWith('a:')) return doc.assets[ref.slice(2)] || ''; if (ref.startsWith('lib:')) return NC.lib.url(ref.slice(4)); return ref; }
 function addAsset(dataURL) { for (const k in doc.assets) if (doc.assets[k] === dataURL) return 'a:' + k; const id = uid(); doc.assets[id] = dataURL; return 'a:' + id; }
 function gcAssets() { const used = new Set(); const walk = v => { if (typeof v === 'string' && v.startsWith('a:')) used.add(v.slice(2)); else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(doc.pages); walk(doc.calendar); for (const k in doc.assets) if (!used.has(k)) delete doc.assets[k]; }
 
@@ -75,7 +75,7 @@ function warnIfRecentOther(j) {
 }
 function tnow() { return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }); }
 function setStatus(t) { $('#status').textContent = t; }
-function updateSaveBadge() { const b = $('#btnSave'); if (!b) return; b.querySelector('span').textContent = store.state.handle ? `${store.state.dir ? '동기화' : '저장됨'} · ${store.state.fileName.replace(/\.design\.json$/i, '')}` : '저장·동기화'; b.classList.toggle('on', !!store.state.handle); }
+function updateSaveBadge() { const b = $('#btnSave'); if (!b) return; const st = store.state; b.querySelector('span').textContent = '저장'; b.title = st.handle ? `저장 (Ctrl+S) · ${st.dir ? '동기화 폴더' : '파일'}: ${st.fileName}` : '저장 (Ctrl+S) · 아직 파일로 저장하지 않음'; b.classList.toggle('on', !!st.handle); }
 async function loadDoc(j, from) {
   if (!j || !j.pages) throw new Error('문서 형식이 아닙니다');
   if (j.v !== 2) throw new Error('이 프로그램의 문서 파일이 아닙니다');
@@ -106,6 +106,10 @@ async function syncSettings(first) {
   } catch (e) { console.warn('설정 동기화', e); }
 }
 async function syncTick() { await checkExternalChange(); if (store.state.dir) await syncSettings(); }
+// 자료실을 다 읽으면 열려 있는 패널을 다시 그림
+NC.lib.onReady(() => { if (['photo', 'elems', 'tpl', 'project'].includes(sideTab)) renderSide(); });
+// 자료실 그림(lib:)을 문서 이미지로 복사해 넣기
+async function libInsert(file) { try { setStatus('자료실에서 불러오는 중…'); const ref = addAsset(await NC.lib.dataURL(file)); setStatus(''); return ref; } catch (e) { setStatus(''); toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return null; } }
 window.addEventListener('focus', syncTick);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) syncTick(); });
 setInterval(() => { if (!document.hidden) syncTick(); }, 20000);
@@ -114,6 +118,7 @@ setInterval(() => { if (store.state.dir) store.pushSettings().then(r => { if (r 
 async function afterFolderReady(opts) {
   opts = opts || {};
   await syncSettings(true);
+  NC.lib.load(true);
   if (store.state.handle && await store.inFolder(store.state.handle)) {
     if (opts.loadCurrent) { try { await loadDoc(await store.readFile()); } catch (e) { console.warn(e); } }
     return;
@@ -425,8 +430,15 @@ function renderSide() {
     body.innerHTML = `<div class="row" style="margin-bottom:6px"><label class="btn sm">파일 올리기<input type="file" accept="image/*" id="imgFile" hidden multiple></label><button class="btn sm ai" id="imgAI">AI로 만들기</button></div>
     <p class="hint">그림을 누르면 페이지에 추가됩니다. 이미지 요소를 선택한 상태면 그 그림을 바꿉니다.</p>
     ${mine.length ? `<h3>내 이미지 (${mine.length})</h3><div class="picker">${mine.map(k => `<button data-img="a:${k}"><img src="${doc.assets[k]}" alt=""></button>`).join('')}</div>` : ''}
+    ${libPhotoHTML()}
     ${groups.map(([t, f]) => { const ks = Object.keys(ASSETS).filter(f); return `<h3>${t}</h3><div class="picker">${ks.map(k => `<button data-img="asset:${k}" title="${k}"><img src="${ASSETS[k]}" alt="${k}"></button>`).join('')}</div>`; }).join('')}`;
-    body.onclick = e => { const b = e.target.closest('[data-img]'); if (!b) return; const ref = b.dataset.img; const s = selEls(); if (s.length === 1 && s[0].type === 'image') { s[0].src = ref; commit(); rerender(); toast('그림을 바꿨습니다'); } else addImage(ref); };
+    body.onclick = async e => {
+      const pc = e.target.closest('[data-pcat]'); if (pc) { photoCat = pc.dataset.pcat; renderSide(); return; }
+      const b = e.target.closest('[data-img],[data-libimg]'); if (!b) return;
+      const ref = b.dataset.libimg ? await libInsert(b.dataset.libimg) : b.dataset.img; if (!ref) return;
+      const s = selEls(); if (s.length === 1 && s[0].type === 'image') { s[0].src = ref; commit(); rerender(); toast('그림을 바꿨습니다'); } else addImage(ref);
+    };
+    const ps = $('#photoSearch'); if (ps) ps.oninput = () => { photoQ = ps.value; const pos = ps.selectionStart; renderSide(); const n = $('#photoSearch'); n.focus(); n.setSelectionRange(pos, pos); };
     $('#imgFile').onchange = async e => { for (const f of e.target.files) addImage(addAsset(await fileToDataURL(f))); e.target.value = ''; renderSide(); };
     $('#imgAI').onclick = () => openAI('image');
   } else if (sideTab === 'upload') {
@@ -487,15 +499,27 @@ function renderSide() {
   }
 }
 /* ---- 요소 패널 ---- */
-function elemCard(it) { const els = it.make(uid, { year: doc.calendar.year || 2027 }); return `<button class="ecard" data-el="${it.id}" title="${esc(it.name)}"><div class="ebox" data-w="${it.w}" data-h="${it.h}">${tmpSheet(it.w, it.h, els, it.cat === 'icon' || it.cat === 'illust' ? 'transparent' : '#ffffff')}</div>${it.cat === 'icon' ? '' : `<span>${esc(it.name)}</span>`}</button>`; }
-function insertElem(id) { const it = NC.elems.get(id); if (!it) return; const els = it.make(uid, { year: doc.calendar.year || 2027 }); addEls(els, it.id); }
+function elemCard(it) { const els = it.make(uid, { year: doc.calendar.year || 2027 }); return `<button class="ecard" data-el="${it.id}" title="${esc(it.name)}"><div class="ebox" data-w="${it.w}" data-h="${it.h}">${tmpSheet(it.w, it.h, els, it.dark ? '#002559' : it.cat === 'icon' || it.cat === 'illust' || it.cat === 'naracha' ? 'transparent' : '#ffffff')}</div>${it.cat === 'icon' ? '' : `<span>${esc(it.name)}</span>`}</button>`; }
+const LIB_ECATS = [['logo', '로고'], ['emblem', '엠블럼·패치'], ['mascot', '마스코트 라차'], ['belt', '띠·라벨'], ['pattern', '패턴·장식'], ['illust', '일러스트']];
+function libElemItems() {
+  return NC.lib.items('element').map(it => { const w = it.ratio >= 1 ? 60 : Math.round(60 * it.ratio), h = it.ratio >= 1 ? Math.round(60 / it.ratio) : 60;
+    return { id: 'lib-' + it.id, cat: 'naracha', sub: it.cat, name: it.name, kw: '나라차 자료실 ' + it.kw, w: Math.max(w, 4), h: Math.max(h, 4), dark: it.dark, lib: it,
+      make: (uid) => [{ id: uid(), type: 'image', src: 'lib:' + it.file, x: 0, y: 0, w: Math.max(w, 4), h: Math.max(h, 4), rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: it.name }] }; });
+}
+function libHint(short) { const st = NC.lib.st; const msg = store.state.dir ? (st.error === 'none' ? '동기화 폴더에 "디자인자료" 폴더가 없습니다.' : st.ready ? '' : '나라차 자료실을 불러오는 중…') : '저장·동기화에서 구글 드라이브 폴더를 연결하면 나라차 로고·마스코트·사진·템플릿(나라차 자료실)이 여기에 나옵니다.'; return msg ? `<p class="hint">${short ? '<b>나라차 자료실</b> · ' : ''}${msg}</p>` : ''; }
+function getElem(id) { return NC.elems.get(id) || libElemItems().find(x => x.id === id); }
+async function insertElem(id) { const it = getElem(id); if (!it) return; let els = it.make(uid, { year: doc.calendar.year || 2027 }); if (it.lib) { setStatus('자료실에서 불러오는 중…'); try { els = await NC.lib.materialize(els, addAsset); } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return; } finally { setStatus(''); } } addEls(els, it.id); }
 function renderElems() {
   const body = $('#sidebody'); const q = elQ.trim().toLowerCase();
-  const all = NC.elems.items.filter(i => !q || (i.name + ' ' + i.kw).toLowerCase().includes(q));
-  const recent = recentElems().map(id => NC.elems.get(id)).filter(Boolean);
-  let h = `<label class="f"><input type="text" id="elSearch" placeholder="요소 검색 (예: 별, 말풍선, 표)" value="${esc(elQ)}"></label><div class="tcats" id="elcats">${NC.elems.cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
-  if (elCat === 'all' && !q) {
+  const libEls = libElemItems(); const cats = NC.elems.cats.slice(0, 1).concat([['naracha', '나라차']], NC.elems.cats.slice(1));
+  const all = libEls.concat(NC.elems.items).filter(i => !q || (i.name + ' ' + i.kw).toLowerCase().includes(q));
+  const recent = recentElems().map(getElem).filter(Boolean);
+  let h = `<label class="f"><input type="text" id="elSearch" placeholder="요소 검색 (예: 로고, 라차, 별, 말풍선)" value="${esc(elQ)}"></label><div class="tcats" id="elcats">${cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+  if (elCat === 'naracha' && !q) {
+    h += libEls.length ? LIB_ECATS.map(([k, t]) => { const list = libEls.filter(i => i.sub === k); return list.length ? `<h3>${t} <small>${list.length}</small></h3><div class="egrid">${list.map(elemCard).join('')}</div>` : ''; }).join('') : libHint();
+  } else if (elCat === 'all' && !q) {
     if (recent.length) h += `<h3>최근 사용</h3><div class="egrid">${recent.map(elemCard).join('')}</div>`;
+    h += libEls.length ? `<div class="esec"><h3>나라차 자료실 <small>${libEls.length}</small></h3><button class="more" data-ec="naracha">더보기 ›</button></div><div class="egrid">${libEls.filter(i => ['logo', 'mascot', 'emblem'].includes(i.sub)).slice(0, 9).map(elemCard).join('')}</div>` : libHint(true);
     NC.elems.cats.slice(1).forEach(([k, t]) => { const list = all.filter(i => i.cat === k); if (!list.length) return; h += `<div class="esec"><h3>${t} <small>${list.length}</small></h3><button class="more" data-ec="${k}">더보기 ›</button></div><div class="egrid ${k === 'icon' ? 'icons' : ''}">${list.slice(0, k === 'icon' ? 16 : 6).map(elemCard).join('')}</div>`; });
   } else {
     const list = all.filter(i => elCat === 'all' || i.cat === elCat);
@@ -509,12 +533,30 @@ function renderElems() {
 }
 function elName(el) { if (el.name) return el.name; if (el.type === 'text') return (el.text || '글자').split('\n')[0].slice(0, 20); if (el.type === 'image') return '이미지'; if (el.type === 'shape') return (FX.SHAPES.find(s => s[0] === el.kind) || [])[1] || '도형'; if (el.type === 'path') return '펜 선'; if (el.type === 'chart') return '차트'; if (el.type === 'cal') return `${el.year}년 ${el.month}월 달력`; if (el.type === 'mini') return `미니 달력 ${el.month}월`; return el.type; }
 
+/* ---- 사진: 나라차 자료실 ---- */
+let photoCat = '', photoQ = '';
+function libPhotoHTML() {
+  const ph = NC.lib.items('photo'); if (!ph.length) return libHint(true);
+  const cats = [...new Set(ph.map(x => x.cat))];
+  const q = photoQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const list = ph.filter(x => (!photoCat || x.cat === photoCat) && (!q.length || q.every(w => (x.name + ' ' + x.kw).toLowerCase().includes(w))));
+  const card = x => `<button data-libimg="${esc(x.file)}" title="${esc(x.name)}"><img src="${NC.lib.url(x.thumb)}" alt="${esc(x.name)}" loading="lazy"></button>`;
+  let h = `<h3>나라차 자료실 사진 <small>${ph.length}</small></h3><label class="f"><input type="text" id="photoSearch" placeholder="사진 검색 (예: 겨루기, 아이, 도장)" value="${esc(photoQ)}"></label>
+  <div class="tcats"><button data-pcat="" class="${photoCat ? '' : 'on'}">전체</button>${cats.map(c => `<button data-pcat="${esc(c)}" class="${photoCat === c ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>`;
+  if (!photoCat && !q.length) cats.forEach(c => { const l = list.filter(x => x.cat === c); h += `<div class="esec"><h3>${esc(c)} <small>${l.length}</small></h3><button class="more" data-pcat="${esc(c)}">더보기 ›</button></div><div class="picker photos">${l.slice(0, 6).map(card).join('')}</div>`; });
+  else h += `<p class="hint" style="margin:4px 0">${list.length}장</p><div class="picker photos">${list.map(card).join('') || '<p class="hint">맞는 사진이 없습니다</p>'}</div>`;
+  return h + '<p class="hint">사진을 누르면 원본 크기(최대 2400px)로 문서에 들어갑니다. 게티이미지 사진은 도장 홍보물에만 쓰세요.</p>';
+}
+
 /* ---- 템플릿 갤러리 ---- */
 function tplItems() {
   const y = doc.calendar.year || 2027;
   const themeItems = CAL.THEMES.map(th => ({ id: 'theme-' + th.id, cat: 'calendar', theme: th, name: th.name + ' 캘린더', desc: th.desc, w: 224, h: 154, build: () => { const saved = doc; const tmp = Object.assign({}, doc, { calendar: Object.assign(clone(doc.calendar), { theme: clone(th) }) }); doc = tmp; try { return CAL.buildPages(tmp, uid, { year: y, kind: 'virtue', month: 1 }).concat(CAL.buildPages(tmp, uid, { year: y, kind: 'cal', month: 1 })); } finally { doc = saved; } } }));
   const calItems = [['cal-cover', '캘린더 표지', () => CAL.buildPages(doc, uid, { year: y, kind: 'cover' })], ['cal-virtue', '인성 페이지 (1월)', () => CAL.buildPages(doc, uid, { year: y, kind: 'virtue', month: 1 })], ['cal-month', '달력 페이지 (1월)', () => CAL.buildPages(doc, uid, { year: y, kind: 'cal', month: 1 })], ['cal-back', '캘린더 뒷표지', () => CAL.buildPages(doc, uid, { year: y, kind: 'back' })]].map(([id, name, build]) => ({ id, cat: 'calpage', name, w: 224, h: 154, build }));
   const items = themeItems.concat(calItems, NC.tpl.list.map(t => ({ id: t.id, cat: t.cat, name: t.name, w: t.w, h: t.h, tags: t.tags, kw: t.kw || t.name, build: () => t.build(uid, t.pal || null, { year: y }) })));
+  // 나라차 자료실 템플릿 (동기화 폴더의 디자인자료)
+  const fresh = pg => Object.assign(clone(pg), { id: uid(), els: pg.els.map(e => Object.assign(clone(e), { id: uid() })) });
+  NC.lib.templates().forEach(t => items.unshift({ id: t.id, cat: t.cat, name: t.name, w: t.w, h: t.h, tags: t.tags, kw: t.kw, lib: true, build: () => t.pages.map(fresh) }));
   themeItems.concat(calItems).forEach(t => { t.tags = { format: '달력', season: '사계절', age: '전체', occasion: '안내', biz: '태권도장' }; t.kw = t.name + ' 달력 캘린더 ' + (t.desc || ''); });
   const q = (tplQ || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
   return items.filter(t => (tplCat === 'all' || t.cat === tplCat) && Object.keys(tplF).every(k => !tplF[k] || (t.tags && t.tags[k] === tplF[k])) && (!q.length || q.every(w => (t.name + ' ' + (t.kw || '')).toLowerCase().includes(w))));
@@ -533,7 +575,7 @@ function renderGallery() {
   if (!filtered) {
     const rec = recentTpls().map(id => byId[id]).filter(Boolean);
     const sNow = NC.tpl.seasonNow(); const seasonal = items.filter(t => t.tags.season === sNow).slice(0, 6);
-    const rows = [['최근 사용', rec, null], [`${sNow} 추천`, seasonal, { season: sNow }], ['달력 테마', items.filter(t => t.theme), null, 'calendar'], ['모집·홍보', items.filter(t => t.tags.occasion === '모집').slice(0, 6), { occasion: '모집' }], ['행사·축하', items.filter(t => ['행사', '축하', '심사·대회'].includes(t.tags.occasion)).slice(0, 6), { occasion: '행사' }], ['명절·인사·감사', items.filter(t => ['명절·인사', '감사'].includes(t.tags.occasion)).slice(0, 6), { occasion: '명절·인사' }], ['다른 직종', items.filter(t => t.tags.biz !== '태권도장').slice(0, 6), { biz: '학원' }], ['SNS·카드뉴스', items.filter(t => ['SNS', '카드뉴스'].includes(t.tags.format)).slice(0, 6), { format: 'SNS' }], ['포스터', items.filter(t => t.tags.format === '포스터').slice(0, 6), { format: '포스터' }], ['안내문·서식', items.filter(t => ['안내문', '서식·활동지'].includes(t.tags.format)).slice(0, 6), { format: '안내문' }]];
+    const rows = [['최근 사용', rec, null], ['나라차 브랜드', items.filter(t => t.lib), null], [`${sNow} 추천`, seasonal, { season: sNow }], ['달력 테마', items.filter(t => t.theme), null, 'calendar'], ['모집·홍보', items.filter(t => t.tags.occasion === '모집').slice(0, 6), { occasion: '모집' }], ['행사·축하', items.filter(t => ['행사', '축하', '심사·대회'].includes(t.tags.occasion)).slice(0, 6), { occasion: '행사' }], ['명절·인사·감사', items.filter(t => ['명절·인사', '감사'].includes(t.tags.occasion)).slice(0, 6), { occasion: '명절·인사' }], ['다른 직종', items.filter(t => t.tags.biz !== '태권도장').slice(0, 6), { biz: '학원' }], ['SNS·카드뉴스', items.filter(t => ['SNS', '카드뉴스'].includes(t.tags.format)).slice(0, 6), { format: 'SNS' }], ['포스터', items.filter(t => t.tags.format === '포스터').slice(0, 6), { format: '포스터' }], ['안내문·서식', items.filter(t => ['안내문', '서식·활동지'].includes(t.tags.format)).slice(0, 6), { format: '안내문' }]];
     rows.forEach(([title, list, facet, cat]) => { if (!list.length) return; h += `<div class="esec"><h3>${title} <small>${list.length}</small></h3><button class="more" ${facet ? `data-more='${JSON.stringify(facet)}'` : cat ? `data-morecat="${cat}"` : ''}>${facet || cat ? '더보기 ›' : ''}</button></div><div class="tgal-row">${list.map(tplCard).join('')}</div>`; });
     g.innerHTML = h;
   } else {
@@ -556,8 +598,9 @@ function openTplPreview(t) {
   requestAnimationFrame(() => fitBoxes($('#tplBody'), '.tprev', Math.min(520, window.innerHeight * 0.55)));
   if (t.theme) { $('#tplWizard').onclick = () => { d.close(); openWizard(doc.calendar.year, t.theme.id); }; const rb = $('#tplRetheme'); if (rb) rb.onclick = () => { doc.calendar.theme = clone(t.theme); const y = doc.calendar.year || 2027; const nrep = CAL.retheme(doc, uid, y); ensureAllHolidays(); commit(); renderAll(); d.close(); toast(`"${t.name}" 테마를 ${nrep}쪽에 적용했습니다`); }; }
   else {
-    $('#tplNew').onclick = () => { if (doc.pages.some(p => p.els.length) && !window.confirm('현재 문서를 닫고 새 문서를 만들까요? (파일에 연결되어 있지 않으면 브라우저 저장본만 남습니다)')) return; store.disconnect(); const nd = newDoc(); nd.w = t.w; nd.h = t.h; nd.name = t.name; nd.pages = pages; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = doc.assets; nd.fonts = doc.fonts; nd.rules = doc.rules; doc = nd; hist = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); renderAll(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다`); };
-    $('#tplAppend').onclick = () => { doc.pages.splice(cur + 1, 0, ...pages); commit(); goto(cur + 1); d.close(); toast(`${pages.length}쪽을 추가했습니다`); };
+    const ready = async () => { if (!t.lib) return true; try { setStatus('자료실 그림을 넣는 중…'); await NC.lib.materialize(pages, addAsset); return true; } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return false; } finally { setStatus(''); } };
+    $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm('현재 문서를 닫고 새 문서를 만들까요? (지금 문서는 저장된 상태로 남습니다)')) return; if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const keepAssets = doc.assets; doc.assets = {}; if (!(await ready())) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = t.w; nd.h = t.h; nd.name = t.name; nd.pages = pages; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; doc = nd; hist = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); if (await store.folderReady()) { try { await store.saveIntoFolder(doc); } catch (e) { toast('폴더에 저장하지 못했습니다: ' + e.message, true); } } renderAll(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다`); };
+    $('#tplAppend').onclick = async () => { if (!(await ready())) return; doc.pages.splice(cur + 1, 0, ...pages); commit(); goto(cur + 1); d.close(); toast(`${pages.length}쪽을 추가했습니다`); };
   }
   d.showModal();
 }
@@ -823,17 +866,10 @@ $('#pname').addEventListener('change', async () => {
   if ((await store.listDocs()).some(x => x.name === name)) return;
   try { await h.move(name); store.state.fileName = h.name; await store.idbSet('fileHandle', h); updateSaveBadge(); } catch (e) { console.warn('파일 이름 바꾸기', e); }
 });
-$('#btnNew').onclick = async () => {
-  const inDir = await store.folderReady();
-  if (!window.confirm(inDir ? '새 문서를 만들까요? (지금 문서는 동기화 폴더에 그대로 남고, 새 문서도 폴더에 저장됩니다)' : '새 문서를 만들까요? (파일에 연결되어 있지 않은 현재 작업은 브라우저 저장본만 남습니다)')) return;
-  if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
-  await store.disconnect(); doc = newDoc(); hist = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer);
-  if (inDir) { try { await store.saveIntoFolder(doc); setStatus(`동기화 폴더에 저장됨 · ${store.state.fileName}`); } catch (e) { toast('폴더에 저장하지 못했습니다: ' + e.message, true); } }
-  renderAll(); updateSaveBadge(); sideTab = 'tpl'; renderRail(); renderSide();
-};
+$('#btnNew').onclick = openNewDesign;
 $('#btnOpen').onclick = async () => { if (await store.folderReady()) { openSaveDialog(); return; } openOtherFile(); };
 async function openOtherFile() { try { let j = null; if (store.state.supported) j = await store.openExisting(); else j = await store.pickLocal(); if (j) { await loadDoc(j, '불러왔습니다'); updateSaveBadge(); } } catch (e) { if (e.name !== 'AbortError') toast('열 수 없습니다: ' + e.message, true); } }
-$('#btnSave').onclick = openSaveDialog;
+$('#btnSave').onclick = saveNow;
 $('#btnHelp').onclick = () => $('#dlgHelp').showModal();
 $('#btnFonts').onclick = openFonts;
 $('#btnHoliday').onclick = () => openHoliday();
@@ -875,6 +911,133 @@ async function renderSaveDialog() {
   const pn = $('#svPcName'); if (pn) pn.onchange = () => { store.setPcName(pn.value); pn.value = store.pcName(); toast('이 PC 이름을 저장했습니다'); };
   const ul = d.querySelector('.list'); if (ul) ul.onclick = async e => { const li = e.target.closest('[data-doc]'); if (!li) return; const x = docs[Number(li.dataset.doc)]; if (st.handle && x.name === st.fileName && curIn) { d.close(); return; } try { await openFolderDoc(x.handle); d.close(); } catch (err) { toast('열 수 없습니다: ' + err.message, true); } };
 }
+
+/* ---- 새 디자인 만들기 (미리캔버스식) ---- */
+const PX = v => Math.round(v * 25.4 / 96 * 100) / 100;
+// [id, 이름, 묶음, 가로, 세로, 단위('mm'|'px'), 검색어]
+const FORMATS = [
+  ['pres169', '프레젠테이션 16:9', 'pres', 1920, 1080, 'px', '발표 PPT 슬라이드 설명회'], ['pres43', '프레젠테이션 4:3', 'pres', 1024, 768, 'px', '발표 PPT 슬라이드'],
+  ['info-h', '인포그래픽 가로형', 'pres', 1920, 1080, 'px', '인포그래픽 도표'], ['info-v', '인포그래픽 세로형', 'pres', 800, 2000, 'px', '인포그래픽 세로'],
+  ['ig-sq', '인스타그램 정사각', 'sns', 1080, 1080, 'px', 'SNS 인스타 피드 게시물'], ['ig-45', '인스타그램 세로 4:5', 'sns', 1080, 1350, 'px', 'SNS 인스타 피드 세로'],
+  ['story', '스토리 · 릴스', 'sns', 1080, 1920, 'px', 'SNS 인스타 스토리 릴스 쇼츠 세로'], ['cardnews', '카드뉴스', 'sns', 1080, 1080, 'px', 'SNS 카드뉴스 정사각'],
+  ['kakao', '카카오톡 공지 이미지', 'sns', 800, 800, 'px', '카카오 단톡방 공지 학부모'], ['blog', '블로그 썸네일', 'sns', 966, 966, 'px', '네이버 블로그 대표 이미지'],
+  ['fb', '페이스북 · 밴드 게시물', 'sns', 1200, 630, 'px', '페이스북 밴드 링크 이미지'],
+  ['yt-thumb', '유튜브 썸네일', 'video', 1280, 720, 'px', '유튜브 썸네일 영상'], ['yt-art', '유튜브 채널 아트', 'video', 2560, 1440, 'px', '유튜브 배너 채널'], ['video', '영상 화면 16:9', 'video', 1920, 1080, 'px', '영상 자막 화면'],
+  ['web-poster', '웹 포스터 세로형', 'web', 891, 1260, 'px', '웹 포스터 홈페이지'], ['detail', '상세페이지', 'web', 860, 1100, 'px', '상세페이지 쇼핑 소개'], ['web-banner', '홈페이지 배너', 'web', 1920, 600, 'px', '홈페이지 메인 배너'],
+  ['a4p', 'A4 세로', 'print', 210, 297, 'mm', '문서 인쇄 포스터 안내문'], ['a4l', 'A4 가로', 'print', 297, 210, 'mm', '문서 인쇄 가로'], ['a3p', 'A3 세로', 'print', 297, 420, 'mm', '포스터 게시물'], ['a3l', 'A3 가로', 'print', 420, 297, 'mm', '포스터 가로'],
+  ['a5p', 'A5 세로', 'print', 148, 210, 'mm', '전단 소책자'], ['b5p', 'B5 세로', 'print', 176, 250, 'mm', '소책자'], ['a2p', '포스터 A2', 'print', 420, 594, 'mm', '게시판 포스터 큰'],
+  ['flyer', '전단지 A4', 'print', 210, 297, 'mm', '전단지 홍보 모집'], ['leaflet', '3단 리플렛', 'print', 297, 210, 'mm', '리플렛 접지 브로셔'],
+  ['cert', '상장 · 증서 A4', 'print', 210, 297, 'mm', '상장 승급증 수료증 표창'], ['letter', '가정통신문 A4', 'doc', 210, 297, 'mm', '가정통신문 안내문 공지 학부모'], ['form', '문서 서식 세로형', 'doc', 794, 1123, 'px', '서식 신청서 활동지'],
+  ['namecard', '명함', 'print', 90, 50, 'mm', '명함'], ['postcard', '엽서 · 초대장', 'print', 148, 100, 'mm', '엽서 초대장 카드'], ['coupon', '쿠폰 · 이용권', 'print', 90, 50, 'mm', '쿠폰 이용권 체험권'],
+  ['sticker', '원형 스티커', 'print', 50, 50, 'mm', '스티커 라벨 원형'], ['nametag', '명찰', 'print', 90, 60, 'mm', '명찰 이름표'],
+  ['banner', '가로 현수막 5×0.9m', 'sign', 5000, 900, 'mm', '현수막 가로 대형'], ['banner3', '가로 현수막 3×0.7m', 'sign', 3000, 700, 'mm', '현수막 가로'], ['banner-v', '세로 현수막 0.8×2m', 'sign', 800, 2000, 'mm', '현수막 세로 심사'],
+  ['xbanner', 'X배너 60×180cm', 'sign', 600, 1800, 'mm', 'X배너 입간판 배너'], ['sign-a1', '입간판 A1', 'sign', 594, 841, 'mm', '입간판 포스터'],
+  ['desk-cal', '탁상 캘린더', 'cal', 224, 154, 'mm', '캘린더 달력 탁상'], ['wall-cal', '벽걸이 캘린더 A3', 'cal', 297, 420, 'mm', '캘린더 달력 벽걸이'], ['a4-cal', 'A4 달력 한 장', 'cal', 297, 210, 'mm', '달력 월간 가로'],
+];
+const ND_GROUPS = [['rec', '추천', '<path d="m12 3 2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>'], ['pres', '프레젠테이션', '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="m10 9 5 2.5-5 2.5z"/>'],
+  ['sns', '소셜 미디어', '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="m8.2 10.8 7.6-3.6M8.2 13.2l7.6 3.6"/>'], ['video', '유튜브 · 영상', '<rect x="3" y="6" width="18" height="12" rx="3"/><path d="m10 9.5 5 2.5-5 2.5z"/>'],
+  ['web', '웹사이트', '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/>'], ['print', '인쇄', '<path d="M7 8V3h10v5M7 17H4v-7h16v7h-3M7 14h10v7H7z"/>'],
+  ['doc', '문서', '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>'], ['sign', '현수막 · 배너', '<path d="M3 5h18v8H3zM6 13v8M18 13v8"/>'], ['cal', '캘린더', '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>']];
+const ND_COLOR = { pres: '#2f5bea', sns: '#d6408b', video: '#e0302e', web: '#6b3fd1', print: '#1e2b5a', doc: '#2f8d9e', sign: '#c9831a', cal: '#3a8a3a' };
+const ND_REC = ['ig-sq', 'cardnews', 'kakao', 'a4p', 'letter', 'cert', 'flyer', 'xbanner', 'banner3', 'pres169', 'yt-thumb', 'desk-cal'];
+let ndState = { nav: 'rec', q: '' };
+function recentFormats() { try { return JSON.parse(localStorage.getItem('naracal-recent-formats') || '[]'); } catch (e) { return []; } }
+function fmtMM(f) { return f[5] === 'px' ? [PX(f[3]), PX(f[4])] : [f[3], f[4]]; }
+function fmtLabel(f) { return f[5] === 'px' ? `${f[3]} × ${f[4]} px` : f[3] >= 1000 || f[4] >= 1000 ? `${f[3] / 10} × ${f[4] / 10} cm` : `${f[3]} × ${f[4]} mm`; }
+function fcard(f) { const r = f[3] / f[4], H = 54, W = 92; let w = W, h = W / r; if (h > H) { h = H; w = H * r; } return `<button class="fcard" data-fmt="${f[0]}"><span class="shape" style="color:${ND_COLOR[f[2]]}"><i style="width:${Math.max(8, w)}px;height:${Math.max(6, h)}px;background:${ND_COLOR[f[2]]}1a"></i></span><b>${esc(f[1])}</b><small>${fmtLabel(f)}</small></button>`; }
+function openNewDesign() {
+  let d = $('#dlgNew');
+  if (!d) { d = document.createElement('dialog'); d.id = 'dlgNew'; d.className = 'nd'; d.innerHTML = `<div class="ndhead"><h2>무엇을 만들어야 하나요?</h2><button class="btn sm" data-close>닫기</button></div><div class="ndsearch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="ndQ" placeholder="만들고 싶은 것을 검색해 보세요! (예: 인스타, 현수막, 상장)"></div><div class="ndbody"><nav id="ndNav"></nav><div class="ndmain" id="ndMain"></div></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close();
+    $('#ndQ').oninput = e => { ndState.q = e.target.value; renderNewDesign(); };
+    d.addEventListener('click', async e => { const n = e.target.closest('[data-ndnav]'); if (n) { ndState.nav = n.dataset.ndnav; ndState.q = ''; $('#ndQ').value = ''; renderNewDesign(); return; }
+      const c = e.target.closest('[data-fmt]'); if (c) { const f = FORMATS.find(x => x[0] === c.dataset.fmt); const [w, h] = fmtMM(f); d.close(); await createDesign(w, h, f[1], f[0]); return; }
+      if (e.target.id === 'ndMake') { const u = $('#ndU').value, w = Number($('#ndW').value), h = Number($('#ndH').value); if (!(w > 0 && h > 0)) { toast('가로·세로 크기를 넣어 주세요', true); return; } const k = u === 'px' ? 25.4 / 96 : u === 'cm' ? 10 : 1; d.close(); await createDesign(Math.round(w * k * 100) / 100, Math.round(h * k * 100) / 100, '새 디자인'); } }); }
+  ndState.q = ''; $('#ndQ').value = ''; renderNewDesign(); d.showModal(); setTimeout(() => $('#ndQ').focus(), 50);
+}
+function renderNewDesign() {
+  $('#ndNav').innerHTML = ND_GROUPS.map(([k, t, ic]) => `<button data-ndnav="${k}" class="${ndState.nav === k && !ndState.q ? 'on' : ''}"><svg viewBox="0 0 24 24">${ic}</svg>${t}</button>`).join('') + `<hr><button data-ndnav="custom" class="${ndState.nav === 'custom' && !ndState.q ? 'on' : ''}"><svg viewBox="0 0 24 24"><path d="m4 20 16-16M7 17l2 2M10 14l2 2M13 11l2 2M16 8l2 2"/></svg>직접 입력</button>`;
+  const custom = `<h3>직접 입력</h3><div class="custom"><label>가로<input type="number" id="ndW" min="1" value="210"></label><label>세로<input type="number" id="ndH" min="1" value="297"></label><label>단위<select id="ndU"><option value="mm">mm</option><option value="cm">cm</option><option value="px">px</option></select></label><button class="btn primary" id="ndMake">새 디자인 만들기</button></div><p class="hint">인쇄물은 mm·cm, 화면용(SNS·웹·영상)은 px로 넣으면 편합니다. px는 96dpi 기준으로 바꿉니다.</p>`;
+  const q = ndState.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let h = '';
+  if (q.length) { const list = FORMATS.filter(f => q.every(w => (f[1] + ' ' + f[6]).toLowerCase().includes(w))); h = `<h3>검색 결과 <small>${list.length}</small></h3><div class="fgrid">${list.map(fcard).join('') || '<p class="hint">맞는 크기가 없습니다. 직접 입력으로 만들어 보세요.</p>'}</div>` + custom; }
+  else if (ndState.nav === 'custom') h = custom;
+  else if (ndState.nav === 'rec') {
+    const rec = recentFormats().map(id => FORMATS.find(f => f[0] === id)).filter(Boolean);
+    h = `<div class="chips">${[['rec', '전체'], ['sns', '소셜 미디어'], ['print', '인쇄'], ['sign', '현수막 · 배너'], ['doc', '문서'], ['pres', '프레젠테이션'], ['cal', '캘린더']].map(([k, t]) => `<button data-ndnav="${k}" class="${k === 'rec' ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+    if (rec.length) h += `<h3>최근 사용</h3><div class="fgrid">${rec.map(fcard).join('')}</div>`;
+    h += `<h3>도장에서 자주 쓰는 크기</h3><div class="fgrid">${ND_REC.map(id => fcard(FORMATS.find(f => f[0] === id))).join('')}</div>`;
+    ND_GROUPS.slice(1).forEach(([k, t]) => { h += `<h3>${t}</h3><div class="fgrid">${FORMATS.filter(f => f[2] === k).map(fcard).join('')}</div>`; });
+  } else { const t = ND_GROUPS.find(g => g[0] === ndState.nav); h = `<h3>${t[1]}</h3><div class="fgrid">${FORMATS.filter(f => f[2] === ndState.nav).map(fcard).join('')}</div>`; }
+  $('#ndMain').innerHTML = h;
+}
+// 새 문서를 만들고, 동기화 폴더가 있으면 그 폴더에 새 파일로 저장
+async function createDesign(w, h, name, fmtId) {
+  if (fmtId) { const r = recentFormats().filter(x => x !== fmtId); r.unshift(fmtId); try { localStorage.setItem('naracal-recent-formats', JSON.stringify(r.slice(0, 6))); } catch (e) {} }
+  if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
+  const inDir = await store.folderReady();
+  await store.disconnect();
+  doc = newDoc(['custom', name, w, h]); doc.name = name; hist = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer);
+  if (inDir) { try { await store.saveIntoFolder(doc); setStatus(`동기화 폴더에 저장됨 · ${store.state.fileName}`); } catch (e) { toast('폴더에 저장하지 못했습니다: ' + e.message, true); } }
+  else setStatus('브라우저에 저장됩니다 · 파일로 저장하려면 저장(Ctrl+S)');
+  renderAll(); updateSaveBadge(); sideTab = 'tpl'; renderRail(); renderSide(); fitCanvas && fitCanvas();
+  toast(`${name} (${fmtLabel(['', '', '', w, h, 'mm'])}) 새 디자인을 만들었습니다`);
+}
+
+/* ---- 파일 메뉴: 저장 · 새 이름으로 저장 · 사본 만들기 ---- */
+async function saveNow() {
+  gcAssets();
+  try {
+    if (store.state.handle) { clearTimeout(fileTimer); await saveFileNow(); toast('저장했습니다'); return; }
+    if (await store.folderReady()) { await store.saveIntoFolder(doc); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); updateSaveBadge(); toast('동기화 폴더에 저장했습니다'); return; }
+    if (store.state.supported) { await store.connectNew(doc); updateSaveBadge(); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); toast('저장했습니다. 이제 바뀔 때마다 자동 저장됩니다.'); return; }
+    store.download(doc); toast('이 브라우저는 파일 저장을 지원하지 않아 내려받았습니다');
+  } catch (e) { if (e.name !== 'AbortError') toast('저장하지 못했습니다: ' + e.message, true); }
+}
+async function saveAs() {
+  const nm = window.prompt('새 이름으로 저장합니다. 문서 이름을 입력하세요.\n(지금 파일은 마지막으로 저장된 상태로 그대로 남습니다)', doc.name || '새 디자인'); if (nm == null || !nm.trim()) return;
+  gcAssets();
+  try {
+    if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
+    const prev = doc.name; doc.name = nm.trim(); $('#pname').value = doc.name;
+    if (await store.folderReady()) { await store.saveIntoFolder(doc); }
+    else if (store.state.supported) { try { await store.connectNew(doc); } catch (e) { doc.name = prev; $('#pname').value = prev; throw e; } }
+    else { store.download(doc); }
+    updateSaveBadge(); setStatus(`새 이름으로 저장됨 · ${store.state.fileName || doc.name}`); toast(`"${doc.name}"(으)로 저장했습니다. 이제 이 파일에서 작업합니다.`);
+  } catch (e) { if (e.name !== 'AbortError') toast('저장하지 못했습니다: ' + e.message, true); }
+}
+async function duplicateDoc() {
+  gcAssets();
+  const copy = Object.assign(clone(doc), { name: (doc.name || '새 디자인') + ' 사본' });
+  try {
+    if (await store.folderReady()) {
+      const h = await store.copyIntoFolder(copy);
+      if (window.confirm(`사본 "${h.name.replace(/\.design\.json$/i, '')}"을(를) 동기화 폴더에 만들었습니다.\n\n확인: 사본을 열어 작업합니다\n취소: 지금 문서에서 계속 작업합니다`)) await openFolderDoc(h, '사본을 열었습니다');
+      else toast('사본을 만들었습니다 (열기 목록에 있습니다)');
+    } else { store.download(copy); toast('사본을 파일로 내려받았습니다'); }
+  } catch (e) { toast('사본을 만들지 못했습니다: ' + e.message, true); }
+}
+function openFileMenu() {
+  const old = $('#fmenu'); if (old) { old.remove(); return; }
+  const st = store.state, b = $('#btnFileMenu').getBoundingClientRect();
+  const m = document.createElement('div'); m.className = 'fmenu'; m.id = 'fmenu'; m.setAttribute('role', 'menu');
+  m.innerHTML = `<div class="fstate">${st.handle ? `<b>${esc(st.fileName.replace(/\.design\.json$/i, ''))}</b><br>${st.dir ? '구글 드라이브 동기화 폴더에 자동 저장 중' : '파일에 자동 저장 중'}` : '아직 파일로 저장하지 않았습니다 (브라우저에만 저장 중)'}</div><hr>
+  <button data-fm="save"><svg class="ic"><use href="#i-save"/></svg>저장<kbd>Ctrl+S</kbd></button>
+  <button data-fm="saveas"><svg class="ic"><use href="#i-save"/></svg>새 이름으로 저장…<kbd>Ctrl+Shift+S</kbd></button>
+  <button data-fm="dup"><svg class="ic"><use href="#i-dup"/></svg>사본 만들기 (복제)</button>
+  <button data-fm="rename"><svg class="ic"><use href="#i-text"/></svg>이름 바꾸기</button><hr>
+  <button data-fm="new"><svg class="ic"><use href="#i-new"/></svg>새 디자인…</button>
+  <button data-fm="open"><svg class="ic"><use href="#i-open"/></svg>열기…<kbd>Ctrl+O</kbd></button>
+  <button data-fm="down"><svg class="ic"><use href="#i-upload"/></svg>파일로 내려받기 (JSON)</button><hr>
+  <button data-fm="sync"><svg class="ic"><use href="#i-folder"/></svg>저장 · 동기화 설정…</button>`;
+  document.body.appendChild(m); m.style.left = Math.max(8, Math.min(b.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px'; m.style.top = (b.bottom + 6) + 'px';
+  m.onclick = e => { const x = e.target.closest('[data-fm]'); if (!x) return; m.remove(); ({ save: saveNow, saveas: saveAs, dup: duplicateDoc, rename: () => { const p = $('#pname'); p.focus(); p.select(); }, new: openNewDesign, open: () => $('#btnOpen').click(), down: () => { gcAssets(); store.download(doc); }, sync: openSaveDialog })[x.dataset.fm](); };
+  setTimeout(() => document.addEventListener('pointerdown', function off(ev) { if (!m.contains(ev.target) && ev.target.closest('#btnFileMenu') == null) { m.remove(); } document.removeEventListener('pointerdown', off); }), 0);
+}
+$('#btnFileMenu').onclick = openFileMenu;
+// 저장 단축키 (입력 중에도 동작, 브라우저 기본 저장 창 막기)
+document.addEventListener('keydown', e => { const mod = e.ctrlKey || e.metaKey; if (!mod) return; const k = e.key.toLowerCase();
+  if (k === 's') { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) saveAs(); else saveNow(); }
+  else if (k === 'o' && !document.querySelector('dialog[open]')) { e.preventDefault(); $('#btnOpen').click(); } }, true);
 
 /* ---- 글꼴 둘러보기 ---- */
 let fontCat = 'all';

@@ -1,1 +1,6 @@
 .DS_Store
+# 동기화 폴더 파일(문서·설정)은 공개 저장소에 올리지 않음
+*.design.json
+설정.naracha.json
+디자인자료/
+_testlib

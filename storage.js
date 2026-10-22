@@ -115,7 +115,7 @@ NC.store = (function () {
   /* ---------- 동기화 폴더 (Google Drive 등): 설정값 + 모든 문서 ---------- */
   // 폴더 안: 설정.naracha.json(API 키·모델·최근 사용 목록) + *.design.json(문서들)
   const SET_FILE = '설정.naracha.json';
-  const SYNC_KEYS = ['naracal-ai-v1', 'naracal-recent-fonts', 'naracal-recent-elems', 'naracal-recent-tpls'];
+  const SYNC_KEYS = ['naracal-ai-v1', 'naracal-recent-fonts', 'naracal-recent-elems', 'naracal-recent-tpls', 'naracal-recent-formats'];
   Object.assign(state, { dir: null, dirName: '', dirSupported: !!window.showDirectoryPicker, setMod: 0, setBase: {} });
   async function connectFolder() {
     if (!state.dirSupported) throw new Error('이 브라우저는 폴더 연결을 지원하지 않습니다 (Chrome, Edge 권장).');
@@ -186,11 +186,20 @@ NC.store = (function () {
   async function inFolder(h) { if (!state.dir || !h) return false; try { return !!(await state.dir.resolve(h)); } catch (e) { return false; } }
   async function openHandle(h) { state.handle = h; state.fileName = h.name; await idbSet('fileHandle', h); return readFile(); }
   // 현재 문서를 폴더에 새 파일로 저장하고 연결 (이름이 겹치면 번호를 붙임)
-  async function saveIntoFolder(doc) {
-    const base = (doc.name || 'design').replace(/[\\/:*?"<>|]/g, '_').trim() || 'design';
+  async function uniqueName(title) {
+    const base = (title || 'design').replace(/[\\/:*?"<>|]/g, '_').trim() || 'design';
     const names = new Set((await listDocs()).map(d => d.name));
     let name = base + '.design.json'; for (let i = 2; names.has(name); i++) name = `${base} (${i}).design.json`;
-    const h = await state.dir.getFileHandle(name, { create: true });
+    return name;
+  }
+  // 사본: 폴더에 새 파일로만 쓰고, 지금 작업 파일은 그대로 둠
+  async function copyIntoFolder(data) {
+    const h = await state.dir.getFileHandle(await uniqueName(data.name), { create: true });
+    const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign({}, data, { saveId: '', lineage: [], savedBy: pcName(), savedAt: Date.now() }))); await w.close();
+    return h;
+  }
+  async function saveIntoFolder(doc) {
+    const h = await state.dir.getFileHandle(await uniqueName(doc.name), { create: true });
     state.handle = h; state.fileName = h.name; state.lastMod = 0; await idbSet('fileHandle', h);
     await writeFile(doc);
     return h;
@@ -198,5 +207,5 @@ NC.store = (function () {
 
   return { state, idbGet, idbSet, idbDel, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
     writeCopy, pcName, setPcName, adopt, descends,
-    connectFolder, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, listDocs, inFolder, openHandle, saveIntoFolder };
+    connectFolder, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
 })();
