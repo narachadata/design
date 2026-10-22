@@ -293,14 +293,10 @@ function renderSide() {
     $('#addImgFile').onchange = async e => { for (const f of e.target.files) { addImage(addAsset(await fileToDataURL(f))); } e.target.value = ''; };
   } else if (sideTab === 'tpl') {
     body.innerHTML = `<h3>캘린더 마법사</h3>
-    <label class="f"><span>연도</span><input type="number" id="wzYear" value="${yearNow}" min="2000" max="2100"></label>
-    <label class="f"><span>구성</span><select id="wzKind"><option value="full">탁상 인성 캘린더 전체 (26쪽)</option><option value="months">월간 달력 페이지만 (12쪽)</option><option value="virtues">인성 페이지만 (12쪽)</option></select></label>
-    <label class="f"><span>넣는 방식</span><select id="wzMode"><option value="replace">문서를 새로 만들기 (224×154)</option><option value="append">현재 문서 뒤에 추가</option></select></label>
-    <button class="btn primary full" id="wzGo">만들기</button>
-    <p class="hint">2026년 디자인을 바탕으로 ${yearNow}년 초안을 만듭니다. 내용(덕목·명언·실천·사자성어)은 AI 도우미에서 새로 받거나 직접 고칩니다. 공휴일은 상단 "공휴일"에서 가져와야 달력에 표시됩니다.</p>
-    <h3>페이지 템플릿 (현재 페이지 뒤에 추가)</h3>
-    <div class="row" style="margin-bottom:6px"><label class="f" style="margin:0;flex:1"><span>월</span><select id="tplMonth">${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}월</option>`).join('')}</select></label></div>
-    <div class="tile"><button data-tpl="cover">표지</button><button data-tpl="back">뒷표지</button><button data-tpl="virtue">인성 페이지</button><button data-tpl="cal">달력 페이지</button></div>
+    <div class="wz-card"><div class="wz-year">${yearNow}<small>년</small></div><p class="hint" style="margin:0 0 8px">연도별 달력 모양을 미리 보면서 표지·인성·달력 26쪽을 한 번에 만듭니다.</p><button class="btn primary full" id="wzOpen"><svg class="ic"><use href="#i-cal"/></svg>캘린더 마법사 열기</button></div>
+    <h3>템플릿 갤러리</h3>
+    <div class="tcats" id="tcats">${NC.tpl.cats.map(([k, t]) => `<button data-tc="${k}" class="${tplCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>
+    <div class="tgal" id="tgal"></div>
     <h3>문서 크기</h3>
     <label class="f"><select id="docSize">${SIZES.map(s => `<option value="${s[0]}" ${s[2] === doc.w && s[3] === doc.h ? 'selected' : ''}>${s[1]}</option>`).join('')}<option value="custom">직접 입력</option></select></label>
     <div class="grid2"><label class="f"><span>가로(mm)</span><input type="number" id="docW" value="${doc.w}" step="0.5"></label><label class="f"><span>세로(mm)</span><input type="number" id="docH" value="${doc.h}" step="0.5"></label></div>
@@ -308,16 +304,9 @@ function renderSide() {
     <h3>인쇄 설정</h3>
     <div class="grid2"><label class="f"><span>도련(mm)</span><input type="number" id="docBleed" value="${doc.bleed}" min="0" max="10" step="0.5"></label><label class="chk" style="margin-top:18px"><input type="checkbox" id="docMarks" ${doc.cropMarks ? 'checked' : ''}> 재단선</label></div>
     <p class="hint">인쇄소 납품용 PDF는 보통 도련 3mm를 둡니다. 페이지 가장자리에 닿은 배경·도형·그림은 도련까지 자동으로 늘어납니다.</p>`;
-    $('#wzGo').onclick = () => {
-      const year = Number($('#wzYear').value), kind = $('#wzKind').value, mode = $('#wzMode').value;
-      doc.calendar.year = year;
-      if (mode === 'replace') { if (!window.confirm('현재 문서의 페이지를 모두 지우고 새로 만듭니다. 계속할까요?')) return; doc.w = 224; doc.h = 154; doc.pages = []; doc.name = `${year} 인성 캘린더`; $('#pname').value = doc.name; }
-      const pages = CAL.buildPages(doc, uid, { year, kind });
-      doc.pages.push(...pages); commit(); goto(mode === 'replace' ? 0 : doc.pages.length - pages.length);
-      toast(`${pages.length}쪽을 만들었습니다`);
-      if (!doc.holidays[year]) setTimeout(() => openHoliday(year), 400);
-    };
-    body.querySelectorAll('[data-tpl]').forEach(b => b.onclick = () => { const kind = b.dataset.tpl, month = Number($('#tplMonth').value); const pages = CAL.buildPages(doc, uid, { year: yearNow, kind, month }); doc.pages.splice(cur + 1, 0, ...pages); commit(); goto(cur + 1); });
+    $('#wzOpen').onclick = () => openWizard(yearNow);
+    renderGallery();
+    $('#tcats').onclick = e => { const b = e.target.closest('[data-tc]'); if (b) { tplCat = b.dataset.tc; $$('#tcats button').forEach(x => x.classList.toggle('on', x === b)); renderGallery(); } };
     $('#docSize').onchange = e => { const s = SIZES.find(x => x[0] === e.target.value); if (s) { $('#docW').value = s[2]; $('#docH').value = s[3]; } };
     $('#docSizeApply').onclick = () => { const w = Number($('#docW').value), h = Number($('#docH').value); if (!(w > 10 && h > 10)) return; doc.w = w; doc.h = h; commit(); zoom = 0; renderAll(); toast('문서 크기를 바꿨습니다'); };
     $('#docBleed').onchange = e => { doc.bleed = Number(e.target.value) || 0; commit(); };
@@ -517,6 +506,109 @@ function openSaveDialog() {
   d.showModal();
 }
 
+
+
+/* ---------- 템플릿 갤러리 ---------- */
+let tplCat = 'all';
+function tplItems() {
+  const y = doc.calendar.year || 2027;
+  const calItems = [['cal-cover', '캘린더 표지', 224, 154, () => CAL.buildPages(doc, uid, { year: y, kind: 'cover' })], ['cal-virtue', '인성 페이지 (1월)', 224, 154, () => CAL.buildPages(doc, uid, { year: y, kind: 'virtue', month: 1 })], ['cal-month', '달력 페이지 (1월)', 224, 154, () => CAL.buildPages(doc, uid, { year: y, kind: 'cal', month: 1 })], ['cal-back', '캘린더 뒷표지', 224, 154, () => CAL.buildPages(doc, uid, { year: y, kind: 'back' })]]
+    .map(([id, name, w, h, build]) => ({ id, cat: 'calendar', name, w, h, build }));
+  const items = calItems.concat(NC.tpl.list.map(t => ({ id: t.id, cat: t.cat, name: t.name, w: t.w, h: t.h, build: () => t.build(uid) })));
+  return tplCat === 'all' ? items : items.filter(t => t.cat === tplCat);
+}
+function tplSheet(t, pages) { const tmp = Object.assign({}, doc, { w: t.w, h: t.h, bleed: 0, cropMarks: false }); const saved = doc; doc = tmp; try { return sheetHTML(pages[0], 'thumb'); } finally { doc = saved; } }
+function renderGallery() {
+  const g = $('#tgal'); if (!g) return;
+  const items = tplItems();
+  g.innerHTML = items.map(t => { const pages = t.build(); const k = 1; return `<button class="tcard" data-tid="${t.id}"><div class="tbox" data-w="${t.w}" data-h="${t.h}">${tplSheet(t, pages)}</div><span>${esc(t.name)}</span><small>${t.w >= 1000 ? (t.w / 10) + '×' + (t.h / 10) + 'cm' : Math.round(t.w) + '×' + Math.round(t.h) + 'mm'}</small></button>`; }).join('');
+  const fitAll = () => g.querySelectorAll('.tbox').forEach(bx => { const w = Number(bx.dataset.w), h = Number(bx.dataset.h); const bw = bx.clientWidth; const k = Math.min(bw / (w * MM), 110 / (h * MM)); const sh = bx.querySelector('.sheet'); sh.style.transform = `scale(${k})`; sh.style.left = ((bw - w * MM * k) / 2) + 'px'; bx.style.height = (h * MM * k) + 'px'; });
+  requestAnimationFrame(fitAll);
+  g.onclick = e => { const b = e.target.closest('[data-tid]'); if (b) openTplPreview(items.find(t => t.id === b.dataset.tid)); };
+}
+function openTplPreview(t) {
+  let d = $('#dlgTpl'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgTpl'; d.innerHTML = `<div class="dhead"><h2 id="tplTitle"></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="tplBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
+  const pages = t.build();
+  $('#tplTitle').innerHTML = `${esc(t.name)} <small>${t.w >= 1000 ? (t.w / 10) + '×' + (t.h / 10) + 'cm' : Math.round(t.w) + '×' + Math.round(t.h) + 'mm'} · ${pages.length}쪽</small>`;
+  $('#tplBody').innerHTML = `<div class="tprev" id="tprev">${tplSheet(t, pages)}</div>
+  <div class="row" style="margin-top:14px;justify-content:flex-end"><span class="hint" style="margin:0;flex:1">만든 뒤 글자·그림·색을 자유롭게 바꿀 수 있습니다. 로고와 연락처는 도장 정보로 고쳐 주세요.</span>
+  <button class="btn" id="tplAppend" ${(t.w === doc.w && t.h === doc.h) ? '' : 'title="현재 문서와 크기가 달라 요소가 어긋날 수 있습니다"'}>현재 문서 뒤에 추가</button><button class="btn primary" id="tplNew">이 템플릿으로 새 문서</button></div>`;
+  const box = $('#tprev'); requestAnimationFrame(() => { const bw = box.clientWidth, maxH = Math.min(520, window.innerHeight * 0.55); const k = Math.min(bw / (t.w * MM), maxH / (t.h * MM)); const sh = box.querySelector('.sheet'); sh.style.transform = `scale(${k})`; sh.style.left = ((bw - t.w * MM * k) / 2) + 'px'; box.style.height = (t.h * MM * k) + 'px'; });
+  $('#tplNew').onclick = () => { if (doc.pages.some(p => p.els.length) && !window.confirm('현재 문서를 닫고 새 문서를 만들까요? (파일에 연결되어 있지 않으면 브라우저 저장본만 남습니다)')) return; store.disconnect(); const nd = newDoc(); nd.w = t.w; nd.h = t.h; nd.name = t.name; nd.pages = pages; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = doc.assets; nd.fonts = doc.fonts; nd.rules = doc.rules; doc = nd; hist = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); renderAll(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다`); };
+  $('#tplAppend').onclick = () => { doc.pages.splice(cur + 1, 0, ...pages); commit(); goto(cur + 1); d.close(); toast(`${pages.length}쪽을 추가했습니다`); };
+  d.showModal();
+}
+/* ---------- 캘린더 마법사 (연도별 미리보기) ---------- */
+let wz = { year: 2027, kind: 'full', mode: 'replace', view: 'cal', month: 1, weekStart: 0, rows: 'merge', colorA: '', colorB: '' };
+function openWizard(year) {
+  wz.year = year || doc.calendar.year || new Date().getFullYear();
+  wz.colorA = doc.calendar.theme.colorA; wz.colorB = doc.calendar.theme.colorB;
+  wz.month = 1; wz.view = 'cal';
+  let d = $('#dlgWizard');
+  if (!d) { d = document.createElement('dialog'); d.id = 'dlgWizard'; d.className = 'wide'; d.innerHTML = `<div class="dhead"><h2>캘린더 마법사 <small>연도를 고르면 12개월 달력 모양이 바로 보입니다</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody wz" id="wzBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
+  renderWizard(); d.showModal();
+}
+function wizardDoc() {
+  const t = Object.assign({}, doc, { calendar: clone(doc.calendar), w: 224, h: 154, bleed: 0, cropMarks: false });
+  t.calendar.year = wz.year; t.calendar.theme.colorA = wz.colorA; t.calendar.theme.colorB = wz.colorB;
+  return t;
+}
+function wizardPages(kind) {
+  const t = wizardDoc(); const saved = doc; doc = t;
+  try { const pages = CAL.buildPages(t, uid, { year: wz.year, kind }); pages.forEach(p => p.els.forEach(el => { if (el.type === 'cal') { el.s = Object.assign({}, el.s, { weekStart: wz.weekStart, rows: wz.rows }); } if (el.type === 'mini') el.s = Object.assign({}, el.s, { weekStart: wz.weekStart }); })); return pages; }
+  finally { doc = saved; }
+}
+function wizardSheet(pg) { const t = wizardDoc(); const saved = doc; doc = t; try { return sheetHTML(pg, 'thumb'); } finally { doc = saved; } }
+function renderWizard() {
+  const body = $('#wzBody'); const hol = (doc.holidays[wz.year] || []).length;
+  const pages = wizardPages(wz.view === 'cal' ? 'months' : 'virtues');
+  const big = pages[wz.month - 1];
+  const pageCount = wz.kind === 'full' ? 26 : 12;
+  body.innerHTML = `<div class="wz-side">
+    <h3>연도</h3><div class="wz-yearrow"><button class="btn icon" id="wzYm" title="이전 해"><svg class="ic"><use href="#i-prev"/></svg></button><input type="number" id="wzYear" value="${wz.year}" min="2000" max="2100"><button class="btn icon" id="wzYp" title="다음 해"><svg class="ic"><use href="#i-next"/></svg></button></div>
+    <div class="wz-hol ${hol ? 'ok' : ''}">${hol ? `✓ ${wz.year}년 공휴일 ${hol}개 적용됨` : `${wz.year}년 공휴일 정보가 아직 없습니다`}<button class="btn sm" id="wzHol">${hol ? '편집' : '가져오기'}</button></div>
+    <h3>구성</h3><div class="wz-opts">${[['full', '전체 26쪽', '표지 + 인성 12 + 달력 12 + 뒷표지'], ['months', '달력 12쪽', '월간 달력 페이지만'], ['virtues', '인성 12쪽', '덕목·명언 페이지만']].map(([k, t, d2]) => `<label class="wz-opt ${wz.kind === k ? 'on' : ''}"><input type="radio" name="wzKind" value="${k}" ${wz.kind === k ? 'checked' : ''}><b>${t}</b><small>${d2}</small></label>`).join('')}</div>
+    <h3>달력 모양</h3><div class="grid2"><label class="f"><span>주 시작</span><select id="wzWs"><option value="0" ${wz.weekStart === 0 ? 'selected' : ''}>일요일</option><option value="1" ${wz.weekStart === 1 ? 'selected' : ''}>월요일</option></select></label><label class="f"><span>줄 수</span><select id="wzRows"><option value="merge" ${wz.rows === 'merge' ? 'selected' : ''}>5줄 (24/31 합침)</option><option value="6" ${wz.rows === '6' ? 'selected' : ''}>6줄</option><option value="auto" ${wz.rows === 'auto' ? 'selected' : ''}>자동</option></select></label></div>
+    <h3>인성 페이지 색</h3><div class="grid2"><label class="f"><span>홀수 달</span><input type="color" id="wzA" value="${wz.colorA}"></label><label class="f"><span>짝수 달</span><input type="color" id="wzB" value="${wz.colorB}"></label></div>
+    <h3>넣는 방식</h3><div class="seg"><button data-wzmode="replace" aria-pressed="${wz.mode === 'replace'}">문서 새로 만들기</button><button data-wzmode="append" aria-pressed="${wz.mode === 'append'}">현재 문서 뒤에 추가</button></div>
+    <p class="hint" style="margin-top:10px">${wz.mode === 'replace' ? '지금 문서의 페이지를 모두 지우고 224×154mm 문서로 새로 만듭니다.' : `현재 문서(${doc.w}×${doc.h}mm) 끝에 ${pageCount}쪽을 덧붙입니다. 크기가 다르면 요소가 어긋날 수 있습니다.`}</p>
+    <button class="btn primary full" id="wzGo" style="margin-top:6px">${wz.year}년 ${pageCount}쪽 만들기</button>
+    <p class="hint">문구(덕목·명언·실천·사자성어)는 2026년 내용으로 채워지며, 만든 뒤 AI 도우미나 직접 입력으로 바꿉니다.</p>
+  </div>
+  <div class="wz-main">
+    <div class="wz-top"><div class="seg" style="width:220px"><button data-wzview="cal" aria-pressed="${wz.view === 'cal'}">달력 페이지</button><button data-wzview="virtue" aria-pressed="${wz.view === 'virtue'}">인성 페이지</button></div><span class="hint" style="margin:0">${wz.year}년 ${wz.month}월 · 아래 작은 달력을 누르면 크게 봅니다</span></div>
+    <div class="wz-big"><div class="wz-bigbox" id="wzBig">${wizardSheet(big)}</div></div>
+    <div class="wz-grid" id="wzGrid">${pages.map((pg, i) => `<button class="wz-m ${i + 1 === wz.month ? 'on' : ''}" data-m="${i + 1}"><div class="wz-mbox">${wizardSheet(pg)}</div><span>${i + 1}월</span></button>`).join('')}</div>
+  </div>`;
+  const fit = () => {
+    const bigBox = $('#wzBig'); const bw = bigBox.clientWidth; const k = bw / (224 * MM); const sh = bigBox.querySelector('.sheet'); sh.style.transform = `scale(${k})`; bigBox.style.height = (154 * MM * k) + 'px';
+    body.querySelectorAll('.wz-mbox').forEach(bx => { const k2 = bx.clientWidth / (224 * MM); bx.querySelector('.sheet').style.transform = `scale(${k2})`; bx.style.height = (154 * MM * k2) + 'px'; });
+  };
+  requestAnimationFrame(fit);
+  const setYear = y => { wz.year = clamp(Math.round(y) || wz.year, 2000, 2100); renderWizard(); };
+  $('#wzYm').onclick = () => setYear(wz.year - 1); $('#wzYp').onclick = () => setYear(wz.year + 1);
+  $('#wzYear').onchange = e => setYear(Number(e.target.value));
+  $('#wzHol').onclick = async () => {
+    if (!hol && wz.year >= 2023 && wz.year <= 2030) { doc.holidays[wz.year] = CAL.builtinHolidays(wz.year); commit(); rerender(); toast(`${wz.year}년 공휴일 ${doc.holidays[wz.year].length}개를 내장 표에서 가져왔습니다`); renderWizard(); }
+    else { $('#dlgWizard').close(); openHoliday(wz.year); }
+  };
+  body.querySelectorAll('[name=wzKind]').forEach(r => r.onchange = () => { wz.kind = r.value; renderWizard(); });
+  $('#wzWs').onchange = e => { wz.weekStart = Number(e.target.value); renderWizard(); };
+  $('#wzRows').onchange = e => { wz.rows = e.target.value; renderWizard(); };
+  $('#wzA').oninput = e => { wz.colorA = e.target.value; }; $('#wzA').onchange = () => renderWizard();
+  $('#wzB').oninput = e => { wz.colorB = e.target.value; }; $('#wzB').onchange = () => renderWizard();
+  body.querySelectorAll('[data-wzmode]').forEach(b => b.onclick = () => { wz.mode = b.dataset.wzmode; renderWizard(); });
+  body.querySelectorAll('[data-wzview]').forEach(b => b.onclick = () => { wz.view = b.dataset.wzview; renderWizard(); });
+  $('#wzGrid').onclick = e => { const b = e.target.closest('[data-m]'); if (b) { wz.month = Number(b.dataset.m); renderWizard(); } };
+  $('#wzGo').onclick = () => {
+    doc.calendar.year = wz.year; doc.calendar.theme.colorA = wz.colorA; doc.calendar.theme.colorB = wz.colorB;
+    if (wz.mode === 'replace') { if (doc.pages.some(p => p.els.length) && !window.confirm('현재 문서의 페이지를 모두 지우고 새로 만듭니다. 계속할까요?')) return; doc.w = 224; doc.h = 154; doc.pages = []; doc.name = `${wz.year} 인성 캘린더`; $('#pname').value = doc.name; }
+    const saved = doc; const pages = wizardPages(wz.kind);
+    doc = saved; doc.pages.push(...pages); commit(); goto(wz.mode === 'replace' ? 0 : doc.pages.length - pages.length);
+    $('#dlgWizard').close(); toast(`${wz.year}년 ${pages.length}쪽을 만들었습니다`);
+    if (!doc.holidays[wz.year]) setTimeout(() => openHoliday(wz.year), 400);
+  };
+}
 /* ---------- 글꼴 둘러보기 ---------- */
 let fontCat = 'all';
 function openFonts() {

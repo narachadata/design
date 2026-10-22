@@ -240,3 +240,51 @@ code{background:var(--ui-field);padding:1px 6px;border-radius:5px;font-size:12.5
 .f input[type=number]::-webkit-outer-spin-button,.f input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .grid4 .f>span,.grid3 .f>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .evrow select{padding:6px 2px}
+
+/* ===== 캘린더 마법사 ===== */
+dialog.wide{max-width:1180px;width:95vw}
+.wz{display:grid;grid-template-columns:272px 1fr;gap:18px;max-height:78vh}
+.wz-side{overflow-y:auto;padding-right:6px}
+.wz-side h3:first-child{margin-top:0}
+.wz-yearrow{display:flex;gap:6px;align-items:center}
+.wz-yearrow input{flex:1;text-align:center;font-size:22px;font-weight:800;padding:6px;border:1px solid var(--ui-line2);border-radius:var(--r);min-width:0;-moz-appearance:textfield;appearance:textfield}
+.wz-yearrow input::-webkit-inner-spin-button{-webkit-appearance:none}
+.wz-hol{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 2px;padding:8px 10px;border-radius:var(--r);background:#fff7e6;color:#8a5a00;font-size:12.5px;font-weight:600;border:1px solid #f3dfae}
+.wz-hol.ok{background:#e9f7ee;color:#1f6b3a;border-color:#bfe5cc}
+.wz-opts{display:flex;flex-direction:column;gap:6px}
+.wz-opt{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--ui-line2);border-radius:var(--r);cursor:pointer}
+.wz-opt input{grid-row:1/3;margin:0;accent-color:var(--ui-accent)}
+.wz-opt b{font-size:13.5px}
+.wz-opt small{color:var(--ui-muted);font-size:12px}
+.wz-opt.on{border-color:var(--ui-accent);background:var(--ui-accent-soft)}
+.wz-main{display:flex;flex-direction:column;gap:10px;min-width:0;overflow-y:auto}
+.wz-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.wz-big{background:var(--ui-stage);border-radius:12px;padding:16px;display:flex;justify-content:center}
+.wz-bigbox{position:relative;width:100%;max-width:640px;overflow:hidden;box-shadow:0 10px 30px rgba(16,24,40,.22);border-radius:3px;background:#fff}
+.wz-bigbox .sheet{position:absolute;left:0;top:0;transform-origin:0 0;box-shadow:none}
+.wz-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.wz-m{border:2px solid transparent;border-radius:8px;padding:4px;background:transparent;cursor:pointer;display:flex;flex-direction:column;gap:3px;align-items:stretch;font-size:12px;font-weight:600;color:var(--ui-fg2)}
+.wz-m:hover{background:var(--ui-field)}
+.wz-m.on{border-color:var(--ui-accent);background:var(--ui-accent-soft);color:var(--ui-accent)}
+.wz-mbox{position:relative;width:100%;overflow:hidden;background:#fff;box-shadow:var(--sh);border-radius:2px}
+.wz-mbox .sheet{position:absolute;left:0;top:0;transform-origin:0 0;box-shadow:none}
+.wz-card{border:1px solid var(--ui-line2);border-radius:12px;padding:12px;background:linear-gradient(180deg,#fff,#f5f7fc)}
+.wz-year{font-size:26px;font-weight:800;color:var(--brand);line-height:1;margin-bottom:6px}
+.wz-year small{font-size:13px;font-weight:600;margin-left:3px;color:var(--ui-muted)}
+@media (max-width:900px){.wz{grid-template-columns:1fr}.wz-grid{grid-template-columns:repeat(4,1fr)}}
+
+/* ===== 템플릿 갤러리 ===== */
+.tcats{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.tcats button{border:1px solid var(--ui-line2);background:#fff;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;cursor:pointer;color:var(--ui-fg2)}
+.tcats button:hover{border-color:var(--ui-accent)}
+.tcats button.on{background:var(--ui-accent);border-color:var(--ui-accent);color:#fff}
+.tgal{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tcard{border:1px solid var(--ui-line2);border-radius:10px;background:#fff;padding:6px;cursor:pointer;display:flex;flex-direction:column;gap:4px;text-align:left;min-width:0}
+.tcard:hover{border-color:var(--ui-accent);box-shadow:0 0 0 3px var(--ui-accent-soft)}
+.tcard .tbox{position:relative;width:100%;overflow:hidden;background:var(--ui-field);border-radius:6px}
+.tcard .tbox .sheet{position:absolute;top:0;transform-origin:0 0;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.tcard span{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tcard small{font-size:11px;color:var(--ui-muted)}
+.tprev{position:relative;width:100%;overflow:hidden;background:var(--ui-stage);border-radius:12px}
+.tprev .sheet{position:absolute;top:0;transform-origin:0 0;box-shadow:0 10px 30px rgba(16,24,40,.22)}
+#dlgTpl{max-width:900px}
