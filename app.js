@@ -427,7 +427,7 @@ wrap.addEventListener('pointerdown', e => {
     else if (!was) select(ids);
     if (el.type === 'cal' && was && !e.shiftKey) { const cell = e.target.closest('.cell'); if (cell && cell.dataset.day) { selDay = Number(cell.dataset.day); renderInspector(); const ds = $('#daySel'); if (ds) ds.scrollIntoView({ block: 'center' }); } }
     if (el.locked) return;
-    let dup = null; if (e.altKey && was) { // Alt+끌기: 제자리에 복제한 뒤 복제본을 옮김
+    let dup = null; if (e.altKey && !e.shiftKey) { // Alt+끌기: 제자리에 복제한 뒤 복제본을 옮김
       const gmap = {}; const ids = selEls().filter(x => !x.locked).map(o => { const n = clone(o); n.id = uid(); delete n.gen; if (n.group) { gmap[n.group] = gmap[n.group] || uid(); n.group = gmap[n.group]; } page().els.push(n); return n.id; }); dup = { ids, orig: sel.slice() }; sel = ids; renderCanvas(); }
     drag = { kind: 'move', dup, reduceTo: (was && !e.shiftKey && !e.altKey && sel.length > ids.length) ? ids : null, els: selEls().filter(x => !x.locked), start: p, orig: selEls().map(x => ({ id: x.id, x: x.x, y: x.y })), moved: false };
     e.preventDefault(); return;
@@ -522,7 +522,7 @@ function endEdit() {
   if (!editing) return; const dom = editing; editing = null; hideTextBar(); const el = find(dom.dataset.id);
   const t = domText(dom); const html = richHTML(dom); dom.contentEditable = 'false'; dom.classList.remove('editing');
   const fresh = el && freshText === el.id; freshText = null; // 방금 만든 글 상자: 넣은 글자까지 한 번의 실행 취소로
-  if (el && !t.trim()) { page().els = page().els.filter(x => x !== el); sel = sel.filter(id => id !== el.id); fresh ? amendCommit() : commit(); rerender(); return; } // 비운 글 상자는 지움 (Figma와 같음)
+  if (el && !t.trim()) { page().els = page().els.filter(x => x !== el); sel = sel.filter(id => id !== el.id); if (fresh && hptr > 0) { hist.length = hptr; histMeta.length = hptr; hptr--; markDirty(); } else commit(); rerender(); return; } // 비운 글 상자는 지움 (Figma와 같음)
   if (el && (t !== el.text || (html || '') !== (el.html || ''))) { el.text = t; if (html) { el.html = html; el.htmlFor = t; } else { delete el.html; delete el.htmlFor; } fresh ? amendCommit() : commit(); }
   rerender();
 }
@@ -652,7 +652,7 @@ document.addEventListener('keydown', e => {
   if (mod && e.key.toLowerCase() === 'g') { e.preventDefault(); e.shiftKey ? ungroupSel() : groupSel(); return; }
   if (mod && (e.code === 'BracketRight' || e.code === 'BracketLeft')) { e.preventDefault(); reorder(e.code === 'BracketRight' ? (e.shiftKey ? 'front' : 'up') : (e.shiftKey ? 'back' : 'down')); return; }
   if (mod && !e.altKey && (e.code === 'KeyC' || e.code === 'KeyX')) { if (sel.length) doCopy(e.code === 'KeyX'); return; }
-  if (mod && !e.altKey && e.code === 'KeyV') { pasteShift = e.shiftKey; return; } // 실제 붙여넣기는 paste 이벤트에서 (바깥 그림·글자와 구분)
+  if (mod && !e.altKey && e.code === 'KeyV') { pasteShift = e.shiftKey; clearTimeout(pasteFallback); if (clip && clip.els) { const sh = e.shiftKey; pasteFallback = setTimeout(() => doPaste(sh), 150); } return; } // paste 이벤트가 안 오는 브라우저(사파리 등) 대비 // 실제 붙여넣기는 paste 이벤트에서 (바깥 그림·글자와 구분)
   if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); select(page().els.filter(x => !x.hidden && !x.locked).map(x => x.id)); return; }
   if (e.key === 'Delete' || e.key === 'Backspace') { if (sel.length) { e.preventDefault(); removeSel(); } return; }
   // 선택한 요소가 없으면 ↑↓(←→)로 페이지를 이동 (페이지 목록에서 고른 뒤 계속 넘기기)
@@ -662,7 +662,7 @@ document.addEventListener('keydown', e => {
   if (e.code === 'KeyP' && !mod && !e.altKey) setTool(tool === 'pen' ? 'select' : 'pen');
   if (e.code === 'KeyT' && !mod && !e.altKey) addText('b');
 });
-function removeSel() { const lk = selEls().filter(el => el.locked).length; page().els = page().els.filter(el => !sel.includes(el.id) || el.locked); sel = []; commit(); rerender(); if (lk) toast(`잠긴 요소 ${lk}개는 지우지 않았습니다 (잠금을 풀고 지우세요)`); }
+function removeSel() { const lk = selEls().filter(el => el.locked).length; page().els = page().els.filter(el => !sel.includes(el.id) || el.locked); commit(); sel = []; histMeta[hptr] && (histMeta[hptr].sel = histMeta[hptr].sel.slice()); rerender(); /* 기록에는 지운 요소의 선택을 남겨 Ctrl+Z 하면 다시 골라진 상태로 */ if (lk) toast(`잠긴 요소 ${lk}개는 지우지 않았습니다 (잠금을 풀고 지우세요)`); }
 function duplicate() { if (!sel.length) return; const gmap = {}; const ids = selEls().map(el => { const n = clone(el); n.id = uid(); delete n.gen; if (n.group) { gmap[n.group] = gmap[n.group] || uid(); n.group = gmap[n.group]; } n.x += 5; n.y += 5; page().els.push(n); return n.id; }); commit(); select(ids); rerender(); }
 // 그룹: 고른 것이 두 묶음 이상이면 (그룹+낱개, 그룹+그룹도) 하나로 묶고, 그룹 하나만 골랐으면 해제
 function selUnitCount() { const els = selEls(); return new Set(els.map(e => e.group || e.id)).size; }
@@ -749,7 +749,7 @@ function renderSide() {
     const tc_ = $('#tplClear'); if (tc_) tc_.onclick = () => { tplF = { format: '', season: '', age: '', occasion: '', biz: '' }; tplQ = ''; tplCat = 'all'; renderSide(); };
     let tq; $('#tplSearch').oninput = e => { tplQ = e.target.value; clearTimeout(tq); tq = setTimeout(renderGallery, 250); };
     $('#docSize').onchange = e => { const s = SIZES.find(x => x[0] === e.target.value); if (s) { $('#docW').value = s[2]; $('#docH').value = s[3]; } };
-    $('#docSizeApply').onclick = () => { const w = Number($('#docW').value), h = Number($('#docH').value); if (!(w > 10 && h > 10)) return; const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, w, h, 'fit'); doc.pages = nd.pages; doc.w = w; doc.h = h; commit(); zoom = 0; renderAll(); toast('문서 크기를 바꾸고 내용을 맞춰 배치했습니다 (Ctrl+Z로 되돌리기)'); };
+    $('#docSizeApply').onclick = () => { const w = Number($('#docW').value), h = Number($('#docH').value); if (!(w > 10 && h > 10)) return; const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, w, h, 'fit'); doc.pages = nd.pages; doc.w = w; doc.h = h; doc.fmt = (SIZES.find(x => x[2] === w && x[3] === h) || [''])[0] === 'desk' ? 'desk-cal' : ''; commit(); zoom = 0; renderAll(); toast('문서 크기를 바꾸고 내용을 맞춰 배치했습니다 (Ctrl+Z로 되돌리기)'); };
     $('#docResize').onclick = openResize;
   } else if (sideTab === 'elems') {
     renderElems();
@@ -785,9 +785,9 @@ function renderSide() {
     <h3>내 이미지 (${mine.length})</h3>${mine.length ? `<div class="picker">${mine.map(k => `<button data-img="a:${k}" title="누르면 추가 · 끌어서 원하는 자리나 그림 위에 놓기 · 우클릭 삭제" data-del="${k}" draggable="true"><img src="${doc.assets[k]}" alt="" draggable="false"></button>`).join('')}</div>` : '<p class="hint">아직 없습니다.</p>'}
     <h3>내 글꼴 (${doc.fonts.length})</h3>${doc.fonts.length ? `<ul class="list">${doc.fonts.map((f, i) => `<li><span style="font-family:'${esc(f.family)}'">${esc(f.family)}</span><button class="x" data-delfont="${i}">×</button></li>`).join('')}</ul>` : '<p class="hint">아직 없습니다.</p>'}`;
     $('#upImg').onchange = async e => { for (const f of e.target.files) addImage(addAsset(await fileToDataURL(f))); e.target.value = ''; renderSide(); };
-    $('#upFont').onchange = async e => { const f = e.target.files[0]; if (!f) return; const data = await fileToDataURL(f); const family = f.name.replace(/\.(ttf|otf|woff2?)$/i, ''); try { const ff = new FontFace(family, `url(${data})`); await ff.load(); document.fonts.add(ff); doc.fonts.push({ family, data }); commit(); renderSide(); toast(`글꼴 "${family}"을 추가했습니다`); } catch (err) { toast('글꼴을 읽지 못했습니다', true); } };
-    body.onclick = e => { const b = e.target.closest('[data-img]'); if (b) addImage(b.dataset.img); const d = e.target.closest('[data-delfont]'); if (d) { doc.fonts.splice(Number(d.dataset.delfont), 1); commit(); renderSide(); } };
-    body.oncontextmenu = e => { const b = e.target.closest('[data-del]'); if (!b) return; e.preventDefault(); if (window.confirm('이 이미지를 보관함에서 지울까요? (페이지에 쓰인 곳은 비워집니다)')) { delete doc.assets[b.dataset.del]; commit(); renderAll(); } };
+    $('#upFont').onchange = async e => { const f = e.target.files[0]; if (!f) return; const data = await fileToDataURL(f); const family = f.name.replace(/\.(ttf|otf|woff2?)$/i, ''); try { const ff = new FontFace(family, `url(${data})`); await ff.load(); document.fonts.add(ff); doc.fonts.push({ family, data }); commit(); markDirty(); renderSide(); toast(`글꼴 "${family}"을 추가했습니다`); } catch (err) { toast('글꼴을 읽지 못했습니다', true); } };
+    body.onclick = e => { const b = e.target.closest('[data-img]'); if (b) addImage(b.dataset.img); const d = e.target.closest('[data-delfont]'); if (d) { doc.fonts.splice(Number(d.dataset.delfont), 1); commit(); markDirty(); renderSide(); } };
+    body.oncontextmenu = e => { const b = e.target.closest('[data-del]'); if (!b) return; e.preventDefault(); if (window.confirm('이 이미지를 보관함에서 지울까요? (페이지에 쓰인 곳은 비워집니다)')) { delete doc.assets[b.dataset.del]; commit(); markDirty(); renderAll(); } };
   } else if (sideTab === 'project') {
     const st = store.state;
     body.innerHTML = `<h3>문서</h3>${F('문서 이름', 'doc.name', doc.name)}
@@ -1614,7 +1614,7 @@ function renderFonts() {
   ${rec.length && fontCat === 'all' ? `<h3>최근 사용</h3><div class="fontlist">${rec.map(row).join('')}</div><h3>전체 ${list.length}종</h3>` : ''}
   <div class="fontlist">${list.map(row).join('')}</div>`;
   $('#fontBody').onclick = e => { const c = e.target.closest('[data-fc]'); if (c) { fontCat = c.dataset.fc; renderFonts(); return; } const r = e.target.closest('[data-font]'); if (!r) return; noteFont(r.dataset.font); if (target) { target.font = r.dataset.font; commit(); rerender(); renderFonts(); } else { lastTextStyle = Object.assign({}, lastTextStyle || {}, { font: r.dataset.font }); toast(`새 글자의 기본 글꼴: ${r.dataset.font}`); } };
-  $('#fontUp').onchange = async e => { const f = e.target.files[0]; if (!f) return; const data = await fileToDataURL(f); const family = f.name.replace(/\.(ttf|otf|woff2?)$/i, ''); try { const ff = new FontFace(family, `url(${data})`); await ff.load(); document.fonts.add(ff); doc.fonts.push({ family, data }); commit(); renderFonts(); toast(`글꼴 "${family}"을 추가했습니다`); } catch (err) { toast('글꼴을 읽지 못했습니다', true); } };
+  $('#fontUp').onchange = async e => { const f = e.target.files[0]; if (!f) return; const data = await fileToDataURL(f); const family = f.name.replace(/\.(ttf|otf|woff2?)$/i, ''); try { const ff = new FontFace(family, `url(${data})`); await ff.load(); document.fonts.add(ff); doc.fonts.push({ family, data }); commit(); markDirty(); renderFonts(); toast(`글꼴 "${family}"을 추가했습니다`); } catch (err) { toast('글꼴을 읽지 못했습니다', true); } };
 }
 
 /* ---- 공휴일 ---- */
@@ -1873,7 +1873,7 @@ function imgNatural(u) { if (!imgSizeCache.has(u)) imgSizeCache.set(u, new Promi
 async function checkResolution(pages) {
   const mx = Math.max(doc.w, doc.h), need = mx >= 1500 ? 50 : mx >= 800 ? 100 : mx >= 400 ? 150 : 200, out = []; // 멀리서 보는 큰 인쇄물일수록 낮아도 됨
   for (const pi of pages) for (const el of doc.pages[pi].els) {
-    if (el.type !== 'image' || el.hidden) continue; const u = src(el.src); if (!u || /^data:image\/svg|\.svg/i.test(u)) continue;
+    if (el.type !== 'image' || el.hidden) continue; const u = src(el.src), raw = el.src.startsWith('a:') ? doc.assets[el.src.slice(2)] || '' : el.src.startsWith('asset:') ? ASSETS[el.src.slice(6)] || '' : el.src; if (!u || /^data:image\/svg|\.svg(\?|$)/i.test(raw)) continue;
     const nat = await imgNatural(u); if (!nat) continue;
     const ar = nat[0] / nat[1], boxAr = el.w / el.h; const fill = el.fit === 'cover' ? (ar > boxAr ? el.h * ar : el.w) : el.fit === 'fill' ? el.w : (ar > boxAr ? el.w : el.h * ar);
     const ppi = Math.round(nat[0] / ((fill * (el.zoom || 1)) / 25.4)); if (ppi < need * 0.9) out.push({ page: pi + 1, id: el.id, name: elName(el), ppi, need }); // 10% 여유: 경계값(197/200ppi)은 인쇄 차이가 없음
@@ -2016,7 +2016,7 @@ $('#btnExport').onclick = () => openDownload();
 function doCopy(cut) {
   const els = clone(selEls().filter(x => !cut || !x.locked)); if (!els.length) return;
   const assets = {}; const walk = v => { if (typeof v === 'string' && v.startsWith('a:') && doc.assets[v.slice(2)]) assets[v] = doc.assets[v.slice(2)]; else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(els);
-  clip = { els, assets, page: cur, n: 0, mark: 'nc-clip:' + uid(), t: Date.now() }; try { navigator.clipboard.writeText(clip.mark).catch(() => {}); } catch (e) {} // 시스템 클립보드에 표식: 붙여넣을 때 바깥 복사본과 구분
+  clip = { els, assets, page: cur, n: 0, mark: 'nc-clip:' + uid(), t: Date.now() }; { const c_ = clip; try { navigator.clipboard.writeText(c_.mark).catch(() => { c_.ctx = true; }); } catch (e) { c_.ctx = true; } } // 표식을 못 쓰면(권한 없음) 다음 붙여넣기는 앱 안 복사본으로 // 시스템 클립보드에 표식: 붙여넣을 때 바깥 복사본과 구분
   if (cut) { removeSel(); toast('잘라냈습니다'); } else toast('복사했습니다');
 }
 function doPaste(inPlace) {
@@ -2183,6 +2183,7 @@ function replaceColor(from, to, pages) {
 function decorateColors(root) {
   root.querySelectorAll('input[type=color]:not([data-cdeco])').forEach(inp => {
     inp.dataset.cdeco = '1';
+    if (inp.closest('.textbar')) { const b2 = document.createElement('button'); b2.type = 'button'; b2.className = 'cpal'; b2.title = '브랜드 색 · 문서 색 · 스포이트'; b2.textContent = '▾'; (inp.closest('label') || inp).after(b2); b2.addEventListener('mousedown', () => { try { saveSel(); } catch (err) {} }); b2.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openPalette(inp, b2); }); return; }
     const hex = document.createElement('input'); hex.className = 'hexin'; hex.value = inp.value.toUpperCase(); hex.maxLength = 7; hex.spellcheck = false; hex.title = 'HEX 색 코드 (예: #002559)';
     const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'cpal'; btn.title = '브랜드 색 · 문서 색 · 스포이트'; btn.textContent = '▾';
     const wrap = document.createElement('span'); wrap.className = 'cfield'; inp.replaceWith(wrap); wrap.append(inp, hex, btn);
@@ -2203,7 +2204,7 @@ function openPalette(inp, anchor) {
   const T = () => document.body.contains(inp) ? inp : (inp.dataset.k && $(`#inspector input[type=color][data-k="${inp.dataset.k}"]`)) || inp;
   $('#cpalPop') && $('#cpalPop').remove();
   const m = document.createElement('div'); m.id = 'cpalPop'; m.className = 'cpalpop';
-  const sw = (list, cls) => list.map(c => `<button class="csw ${cls || ''}" data-c="${c}" style="background:${c}" title="${c}"></button>`).join('');
+  const inBar = !!anchor.closest('.textbar'); const sw = (list, cls) => list.map(c => `<button class="csw ${cls || ''}" data-c="${c}" style="background:${c}" title="${c}"></button>`).join('');
   const draw = () => {
     const cur_ = T().value.toUpperCase(), brand = brandColors(), inBrand = brand.some(c => c.toUpperCase() === cur_);
     m.innerHTML = `<div class="cph"><span class="csw big" style="background:${cur_}"></span><b>${cur_}</b>${window.EyeDropper ? '<button class="btn sm" data-eye title="화면에서 색 집기">스포이트</button>' : ''}</div>
@@ -2211,14 +2212,14 @@ function openPalette(inp, anchor) {
       ${recentColors().length ? `<h4>최근 쓴 색</h4><div class="cgrid">${sw(recentColors())}</div>` : ''}
       <h4>이 문서에 쓰인 색</h4><div class="cgrid">${sw(docColors().slice(0, 24))}</div>
       <h4>기본 색</h4><div class="cgrid">${sw(['#000000', '#3F3F46', '#71717A', '#D4D4D8', '#FFFFFF', '#E11D48', '#F97316', '#FACC15', '#22C55E', '#14B8A6', '#0EA5E9', '#2563EB', '#7C3AED', '#DB2777', '#8B5A2B', '#FDE68A'])}</div>
-      <div class="cpall"><label class="chk"><input type="checkbox" data-all ${palAll ? 'checked' : ''}> 같은 색 모두 바꾸기</label><select data-allsc ${palAll ? '' : 'disabled'}><option value="page" ${palAll === 'page' ? 'selected' : ''}>이 쪽만</option><option value="doc" ${palAll === 'doc' ? 'selected' : ''}>모든 쪽</option></select></div>
-      <p class="hint" style="margin:4px 0 0">켜 두면 지금 색(${cur_})을 쓴 다른 요소도 함께 바뀝니다.</p>`;
+      ${inBar ? '' : `<div class="cpall"><label class="chk"><input type="checkbox" data-all ${palAll ? 'checked' : ''}> 같은 색 모두 바꾸기</label><select data-allsc ${palAll ? '' : 'disabled'}><option value="page" ${palAll === 'page' ? 'selected' : ''}>이 쪽만</option><option value="doc" ${palAll === 'doc' ? 'selected' : ''}>모든 쪽</option></select></div>
+      <p class="hint" style="margin:4px 0 0">켜 두면 지금 색(${cur_})을 쓴 다른 요소도 함께 바뀝니다.</p>`}`;
   };
   draw(); (anchor.closest('#textBar, #cellBar') || document.body).appendChild(m);
   const r = anchor.getBoundingClientRect(); m.style.left = Math.max(8, Math.min(r.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px'; m.style.top = (r.bottom + m.offsetHeight + 8 > innerHeight ? Math.max(8, r.top - m.offsetHeight - 4) : r.bottom + 4) + 'px';
   m.addEventListener('click', async e => {
-    const c = e.target.closest('[data-c]'); if (c) { applyColor(T(), c.dataset.c, { all: palAll === 'doc' ? 'doc' : palAll ? 'page' : '' }); draw(); return; }
-    if (e.target.closest('[data-eye]')) { try { const r_ = await new window.EyeDropper().open(); applyColor(T(), r_.sRGBHex.length === 7 ? r_.sRGBHex : rgbHex(r_.sRGBHex), { all: palAll }); draw(); } catch (err) {} return; }
+    const c = e.target.closest('[data-c]'); if (c) { applyColor(T(), c.dataset.c, { all: inBar ? '' : palAll === 'doc' ? 'doc' : palAll ? 'page' : '' }); draw(); return; }
+    if (e.target.closest('[data-eye]')) { try { const r_ = await new window.EyeDropper().open(); applyColor(T(), r_.sRGBHex.length === 7 ? r_.sRGBHex : rgbHex(r_.sRGBHex), { all: inBar ? '' : palAll }); draw(); } catch (err) {} return; }
     const b = e.target.closest('[data-brand]'); if (b) { const cur_ = T().value.toUpperCase(); lsSet('naracal-brand-colors', b.dataset.brand === 'add' ? brandColors().concat(cur_) : brandColors().filter(x => x.toUpperCase() !== cur_)); draw(); }
   });
   m.addEventListener('change', e => { if (e.target.matches('[data-all]')) { palAll = e.target.checked ? 'page' : ''; draw(); } if (e.target.matches('[data-allsc]')) palAll = e.target.value; });
@@ -2286,6 +2287,7 @@ function resizeEls(els, w0, h0, W, H, mode) {
         if (el.size) el.size = Math.round(el.size * f * 10) / 10;
         if (el.html) el.html = el.html.replace(/font-size:\s*([\d.]+)pt/g, (_, v) => 'font-size:' + Math.round(v * f * 2) / 2 + 'pt');
         MM_KEYS.forEach(k => { if (typeof el[k] === 'number' && el[k]) el[k] = Math.round(el[k] * f * 100) / 100; });
+        if (el.s && (el.type === 'cal' || el.type === 'mini')) Object.keys(el.s).forEach(k => { if (/Size$|H$/.test(k) && typeof el.s[k] === 'number') el.s[k] = Math.round(el.s[k] * f * 10) / 10; });
       }
     });
   });
@@ -2317,9 +2319,9 @@ function renderResize() {
   $('#rsU').onchange = e => { const u = e.target.value; if (u !== S.unit) { const f = u === 'px' ? 96 / 25.4 : 25.4 / 96; S.w = Math.round(S.w * f * 10) / 10; S.h = Math.round(S.h * f * 10) / 10; S.unit = u; } renderResize(); };
   $('#rsSwap').onclick = () => { [S.w, S.h] = [S.h, S.w]; S.fmt = ''; renderResize(); };
   B.querySelectorAll('[name=rsMode]').forEach(r => r.onchange = () => { S.mode = r.value; renderResize(); });
-  $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode); doc.pages = nd.pages; doc.w = W; doc.h = H; commit(); zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toast(`크기를 ${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm로 바꿨습니다 (Ctrl+Z로 되돌리기)`); };
+  $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode); doc.pages = nd.pages; doc.w = W; doc.h = H; doc.fmt = S.fmt || ''; commit(); zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toast(`크기를 ${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm로 바꿨습니다 (Ctrl+Z로 되돌리기)`); };
   $('#rsCopy').onclick = async () => {
-    const f = FORMATS.find(x => x[0] === S.fmt); const nd = resizedDoc(doc, W, H, S.mode); nd.name = `${doc.name || '새 디자인'} (${f ? f[1] : `${Math.round(W)}×${Math.round(H)}`})`;
+    const f = FORMATS.find(x => x[0] === S.fmt); const nd = resizedDoc(doc, W, H, S.mode); nd.fmt = S.fmt || ''; nd.name = `${doc.name || '새 디자인'} (${f ? f[1] : `${Math.round(W)}×${Math.round(H)}`})`;
     if (f && !['print', 'doc', 'cal'].includes(f[2])) nd.bleed = 0;
     $('#dlgResize').close(); gcAssets();
     try {
@@ -2354,7 +2356,7 @@ async function renderVersions() {
     $('#verRestore').disabled = false; $('#verCopy').disabled = false;
     $('#verRestore').onclick = async () => {
       if (!window.confirm(`${fmt(x.time)} 버전으로 되돌릴까요?\n지금 상태는 버전 기록에 먼저 남겨 두고, Ctrl+Z로도 되돌릴 수 있습니다.`)) return;
-      await verNow('되돌리기 전'); Object.keys(j).forEach(k => { if (!DOC_KEYS_SKIP.has(k)) doc[k] = j[k]; }); cur = Math.min(cur, doc.pages.length - 1); sel = []; cellSel = null; commit(); zoom = 0; renderAll(); fitCanvas(); $('#dlgVer').close(); toast(`${fmt(x.time)} 버전으로 되돌렸습니다`);
+      await verNow('되돌리기 전'); Object.keys(j).forEach(k => { if (!DOC_KEYS_SKIP.has(k) && k !== 'assets' && k !== 'fonts') doc[k] = j[k]; }); doc.assets = Object.assign({}, doc.assets, j.assets || {}); (j.fonts || []).forEach(f => { if (!doc.fonts.some(x => x.family === f.family)) doc.fonts.push(f); }); cur = Math.min(cur, doc.pages.length - 1); sel = []; cellSel = null; commit(); zoom = 0; renderAll(); fitCanvas(); $('#dlgVer').close(); toast(`${fmt(x.time)} 버전으로 되돌렸습니다`);
     };
     $('#verCopy').onclick = async () => { const c = Object.assign({}, j, { name: `${doc.name || '디자인'} (${fmt(x.time).replace(':', '시 ')}분 버전)` }); delete c._size; const h = await store.copyIntoFolder(c); toast(`"${h.name.replace(/\.design\.json$/i, '')}"을(를) 만들었습니다 (열기 목록에 있습니다)`); };
   };
@@ -2409,7 +2411,7 @@ function renderBulk() {
   };
 }
 
-let pasteShift = false;
+let pasteShift = false, pasteFallback = null;
 // Ctrl+C: 시스템 클립보드에도 표식을 넣어 둠 (권한이 없어도 동작)
 document.addEventListener('copy', e => { if (editing || (e.target.matches && e.target.matches('input,textarea,[contenteditable="true"]')) || !clip || Date.now() - clip.t > 1500) return; e.clipboardData.setData('text/plain', clip.mark); e.preventDefault(); });
 document.addEventListener('cut', e => { if (editing || (e.target.matches && e.target.matches('input,textarea,[contenteditable="true"]')) || !clip || Date.now() - clip.t > 1500) return; e.clipboardData.setData('text/plain', clip.mark); e.preventDefault(); });
@@ -2420,9 +2422,11 @@ document.addEventListener('paste', async e => {
   const files = [...cd.files].filter(f => /^image\//.test(f.type));
   if (files.length) { e.preventDefault(); for (const f of files) addImage(addAsset(await fileToDataURL(f))); toast('붙여 넣은 그림을 넣었습니다'); return; }
   const t = (cd.getData('text/plain') || '').trim();
-  if (clip && clip.els && (t === clip.mark || !t)) { e.preventDefault(); doPaste(pasteShift); pasteShift = false; return; } // 앱 안에서 복사한 요소
+  clearTimeout(pasteFallback);
+  if (clip && clip.els && (t === clip.mark || !t || (clip.ctx && !files.length))) { e.preventDefault(); doPaste(pasteShift); pasteShift = false; return; } // 앱 안에서 복사한 요소
+  if (t.startsWith('nc-clip:')) { e.preventDefault(); return; } // 다른 창·새로 고침 전의 표식
   if (!t) return; e.preventDefault();
-  if (/^https?:\/\/\S+\.(png|jpe?g|gif|webp|svg)(\?\S*)?$/i.test(t)) { addImage(t); return; }
+  if (/^https?:\/\/\S+\.(png|jpe?g|gif|webp|svg)(\?\S*)?$/i.test(t)) { try { const bl = await (await fetch(t)).blob(); addImage(addAsset(await fileToDataURL(bl))); } catch (err) { addImage(t); toast('그림을 가져오지 못해 주소로 넣었습니다 (내려받기에서 빠질 수 있음)', true); } return; }
   addText('b', { text: t.slice(0, 2000), noEdit: true });
 });
 
@@ -2545,18 +2549,20 @@ if (/[?&]qa\b/.test(location.search)) window.NCQA = { get doc() { return doc; },
 let toastTimer; function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, err ? 5000 : 2200); }
 
 /* ---- 시작 ---- */
+// 같은 문서인지 (문서 번호가 있으면 번호로, 없으면 이름으로)
+function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.docId : (a.name || '') === (b.name || '')); }
 (async function init() {
   doc = newDoc(); renderRail();
   let loaded = false;
   try {
     const p = await store.reconnect();
-    if (p === 'granted') { const j = await store.readFile(); await loadDoc(j); loaded = true; setStatus(`연결된 파일: ${store.state.fileName}`); setTimeout(() => warnIfRecentOther(j), 1500); }
+    if (p === 'granted') { const j = await store.readFile(); const dr = await store.idbGet('doc').catch(() => null); if (dr && sameDoc(dr, j) && (dr.updatedAt || 0) > (j.savedAt || 0) + 1000 && window.confirm(`이 브라우저에 파일보다 나중에 고친 작업이 있습니다 (파일에 저장되지 못한 작업).\n\n확인: 브라우저 작업으로 열어 파일에 저장 (권장)\n취소: 파일 내용으로 열기 (브라우저 작업은 충돌 사본으로 보관)`)) { await loadDoc(dr); loaded = true; markDirty(); setStatus(`연결된 파일: ${store.state.fileName} · 브라우저 작업을 이어서 저장합니다`); } else { if (dr && sameDoc(dr, j) && (dr.updatedAt || 0) > (j.savedAt || 0) + 1000) { try { await store.writeCopy(dr, '브라우저 작업'); } catch (e) {} } await loadDoc(j); loaded = true; setStatus(`연결된 파일: ${store.state.fileName}`); setTimeout(() => warnIfRecentOther(j), 1500); } }
     else if (p === 'prompt') { const saved = await store.idbGet('doc'); if (saved) { await loadDoc(saved); loaded = true; } const st = $('#status'); st.innerHTML = `<button class="btn sm" id="reconn">연결된 파일 "${esc(store.state.fileName)}" 다시 열기</button>`; store.state.needPerm = true;
       $('#reconn').onclick = async () => {
         if (!(await store.requestPermission())) return; store.state.needPerm = false;
-        const draft = loaded ? doc : null, edited = draft && store.state.dirty; const j = await store.readFile();
-        // 권한을 기다리는 동안 브라우저에서 고친 작업이 파일보다 새로우면 덮어쓰지 않음
-        if (edited && (draft.updatedAt || 0) > (j.savedAt || 0) + 1000) {
+        const draft = loaded ? doc : null; const j = await store.readFile();
+        // 권한을 기다리는 동안(지난번 창 포함) 브라우저에서 고친 작업이 파일보다 새로우면 덮어쓰지 않음
+        if (draft && sameDoc(draft, j) && (draft.updatedAt || 0) > (j.savedAt || 0) + 1000) {
           if (window.confirm(`이 브라우저에 파일보다 나중에 고친 작업이 있습니다.\n\n확인: 지금 작업을 파일에 저장 (권장)\n취소: 파일 내용을 열고, 지금 작업은 "충돌 사본"으로 보관`)) { await saveFileNow(); setStatus(`연결된 파일: ${store.state.fileName} · 브라우저 작업을 저장했습니다`); updateSaveBadge(); return; }
           try { await store.writeCopy(draft, '브라우저 작업'); } catch (e) { store.download(draft); }
         }

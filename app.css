@@ -506,13 +506,13 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .tfmt select{margin-left:auto;padding:6px 8px;border:1px solid var(--ui-line2);border-radius:8px;font:inherit;font-size:12.5px}
 .textbar{position:fixed;z-index:80;display:flex;align-items:center;gap:2px;background:#1f2433;color:#fff;border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .textbar[hidden]{display:none}
-.textbar button{min-width:30px;height:30px;border:0;background:transparent;color:#fff;border-radius:7px;cursor:pointer;font:inherit;font-size:13.5px;padding:0 6px}
-.textbar button:hover{background:rgba(255,255,255,.12)}
-.textbar button.on{background:#2f5bea}
+.textbar>button{min-width:30px;height:30px;border:0;background:transparent;color:#fff;border-radius:7px;cursor:pointer;font:inherit;font-size:13.5px;padding:0 6px}
+.textbar>button:hover{background:rgba(255,255,255,.12)}
+.textbar>button.on{background:#2f5bea}
 .textbar .sep{width:1px;height:20px;background:rgba(255,255,255,.2);margin:0 3px}
-.textbar label{position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.textbar label input{position:absolute;inset:0;opacity:0;cursor:pointer}
-.textbar label .sw{width:16px;height:16px;border-radius:50%;background:#e0564b;border:2px solid #fff}
+.textbar>label{position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.textbar>label input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.textbar>label .sw{width:16px;height:16px;border-radius:50%;background:#e0564b;border:2px solid #fff}
 /* 달력 칸 편집 */
 .ovl .csel{position:absolute;background:rgba(47,111,228,.14);outline:calc(2px / var(--k)) solid #2f6fe4;pointer-events:none}
 .ovl .cgl{position:absolute;pointer-events:auto;z-index:2}
@@ -622,3 +622,6 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .gtile .gbox .sheet{position:absolute;left:0;top:0;transform-origin:0 0;box-shadow:none}
 .gtile span{font-size:11px;color:#555;max-width:170px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .gtile.dropl{box-shadow:-4px 0 0 #2f6fe4}.gtile.dropr{box-shadow:4px 0 0 #2f6fe4}
+
+/* 도구 막대 안 팔레트: 막대 단추 모양을 물려받지 않게 */
+.textbar .cpalpop{color:#222}.textbar>button.cpal{min-width:16px;width:16px;padding:0;font-size:10px;margin-left:-4px}
