@@ -500,7 +500,7 @@ function renderSide() {
 }
 /* ---- 요소 패널 ---- */
 function elemCard(it) { const els = it.make(uid, { year: doc.calendar.year || 2027 }); return `<button class="ecard" data-el="${it.id}" title="${esc(it.name)}"><div class="ebox" data-w="${it.w}" data-h="${it.h}">${tmpSheet(it.w, it.h, els, it.dark ? '#002559' : it.cat === 'icon' || it.cat === 'illust' || it.cat === 'naracha' ? 'transparent' : '#ffffff')}</div>${it.cat === 'icon' ? '' : `<span>${esc(it.name)}</span>`}</button>`; }
-const LIB_ECATS = [['logo', '로고'], ['emblem', '엠블럼·패치'], ['mascot', '마스코트 라차'], ['belt', '띠·라벨'], ['pattern', '패턴·장식'], ['illust', '일러스트']];
+const LIB_ECATS = [['cartoon', '태권도 캐릭터 (만화)'], ['aiimg', 'AI로 만든 그림'], ['pose', '태권도 포즈 (사진)'], ['pair', '겨루기 · 두 사람'], ['silhouette', '동작 실루엣'], ['illust', '태권도 일러스트'], ['mascot', '마스코트 라차'], ['logo', '로고'], ['emblem', '엠블럼·패치'], ['belt', '띠·라벨'], ['pattern', '패턴·장식']];
 function libElemItems() {
   return NC.lib.items('element').map(it => { const w = it.ratio >= 1 ? 60 : Math.round(60 * it.ratio), h = it.ratio >= 1 ? Math.round(60 / it.ratio) : 60;
     return { id: 'lib-' + it.id, cat: 'naracha', sub: it.cat, name: it.name, kw: '나라차 자료실 ' + it.kw, w: Math.max(w, 4), h: Math.max(h, 4), dark: it.dark, lib: it,
@@ -516,10 +516,10 @@ function renderElems() {
   const recent = recentElems().map(getElem).filter(Boolean);
   let h = `<label class="f"><input type="text" id="elSearch" placeholder="요소 검색 (예: 로고, 라차, 별, 말풍선)" value="${esc(elQ)}"></label><div class="tcats" id="elcats">${cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
   if (elCat === 'naracha' && !q) {
-    h += libEls.length ? LIB_ECATS.map(([k, t]) => { const list = libEls.filter(i => i.sub === k); return list.length ? `<h3>${t} <small>${list.length}</small></h3><div class="egrid">${list.map(elemCard).join('')}</div>` : ''; }).join('') : libHint();
+    h += libEls.length ? `<div class="row" style="margin:4px 0 2px"><button class="btn sm ai" data-aistudio>✨ AI로 태권도 그림 만들기</button></div><p class="hint">사진 포즈는 배경을 지운 사람만 들어갑니다. 실루엣은 이미지 속성의 "색 입히기"로 색을 바꿀 수 있습니다. AI로 만든 그림은 우클릭으로 이름 바꾸기·삭제를 합니다.</p>` + LIB_ECATS.map(([k, t]) => { const list = libEls.filter(i => i.sub === k); return list.length ? `<h3>${t} <small>${list.length}</small></h3><div class="egrid">${list.map(elemCard).join('')}</div>` : ''; }).join('') : libHint();
   } else if (elCat === 'all' && !q) {
     if (recent.length) h += `<h3>최근 사용</h3><div class="egrid">${recent.map(elemCard).join('')}</div>`;
-    h += libEls.length ? `<div class="esec"><h3>나라차 자료실 <small>${libEls.length}</small></h3><button class="more" data-ec="naracha">더보기 ›</button></div><div class="egrid">${libEls.filter(i => ['logo', 'mascot', 'emblem'].includes(i.sub)).slice(0, 9).map(elemCard).join('')}</div>` : libHint(true);
+    h += libEls.length ? `<div class="esec"><h3>나라차 자료실 <small>${libEls.length}</small></h3><button class="more" data-ec="naracha">더보기 ›</button></div><div class="egrid">${['cartoon', 'pose', 'illust', 'mascot', 'silhouette'].flatMap(k => libEls.filter(i => i.sub === k).slice(0, k === 'cartoon' ? 3 : 2)).slice(0, 9).map(elemCard).join('')}</div>` : libHint(true);
     NC.elems.cats.slice(1).forEach(([k, t]) => { const list = all.filter(i => i.cat === k); if (!list.length) return; h += `<div class="esec"><h3>${t} <small>${list.length}</small></h3><button class="more" data-ec="${k}">더보기 ›</button></div><div class="egrid ${k === 'icon' ? 'icons' : ''}">${list.slice(0, k === 'icon' ? 16 : 6).map(elemCard).join('')}</div>`; });
   } else {
     const list = all.filter(i => elCat === 'all' || i.cat === elCat);
@@ -528,7 +528,11 @@ function renderElems() {
   h += `<p class="hint" style="margin-top:12px">요소를 누르면 페이지 가운데에 들어갑니다. 여러 조각으로 된 요소는 자동으로 그룹이 되어 함께 움직입니다 (Ctrl+G로 그룹 해제·묶기).</p>`;
   body.innerHTML = h;
   requestAnimationFrame(() => fitBoxes(body, '.ebox', 64));
-  body.onclick = e => { const c = e.target.closest('[data-ec]'); if (c) { elCat = c.dataset.ec; renderElems(); return; } const b = e.target.closest('[data-el]'); if (b) insertElem(b.dataset.el); };
+  body.onclick = e => { if (e.target.closest('[data-aistudio]')) { openAI('image'); return; } const c = e.target.closest('[data-ec]'); if (c) { elCat = c.dataset.ec; renderElems(); return; } const b = e.target.closest('[data-el]'); if (b) insertElem(b.dataset.el); };
+  // 내 그림(AI로 만든 그림): 우클릭으로 이름 바꾸기·지우기
+  body.oncontextmenu = async e => { const b = e.target.closest('[data-el^="lib-ai-"]'); if (!b) return; e.preventDefault(); const it = getElem(b.dataset.el); if (!it) return;
+    const nm = window.prompt(`"${it.name}"\n\n새 이름을 넣으면 이름을 바꿉니다. "삭제"라고 쓰면 내 그림에서 지웁니다 (두 PC 모두에서 사라짐).`, it.name); if (nm == null) return;
+    try { if (nm.trim() === '삭제') { await NC.lib.removeMine(it.lib.id); toast('내 그림에서 지웠습니다'); } else if (nm.trim()) { await NC.lib.renameMine(it.lib.id, nm.trim()); toast('이름을 바꿨습니다'); } renderElems(); } catch (err) { toast(err.message, true); } };
   let tq; $('#elSearch').oninput = e => { elQ = e.target.value; clearTimeout(tq); tq = setTimeout(() => { renderElems(); const i = $('#elSearch'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
 }
 function elName(el) { if (el.name) return el.name; if (el.type === 'text') return (el.text || '글자').split('\n')[0].slice(0, 20); if (el.type === 'image') return '이미지'; if (el.type === 'shape') return (FX.SHAPES.find(s => s[0] === el.kind) || [])[1] || '도형'; if (el.type === 'path') return '펜 선'; if (el.type === 'chart') return '차트'; if (el.type === 'cal') return `${el.year}년 ${el.month}월 달력`; if (el.type === 'mini') return `미니 달력 ${el.month}월`; return el.type; }
@@ -1099,7 +1103,7 @@ function renderAI() {
   $$('#dlgAI [role=tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === aiCtx.tab));
   const body = $('#aiBody'); const months = doc.calendar.months; const year = doc.calendar.year || 2027;
   if (aiCtx.tab === 'keys') {
-    body.innerHTML = `<p class="hint">키는 이 컴퓨터의 브라우저에만 저장되며 다른 곳으로 보내지 않습니다. Claude 키는 console.anthropic.com, Gemini 키는 aistudio.google.com에서 만듭니다.</p>
+    body.innerHTML = `<p class="hint">키는 이 브라우저와, 동기화 폴더가 연결돼 있으면 그 폴더의 설정 파일(설정.naracha.json)에 저장되어 다른 PC에서도 바로 쓰입니다. 키는 Anthropic·Google 서버로만 보내집니다. Claude 키는 console.anthropic.com, Gemini 키는 aistudio.google.com에서 만듭니다.</p>
     <div class="grid2">${aiF('Claude API 키', 'anthropicKey', 'password')}${aiF('Claude 모델', 'claudeModel')}${aiF('Gemini API 키', 'geminiKey', 'password')}${aiF('Gemini 이미지 모델', 'geminiModel')}
     <label class="f"><span>이미지 비율</span><select data-ai="aspect">${['1:1', '3:4', '4:3', '2:3', '3:2', '9:16', '16:9'].map(a => `<option ${AI.cfg.aspect === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
     <label class="f"><span>이미지 크기</span><select data-ai="size">${['1K', '2K', '4K'].map(a => `<option ${AI.cfg.size === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label></div>
@@ -1118,35 +1122,96 @@ function renderAI() {
     $('#aiGoYear').onclick = () => runAI(async () => { const r = await AI.suggestYear({ year, previous: months.map(x => x.virtue), hint: $('#aiHint').value.trim() }); $('#aiResult').innerHTML = `<div class="aiout">${r.map((x, k) => `${k + 1}월 ${x.virtue} (${x.en}) · ${x.idiom}(${x.hanja})\n  ${x.quote.replace(/\n/g, ' ')}\n  1) ${x.practice[0]}\n  2) ${x.practice[1]}`).join('\n\n')}</div><div class="row" style="margin-top:8px"><button class="btn primary" id="aiApplyY">12개월 모두 적용</button></div>`; $('#aiApplyY').onclick = () => { let n = 0; r.forEach((x, k) => n += applyMonthContent(k, x)); commit(); rerender(); $('#dlgAI').close(); toast(`12개월 문구를 적용했습니다 (글 상자 ${n}개 갱신)`); }; });
     return;
   }
-  const el = selEls()[0]; const targetImg = el && el.type === 'image' ? el : null;
-  body.innerHTML = `<p class="hint">${targetImg ? `선택한 이미지 요소 "${esc(elName(targetImg))}"에 넣습니다.` : '현재 페이지에 새 이미지 요소로 넣습니다. (이미지 요소를 선택하고 열면 그 요소를 바꿉니다)'}</p>
-  <div class="row" style="margin-bottom:8px"><label class="f" style="margin:0;flex:1"><span>관련 달 (문구 참고용)</span><select id="aiMonth2">${months.map((x, k) => `<option value="${k}" ${k === mi ? 'selected' : ''}>${k + 1}월 · ${esc(x.virtue)}</option>`).join('')}<option value="-1">달과 무관</option></select></label>
-    <label class="f" style="margin:0"><span>주인공</span><select id="aiChar"><option value="penguin">펭귄 마스코트</option><option value="kids">어린이 수련생</option><option value="both">마스코트 + 어린이</option></select></label></div>
-  <label class="f"><span>추가 요청 (선택)</span><input type="text" id="aiExtra" placeholder="예: 발차기 동작, 봄 벚꽃, 두 명이 악수"></label>
-  <div class="row"><button class="btn ai" id="aiPrompt">Claude로 프롬프트 만들기</button><span class="hint" style="margin:0">또는 아래에 직접 적어도 됩니다 (한국어 가능).</span></div>
-  <label class="f"><span>이미지 프롬프트</span><textarea id="aiPromptText" rows="6"></textarea></label>
-  <label class="chk"><input type="checkbox" id="aiRef" checked> 펭귄 마스코트 참고 이미지 첨부 (같은 캐릭터로 그리게 함)</label>
-  <label class="chk"><input type="checkbox" id="aiWhite" checked> 생성 후 흰 배경을 자동으로 투명하게 (고급 지우기)</label>
-  <div class="row"><button class="btn primary" id="aiGen">Gemini로 이미지 만들기</button><label class="f" style="margin:0"><span>장수</span><select id="aiN"><option>1</option><option>2</option><option>3</option></select></label><span id="aiBusy"></span></div>
+  // ---- AI 그림 스튜디오: 스타일 프리셋 + 인물·동작·띠 조합 + 여러 동작 한 번에(같은 그림체) + 내 그림 보관함 ----
+  const el = selEls()[0]; const targetImg = el && el.type === 'image' ? el : null; const S = aiStudio;
+  const opt = (list, cur) => list.map(([v, t]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${t}</option>`).join('');
+  const canSave = !!store.state.dir;
+  body.innerHTML = `<p class="hint" style="margin-top:0">${targetImg ? `선택한 이미지 "${esc(elName(targetImg))}"를 바꿉니다.` : '만든 그림을 누르면 현재 페이지에 넣습니다.'} ${canSave ? '마음에 드는 그림은 <b>내 그림</b>에 보관하면 두 PC에서 함께 씁니다 (요소 → 나라차 → AI로 만든 그림).' : '<b>동기화 폴더를 연결하면</b> 만든 그림을 내 그림 보관함에 저장해 두 PC에서 함께 쓸 수 있습니다.'}</p>
+  <div class="tcats" id="aiStyles">${AI_STYLES.map(([k, t]) => `<button data-st="${k}" class="${S.style === k ? 'on' : ''}">${t}</button>`).join('')}</div>
+  <div class="grid3">
+    <label class="f"><span>주인공</span><select id="aiWho">${opt(AI_WHO, S.who)}</select></label>
+    <label class="f"><span>띠 색</span><select id="aiBelt">${opt(AI_BELT, S.belt)}</select></label>
+    <label class="f"><span>표정</span><select id="aiMood">${opt(AI_MOOD, S.mood)}</select></label>
+  </div>
+  <div class="f"><span style="font-size:12px;color:var(--ui-muted)">동작 (여러 개 고르면 같은 그림체로 한 장씩 만듭니다)</span><div class="tcats" id="aiMoves">${AI_MOVES.map(([k, t]) => `<button data-mv="${k}" class="${S.moves.includes(k) ? 'on' : ''}">${t}</button>`).join('')}</div></div>
+  <label class="f"><span>추가 요청 (선택, 한국어 가능)</span><input type="text" id="aiExtra" value="${esc(S.extra)}" placeholder="예: 벚꽃 배경, 금메달을 목에 걸고, 친구와 하이파이브"></label>
+  <details ${S.showPrompt ? 'open' : ''} id="aiPD"><summary class="hint" style="cursor:pointer">프롬프트 보기·고치기</summary><textarea id="aiPromptText" rows="5" style="width:100%">${esc(S.prompt || aiComposePrompt(S.moves[0] || 'ready'))}</textarea><div class="row"><button class="btn sm ai" id="aiPrompt">Claude로 다듬기</button><button class="btn sm" id="aiReset">조합대로 다시 쓰기</button></div></details>
+  <div class="row" style="flex-wrap:wrap">
+    <label class="chk"><input type="checkbox" id="aiWhite" ${S.white ? 'checked' : ''}> 흰 배경 지우기 (요소용)</label>
+    <label class="chk"><input type="checkbox" id="aiAuto" ${S.autoSave && canSave ? 'checked' : ''} ${canSave ? '' : 'disabled'}> 만든 그림 자동 보관</label>
+    <label class="f" style="margin:0"><span>동작마다</span><select id="aiN">${opt([['1', '1장'], ['2', '2장'], ['3', '3장']], String(S.n))}</select></label>
+  </div>
+  <div class="row"><button class="btn primary" id="aiGen">✨ 그림 만들기</button><span id="aiBusy"></span><span class="hint" style="margin:0" id="aiCount"></span></div>
   <div class="aiimgs" id="aiImgs"></div>`;
-  $('#aiMonth2').onchange = e => { aiCtx.monthIdx = Math.max(0, Number(e.target.value)); };
-  $('#aiPrompt').onclick = () => runAI(async () => { const k = Number($('#aiMonth2').value); const m2 = k >= 0 ? months[k] : null; const t = await AI.imagePrompt(m2 ? { virtue: m2.virtue, en: m2.en, quote: m2.quote, practice: m2.practice, character: $('#aiChar').value, extra: $('#aiExtra').value } : { virtue: 'General illustration for a taekwondo school design', en: '', quote: doc.name, practice: [], character: $('#aiChar').value, extra: $('#aiExtra').value }); $('#aiPromptText').value = t; });
+  const sync = () => { S.who = $('#aiWho').value; S.belt = $('#aiBelt').value; S.mood = $('#aiMood').value; S.extra = $('#aiExtra').value; S.white = $('#aiWhite').checked; S.autoSave = $('#aiAuto').checked; S.n = Number($('#aiN').value); S.showPrompt = $('#aiPD').open; };
+  const recompose = () => { sync(); S.prompt = ''; $('#aiPromptText').value = aiComposePrompt(S.moves[0] || 'ready'); updCount(); };
+  const updCount = () => { const n = Math.max(1, S.moves.length) * S.n; $('#aiCount').textContent = `${n}장을 만듭니다${n > 3 ? ' (한 장에 10~30초)' : ''}`; };
+  updCount();
+  $('#aiStyles').onclick = e => { const b = e.target.closest('[data-st]'); if (!b) return; sync(); S.style = b.dataset.st; const d = AI_STYLE[S.style]; S.white = d.white; if (d.who) S.who = d.who; S.prompt = ''; renderAI(); };
+  $('#aiMoves').onclick = e => { const b = e.target.closest('[data-mv]'); if (!b) return; const k = b.dataset.mv; S.moves = S.moves.includes(k) ? S.moves.filter(x => x !== k) : S.moves.concat(k); b.classList.toggle('on'); recompose(); };
+  ['aiWho', 'aiBelt', 'aiMood'].forEach(id => $('#' + id).onchange = recompose);
+  $('#aiExtra').onchange = recompose; $('#aiN').onchange = () => { sync(); updCount(); };
+  $('#aiReset').onclick = recompose;
+  $('#aiPromptText').oninput = e => { S.prompt = e.target.value; };
+  $('#aiPrompt').onclick = () => runAI(async () => { sync(); const t = await AI.refinePrompt($('#aiPromptText').value); $('#aiPromptText').value = t; S.prompt = t; });
+  const card = (s, meta) => {
+    const fig = document.createElement('figure');
+    fig.innerHTML = `<img src="${s}" alt=""><figcaption><button class="btn sm primary">넣기</button>${canSave ? `<button class="btn sm" data-save>${meta.saved ? '보관됨 ✓' : '내 그림에 보관'}</button>` : ''}<button class="btn sm">내려받기</button></figcaption>`;
+    const [bIns] = fig.querySelectorAll('button'); const bSave = fig.querySelector('[data-save]'), bDown = fig.querySelector('button:last-child');
+    bIns.onclick = () => { const ref2 = addAsset(s); if (targetImg) { targetImg.src = ref2; delete targetImg.srcOrig; commit(); rerender(); } else addImage(ref2); toast('그림을 넣었습니다'); };
+    if (bSave) { if (meta.saved) bSave.disabled = true; bSave.onclick = async () => { bSave.disabled = true; try { await NC.lib.saveMine(s, meta); bSave.textContent = '보관됨 ✓'; toast('내 그림에 보관했습니다 (요소 → 나라차 → AI로 만든 그림)'); } catch (err) { bSave.disabled = false; toast(err.message, true); } }; }
+    bDown.onclick = () => { const a = document.createElement('a'); a.href = s; a.download = `${(meta.name || 'ai-image').replace(/[\\/:*?"<>|]/g, '_')}.png`; a.click(); };
+    $('#aiImgs').prepend(fig);
+  };
   $('#aiGen').onclick = () => runAI(async () => {
-    const prompt = $('#aiPromptText').value.trim(); if (!prompt) throw new Error('프롬프트를 먼저 적거나 Claude로 만들어 주세요.');
-    const n = Number($('#aiN').value); const ref = $('#aiRef').checked ? ASSETS['mascot-01'] : null;
-    for (let k = 0; k < n; k++) {
-      $('#aiBusy').innerHTML = `<span class="spin"></span>${k + 1}/${n} 생성 중…`;
-      const imgs = await AI.geminiImage({ prompt, refImage: ref });
-      for (let s of imgs) {
-        if ($('#aiWhite').checked) { try { s = await NC.imgedit.removeColorFromSrc(s, '#ffffff'); } catch (e) {} }
-        const fig = document.createElement('figure'); fig.innerHTML = `<img src="${s}" alt=""><figcaption><button class="btn sm primary">사용</button><button class="btn sm">내려받기</button></figcaption>`;
-        fig.querySelectorAll('button')[0].onclick = () => { const ref2 = addAsset(s); if (targetImg) { targetImg.src = ref2; delete targetImg.srcOrig; commit(); rerender(); } else addImage(ref2); $('#dlgAI').close(); toast('그림을 넣었습니다'); };
-        fig.querySelectorAll('button')[1].onclick = () => { const a = document.createElement('a'); a.href = s; a.download = `ai-image-${Date.now()}.png`; a.click(); };
-        $('#aiImgs').prepend(fig);
+    sync(); const moves = S.moves.length ? S.moves : [null]; const total = moves.length * S.n; let k = 0;
+    const custom = S.prompt && S.prompt.trim();
+    let styleRef = S.style === 'mascot' ? ASSETS['mascot-01'] : null;  // 같은 그림체를 위해 첫 그림을 다음 동작의 참고 그림으로
+    for (const mv of moves) {
+      const prompt = custom && moves.length === 1 ? S.prompt : aiComposePrompt(mv || 'ready', !!styleRef && S.style !== 'mascot');
+      for (let r = 0; r < S.n; r++) {
+        $('#aiBusy').innerHTML = `<span class="spin"></span>${++k}/${total} 만드는 중…`;
+        const imgs = await AI.geminiImage({ prompt, refImage: styleRef, aspect: AI_STYLE[S.style].aspect || '1:1' });
+        for (let s of imgs) {
+          if (S.white) { try { s = await NC.imgedit.removeColorFromSrc(s, '#ffffff'); } catch (e) {} }
+          if (!styleRef && S.style !== 'scene' && S.style !== 'photo') styleRef = s;
+          const meta = { name: aiName(mv), kw: aiKw(mv), prompt, style: S.style };
+          if (S.autoSave && canSave) { try { await NC.lib.saveMine(s, meta); meta.saved = true; } catch (e) { toast(e.message, true); } }
+          card(s, meta);
+        }
       }
     }
+    if (S.autoSave && canSave) toast('만든 그림을 내 그림에 보관했습니다');
   });
 }
+// ---- AI 그림 스튜디오 설정 ----
+const AI_STYLES = [['cartoon', '귀여운 캐릭터'], ['sticker', '스티커'], ['flat', '플랫 일러스트'], ['water', '수채화'], ['mascot', '라차 마스코트'], ['photo', '실사 사진'], ['scene', '배경·장면']];
+const AI_STYLE = {
+  cartoon: { white: true, text: 'cute chibi cartoon character, big head small body (2.5 heads tall), large sparkling eyes, rosy cheeks, clean bold dark outline, soft cel shading, bright friendly colors, Korean webtoon style, full body, centered, isolated on a plain pure white background, no text' },
+  sticker: { white: true, text: 'die-cut sticker illustration, thick white border around the character, bold outline, vibrant flat colors, cute and playful, full body, isolated on a plain pure white background, no text' },
+  flat: { white: true, text: 'modern flat vector illustration, simple geometric shapes, limited palette of navy #002559, red #B82837, warm skin tones and white, minimal shading, clean edges, full body, isolated on a plain pure white background, no text' },
+  water: { white: true, text: 'soft watercolor and ink illustration, gentle brush textures, light pastel washes, hand-drawn line art, warm and heartwarming, full body, isolated on a plain pure white background, no text' },
+  mascot: { white: true, who: 'penguin', text: 'the penguin mascot exactly as in the attached reference (same design, colors and proportions), cute cartoon style, clean outline, full body, isolated on a plain pure white background, no text' },
+  photo: { white: false, text: 'high quality realistic studio photograph, soft key light, sharp focus, natural skin tones, plain light gray seamless background, full body, no text' },
+  scene: { white: false, aspect: '4:3', text: 'bright cheerful illustration scene for a children\'s taekwondo school poster, wide composition with room for text, soft colors, no text' },
+};
+const AI_WHO = [['boy', '남자아이'], ['girl', '여자아이'], ['kids', '아이들 여럿'], ['teen', '청소년'], ['man', '성인 남성'], ['woman', '성인 여성'], ['master', '사범님'], ['penguin', '펭귄 라차']];
+const AI_WHO_EN = { boy: 'a cheerful 8-year-old Korean boy', girl: 'a cheerful 8-year-old Korean girl with a ponytail', kids: 'three happy Korean children (boys and girls, ages 6-10)', teen: 'a confident Korean teenager', man: 'a fit Korean man in his 30s', woman: 'a fit Korean woman in her 30s', master: 'a kind, confident Korean taekwondo master instructor', penguin: 'the gray penguin mascot' };
+const AI_BELT = [['yellow', '노란띠'], ['white', '흰띠'], ['green', '초록띠'], ['blue', '파란띠'], ['red', '빨간띠'], ['poom', '품띠 (빨강·검정)'], ['black', '검은띠']];
+const AI_BELT_EN = { white: 'a white belt', yellow: 'a yellow belt', green: 'a green belt', blue: 'a blue belt', red: 'a red belt', poom: 'a red-and-black poom belt and a red-black collar dobok', black: 'a black belt and a black-collar dobok' };
+const AI_MOOD = [['happy', '밝게 웃는'], ['kiai', '기합! (입 벌림)'], ['focus', '진지한 집중'], ['proud', '뿌듯한'], ['wink', '윙크']];
+const AI_MOOD_EN = { happy: 'big bright smile', kiai: 'shouting a powerful kihap with mouth open', focus: 'serious focused expression', proud: 'proud confident smile', wink: 'playful wink' };
+const AI_MOVES = [['ready', '준비 자세'], ['bow', '경례(인사)'], ['frontkick', '앞차기'], ['sidekick', '옆차기'], ['roundkick', '돌려차기'], ['backkick', '뒤차기'], ['axekick', '내려차기'], ['jumpkick', '뛰어 차기'], ['punch', '지르기'], ['block', '막기'], ['poomsae', '품새'], ['break', '격파'], ['medal', '메달·트로피'], ['thumb', '엄지 척'], ['run', '달리기·줄넘기'], ['stretch', '스트레칭']];
+const AI_MOVE_EN = { ready: 'standing in the taekwondo ready stance (junbi) with fists in front of the belt', bow: 'bowing politely with hands at the sides', frontkick: 'performing a high front kick (ap chagi)', sidekick: 'performing a powerful side kick (yeop chagi), body sideways', roundkick: 'performing a dynamic roundhouse kick (dollyeo chagi)', backkick: 'performing a back kick (dwit chagi)', axekick: 'performing an axe kick (naeryeo chagi) with the leg raised high', jumpkick: 'jumping high in the air doing a flying kick', punch: 'throwing a straight middle punch (jireugi) in a front stance', block: 'doing a low block (arae makgi) in a front stance', poomsae: 'performing a graceful poomsae form movement', break: 'breaking a wooden board with a kick, splinters flying', medal: 'holding up a shiny gold medal and a trophy, celebrating', thumb: 'giving an energetic thumbs-up', run: 'jumping rope happily', stretch: 'doing a split stretch on a mat' };
+let aiStudio = { style: 'cartoon', who: 'boy', belt: 'yellow', mood: 'happy', moves: ['frontkick'], extra: '', white: true, autoSave: true, n: 1, prompt: '', showPrompt: false };
+function aiComposePrompt(mv, withRef) {
+  const S = aiStudio, st = AI_STYLE[S.style];
+  const who = S.style === 'mascot' ? 'the penguin mascot wearing a white taekwondo dobok' : `${AI_WHO_EN[S.who]} wearing a clean white taekwondo dobok with ${AI_BELT_EN[S.belt]}`;
+  const act = S.style === 'scene' ? 'in a bright taekwondo dojang' : AI_MOVE_EN[mv] || AI_MOVE_EN.ready;
+  return `${who}, ${act}, ${AI_MOOD_EN[S.mood]}.${S.extra ? ' ' + S.extra + '.' : ''} ${st.text}.${withRef ? ' Match the exact art style, line weight, colors and character design of the attached reference image.' : ''}`;
+}
+function aiName(mv) { const t = k => (AI_MOVES.find(x => x[0] === k) || [])[1] || ''; const w = (AI_WHO.find(x => x[0] === aiStudio.who) || [])[1]; return `${t(mv) || 'AI 그림'} · ${aiStudio.style === 'mascot' ? '라차' : w} (${(AI_STYLES.find(x => x[0] === aiStudio.style) || [])[1]})`; }
+function aiKw(mv) { const S = aiStudio; return ['AI', (AI_STYLES.find(x => x[0] === S.style) || [])[1], (AI_WHO.find(x => x[0] === S.who) || [])[1], (AI_BELT.find(x => x[0] === S.belt) || [])[1], (AI_MOVES.find(x => x[0] === mv) || [])[1], S.extra].filter(Boolean).join(' '); }
 function aiF(label, key, type) { return `<label class="f"><span>${label}</span><input type="${type || 'text'}" data-ai="${key}" value="${esc(AI.cfg[key])}" autocomplete="off"></label>`; }
 $('#aiBody').addEventListener('input', e => { const k = e.target.dataset.ai; if (k) { AI.cfg[k] = e.target.value.trim(); AI.saveCfg(); } });
 $('#aiBody').addEventListener('change', e => { const k = e.target.dataset.ai; if (k) { AI.cfg[k] = e.target.value.trim(); AI.saveCfg(); } });

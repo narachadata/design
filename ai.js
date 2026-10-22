@@ -1,4 +1,4 @@
-// AI 연동: Claude(문구·프롬프트 설계) + Gemini(이미지 생성). 키는 localStorage에만 저장됩니다.
+// AI 연동: Claude(문구·프롬프트 설계) + Gemini(이미지 생성). 키는 localStorage와, 동기화 폴더가 있으면 그 설정 파일에 저장됩니다.
 window.AI = (function () {
   const KEY = 'naracal-ai-v1';
   const cfg = Object.assign({
@@ -105,6 +105,11 @@ Output the prompt text only.`;
     return claudeText({ system: 'You are an art director writing prompts for an image-generation model. Output only the prompt.', user });
   }
 
+  // 사용자가 고른 조합으로 만든 프롬프트를 다듬음 (스타일 문장은 유지)
+  async function refinePrompt(prompt) {
+    return claudeText({ system: 'You are an art director improving prompts for an image-generation model. Output only the improved prompt, in English, one paragraph, 60-120 words.', user: `Improve this image prompt for a Korean taekwondo school's design asset. Keep the subject, action, belt color, expression and the style sentence, make the pose anatomically clear and appealing, keep "isolated on a plain pure white background" if present, and never add text or logos to the image.\n\n${prompt}` });
+  }
+
   /* ---------- Gemini ---------- */
   async function geminiImage({ prompt, refImage, aspect, size }) {
     if (!cfg.geminiKey) throw new Error('Gemini API 키를 먼저 넣어 주세요 (AI 도우미 > API 설정).');
@@ -182,5 +187,5 @@ Output the prompt text only.`;
     return c.toDataURL('image/png');
   }
 
-  return { cfg, saveCfg, suggestMonth, suggestYear, imagePrompt, geminiImage, removeWhite, loadImg };
+  return { cfg, saveCfg, suggestMonth, suggestYear, imagePrompt, refinePrompt, geminiImage, removeWhite, loadImg };
 })();
