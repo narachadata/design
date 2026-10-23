@@ -753,3 +753,12 @@ dialog.vd-dlg .dbody{display:flex;flex-direction:column;gap:10px}
 @keyframes amLeft{0%{opacity:0;transform:translateX(-8px)}100%{opacity:.75}}@keyframes amRight{0%{opacity:0;transform:translateX(8px)}100%{opacity:.75}}
 @keyframes amZoom{0%{opacity:0;transform:scale(.4)}100%{opacity:.75}}@keyframes amWipe{0%{clip-path:inset(0 100% 0 0)}100%{clip-path:inset(0 0 0 0)}}
 .vd-th .sheet{position:absolute;left:0;top:0;transform-origin:0 0;box-shadow:none;pointer-events:none}
+/* 저장 위치 고르기 */
+dialog.loc-dlg{width:min(520px,94vw)}
+.loc-head{display:flex;align-items:baseline;gap:8px;margin:6px 0}.loc-head b{font-size:13px}.loc-head span{font-size:12.5px;color:var(--ui-accent);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.loc-tree{border:1px solid var(--ui-line2);border-radius:10px;max-height:300px;overflow:auto;padding:4px;background:#fff}
+.loc-row{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13.5px;text-align:left;color:var(--ui-fg)}
+.loc-row:hover{background:var(--ui-field)}.loc-row.on{background:var(--ui-accent-soft);color:var(--ui-accent);font-weight:700}
+.loc-row .ic{width:17px;height:17px;flex:none}.loc-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.loc-row em{font-style:normal;font-size:11px;color:#0f7b4f;font-weight:700}
+.loc-tools{display:flex;gap:6px;margin:8px 0 4px}.loc-tools .btn[disabled]{opacity:.45;pointer-events:none}

@@ -919,7 +919,7 @@ async function newsImport(tv) {
   nd.name = `${S.year}년 ${S.month}월호 소식지${tv ? ' TV' : ''}`; nd.pages = pages; nd.assets = assets; nd.fonts = []; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.rules = doc.rules;
   nd.news = { ym: `${S.year}-${String(S.month).padStart(2, '0')}`, ratio: tv ? 'tv' : S.ratio, tv: !!tv, at: Date.now() };
   doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer);
-  if (await store.folderReady()) { try { await store.saveIntoFolder(doc); } catch (e) { toast('폴더에 저장하지 못했습니다: ' + e.message, true); } }
+  setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)');
   zoom = 0; newsMode = false; $('#stage').classList.remove('newsmode'); renderAll(); fitCanvas(); updateSaveBadge();
   toast(`${doc.name} ${pages.length}쪽을 가져왔습니다 — 글자·사진·장식을 눌러 다듬으세요`);
 }
@@ -1407,7 +1407,7 @@ function openTplPreview(t) {
     const ss = $('#tplSize'); if (ss) ss.onchange = () => { choice = ss.value; draw(); };
     if (t.theme) { $('#tplWizard').onclick = () => { d.close(); openWizard(doc.calendar.year, t.theme.id); }; const rb = $('#tplRetheme'); if (rb) rb.onclick = () => { doc.calendar.theme = clone(t.theme); const y = doc.calendar.year || 2027; const nrep = CAL.retheme(doc, uid, y); ensureAllHolidays(); commit(); renderAll(); d.close(); toast(`"${t.name}" 테마를 ${nrep}쪽에 적용했습니다`); }; return; }
     const ready = async pgs => { if (!t.lib) return true; try { setStatus('자료실 그림을 넣는 중…'); await NC.lib.materialize(pgs, addAsset); return true; } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return false; } finally { setStatus(''); } };
-    $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm('현재 문서를 닫고 새 문서를 만들까요? (지금 문서는 저장된 상태로 남습니다)')) return; if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const pgs = tplPagesFor(t, S); const keepAssets = doc.assets; doc.assets = {}; if (!(await ready(pgs))) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = S.w; nd.h = S.h; nd.fmt = S.fmt || ''; nd.name = t.name; nd.pages = pgs; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; if (!S.screen && ['print', 'doc', 'cal', 'sign'].includes((FORMATS.find(f => f[0] === S.fmt) || [])[2])) nd.bleed = 3; doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); if (await store.folderReady()) { try { await store.saveIntoFolder(doc); } catch (e) { toast('폴더에 저장하지 못했습니다: ' + e.message, true); } } zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다 (${label(S)})`); };
+    $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm('현재 문서를 닫고 새 문서를 만들까요? (지금 문서는 저장된 상태로 남습니다)')) return; if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const pgs = tplPagesFor(t, S); const keepAssets = doc.assets; doc.assets = {}; if (!(await ready(pgs))) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = S.w; nd.h = S.h; nd.fmt = S.fmt || ''; nd.name = t.name; nd.pages = pgs; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; if (!S.screen && ['print', 'doc', 'cal', 'sign'].includes((FORMATS.find(f => f[0] === S.fmt) || [])[2])) nd.bleed = 3; doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)'); zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다 (${label(S)})`); };
     // 지금 문서에 넣기: 늘 지금 문서 크기로 다시 짜서 넣음. 지금 쪽이 비어 있으면 그 쪽을 바꿈
     $('#tplHere').onclick = async () => { const pg = tplPagesFor(t, docS); if (!(await ready(pg))) return; const emp = !page().els.length; doc.pages.splice(emp ? cur : cur + 1, emp ? 1 : 0, ...pg); const at = emp ? cur : cur + 1; commit(); goto(at); d.close(); toastUndo(emp ? `"${t.name}"을(를) 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`); };
   };
@@ -1830,7 +1830,7 @@ async function renderSaveDialog() {
   const on = (id, fn) => { const b = $('#' + id); if (b) b.onclick = async () => { try { await fn(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } }; };
   on('svDir', async () => { await store.connectFolder(); await afterFolderReady(); updateSaveBadge(); toast('동기화 폴더를 연결했습니다. 설정과 문서가 이 폴더로 동기화됩니다.'); renderSaveDialog(); });
   on('svReDir', async () => { if (await store.requestFolderPermission()) { await afterFolderReady({ loadCurrent: true }); updateSaveBadge(); renderSaveDialog(); } });
-  on('svIntoDir', async () => { gcAssets(); await store.saveIntoFolder(doc); updateSaveBadge(); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); renderSaveDialog(); });
+  on('svIntoDir', async () => { d.close(); await saveNow(); });
   on('svDiscDir', async () => { if (!window.confirm('이 PC에서 동기화 폴더 연결을 끊을까요? (폴더 안 파일은 그대로 남습니다)')) return; await store.disconnectFolder(); await store.disconnect(); updateSaveBadge(); setStatus('브라우저에만 저장됩니다'); renderSaveDialog(); });
   on('svConnect', async () => { gcAssets(); await store.connectNew(doc); updateSaveBadge(); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); toast('파일에 연결했습니다. 이제 자동으로 저장됩니다.'); d.close(); });
   on('svNow', async () => { gcAssets(); await saveFileNow(); d.close(); });
@@ -1906,7 +1906,9 @@ async function createDesign(w, h, name, fmtId) {
   const inDir = await store.folderReady();
   await store.disconnect();
   doc = newDoc(['custom', name, w, h]); doc.name = name; doc.fmt = fmtId || ''; { const f = FORMATS.find(x => x[0] === fmtId); if (f && ['print', 'doc', 'cal'].includes(f[2]) && f[5] === 'mm') doc.bleed = 3; } hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer);
-  if (inDir) { try { const into = $('#dlgDrive') && drv.view === 'drive' ? drv.path : []; await store.saveIntoFolder(doc, into); setStatus(`${into.length ? into.join(' › ') + ' 폴더' : '동기화 폴더'}에 저장됨 · ${store.state.fileName}`); } catch (e) { toast('폴더에 저장하지 못했습니다: ' + e.message, true); } }
+  const into = inDir && $('#dlgDrive') && drv.view === 'drive' ? drv.path : null;
+  if (into && into.length) { try { await store.saveIntoFolder(doc, into); rememberLoc(into); setStatus(`${into.length ? into.join(' › ') + ' 폴더' : '동기화 폴더'}에 저장됨 · ${store.state.fileName}`); } catch (e) { toast('폴더에 저장하지 못했습니다: ' + e.message, true); } }
+  else if (inDir) setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)');
   else setStatus('브라우저에 저장됩니다 · 파일로 저장하려면 저장(Ctrl+S)');
   renderAll(); updateSaveBadge(); sideTab = 'tpl'; renderRail(); renderSide(); fitCanvas && fitCanvas();
   toast(`${name} (${fmtLabel(['', '', '', w, h, 'mm'])}) 새 디자인을 만들었습니다`);
@@ -2063,23 +2065,77 @@ async function driveDrop(e) {
   } catch (err) { toast(err.message, true); }
 }
 
+/* ---- 저장 위치 고르기 (처음 저장 · 새 이름으로 저장): 동기화 폴더 안의 폴더 = 위치. 새 폴더·이름 바꾸기·삭제(휴지통)도 여기서 ---- */
+const locLabel = p => p && p.length ? '내 드라이브 › ' + p.join(' › ') : '내 드라이브';
+function lastLoc() { try { return JSON.parse(localStorage.getItem('naracal-save-loc') || '[]'); } catch (e) { return []; } }
+function rememberLoc(p) { try { localStorage.setItem('naracal-save-loc', JSON.stringify(p || [])); } catch (e) {} }
+// 지금 열린 문서 파일이 들어 있는 폴더 경로 (그 폴더는 이름 바꾸기·삭제를 막아 자동 저장이 끊기지 않게)
+async function curDocPath() { try { const st = store.state; if (!st.dir || !st.handle) return null; const r = await st.dir.resolve(st.handle); return r ? r.slice(0, -1) : null; } catch (e) { return null; } }
+function pickSaveLocation(o) {
+  return new Promise(async resolve => {
+    let d = $('#dlgLoc'); if (d) d.remove();
+    d = document.createElement('dialog'); d.id = 'dlgLoc'; d.className = 'loc-dlg';
+    let sel = lastLoc(), all = [[]], counts = new Map(), done = false; const busy = await curDocPath();
+    const finish = v => { if (done) return; done = true; resolve(v); d.close(); };
+    d.innerHTML = `<div class="dhead"><h2>${esc(o.title || '저장')}</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
+      <label class="f"><span>문서 이름</span><input type="text" id="locName" maxlength="80" value="${esc(o.name || '')}"></label>
+      <div class="loc-head"><b>저장 위치</b><span id="locCur"></span></div>
+      <div class="loc-tree" id="locTree"><p class="hint" style="padding:12px">폴더를 읽는 중…</p></div>
+      <div class="loc-tools"><button class="btn sm" id="locNew"><svg class="ic"><use href="#i-plus"/></svg>새 폴더</button><button class="btn sm" id="locRen">이름 바꾸기</button><button class="btn sm danger" id="locDel"><svg class="ic"><use href="#i-del"/></svg>삭제</button></div>
+      ${o.note ? `<p class="hint">${esc(o.note)}</p>` : ''}
+      <div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn" data-close>취소</button><button class="btn primary" id="locOk"><svg class="ic"><use href="#i-save"/></svg>${esc(o.ok || '저장')}</button></div></div>`;
+    document.body.appendChild(d); d.querySelectorAll('[data-close]').forEach(b => b.onclick = () => finish(null)); d.addEventListener('close', () => { if (!done) { done = true; resolve(null); } d.remove(); }); d.showModal();
+    const key = p => JSON.stringify(p), same = (a, b) => key(a) === key(b);
+    const load = async () => { try { all = await store.allFolders(); } catch (e) { all = [[]]; } if (!all.some(p => same(p, sel))) sel = []; draw(); };
+    const draw = () => {
+      const rows = all.slice().sort((a, b) => a.join('\u0001').localeCompare(b.join('\u0001'), 'ko'));
+      $('#locTree').innerHTML = rows.map(p => `<button type="button" class="loc-row${same(p, sel) ? ' on' : ''}" data-p='${esc(key(p))}' style="padding-left:${10 + p.length * 18}px"><svg class="ic"><use href="#${p.length ? 'i-folder' : 'i-pages'}"/></svg><span>${esc(p.length ? p[p.length - 1] : '내 드라이브')}</span>${busy && same(p, busy) ? '<em>지금 문서</em>' : ''}</button>`).join('');
+      $('#locCur').textContent = locLabel(sel); const root = !sel.length;
+      $('#locRen').disabled = root; $('#locDel').disabled = root;
+      const on = $('#locTree .on'); if (on) on.scrollIntoView({ block: 'nearest' });
+    };
+    const inBusy = p => busy && p.length && busy.length >= p.length && same(busy.slice(0, p.length), p);
+    d.querySelector('#locTree').onclick = e => { const r = e.target.closest('.loc-row'); if (r) { sel = JSON.parse(r.dataset.p); draw(); } };
+    d.querySelector('#locTree').ondblclick = e => { if (e.target.closest('.loc-row')) $('#locOk').click(); };
+    $('#locNew').onclick = async () => { const n = window.prompt(`${locLabel(sel)} 안에 새 폴더를 만듭니다. 폴더 이름:`, '새 폴더'); if (!n) return; try { const h = await store.makeFolder(sel, n); sel = sel.concat(h.name); await load(); } catch (e) { toast(e.message, true); } };
+    $('#locRen').onclick = async () => {
+      if (!sel.length) return; if (inBusy(sel)) { toast('지금 열린 문서가 이 폴더 안에 있어 이름을 바꿀 수 없습니다', true); return; }
+      const old = sel[sel.length - 1], n = window.prompt('폴더의 새 이름', old); if (!n || n.trim() === old) return; const name = n.replace(/[\\/:*?"<>|]/g, '_').trim(); if (!name) return;
+      try { const parent = sel.slice(0, -1), pd = await store.dirAt(parent); for await (const [x] of pd.entries()) if (x === name) throw new Error('같은 이름의 폴더가 이미 있습니다'); const h = await pd.getDirectoryHandle(old); await store.moveEntry(h, parent, parent, name); sel = parent.concat(name); await load(); toast('폴더 이름을 바꿨습니다'); } catch (e) { toast('바꾸지 못했습니다: ' + e.message, true); }
+    };
+    $('#locDel').onclick = async () => {
+      if (!sel.length) return; if (inBusy(sel)) { toast('지금 열린 문서가 이 폴더 안에 있어 삭제할 수 없습니다', true); return; }
+      const parent = sel.slice(0, -1), name = sel[sel.length - 1];
+      try { const pd = await store.dirAt(parent), h = await pd.getDirectoryHandle(name); let n = 0; try { n = (await store.walkDocs(sel)).length; } catch (e) {}
+        if (!window.confirm(`"${name}" 폴더를 휴지통으로 옮길까요?${n ? `\n안에 있는 디자인 ${n}개도 함께 옮겨집니다.` : ''}\n(내 드라이브 → 휴지통에서 되살릴 수 있습니다)`)) return;
+        await store.toTrash(h, parent); sel = parent; await load(); toast('휴지통으로 옮겼습니다'); } catch (e) { toast('삭제하지 못했습니다: ' + e.message, true); }
+    };
+    $('#locOk').onclick = () => { const nm = $('#locName').value.trim(); if (!nm) { $('#locName').focus(); toast('문서 이름을 넣어 주세요', true); return; } finish({ name: nm, path: sel }); };
+    $('#locName').onkeydown = e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); $('#locOk').click(); } };
+    setTimeout(() => { const i = $('#locName'); if (i) { i.focus(); i.select(); } }, 30);
+    load();
+  });
+}
 /* ---- 파일 메뉴: 저장 · 새 이름으로 저장 · 사본 만들기 ---- */
 async function saveNow() {
   gcAssets();
   try {
     if (store.state.handle) { clearTimeout(fileTimer); await saveFileNow(); toast('저장했습니다'); return; }
-    if (await store.folderReady()) { await store.saveIntoFolder(doc); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); updateSaveBadge(); toast('동기화 폴더에 저장했습니다'); return; }
+    if (await store.folderReady()) { const loc = await pickSaveLocation({ title: '저장', name: doc.name || '새 디자인', ok: '여기에 저장' }); if (!loc) return; doc.name = loc.name; $('#pname').value = doc.name; await store.saveIntoFolder(doc, loc.path); rememberLoc(loc.path); setStatus(`${locLabel(loc.path)}에 저장됨 ${tnow()} · ${store.state.fileName}`); updateSaveBadge(); toast(`${locLabel(loc.path)}에 저장했습니다. 이제 바뀔 때마다 자동 저장됩니다.`); return; }
     if (store.state.supported) { await store.connectNew(doc); updateSaveBadge(); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); toast('저장했습니다. 이제 바뀔 때마다 자동 저장됩니다.'); return; }
     store.download(doc); toast('이 브라우저는 파일 저장을 지원하지 않아 내려받았습니다');
   } catch (e) { if (e.name !== 'AbortError') toast('저장하지 못했습니다: ' + e.message, true); }
 }
 async function saveAs() {
-  const nm = window.prompt('새 이름으로 저장합니다. 문서 이름을 입력하세요.\n(지금 파일은 마지막으로 저장된 상태로 그대로 남습니다)', doc.name || '새 디자인'); if (nm == null || !nm.trim()) return;
+  const inDir = await store.folderReady();
+  let nm, loc = null;
+  if (inDir) { loc = await pickSaveLocation({ title: '새 이름으로 저장', name: (doc.name || '새 디자인'), ok: '새 이름으로 저장', note: '지금 파일은 마지막으로 저장된 상태로 그대로 남고, 이제부터 새 파일에서 작업합니다.' }); if (!loc) return; nm = loc.name; }
+  else { nm = window.prompt('새 이름으로 저장합니다. 문서 이름을 입력하세요.\n(지금 파일은 마지막으로 저장된 상태로 그대로 남습니다)', doc.name || '새 디자인'); if (nm == null || !nm.trim()) return; }
   gcAssets();
   try {
     if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
     const prev = doc.name, prevId = doc.docId; doc.name = nm.trim(); doc.docId = ''; $('#pname').value = doc.name; // 새 파일은 버전 기록을 새로 시작
-    if (await store.folderReady()) { await store.saveIntoFolder(doc); }
+    if (inDir) { await store.saveIntoFolder(doc, loc.path); rememberLoc(loc.path); }
     else if (store.state.supported) { try { await store.connectNew(doc); } catch (e) { doc.name = prev; doc.docId = prevId; $('#pname').value = prev; throw e; } }
     else { store.download(doc); }
     updateSaveBadge(); setStatus(`새 이름으로 저장됨 · ${store.state.fileName || doc.name}`); toast(`"${doc.name}"(으)로 저장했습니다. 이제 이 파일에서 작업합니다.`);
