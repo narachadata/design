@@ -68,7 +68,7 @@ NC.store = (function () {
       if (state.lastMod && f0.lastModified > state.lastMod + 500) {
         let j = null; try { j = JSON.parse(await f0.text()); } catch (e) {}
         if (!j) { if (++state.retries < 4) return { retry: true }; } // 동기화 중이라 덜 받은 파일일 수 있음: 잠시 뒤 다시
-        else if ((j.saveId || '') !== state.lastSaveId) return { conflict: true, file: f0, data: j };
+        else if ((j.saveId || '') !== state.lastSaveId) { if (window.NC && NC.live && NC.live.peers() && j.docId && j.docId === doc.docId) adopt(j); else return { conflict: true, file: f0, data: j }; } // 실시간으로 같이 고치는 중이면 상대 저장본을 이어받아 그 다음 판으로 저장
       }
       const seq = state.seq, saveId = rid(), lineage = [saveId].concat(state.lineage).slice(0, 60);
       if (!doc.docId) doc.docId = rid(); // 버전 기록을 묶는 문서 번호 (이름을 바꾸거나 옮겨도 그대로)
@@ -144,7 +144,7 @@ NC.store = (function () {
   /* ---------- 동기화 폴더 (Google Drive 등): 설정값 + 모든 문서 ---------- */
   // 폴더 안: 설정.naracha.json(API 키·모델·최근 사용 목록) + *.design.json(문서들)
   const SET_FILE = '설정.naracha.json';
-  const SYNC_KEYS = ['naracal-ai-v1', 'naracal-brand-colors', 'naracal-recent-colors', 'naracal-recent-fonts', 'naracal-recent-elems', 'naracal-recent-tpls', 'naracal-recent-formats'];
+  const SYNC_KEYS = ['naracal-live', 'naracal-ai-v1', 'naracal-brand-colors', 'naracal-recent-colors', 'naracal-recent-fonts', 'naracal-recent-elems', 'naracal-recent-tpls', 'naracal-recent-formats'];
   Object.assign(state, { dir: null, dirName: '', dirSupported: !!window.showDirectoryPicker, setMod: 0, setBase: {} });
   async function connectFolder() {
     if (!state.dirSupported) throw new Error('이 브라우저는 폴더 연결을 지원하지 않습니다 (Chrome, Edge 권장).');
