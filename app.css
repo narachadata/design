@@ -1025,3 +1025,12 @@ body.tl-focus .stage{grid-column:4}
 
 /* 다운로드 패널: 실행 단추는 늘 보이게 */
 #dlPanel #dlGo{position:sticky;bottom:0;z-index:2;box-shadow:0 -8px 14px rgba(255,255,255,.95)}
+
+.vg-badge{background:#fff7e6;border:1px solid #f3dfae;color:#6b4a00;border-radius:8px;padding:8px 10px;font-size:12.5px;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+
+/* MP4 저장 창: 화질 고르기 */
+.vd-q{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.vd-qbtn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:9px 11px;border:1.5px solid var(--ui-line);border-radius:10px;background:var(--ui-panel,#fff);cursor:pointer;text-align:left;font:inherit;color:var(--ui-fg)}.vd-qbtn b{font-size:13.5px}.vd-qbtn span{font-size:12px;color:var(--ui-fg2);font-variant-numeric:tabular-nums}.vd-qbtn small{font-size:11px;color:var(--ui-muted)}.vd-qbtn[aria-pressed=true]{border-color:var(--ui-accent);background:var(--ui-accent-soft,#eef3ff);box-shadow:0 0 0 1px var(--ui-accent) inset}.vd-meta{font-size:12px;color:var(--ui-muted);white-space:nowrap}
+@media (max-width:720px){.vd-q{grid-template-columns:1fr}}
+/* 보관함 */
+.lib-filt{display:flex;gap:4px;margin:8px 0 2px}.lib-it .lib-name{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}.lib-name b{font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lib-name small{font-size:11px;color:var(--ui-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lib-name em{font-style:normal;color:var(--ui-accent)}.lib-it.used{background:var(--ui-accent-soft)}.lib-del{opacity:.45}.lib-it:hover .lib-del{opacity:1}details.fx summary small{font-weight:500;color:var(--ui-muted);margin-left:auto;font-size:11px}.vd-pane details.fx{margin-top:8px}
+#dlgVideo .f>span{white-space:nowrap}
