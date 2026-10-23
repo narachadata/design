@@ -127,7 +127,11 @@ NC.vtpl = (function () {
     const els = (pg.els || []).filter(e => !big(e) && inFrame(e)); if (!els.length) return;
     const minY = Math.min(...els.map(e => e.y)), maxB = Math.max(...els.map(e => e.y + e.h));
     let d = 0; if (maxB > bot) d = -(maxB - bot); if (minY + d < top) d = top - minY; if (maxB + d > bot && minY + d > top) d = Math.max(top - minY, bot - maxB);  // 내용 묶음 전체를 같은 거리만큼 옮겨 간격 유지
-    if (maxB - minY > bot - top) d = (top + bot) / 2 - (minY + maxB) / 2;  // 안전 영역보다 크면 가운데 맞춤
+    if (maxB - minY > bot - top) {  // 안전 영역보다 크면 묶음 전체를 비율대로 줄여 가운데에 (크기·간격·글자 크기 함께)
+      const k = (bot - top) / (maxB - minY), cx = S.w / 2, r2 = v => Math.round(v * 100) / 100;
+      els.forEach(e => { const ncx = cx + (e.x + e.w / 2 - cx) * k; e.w = r2(e.w * k); e.h = r2(e.h * k); e.x = r2(ncx - e.w / 2); e.y = r2(top + (e.y - minY) * k); if (e.size) e.size = Math.round(e.size * k * 10) / 10; if (e.strokeW) e.strokeW = r2(e.strokeW * k); if (e.radius) e.radius = r2(e.radius * k); });
+      return;
+    }
     if (Math.abs(d) > 0.5) els.forEach(e => { e.y = Math.round((e.y + d) * 100) / 100; });
   }
   function make(id, sizeKey) {

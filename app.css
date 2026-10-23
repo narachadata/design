@@ -1034,3 +1034,19 @@ body.tl-focus .stage{grid-column:4}
 /* 보관함 */
 .lib-filt{display:flex;gap:4px;margin:8px 0 2px}.lib-it .lib-name{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}.lib-name b{font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lib-name small{font-size:11px;color:var(--ui-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lib-name em{font-style:normal;color:var(--ui-accent)}.lib-it.used{background:var(--ui-accent-soft)}.lib-del{opacity:.45}.lib-it:hover .lib-del{opacity:1}details.fx summary small{font-weight:500;color:var(--ui-muted);margin-left:auto;font-size:11px}.vd-pane details.fx{margin-top:8px}
 #dlgVideo .f>span{white-space:nowrap}
+
+/* 스냅: 붙은 자리 노란 선, 자석 단추 켜짐 */
+.tl-snapl{position:absolute;top:0;bottom:0;width:0;border-left:2px solid #ffd34d;pointer-events:none;z-index:6;box-shadow:0 0 6px rgba(255,211,77,.7)}
+.vtl-bar .tb.on{color:#ffd34d;background:#2c313c}
+
+/* 소리 페이드 손잡이와 페이드 그늘 */
+.tl-fh{position:absolute;top:1px;width:10px;height:10px;margin-left:-5px;background:#fff;border:1px solid #333;border-radius:2px;z-index:4;cursor:ew-resize;opacity:.85;transform:rotate(45deg) scale(.8)}
+.tl-fh.out{margin-left:0;margin-right:-5px;left:auto}
+.tl-fh:hover{opacity:1;transform:rotate(45deg) scale(1)}
+.tl-fx i.fi{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,rgba(0,0,0,.5),transparent);pointer-events:none;z-index:1}
+.tl-fx i.fo{position:absolute;right:0;top:0;bottom:0;background:linear-gradient(90deg,transparent,rgba(0,0,0,.5));pointer-events:none;z-index:1}
+
+/* 마커·꺼진 클립 */
+.tl-mk{position:absolute;bottom:0;width:10px;height:12px;margin-left:-5px;background:#ffb020;clip-path:polygon(0 0,100% 0,100% 60%,50% 100%,0 60%);cursor:pointer;z-index:3}
+.tl-mk:hover{background:#ffd34d}
+.dis{opacity:.35;filter:grayscale(1);background-image:repeating-linear-gradient(45deg,transparent 0 6px,rgba(255,255,255,.12) 6px 12px)!important}
