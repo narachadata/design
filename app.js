@@ -2053,7 +2053,7 @@ function renderSide() {
 }
 /* ---- 요소 패널 ---- */
 function elemCard(it) { const els = it.make(uid, { year: doc.calendar.year || 2027 }); return `<button class="ecard" data-el="${it.id}" title="${esc(it.name)}"><div class="ebox" data-w="${it.w}" data-h="${it.h}">${tmpSheet(it.w, it.h, els, it.dark ? '#002559' : it.cat === 'icon' || it.cat === 'illust' || it.cat === 'naracha' ? 'transparent' : '#ffffff')}</div>${it.cat === 'icon' ? '' : `<span>${esc(it.name)}</span>`}</button>`; }
-const LIB_ECATS = [['brand', '로고 · 심볼'], ['logo', '로고 (자료실)'], ['emblem', '엠블럼·패치'], ['mascot', '마스코트 라차'], ['mine-el', '내 요소'], ['cartoon', '태권도 캐릭터 (만화)'], ['aiimg', 'AI로 만든 그림'], ['pose', '태권도 포즈 (사진)'], ['pair', '겨루기 · 두 사람'], ['silhouette', '동작 실루엣'], ['illust', '태권도 일러스트'], ['belt', '띠·라벨'], ['pattern', '패턴·장식']];
+const LIB_ECATS = [['brand', '로고 · 심볼'], ['logo', '로고 (자료실)'], ['emblem', '엠블럼·패치'], ['mascot', '마스코트 라차'], ['mine-el', '내 요소'], ['cartoon', '태권도 캐릭터 (만화)'], ['ai-char', 'AI 캐릭터·사람'], ['ai-sticker', 'AI 스티커'], ['ai-scene', 'AI 배경·장면'], ['ai-photo', 'AI 사진'], ['ai-coloring', 'AI 색칠 도안'], ['aiimg', 'AI로 만든 그림'], ['pose', '태권도 포즈 (사진)'], ['pair', '겨루기 · 두 사람'], ['silhouette', '동작 실루엣'], ['illust', '태권도 일러스트'], ['belt', '띠·라벨'], ['pattern', '패턴·장식']];
 // 프로그램에 들어 있는 나라차 로고·심볼 (자료실이 없어도 늘 맨 위에)
 const BRAND_ELS = [['brand-horizontal', '가로 로고'], ['brand-horizontal-navy', '가로 로고 (남색)'], ['brand-horizontal-white', '가로 로고 (흰색)'], ['brand-horizontal-mono', '가로 로고 (한 색)'], ['brand-korean', '한글 로고'], ['brand-korean-navy', '한글 로고 (남색)'], ['brand-korean-white', '한글 로고 (흰색)'], ['brand-since', 'Since 2002 로고'], ['brand-since-white', 'Since 2002 (흰색)'], ['brand-hex', '육각 심볼'], ['brand-symbol-gray', '심볼 (회색)'], ['logo-wordmark-white', '워드마크 (흰색)']];
 const brandAR = {};
@@ -3149,6 +3149,7 @@ function applyMonthContent(mi, r) {
 }
 function renderAI() {
   $$('#dlgAI [role=tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === aiCtx.tab));
+  $('#dlgAI').classList.toggle('studio', aiCtx.tab === 'image');
   const body = $('#aiBody'); const months = doc.calendar.months; const year = doc.calendar.year || 2027;
   if (aiCtx.tab === 'keys') {
     const chat = chatMode(), sel = (k, list) => `<select data-ai="${k}">${list.map(x => `<option value="${x}" ${AI.cfg[k] === x ? 'selected' : ''}>${CHAT_SITES[x][0]}</option>`).join('')}</select>`;
@@ -3194,64 +3195,7 @@ function renderAI() {
     }
     return;
   }
-  // ---- AI 그림 스튜디오: 스타일 프리셋 + 인물·동작·띠 조합 + 여러 동작 한 번에(같은 그림체) + 내 그림 보관함 ----
-  const el = selEls()[0]; const targetImg = el && el.type === 'image' ? el : null; const S = aiStudio;
-  const opt = (list, cur) => list.map(([v, t]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${t}</option>`).join('');
-  const canSave = !!store.state.dir;
-  body.innerHTML = `<p class="hint" style="margin-top:0">${targetImg ? `선택한 이미지 "${esc(elName(targetImg))}"를 바꿉니다.` : '만든 그림을 누르면 현재 페이지에 넣습니다.'} ${canSave ? '마음에 드는 그림은 <b>내 그림</b>에 보관하면 두 PC에서 함께 씁니다 (요소 → 나라차 → AI로 만든 그림).' : '<b>동기화 폴더를 연결하면</b> 만든 그림을 내 그림 보관함에 저장해 두 PC에서 함께 쓸 수 있습니다.'}</p>
-  <div class="tcats" id="aiStyles">${AI_STYLES.map(([k, t]) => `<button data-st="${k}" class="${S.style === k ? 'on' : ''}">${t}</button>`).join('')}</div>
-  <div class="grid3">
-    <label class="f"><span>주인공</span><select id="aiWho">${opt(AI_WHO, S.who)}</select></label>
-    <label class="f"><span>띠 색</span><select id="aiBelt">${opt(AI_BELT, S.belt)}</select></label>
-    <label class="f"><span>표정</span><select id="aiMood">${opt(AI_MOOD, S.mood)}</select></label>
-  </div>
-  <div class="f"><span style="font-size:12px;color:var(--ui-muted)">동작 (여러 개 고르면 같은 그림체로 한 장씩 만듭니다)</span><div class="tcats" id="aiMoves">${AI_MOVES.map(([k, t]) => `<button data-mv="${k}" class="${S.moves.includes(k) ? 'on' : ''}">${t}</button>`).join('')}</div></div>
-  <label class="f"><span>추가 요청 (선택, 한국어 가능)</span><input type="text" id="aiExtra" value="${esc(S.extra)}" placeholder="예: 벚꽃 배경, 금메달을 목에 걸고, 친구와 하이파이브"></label>
-  <details ${S.showPrompt ? 'open' : ''} id="aiPD"><summary class="hint" style="cursor:pointer">프롬프트 보기·고치기</summary><textarea id="aiPromptText" rows="5" style="width:100%">${esc(S.prompt || aiComposePrompt(S.moves[0] || 'ready'))}</textarea><div class="row"><button class="btn sm ai" id="aiPrompt">${chatMode() ? CHAT_SITES[AI.cfg.chatText][0] + ' 채팅으로 다듬기' : 'Claude로 다듬기'}</button><button class="btn sm" id="aiReset">조합대로 다시 쓰기</button></div></details>
-  <div class="row" style="flex-wrap:wrap">
-    <label class="chk"><input type="checkbox" id="aiWhite" ${S.white ? 'checked' : ''}> 흰 배경 지우기 (요소용)</label>
-    <label class="chk"><input type="checkbox" id="aiAuto" ${S.autoSave && canSave ? 'checked' : ''} ${canSave ? '' : 'disabled'}> 만든 그림 자동 보관</label>
-    <label class="f" style="margin:0"><span>동작마다</span><select id="aiN">${opt([['1', '1장'], ['2', '2장'], ['3', '3장']], String(S.n))}</select></label>
-  </div>
-  ${chatMode() ? aiChatFlow() : '<div class="row"><button class="btn primary" id="aiGen">✨ 그림 만들기</button><span id="aiBusy"></span><span class="hint" style="margin:0" id="aiCount"></span></div>'}
-  <div class="aiimgs" id="aiImgs"></div>`;
-  const sync = () => { S.who = $('#aiWho').value; S.belt = $('#aiBelt').value; S.mood = $('#aiMood').value; S.extra = $('#aiExtra').value; S.white = $('#aiWhite').checked; S.autoSave = $('#aiAuto').checked; S.n = Number($('#aiN').value); S.showPrompt = $('#aiPD').open; };
-  const recompose = () => { sync(); S.prompt = ''; $('#aiPromptText').value = aiComposePrompt(S.moves[0] || 'ready'); updCount(); };
-  const updCount = () => { if (!$('#aiCount')) return; const n = Math.max(1, S.moves.length) * S.n; $('#aiCount').textContent = `${n}장을 만듭니다${n > 3 ? ' (한 장에 10~30초)' : ''}`; };
-  updCount();
-  $('#aiStyles').onclick = e => { const b = e.target.closest('[data-st]'); if (!b) return; sync(); S.style = b.dataset.st; const d = AI_STYLE[S.style]; S.white = d.white; if (d.who) S.who = d.who; S.prompt = ''; renderAI(); };
-  $('#aiMoves').onclick = e => { const b = e.target.closest('[data-mv]'); if (!b) return; const k = b.dataset.mv; S.moves = S.moves.includes(k) ? S.moves.filter(x => x !== k) : S.moves.concat(k); if (chatMode()) { sync(); S.prompt = ''; renderAI(); return; } b.classList.toggle('on'); recompose(); };  // 채팅 방식은 동작별 복사 단추도 다시 그림
-  ['aiWho', 'aiBelt', 'aiMood'].forEach(id => $('#' + id).onchange = recompose);
-  $('#aiExtra').onchange = recompose; $('#aiN').onchange = () => { sync(); updCount(); };
-  $('#aiReset').onclick = recompose;
-  $('#aiPromptText').oninput = e => { S.prompt = e.target.value; };
-  $('#aiPrompt').onclick = chatMode() ? () => { sync(); sendToChat(AI.chat.refine($('#aiPromptText').value), 'text', { note: '다듬은 글이 나오면 복사해 위 프롬프트 칸에 붙여 넣으세요' }); } : () => runAI(async () => { sync(); const t = await AI.refinePrompt($('#aiPromptText').value); $('#aiPromptText').value = t; S.prompt = t; });
-  const card = (s, meta) => {
-    const fig = document.createElement('figure');
-    fig.innerHTML = `<img src="${s}" alt=""><figcaption><button class="btn sm primary">넣기</button>${canSave ? `<button class="btn sm" data-save>${meta.saved ? '보관됨 ✓' : '내 그림에 보관'}</button>` : ''}<button class="btn sm">내려받기</button></figcaption>`;
-    const [bIns] = fig.querySelectorAll('button'); const bSave = fig.querySelector('[data-save]'), bDown = fig.querySelector('button:last-child');
-    bIns.onclick = () => { const ref2 = addAsset(s); if (targetImg) { targetImg.src = ref2; delete targetImg.srcOrig; commit(); rerender(); } else addImage(ref2); toast('그림을 넣었습니다'); };
-    if (bSave) { if (meta.saved) bSave.disabled = true; bSave.onclick = async () => { bSave.disabled = true; try { await NC.lib.saveMine(s, meta); bSave.textContent = '보관됨 ✓'; toast('내 그림에 보관했습니다 (요소 → 나라차 → AI로 만든 그림)'); } catch (err) { bSave.disabled = false; toast(err.message, true); } }; }
-    bDown.onclick = () => { const a = document.createElement('a'); a.href = s; a.download = `${(meta.name || 'ai-image').replace(/[\\/:*?"<>|]/g, '_')}.png`; a.click(); };
-    $('#aiImgs').prepend(fig);
-  };
-  // 받은 그림 처리 (API·채팅 공통): 흰 배경 지우기 → 자동 보관 → 카드
-  const take = async (s, mv, prompt) => { if (S.white) { try { s = await NC.imgedit.removeColorFromSrc(s, '#ffffff'); } catch (e) {} } const meta = { name: aiName(mv), kw: aiKw(mv), prompt, style: S.style }; if (S.autoSave && canSave) { try { await NC.lib.saveMine(s, meta); meta.saved = true; } catch (e) { toast(e.message, true); } } card(s, meta); return s; };
-  if (chatMode()) { aiChatWire(take, sync); return; }
-  $('#aiGen').onclick = () => runAI(async () => {
-    sync(); const moves = S.moves.length ? S.moves : [null]; const total = moves.length * S.n; let k = 0;
-    const custom = S.prompt && S.prompt.trim();
-    let styleRef = S.style === 'mascot' ? ASSETS['mascot-01'] : null;  // 같은 그림체를 위해 첫 그림을 다음 동작의 참고 그림으로
-    for (const mv of moves) {
-      const prompt = custom && moves.length === 1 ? S.prompt : aiComposePrompt(mv || 'ready', !!styleRef && S.style !== 'mascot');
-      for (let r = 0; r < S.n; r++) {
-        $('#aiBusy').innerHTML = `<span class="spin"></span>${++k}/${total} 만드는 중…`;
-        const imgs = await AI.geminiImage({ prompt, refImage: styleRef, aspect: AI_STYLE[S.style].aspect || '1:1' });
-        for (const s0 of imgs) { const s = await take(s0, mv, prompt); if (!styleRef && S.style !== 'scene' && S.style !== 'photo') styleRef = s; }
-      }
-    }
-    if (S.autoSave && canSave) toast('만든 그림을 내 그림에 보관했습니다');
-  });
+  renderStudio(body);  // 7단계 AI 그림 만들기 (아래 renderStudio)
 }
 // ---- AI 그림 스튜디오 설정 ----
 const AI_STYLES = [['cartoon', '귀여운 캐릭터'], ['sticker', '스티커'], ['flat', '플랫 일러스트'], ['water', '수채화'], ['mascot', '라차 마스코트'], ['photo', '실사 사진'], ['scene', '배경·장면']];
@@ -3320,6 +3264,242 @@ function aiChatWire(take, sync) {
     body.querySelectorAll('[data-cp]').forEach(x => x.classList.toggle('ai', x === b)); $('#aiZoneFor').textContent = `받을 그림: ${aiMoveName(mv)}`;
   });
   chatImgZone($('#aiZone'), async s => { sync(); const mv = S.cur || mvs[0]; await take(s, mv, S.curPrompt || aiComposePrompt(mv, false)); toast(`'${aiMoveName(mv)}' 그림을 받았습니다 — 아래에서 넣기를 누르세요`); });
+}
+// ════ AI 그림 만들기 (나라차 도장 고유 기능) ════
+// 7단계로 고르면 채팅(Gemini 등)에 붙여 넣을 지시문이 실시간으로 만들어짐: ① 그림체 ② 참고 그림 ③ 주인공(누구·띠·표정·옷) ④ 인원 ⑤ 포즈 ⑥ 용도·상황 ⑦ 추가 요청
+// 받은 그림은 고른 내용으로 분류(AI 캐릭터·스티커·배경·사진·색칠 도안·마스코트 라차)해 보관함에 이름·검색어와 함께 넣음
+const ST_STYLES = [
+  ['chibi', '귀여운 캐릭터', '2.5등신 큰 눈 · 웹툰풍 채색', '🧸', { bg: '#ffffff', en: 'cute chibi character illustration, big head and small body (about 2.5 heads tall), large sparkling eyes, rosy cheeks, clean bold dark outline around the whole silhouette, soft cel shading, bright friendly colors, Korean webtoon style' }],
+  ['sticker', '스티커', '흰 테두리 다이컷 스티커', '🏷️', { bg: '#d9d9d9', bgEn: 'plain flat light gray (#D9D9D9) background so the white sticker border stays visible', en: 'die-cut sticker illustration with a thick white border around the whole character, bold outline, vibrant flat colors, playful' }],
+  ['flat', '플랫 일러스트', '깔끔한 면과 선 · 브랜드 색', '🔷', { bg: '#ffffff', en: 'modern flat vector illustration, simple geometric shapes, limited palette of navy #1E2B5A, red #E0564B, warm yellow #FFE89A, skin tones and white, clean dark outline around the whole silhouette, minimal shading' }],
+  ['water', '수채화', '부드러운 손그림 느낌', '🎨', { bg: '#ffffff', en: 'soft watercolor and ink illustration, gentle brush textures, light pastel washes, hand-drawn ink line around the whole silhouette, warm and heartwarming' }],
+  ['clay', '3D 캐릭터', '말랑한 피규어 · 애니메이션풍', '🧩', { bg: '#ffffff', en: 'cute 3D character render like a premium animated film, soft clay-like materials, gentle studio lighting, rounded shapes, high detail' }],
+  ['webtoon', '웹툰', '선명한 한국 웹툰 선화', '📖', { bg: '#ffffff', en: 'Korean webtoon comic illustration, crisp line art, clean cel coloring, expressive dynamic pose' }],
+  ['photo', '실사 사진', '진짜 사진처럼', '📷', { bg: '#ffffff', bgEn: 'plain seamless light background', en: 'high quality realistic photograph, natural soft light, sharp focus, natural skin tones' }],
+  ['line', '색칠 도안', '검은 선만 · 아이 색칠놀이', '✏️', { bg: null, en: 'black and white coloring book line art for children, clean uniform black outlines only, no shading, no gray, no color fill, large simple areas that are easy to color' }],
+];
+const ST_REFS = [['none', '없음', '참고 그림 없이 그립니다', '➖'], ['racha', '라차 마스코트', '도장 펭귄 캐릭터를 똑같이', '🐧'], ['logo', '나라차 로고', '도복 가슴이나 배경에 로고', '🥋'], ['mine', '내 그림에서', '보관함의 그림을 참고', '🖼️'], ['file', '파일 올리기', '내 PC의 그림을 참고', '📁']];
+const ST_REFROLE = [['same', '이 캐릭터를 똑같이'], ['style', '그림체만 비슷하게'], ['logo', '로고로 넣기 (가슴·배경)']];
+const ST_HERO = [['people', '사람', '수련생 · 사범님', '🧒'], ['racha', '라차만', '도장 펭귄 마스코트', '🐧'], ['both', '사람 + 라차', '함께 등장', '🤝']];
+const ST_BELT = [['white', '흰띠', '#ffffff', 'a white belt'], ['yellow', '노란띠', '#f6c90e', 'a yellow belt'], ['orange', '주황띠', '#f39c12', 'an orange belt'], ['green', '초록띠', '#2e9e4f', 'a green belt'], ['blue', '파란띠', '#2f6fe4', 'a blue belt'], ['purple', '보라띠', '#8e44ad', 'a purple belt'], ['brown', '밤띠', '#7b4a2a', 'a brown belt'], ['red', '빨간띠', '#d63031', 'a red belt'], ['poom', '품띠', 'linear-gradient(90deg,#d63031 50%,#111 50%)', 'a red-and-black poom belt with a red-and-black collar'], ['black', '검은띠', '#111111', 'a black belt with a black collar'], ['mixed', '여러 색', 'conic-gradient(#f6c90e,#2e9e4f,#2f6fe4,#d63031,#f6c90e)', '']];
+const ST_MOOD = [['happy', '😄', '밝게 웃음', 'a big bright smile'], ['kiai', '😤', '기합!', 'shouting a powerful kihap with the mouth open'], ['focus', '🧐', '진지한 집중', 'a serious focused expression'], ['proud', '😊', '뿌듯함', 'a proud confident smile'], ['wink', '😉', '윙크', 'a playful wink'], ['wow', '😲', '깜짝', 'a surprised excited face'], ['moved', '🥹', '감동', 'touched happy tears in the eyes']];
+const ST_OUTFIT = [['dobok', '도복', 'a clean white V-neck taekwondo dobok', true], ['gear', '겨루기 보호구', 'a white dobok with taekwondo sparring gear (red or blue chest protector and headgear)', true], ['demo', '시범단 도복', 'a black-and-white taekwondo demonstration team uniform', true], ['hanbok', '한복', 'a colorful traditional Korean hanbok', false], ['casual', '평상복', 'casual everyday clothes', false]];
+const ST_AGE = [['kid-m', '어린이 남', '👦', 'an energetic 8-year-old boy'], ['kid-f', '어린이 여', '👧', 'a cheerful 8-year-old girl with a ponytail'], ['tod-m', '유아 남', '🧒', 'a small 5-year-old boy'], ['tod-f', '유아 여', '👶', 'a small 5-year-old girl with pigtails'], ['teen-m', '청소년 남', '🧑', 'a confident teenage boy'], ['teen-f', '청소년 여', '👱‍♀️', 'a confident teenage girl'], ['man', '성인 남', '👨', 'a fit man in his 30s'], ['woman', '성인 여', '👩', 'a fit woman in her 30s'], ['master', '사범님', '🥋', 'a kind, confident taekwondo master instructor']];
+const ST_RACE = [['kr', '한국인', 'Korean'], ['ea', '동아시아', 'East Asian'], ['white', '백인', 'Caucasian'], ['black', '흑인', 'Black'], ['sa', '남아시아', 'South Asian'], ['sea', '동남아시아', 'Southeast Asian'], ['latin', '라틴', 'Latino'], ['me', '중동', 'Middle Eastern'], ['mixed', '혼혈', 'mixed-race']];
+const ST_POSE = [['ready', '준비 자세', 'standing in the taekwondo ready stance (junbi) with fists in front of the belt'], ['bow', '경례(인사)', 'bowing politely with hands at the sides'], ['frontkick', '앞차기', 'performing a high front kick (ap chagi)'], ['sidekick', '옆차기', 'performing a powerful side kick (yeop chagi), body sideways'], ['roundkick', '돌려차기', 'performing a dynamic roundhouse kick (dollyeo chagi)'], ['backkick', '뒤차기', 'performing a back kick (dwit chagi)'], ['axekick', '내려차기', 'performing an axe kick (naeryeo chagi) with the leg raised high'], ['jumpkick', '뛰어 차기', 'jumping high in the air doing a flying kick'], ['punch', '지르기', 'throwing a straight middle punch (jireugi) in a front stance'], ['block', '막기', 'doing a low block (arae makgi) in a front stance'], ['poomsae', '품새', 'performing a graceful poomsae form movement'], ['break', '격파', 'breaking a wooden board with a kick, splinters flying'], ['medal', '메달·트로피', 'holding up a shiny gold medal and a trophy, celebrating'], ['thumb', '엄지 척', 'giving an energetic thumbs-up'], ['wave', '손 흔들기', 'waving hello with a big smile'], ['cheer', '만세·파이팅', 'jumping with both fists raised in a cheer'], ['heart', '손하트', 'making a finger heart with one hand'], ['point', '가리키기(안내)', 'pointing to the side with one hand as if introducing something'], ['sign', '빈 팻말 들기', 'holding up a blank sign board with both hands (no text on it)'], ['run', '줄넘기', 'jumping rope happily'], ['stretch', '스트레칭', 'doing a split stretch on a mat'], ['sit', '앉아서 웃기', 'sitting cross-legged and smiling']];
+const ST_GROUP = [['photo', '단체 기념사진', '앞줄 앉고 뒷줄 서서 활짝', 'posing for a group photo: front row kneeling, back row standing, everyone smiling at the camera'], ['line', '나란히 준비 자세', '한 줄로 서서 준비 자세', 'standing side by side in a neat line, all in the taekwondo ready stance'], ['kiai', '다 같이 기합', '주먹을 위로 번쩍', 'all shouting kihap together with fists raised high'], ['sync', '맞춰서 발차기', '같은 순간 같은 발차기', 'all performing the same high front kick at the same moment in perfect sync'], ['hi5', '하이파이브', '서로 손바닥을 마주침', 'giving each other high-fives, joyful'], ['trophy', '시상 축하', '트로피·메달 들고 환호', 'celebrating together holding trophies and gold medals'], ['spar', '겨루기', '둘이 마주 보고 겨루기', 'facing each other in a friendly sparring match, one kicking and one blocking'], ['master', '사범님과 아이들', '사범님이 가운데서 지도', 'the master instructor in the center guiding the children who follow the movement'], ['bow', '다 같이 경례', '공손하게 인사', 'all bowing politely together'], ['circle', '파이팅 손 모으기', '둥글게 서서 손을 모음', 'standing in a circle putting their hands together in the middle for a team cheer']];
+const ST_USE = [
+  ['element', '요소·스티커', '투명 배경 · 어디든 붙이기', '1:1', true, 'full body, centered, generous margin around the subject'],
+  ['poster', '포스터 주인공', '세로 · 위쪽에 제목 자리', '3:4', false, 'vertical poster composition: subjects in the lower two thirds, leave the top third as clean empty space for a headline'],
+  ['sns', 'SNS 정사각', '인스타 · 카카오톡', '1:1', false, 'square social media illustration, subjects centered with a simple pleasant background'],
+  ['story', '숏츠·스토리 배경', '세로 9:16 · 위아래 여백', '9:16', false, 'vertical 9:16 composition, keep the top 15% and bottom 25% simple for captions and app buttons'],
+  ['banner', '가로 배경·현수막', '16:9 · 가운데 글 자리', '16:9', false, 'wide horizontal composition, subjects on the left and right sides, leave the center clear for text'],
+  ['calendar', '달력 삽화', '4:3 · 따뜻한 장면', '4:3', false, 'warm calendar illustration scene with a balanced composition'],
+  ['deco', '카드·상장 장식', '작은 모서리 장식', '1:1', true, 'small compact decorative illustration for a certificate or card corner'],
+  ['coloring', '색칠 도안', '아이들 색칠놀이 종이', '3:4', false, 'full page coloring sheet with a simple outline background'],
+];
+const ST_SCENE = [['spring', '🌸', '봄 벚꽃', 'spring cherry blossoms'], ['summer', '🌊', '여름 물놀이', 'a bright summer day with water splashes'], ['autumn', '🍁', '가을 단풍', 'autumn maple leaves'], ['winter', '⛄', '겨울 눈', 'a snowy winter day'], ['seol', '🧧', '설날', 'Korean Lunar New Year with traditional patterns'], ['chuseok', '🌕', '추석 보름달', 'Chuseok with a big full moon and songpyeon'], ['xmas', '🎄', '크리스마스', 'Christmas with gifts and twinkling lights'], ['halloween', '🎃', '할로윈', 'a friendly Halloween with pumpkins'], ['exam', '🎖️', '승급심사', 'belt promotion test day'], ['contest', '🏆', '대회·시상', 'a taekwondo competition award ceremony'], ['bday', '🎂', '생일 파티', 'a birthday party with balloons and cake'], ['camp', '⛺', '방학 캠프', 'a fun outdoor vacation camp'], ['dojang', '🏠', '도장 안', 'inside a bright modern taekwondo dojang with mats'], ['park', '🌳', '야외 공원', 'an outdoor park on a sunny day'], ['school', '🎒', '입학·졸업', 'a school entrance and graduation celebration']];
+const ST_EXTRA = ['금메달을 목에 걸고', '작은 태극기를 들고', '친구와 손잡고', '말풍선 자리를 비워 줘', '안경을 쓰고', '웃는 얼굴로 정면을 보게', '배경에 반짝이 효과'];
+const ST_CATS = { char: ['ai-char', 'AI 캐릭터·사람'], sticker: ['ai-sticker', 'AI 스티커'], scene: ['ai-scene', 'AI 배경·장면'], photo: ['ai-photo', 'AI 사진'], coloring: ['ai-coloring', 'AI 색칠 도안'], mascot: ['mascot', '마스코트 라차'] };
+const ST_STEPS = [['그림체', '어떤 그림체로 그릴까요?'], ['참고 그림', '참고할 그림이 있나요?'], ['주인공', '누가 나오나요? 띠·표정·옷은요?'], ['인원', '몇 명이 나오나요?'], ['포즈', '어떤 동작을 할까요?'], ['용도·상황', '어디에 쓸 그림인가요?'], ['추가 요청', '더 바라는 점이 있나요?']];
+const ST_QUICK = [
+  ['🐧 라차 스티커', { style: 'sticker', ref: 'racha', refRole: 'same', hero: 'racha', rachaPose: 'thumb', mood: 'happy', use: 'element', scenes: [] }],
+  ['📣 모집 포스터 주인공', { style: 'chibi', ref: 'none', hero: 'people', belt: 'yellow', mood: 'happy', outfit: 'dobok', people: [{ age: 'kid-m', race: 'kr', belt: '', pose: 'frontkick' }, { age: 'kid-f', race: 'kr', belt: '', pose: 'thumb' }], poseMode: 'each', use: 'poster', scenes: ['dojang'] }],
+  ['🌏 다국적 단체 사진', { style: 'flat', ref: 'none', hero: 'people', belt: 'mixed', mood: 'happy', outfit: 'dobok', people: [{ age: 'kid-m', race: 'kr', belt: '' }, { age: 'kid-f', race: 'white', belt: '' }, { age: 'kid-m', race: 'black', belt: '' }, { age: 'kid-f', race: 'sea', belt: '' }, { age: 'master', race: 'kr', belt: 'black' }], poseMode: 'group', group: 'photo', use: 'sns', scenes: ['dojang'] }],
+  ['✏️ 색칠 도안', { style: 'line', ref: 'none', hero: 'people', belt: 'white', mood: 'happy', outfit: 'dobok', people: [{ age: 'kid-m', race: 'kr', belt: '', pose: 'sidekick' }], poseMode: 'each', use: 'coloring', scenes: [] }],
+  ['🌸 계절 배경', { style: 'water', ref: 'none', hero: 'both', belt: 'yellow', mood: 'happy', outfit: 'dobok', people: [{ age: 'kid-f', race: 'kr', belt: '', pose: 'wave' }], rachaPose: 'wave', poseMode: 'each', use: 'banner', scenes: ['spring', 'park'] }],
+];
+const STU_DEF = { step: 1, style: 'chibi', ref: 'none', refRole: 'same', mineId: '', hero: 'people', belt: 'yellow', mood: 'happy', outfit: 'dobok', people: [{ age: 'kid-m', race: 'kr', belt: '', pose: 'frontkick' }], rachaPose: 'frontkick', poseMode: 'each', group: 'photo', use: 'element', scenes: [], extra: '', cut: true, autoSave: true };
+let stu = (() => { try { return Object.assign(clone(STU_DEF), JSON.parse(localStorage.getItem('naracal-studio') || '{}')); } catch (e) { return clone(STU_DEF); } })();
+let stuRefFile = '', stuEdited = '', stuChatN = 0, stuChatOpen = false;
+const stuSave = () => { try { localStorage.setItem('naracal-studio', JSON.stringify(stu)); } catch (e) {} };
+const stFind = (L, k) => L.find(x => x[0] === k) || L[0];
+const stuUse = () => stFind(ST_USE, stu.use), stuStyle = () => stFind(ST_STYLES, stu.style);
+const stuCut = () => stu.cut && stuStyle()[4].bg !== null;
+const stuHasPeople = () => stu.hero !== 'racha';
+function stuRefSrc() {
+  if (stu.ref === 'racha') return [ASSETS['mascot-03'], ASSETS['mascot-01']].filter(Boolean);
+  if (stu.ref === 'logo') return [ASSETS['brand-horizontal'] || ASSETS['brand-hex']].filter(Boolean);
+  if (stu.ref === 'mine') { const it = NC.lib.mine().find(x => x.id === stu.mineId); return it ? [NC.lib.url(it.file)].filter(Boolean) : []; }
+  if (stu.ref === 'file') return stuRefFile ? [stuRefFile] : [];
+  return [];
+}
+// 영어 지시문 + 한글 요약
+function stuPrompt(next) {
+  const st = stuStyle(), use = stuUse(), aspect = use[3], cut = stuCut(), outfit = stFind(ST_OUTFIT, stu.outfit), tkd = outfit[3] && stu.style !== 'line' ? true : outfit[3];
+  const beltEn = (k, i) => k === 'mixed' ? stFind(ST_BELT, ['yellow', 'green', 'blue', 'red', 'orange', 'purple'][i % 6])[3] : stFind(ST_BELT, k)[3];
+  const ppl = stuHasPeople() ? stu.people : [], group = ppl.length > 1 && stu.poseMode === 'group';
+  const person = (p, i) => `${stFind(ST_AGE, p.age)[3]} (${stFind(ST_RACE, p.race)[2]}) wearing ${outfit[2]}${outfit[3] ? ' with ' + beltEn(p.belt || stu.belt, i) : ''}${group ? '' : ', ' + stFind(ST_POSE, p.pose || 'ready')[2]}`;
+  const racha = `the dojang mascot: a cute round gray penguin (dark gray head and back, white face and belly, orange beak and feet) wearing a white taekwondo dobok with a black belt${stu.ref === 'racha' && stu.refRole === 'same' ? ', exactly as in the attached reference' : ''}, ${stFind(ST_POSE, stu.rachaPose)[2]}`;
+  const subs = ppl.map(person); if (stu.hero !== 'people') subs.push(racha);
+  const L = [];
+  const refs = stuRefSrc().length;
+  if (!next && refs) L.push(stu.refRole === 'same' ? 'Use the attached reference image: draw this exact character with the same design, colors and proportions.' : stu.refRole === 'style' ? 'Match the art style, line weight and colors of the attached reference image.' : 'Use the attached logo exactly as it is (do not redraw or change it, no extra text): place it on the left chest of the dobok or as a small sign in the background.');
+  if (next) L.push('Same art style and the same characters as the previous image.');
+  L.push(subs.length === 1 ? `Subject: ${subs[0]}.` : `Subjects (${subs.length}): ${subs.map((x, i) => `${i + 1}) ${x}`).join('; ')}.`);
+  if (group) L.push(`Together they are ${stFind(ST_GROUP, stu.group)[3]}.`);
+  L.push(`Expression: ${stFind(ST_MOOD, stu.mood)[3]}${subs.length > 1 ? ' for everyone' : ''}.`);
+  const sc = stu.scenes.map(k => stFind(ST_SCENE, k)[3]);
+  if (sc.length) L.push(cut ? `Add a few small props that suggest ${sc.join(' and ')} close to the characters, but no full background.` : `Setting: ${sc.join(', ')}.`);
+  L.push(`Style: ${st[4].en}.`);
+  if (cut) L.push(`Background: ${st[4].bgEn || 'plain pure white (#FFFFFF) background'}, nothing else in the background.`);
+  L.push(`Composition: ${use[5]}.`);
+  if (tkd && stu.hero !== 'racha') L.push('Authentic taekwondo details: barefoot (no shoes, no socks), V-neck dobok, belt tied in a square knot with two ends hanging, correct anatomy, five fingers on each hand.');
+  if (stu.extra.trim()) L.push(`Additional request (may be written in Korean; follow it faithfully): "${stu.extra.trim()}"`);
+  if (stu.refRole !== 'logo' || !refs) L.push('Do not add any text, letters, numbers, logos or watermarks.');
+  L.push(`Aspect ratio ${aspect}. Output one image only.`);
+  return { en: (next ? '' : 'Create an image. ') + L.join(' '), aspect, cut };
+}
+function stuSummary() {
+  const st = stuStyle(), use = stuUse(), ppl = stuHasPeople() ? stu.people : [];
+  const who = ppl.map(p => `${stFind(ST_AGE, p.age)[1]}${p.race !== 'kr' ? '(' + stFind(ST_RACE, p.race)[1] + ')' : ''}`);
+  if (stu.hero !== 'people') who.push('라차');
+  const pose = ppl.length > 1 && stu.poseMode === 'group' ? stFind(ST_GROUP, stu.group)[1] : [...new Set(ppl.map(p => stFind(ST_POSE, p.pose || 'ready')[1]).concat(stu.hero !== 'people' ? [stFind(ST_POSE, stu.rachaPose)[1]] : []))].join('·');
+  return [['그림체', st[1]], ['참고', stu.ref === 'none' ? '없음' : stFind(ST_REFS, stu.ref)[1]], ['주인공', who.join(', ') || '—'], ['띠·표정', `${stFind(ST_BELT, stu.belt)[1]} · ${stFind(ST_MOOD, stu.mood)[2]} · ${stFind(ST_OUTFIT, stu.outfit)[1]}`], ['포즈', pose], ['용도', `${use[1]} · ${use[3]}${stuCut() ? ' · 투명 배경' : ''}`], ['상황', stu.scenes.map(k => stFind(ST_SCENE, k)[2]).join(', ') || '—'], ['추가', stu.extra.trim() || '—']];
+}
+// 받은 그림의 보관 분류·이름·검색어
+function stuClassify() {
+  const ppl = stuHasPeople() ? stu.people : [];
+  const k = stu.style === 'line' || stu.use === 'coloring' ? 'coloring' : stu.style === 'photo' ? 'photo' : stu.hero === 'racha' && stuCut() ? 'mascot' : stu.style === 'sticker' ? 'sticker' : stuCut() ? 'char' : 'scene';
+  const pose = ppl.length > 1 && stu.poseMode === 'group' ? stFind(ST_GROUP, stu.group)[1] : stFind(ST_POSE, stu.hero === 'racha' ? stu.rachaPose : (ppl[0] || {}).pose || 'ready')[1];
+  const who = stu.hero === 'racha' ? '라차' : ppl.length > 1 ? `${ppl.length}명` : stFind(ST_AGE, (ppl[0] || {}).age || 'kid-m')[1];
+  const scene = stu.scenes.map(x => stFind(ST_SCENE, x)[2]);
+  const name = `${pose} · ${who}${scene.length ? ' · ' + scene[0] : ''} (${stuStyle()[1]})`;
+  const kw = ['AI', stuStyle()[1], stuUse()[1], stFind(ST_BELT, stu.belt)[1], stFind(ST_MOOD, stu.mood)[2], stFind(ST_OUTFIT, stu.outfit)[1], pose, who, ...ppl.map(p => stFind(ST_AGE, p.age)[1] + ' ' + stFind(ST_RACE, p.race)[1]), ...scene, stu.hero !== 'people' ? '라차 마스코트 펭귄' : '', '태권도', stu.extra].filter(Boolean).join(' ');
+  return { cat: ST_CATS[k][0], catName: ST_CATS[k][1], name, kw };
+}
+function renderStudio(body) {
+  const el = selEls()[0], targetImg = el && el.type === 'image' ? el : null, canSave = !!store.state.dir, chat = chatMode();
+  const presets = (() => { try { return JSON.parse(localStorage.getItem('naracal-studio-presets') || '[]'); } catch (e) { return []; } })();
+  body.innerHTML = `<div class="stu">
+    <div class="stu-quick"><span>빠른 시작</span>${ST_QUICK.map((q, i) => `<button class="stu-chip" data-quick="${i}">${q[0]}</button>`).join('')}${presets.map((p, i) => `<button class="stu-chip mine" data-preset="${i}" title="내 조합 — 오른쪽 클릭하면 지웁니다">⭐ ${esc(p.name)}</button>`).join('')}<button class="stu-chip add" data-savepreset>＋ 지금 조합 저장</button></div>
+    <div class="stu-main">
+      <nav class="stu-steps" id="stuSteps"></nav>
+      <section class="stu-pane" id="stuPane"></section>
+      <aside class="stu-side">
+        <div class="stu-card-sum"><div class="stu-sum-h"><b>지금 만들 그림</b><span class="stu-badge" id="stuRatio"></span></div><div id="stuSum"></div></div>
+        <details class="stu-en"><summary>영어 지시문 보기·고치기</summary><textarea id="stuEn" rows="7"></textarea><div class="row" style="margin-top:4px"><button class="btn sm" data-act="resetEn">고른 내용대로 다시 쓰기</button></div></details>
+        <div class="stu-actions" id="stuActs"></div>
+        <div class="chatzone" id="stuZone" tabindex="0" role="button"><b>받은 그림을 여기에 넣기</b><span>그림 오른쪽 클릭 → 이미지 복사 → 여기서 ⌘V·Ctrl+V<br>내려받은 파일 끌어다 놓기 · 눌러서 고르기</span><small id="stuCat"></small></div>
+        <label class="chk" style="margin-top:8px"><input type="checkbox" id="stuAuto" ${stu.autoSave && canSave ? 'checked' : ''} ${canSave ? '' : 'disabled'}> 받은 그림을 보관함에 자동으로 분류해 넣기</label>
+        ${canSave ? '' : '<p class="hint" style="margin:4px 0 0">동기화 폴더를 연결하면 보관함(요소 → 나라차)에 분류해 넣습니다.</p>'}
+        ${targetImg ? `<p class="hint" style="margin:4px 0 0">고른 이미지 "${esc(elName(targetImg))}"를 받은 그림으로 바꿀 수 있습니다.</p>` : ''}
+        <div class="aiimgs stu-res" id="aiImgs"></div>
+      </aside>
+    </div></div>`;
+  const steps = () => { $('#stuSteps').innerHTML = ST_STEPS.map(([t], i) => { const n = i + 1, sum = stuSummary()[i][1], skip = (n === 4 && !stuHasPeople()) || (n === 2 && stu.ref === 'none'); return `<button class="${stu.step === n ? 'on' : ''}${n < stu.step || (n !== stu.step && sum !== '—') ? ' done' : ''}" data-step="${n}"><b>${n < stu.step ? '✓' : n}</b><span>${t}<small>${esc(n === 2 && stu.ref === 'none' ? '건너뜀' : n === 4 && !stuHasPeople() ? '라차만' : sum)}</small></span></button>`; }).join(''); };
+  const side = () => {
+    const p = stuPrompt(false), c = stuClassify();
+    $('#stuRatio').textContent = `${p.aspect}${p.cut ? ' · 투명' : ''}`;
+    $('#stuSum').innerHTML = stuSummary().filter(r => r[1] !== '—').map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join('');
+    if (!$('#stuEn').matches(':focus')) $('#stuEn').value = stuEdited || p.en;
+    $('#stuCat').textContent = `보관 분류: ${c.catName}`;
+    const refs = stuRefSrc(), site = CHAT_SITES[AI.cfg.chatImage][0];
+    $('#stuActs').innerHTML = chat ? `${refs.length && !stuChatN ? `<button class="btn stu-act" data-act="copyRef"><i>①</i> 참고 그림 복사 · ${site} 열기<small>채팅에 먼저 붙여 넣기</small></button>` : ''}
+      <button class="btn primary stu-act" data-act="copyPrompt"><i>${refs.length && !stuChatN ? '②' : '①'}</i> ${stuChatN ? '이어서 그리기 지시문 복사' : `지시문 복사${refs.length ? '' : ` · ${site} 열기`}`}<small>${stuChatN ? '같은 대화에 붙이면 그림체가 이어집니다' : '채팅 칸에 ⌘V·Ctrl+V 하고 보내기'}</small></button>
+      ${stuChatN ? '<button class="lnk" data-act="newChat">새 대화로 처음부터</button>' : ''}<p class="hint" style="margin:2px 0 0">${site} 채팅(내 요금제)에서 그립니다 · <button class="lnk" data-act="keys">다른 채팅으로 바꾸기</button></p>`
+      : `<button class="btn primary stu-act" data-act="gen"><i>✨</i> 바로 그림 만들기 (API)<small>Gemini API 요금이 듭니다</small></button><span id="aiBusy"></span>`;
+  };
+  const pane = () => {
+    const n = stu.step, [t, q] = ST_STEPS[n - 1]; let h = '';
+    const card = (attr, k, on, ic, ttl, sub, extra) => `<button class="stu-card${on ? ' on' : ''}" ${attr}="${k}">${ic ? `<span class="ic">${ic}</span>` : ''}<b>${ttl}</b>${sub ? `<small>${sub}</small>` : ''}${extra || ''}</button>`;
+    if (n === 1) h = `<div class="stu-cards">${ST_STYLES.map(s => card('data-style', s[0], stu.style === s[0], s[3], s[1], s[2], s[4].bg !== null && s[0] !== 'photo' ? '<em>배경 지우기 가능</em>' : '')).join('')}</div>`;
+    if (n === 2) { const refs = stuRefSrc();
+      h = `<div class="stu-cards">${ST_REFS.map(r => card('data-ref', r[0], stu.ref === r[0], r[3], r[1], r[2])).join('')}</div>`;
+      if (stu.ref === 'mine') { const mine = NC.lib.mine().slice(0, 30); h += mine.length ? `<p class="hint">참고할 그림을 고르세요</p><div class="stu-mine">${mine.map(it => `<button class="${stu.mineId === it.id ? 'on' : ''}" data-mine="${esc(it.id)}" title="${esc(it.name)}"><img src="${NC.lib.url(it.thumb) || ''}" alt=""></button>`).join('')}</div>` : '<p class="hint">보관함에 그림이 아직 없습니다 (동기화 폴더 연결 후 AI 그림을 보관하면 여기에 나옵니다).</p>'; }
+      if (stu.ref === 'file') h += `<div class="row" style="margin-top:8px"><button class="btn sm" data-act="pickRef">그림 파일 고르기</button>${stuRefFile ? '<span class="hint" style="margin:0">✓ 골랐습니다</span>' : ''}</div>`;
+      if (stu.ref !== 'none') h += `<h4>참고 그림을 어떻게 쓸까요?</h4><div class="stu-chips">${ST_REFROLE.map(r => `<button class="stu-chip${stu.refRole === r[0] ? ' on' : ''}" data-role="${r[0]}">${r[1]}</button>`).join('')}</div>${refs.length ? `<div class="stu-refprev">${refs.map(s => `<img src="${s}" alt="">`).join('')}<p class="hint">오른쪽 <b>① 참고 그림 복사</b>를 누르면 이 그림이 복사되고 채팅이 열립니다. 채팅 칸에 먼저 붙여 넣으세요.</p></div>` : ''}`;
+      else h += '<p class="hint" style="margin-top:10px">참고 그림 없이 그립니다. 바로 <b>다음</b>으로 가세요.</p>'; }
+    if (n === 3) h = `<div class="stu-cards three">${ST_HERO.map(r => card('data-hero', r[0], stu.hero === r[0], r[3], r[1], r[2])).join('')}</div>
+      <h4>띠 색</h4><div class="stu-chips">${ST_BELT.map(b => `<button class="stu-chip${stu.belt === b[0] ? ' on' : ''}" data-belt="${b[0]}"><i class="sw" style="background:${b[2]}"></i>${b[1]}</button>`).join('')}</div>
+      <h4>표정</h4><div class="stu-chips">${ST_MOOD.map(m => `<button class="stu-chip${stu.mood === m[0] ? ' on' : ''}" data-mood="${m[0]}"><span class="emo">${m[1]}</span>${m[2]}</button>`).join('')}</div>
+      <h4>옷</h4><div class="stu-chips">${ST_OUTFIT.map(o => `<button class="stu-chip${stu.outfit === o[0] ? ' on' : ''}" data-outfit="${o[0]}">${o[1]}</button>`).join('')}</div>`;
+    if (n === 4) h = !stuHasPeople() ? '<div class="stu-empty">🐧<p>라차만 그립니다 — 인원 단계는 건너뜁니다.</p></div>' : `<div class="stu-count"><button class="btn" data-act="pplMinus" ${stu.people.length <= 1 ? 'disabled' : ''}>−</button><b>${stu.people.length}명</b><button class="btn" data-act="pplPlus" ${stu.people.length >= 8 ? 'disabled' : ''}>＋</button><span class="hint" style="margin:0">최대 8명 (많을수록 얼굴이 작아집니다)</span></div>
+      <div class="stu-chips" style="margin:8px 0"><button class="stu-chip" data-act="allKr">모두 한국인</button><button class="stu-chip" data-act="mixRace">🌏 다국적으로 섞기</button><button class="stu-chip" data-act="mixGender">남녀 섞기</button></div>
+      <div class="stu-people"><div class="stu-phead"><span></span><span></span><span>나이·성별</span><span>인종·출신</span><span>띠</span><span></span></div>${stu.people.map((p, i) => `<div class="stu-person"><span class="no">${i + 1}</span><span class="av">${stFind(ST_AGE, p.age)[2]}</span>
+        <select data-age="${i}" aria-label="${i + 1}번 나이·성별">${ST_AGE.map(a => `<option value="${a[0]}" ${p.age === a[0] ? 'selected' : ''}>${a[1]}</option>`).join('')}</select>
+        <select data-race="${i}" aria-label="${i + 1}번 인종·출신">${ST_RACE.map(r => `<option value="${r[0]}" ${p.race === r[0] ? 'selected' : ''}>${r[1]}</option>`).join('')}</select>
+        <select data-pbelt="${i}" aria-label="${i + 1}번 띠"><option value="">공통 (${stFind(ST_BELT, stu.belt)[1]})</option>${ST_BELT.filter(b => b[0] !== 'mixed').map(b => `<option value="${b[0]}" ${p.belt === b[0] ? 'selected' : ''}>${b[1]}</option>`).join('')}</select>
+        ${stu.people.length > 1 ? `<button class="x" data-pdel="${i}" title="${i + 1}번 빼기">✕</button>` : '<span></span>'}</div>`).join('')}</div>`;
+    if (n === 5) { const ppl = stuHasPeople() ? stu.people : [];
+      if (ppl.length > 1) h += `<div class="stu-seg"><button class="${stu.poseMode === 'each' ? 'on' : ''}" data-pmode="each">각자 포즈</button><button class="${stu.poseMode === 'group' ? 'on' : ''}" data-pmode="group">단체 포즈</button></div>`;
+      if (ppl.length > 1 && stu.poseMode === 'group') h += `<div class="stu-cards">${ST_GROUP.map(g => card('data-group', g[0], stu.group === g[0], '', g[1], g[2])).join('')}</div>`;
+      else ppl.forEach((p, i) => { h += `<h4>${ppl.length > 1 ? `${i + 1}번 · ` : ''}${stFind(ST_AGE, p.age)[1]}</h4><div class="stu-chips">${ST_POSE.map(m => `<button class="stu-chip${(p.pose || 'ready') === m[0] ? ' on' : ''}" data-pose="${i}:${m[0]}">${m[1]}</button>`).join('')}</div>`; });
+      if (stu.hero !== 'people') h += `<h4>🐧 라차</h4><div class="stu-chips">${ST_POSE.map(m => `<button class="stu-chip${stu.rachaPose === m[0] ? ' on' : ''}" data-rpose="${m[0]}">${m[1]}</button>`).join('')}</div>`; }
+    if (n === 6) h = `<div class="stu-cards">${ST_USE.map(u => card('data-use', u[0], stu.use === u[0], '', u[1], u[2], `<em>${u[3]}${u[4] ? ' · 투명 배경' : ''}</em>`)).join('')}</div>
+      ${stuStyle()[4].bg !== null ? `<label class="chk" style="margin:10px 0 0"><input type="checkbox" id="stuCut" ${stu.cut ? 'checked' : ''}> 받은 그림의 배경을 지워 투명하게 (요소로 쓰기 좋음)</label>` : ''}
+      <h4>계절·상황 <small>(여러 개 고를 수 있어요)</small></h4><div class="stu-chips">${ST_SCENE.map(s => `<button class="stu-chip${stu.scenes.includes(s[0]) ? ' on' : ''}" data-scene="${s[0]}"><span class="emo">${s[1]}</span>${s[2]}</button>`).join('')}</div>`;
+    if (n === 7) h = `<textarea id="stuExtra" rows="4" placeholder="예: 벚꽃 아래에서 친구와 하이파이브, 금메달을 목에 걸고 (한국어로 써도 됩니다)">${esc(stu.extra)}</textarea>
+      <div class="stu-chips" style="margin-top:8px">${ST_EXTRA.map(x => `<button class="stu-chip" data-extra="${esc(x)}">＋ ${x}</button>`).join('')}</div>
+      <p class="hint">한국어로 쓰면 지시문에 그대로 넣고 "한국어 요청을 따르라"는 안내를 붙입니다. 오른쪽에서 최종 지시문을 확인하고 복사하세요.</p>`;
+    $('#stuPane').innerHTML = `<div class="stu-q"><span>${n} / 7 · ${t}</span><h3>${q}</h3></div><div class="stu-body">${h}</div>
+      <div class="stu-nav">${n > 1 ? '<button class="btn" data-act="prev">‹ 이전</button>' : '<span></span>'}${n < 7 ? `<button class="btn primary" data-act="next">다음: ${ST_STEPS[n][0]} ›</button>` : '<button class="btn primary" data-act="copyPrompt">지시문 복사하기</button>'}</div>`;
+  };
+  const all = () => { stuSave(); steps(); pane(); side(); };
+  const change = () => { stuEdited = ''; stuSave(); steps(); pane(); side(); };
+  all();
+  body.onclick = async e => {
+    const b = e.target.closest('button,[data-mine]'); if (!b) return; const d = b.dataset;
+    if (d.quick != null) { Object.assign(stu, clone(STU_DEF), clone(ST_QUICK[d.quick][1]), { step: 7, autoSave: stu.autoSave }); stu.cut = stuUse()[4]; stuChatN = 0; stuChatOpen = false; change(); toast(`'${ST_QUICK[d.quick][0]}' 조합을 넣었습니다 — 단계를 눌러 바꿀 수 있어요`); return; }
+    if (d.preset != null) { const p = presets[d.preset]; if (p) { Object.assign(stu, clone(STU_DEF), clone(p.s), { step: 7 }); stuChatN = 0; change(); toast(`'${p.name}' 조합을 불렀습니다`); } return; }
+    if (d.savepreset != null) { const nm = window.prompt('이 조합의 이름', stuClassify().name.split(' (')[0]); if (!nm || !nm.trim()) return; const s = clone(stu); delete s.step; presets.unshift({ name: nm.trim().slice(0, 20), s }); try { localStorage.setItem('naracal-studio-presets', JSON.stringify(presets.slice(0, 12))); } catch (er) {} renderStudio(body); toast('내 조합으로 저장했습니다 (빠른 시작 줄에 ⭐)'); return; }
+    if (d.step) { stu.step = Number(d.step); change(); return; }
+    if (d.style) { stu.style = d.style; stu.cut = stuUse()[4] && stuStyle()[4].bg !== null; if (d.style === 'line') stu.use = 'coloring'; change(); return; }
+    if (d.ref) { stu.ref = d.ref; stu.refRole = d.ref === 'logo' ? 'logo' : d.ref === 'racha' ? 'same' : 'style'; if (d.ref === 'racha' && stu.hero === 'people') stu.hero = 'both'; stuChatN = 0; change(); return; }
+    if (d.role) { stu.refRole = d.role; change(); return; }
+    if (d.mine) { stu.mineId = d.mine; change(); return; }
+    if (d.hero) { stu.hero = d.hero; change(); return; }
+    if (d.belt) { stu.belt = d.belt; change(); return; }
+    if (d.mood) { stu.mood = d.mood; change(); return; }
+    if (d.outfit) { stu.outfit = d.outfit; change(); return; }
+    if (d.age) { const [i, a] = d.age.split(':'); stu.people[i].age = a; change(); return; }
+    if (d.pdel != null) { stu.people.splice(Number(d.pdel), 1); change(); return; }
+    if (d.pmode) { stu.poseMode = d.pmode; change(); return; }
+    if (d.group) { stu.group = d.group; change(); return; }
+    if (d.pose) { const [i, p] = d.pose.split(':'); stu.people[i].pose = p; change(); return; }
+    if (d.rpose) { stu.rachaPose = d.rpose; change(); return; }
+    if (d.use) { stu.use = d.use; stu.cut = stuUse()[4] && stuStyle()[4].bg !== null; if (d.use === 'coloring') stu.style = 'line'; change(); return; }
+    if (d.scene) { stu.scenes = stu.scenes.includes(d.scene) ? stu.scenes.filter(x => x !== d.scene) : stu.scenes.concat(d.scene); change(); return; }
+    if (d.extra) { stu.extra = (stu.extra.trim() ? stu.extra.trim() + ', ' : '') + d.extra; change(); return; }
+    const a = d.act; if (!a) return;
+    if (a === 'next') { stu.step = Math.min(7, stu.step + 1); if (stu.step === 4 && !stuHasPeople()) stu.step = 5; change(); return; }
+    if (a === 'prev') { stu.step = Math.max(1, stu.step - 1); if (stu.step === 4 && !stuHasPeople()) stu.step = 3; change(); return; }
+    if (a === 'pplPlus') { const last = stu.people[stu.people.length - 1] || {}; stu.people.push({ age: last.age === 'kid-m' ? 'kid-f' : 'kid-m', race: last.race || 'kr', belt: '', pose: last.pose || 'ready' }); if (stu.people.length > 2) stu.poseMode = 'group'; change(); return; }
+    if (a === 'pplMinus') { stu.people.pop(); change(); return; }
+    if (a === 'allKr') { stu.people.forEach(p => p.race = 'kr'); change(); return; }
+    if (a === 'mixRace') { const r = ['kr', 'white', 'black', 'sea', 'sa', 'latin', 'ea', 'me']; stu.people.forEach((p, i) => p.race = r[i % r.length]); change(); return; }
+    if (a === 'mixGender') { stu.people.forEach((p, i) => { const base = p.age.split('-')[0]; if (['kid', 'tod', 'teen'].includes(base)) p.age = base + (i % 2 ? '-f' : '-m'); else if (p.age !== 'master') p.age = i % 2 ? 'woman' : 'man'; }); change(); return; }
+    if (a === 'pickRef') { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.onchange = async () => { if (i.files[0]) { stuRefFile = await fileToDataURL(i.files[0]); stuChatN = 0; change(); } }; i.click(); return; }
+    if (a === 'resetEn') { stuEdited = ''; side(); toast('고른 내용대로 다시 썼습니다'); return; }
+    if (a === 'keys') { aiCtx.tab = 'keys'; renderAI(); return; }
+    if (a === 'newChat') { stuChatN = 0; stuChatOpen = false; side(); toast('다음 복사부터 새 대화로 엽니다'); return; }
+    if (a === 'copyRef') { try { stuChatOpen = true; await copyImg(await refSheet(stuRefSrc())); openChatSite(AI.cfg.chatImage); toast('참고 그림을 복사했습니다 — 열린 채팅 칸에 ⌘V·Ctrl+V로 붙여 넣은 뒤 ② 지시문 복사를 누르세요'); } catch (er) { toast('참고 그림을 복사하지 못했습니다: ' + er.message, true); } return; }
+    if (a === 'copyPrompt') { const next = stuChatN > 0, p = next ? stuPrompt(true) : stuPrompt(false), text = stuEdited && !next ? stuEdited : p.en; await sendToChat(text, 'image', { open: !stuChatOpen, note: '그림이 나오면 오른쪽 클릭 → 이미지 복사 후 오른쪽 아래 칸에 붙여 넣으세요' }); stuChatOpen = true; stuChatN++; side(); return; }
+    if (a === 'gen') runAI(async () => { const p = stuPrompt(false), imgs = await AI.geminiImage({ prompt: stuEdited || p.en, refImage: stuRefSrc(), aspect: p.aspect }); for (const s0 of imgs) await take(s0); });
+  };
+  body.oncontextmenu = e => { const b = e.target.closest('[data-preset]'); if (!b) return; e.preventDefault(); if (!window.confirm(`'${presets[b.dataset.preset].name}' 조합을 지울까요?`)) return; presets.splice(Number(b.dataset.preset), 1); try { localStorage.setItem('naracal-studio-presets', JSON.stringify(presets)); } catch (er) {} renderStudio(body); };
+  body.onchange = e => { const t = e.target, d = t.dataset;
+    if (d.age != null && t.tagName === 'SELECT') { stu.people[d.age].age = t.value; change(); }
+    if (d.race != null) { stu.people[d.race].race = t.value; change(); }
+    if (d.pbelt != null) { stu.people[d.pbelt].belt = t.value; change(); }
+    if (t.id === 'stuCut') { stu.cut = t.checked; change(); }
+    if (t.id === 'stuAuto') { stu.autoSave = t.checked; stuSave(); } };
+  body.oninput = e => { if (e.target.id === 'stuExtra') { stu.extra = e.target.value; stuSave(); steps(); side(); } if (e.target.id === 'stuEn') stuEdited = e.target.value; };
+  // 받은 그림 처리: 배경 지우기 → 분류해 보관 → 결과 카드
+  const take = async s => {
+    if (stuCut()) { try { s = await NC.imgedit.removeColorFromSrc(s, stuStyle()[4].bg || '#ffffff'); } catch (er) {} }
+    const c = stuClassify(), meta = { name: c.name, kw: c.kw, prompt: stuPrompt(false).en, style: stu.style, cat: c.cat };
+    if (stu.autoSave && canSave) { try { await NC.lib.saveMine(s, meta); meta.saved = true; } catch (er) { toast('보관하지 못했습니다: ' + er.message, true); } }
+    const fig = document.createElement('figure');
+    fig.innerHTML = `<img src="${s}" alt=""><figcaption><span class="stu-saved">${meta.saved ? `✓ 보관됨 · ${esc(c.catName)}` : esc(c.catName)}</span><div class="row" style="gap:4px"><button class="btn sm primary" data-ins>${targetImg ? '바꾸기' : '넣기'}</button>${canSave && !meta.saved ? '<button class="btn sm" data-keep>보관</button>' : ''}<button class="btn sm" data-dl>내려받기</button></div></figcaption>`;
+    fig.querySelector('[data-ins]').onclick = () => { const r = addAsset(s); if (targetImg) { targetImg.src = r; delete targetImg.srcOrig; commit(); rerender(); } else addImage(r); toast('그림을 넣었습니다'); };
+    const kb = fig.querySelector('[data-keep]'); if (kb) kb.onclick = async () => { kb.disabled = true; try { await NC.lib.saveMine(s, meta); fig.querySelector('.stu-saved').textContent = `✓ 보관됨 · ${c.catName}`; kb.remove(); toast(`보관했습니다 — 요소 → 나라차 → ${c.catName}`); } catch (er) { kb.disabled = false; toast(er.message, true); } };
+    fig.querySelector('[data-dl]').onclick = () => { const a2 = document.createElement('a'); a2.href = s; a2.download = c.name.replace(/[\\/:*?"<>|]/g, '_') + '.png'; a2.click(); };
+    $('#aiImgs').prepend(fig);
+    if (meta.saved) toast(`받은 그림을 보관했습니다 — 요소 → 나라차 → ${c.catName}`);
+  };
+  chatImgZone($('#stuZone'), take);
+  $('#stuZone').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#stuZone').click(); } };
 }
 function aiF(label, key, type) { return `<label class="f"><span>${label}</span><input type="${type || 'text'}" data-ai="${key}" value="${esc(AI.cfg[key])}" autocomplete="off"></label>`; }
 // 키 저장 표시: 이 브라우저에 바로 저장되고, 동기화 폴더가 있으면 몇 초 안에 설정 파일로 올라가 다른 PC에도 적용됨
