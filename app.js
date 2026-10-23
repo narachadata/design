@@ -50,7 +50,7 @@ function viewSrc(el, mode) {
 }
 function src(ref) { if (!ref) return ''; if (ref.startsWith('asset:')) return blobURL(ref, ASSETS[ref.slice(6)]); if (ref.startsWith('a:')) return blobURL(ref, doc.assets[ref.slice(2)]); if (ref.startsWith('lib:')) return NC.lib.url(ref.slice(4)); return ref; }
 function addAsset(dataURL) { for (const k in doc.assets) if (doc.assets[k] === dataURL) return 'a:' + k; const id = uid(); doc.assets[id] = dataURL; return 'a:' + id; }
-function gcAssets() { const used = new Set(); const walk = v => { if (typeof v === 'string' && v.startsWith('a:')) used.add(v.slice(2)); else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(doc.pages); walk(doc.calendar); hist.forEach(h => { for (const m of h.matchAll(/"a:([^"]+)"/g)) used.add(m[1]); }); for (const k in doc.assets) if (!used.has(k)) delete doc.assets[k]; } // 실행 취소 기록에 남은 그림도 지키기 (저장 뒤 Ctrl+Z로 지운 사진 되살리기)
+function gcAssets() { const used = new Set(); const walk = v => { if (typeof v === 'string' && v.startsWith('a:')) used.add(v.slice(2)); else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(doc.pages); walk(doc.calendar); walk(doc.audio); hist.forEach(h => { for (const m of h.matchAll(/"a:([^"]+)"/g)) used.add(m[1]); }); for (const k in doc.assets) if (!used.has(k)) delete doc.assets[k]; } // 실행 취소 기록에 남은 그림도 지키기 (저장 뒤 Ctrl+Z로 지운 사진 되살리기)
 
 /* ---------- 실행 취소 ---------- */
 // 기록에는 내용만: 그림·올린 글꼴(수 MB)·이름·문서 번호·저장 시각은 빼고, 되돌릴 때 지금 값을 그대로 둠
@@ -522,7 +522,7 @@ function dragMove(e) {
       const [ax0, ay0] = wp(o.x, o.y, o.w, o.h), [ax1, ay1] = wp(x, y, w, h); x += ax0 - ax1; y += ay0 - ay1; }
     el.x = r1(x); el.y = r1(y); el.w = r1(w); el.h = r1(h);
     if (el.type === 'text' && d.length === 2) scaleTextBy(el, o, el.w / o.w); /* 모서리 끌기 = 글자 크기도 함께 (캔바·미리캔버스와 같음) */
-    if (el.type === 'path') { const sx = el.w / o.w, sy = el.h / o.h; el.pts = o.pts.map(pt => [r1(pt[0] * sx), r1(pt[1] * sy)]); renderCanvas(); } else if (el.type === 'text') { renderCanvas(); } else liveUpdate([el]);
+    if (el.type === 'path' && o.pts) { const sx = el.w / o.w, sy = el.h / o.h; el.pts = o.pts.map(pt => [r1(pt[0] * sx), r1(pt[1] * sy)]); renderCanvas(); } else if (el.type === 'text') { renderCanvas(); } else liveUpdate([el]);
     renderOverlay();
   } else if (drag.kind === 'rot') {
     const el = drag.el; let a = Math.atan2(p.y - drag.cy, p.x - drag.cx) * 180 / Math.PI + 90; if (e.shiftKey) a = Math.round(a / 15) * 15; el.rot = Math.round(((a % 360) + 360) % 360); liveUpdate([el]); renderOverlay();
@@ -778,8 +778,309 @@ function noteRecentElem(id) { if (!id) return; const r = recentElems().filter(x 
 
 /* ======================= 왼쪽 레일 패널 ======================= */
 let sideTab = 'pages', tplCat = 'all', tplQ = '', elCat = 'all', elQ = '', tplF = { format: '', season: '', age: '', occasion: '', biz: '' };
-const RAIL = [['pages', '페이지', 'i-pages'], ['tpl', '템플릿', 'i-tpl'], ['elems', '요소', 'i-elems'], ['text', '텍스트', 'i-text'], ['photo', '사진', 'i-img'], ['upload', '업로드', 'i-upload'], ['project', '프로젝트', 'i-folder'], ['ai', 'AI 도구', 'i-ai'], ['bg', '배경', 'i-bg'], ['theme', '테마', 'i-theme'], ['chart', '차트', 'i-chart'], ['layers', '레이어', 'i-layers']];
-function renderRail() { $('#rail').innerHTML = RAIL.map(([k, t, ic]) => `<button data-tab="${k}" aria-selected="${sideTab === k}" title="${t}"><svg class="ic"><use href="#${ic}"/></svg><span>${t}</span></button>`).join(''); $$('#rail button').forEach(b => b.onclick = () => { sideTab = b.dataset.tab; renderRail(); renderSide(); }); }
+/* ======================= 소식지 (나라차 소식지 엔진 결합) =======================
+   내용(데이터 불러오기·일정·명단·사진첩·보관·클라우드)은 지금 쓰는 소식지 엔진(../naracha/news.html)을 그대로 쓰고
+   (같은 주소라 접속키·보관한 호·사진이 그대로 보임), 화면은 공방과 같은 모양으로 입혀 가운데 작업 영역에 띄움.
+   [공방 디자인으로 가져오기]는 엔진이 그리는 명령을 기록해 글 상자·사진·도형·벡터 모양으로 바꾼 새 문서를 엶. */
+let newsMode = false, newsReady = null, newsWin = null, newsObs = null;
+const NEWS_NAV = [['pgCover', '표지'], ['pgToc', '목차'], ['pgVirtue', '인성덕목'], ['pgSchedule', '주요 일정'], ['pgCal', '수련계획표'], ['pgTrain', '수련 안내'], ['pgExamInfo', '승급심사 안내'], ['pgRec', '승급심사 추천자'], ['pgKkw', '국기원 응시예정자'], ['pgBday', '생일자'], ['pgAlbum', '사진첩 · 행사 보고'], ['pgCheck', '실천 체크리스트']];
+function newsEngine() {
+  if (newsReady) return newsReady;
+  newsReady = new Promise((res, rej) => {
+    const f = document.createElement('iframe'); f.id = 'newsFrame'; f.className = 'newsframe'; f.title = '소식지 내용 편집'; f.src = NC.news.ENGINE;
+    const to = setTimeout(() => rej(new Error('소식지 엔진을 열지 못했습니다 (인터넷 연결을 확인하세요)')), 40000);
+    f.onload = () => { clearTimeout(to); try { const w = f.contentWindow; if (typeof w.buildPages !== 'function') throw new Error('소식지 엔진이 아닙니다'); newsSkin(w); newsWin = w; res(w); if (sideTab === 'news') renderSide(); } catch (e) { rej(e); } };
+    $('#stage').appendChild(f);
+  });
+  newsReady.catch(e => { newsReady = null; const f = $('#newsFrame'); if (f) f.remove(); toast(e.message, true); });
+  return newsReady;
+}
+// 엔진 화면을 공방과 같은 모양으로: 같은 색·글꼴·입력칸·단추, 엔진의 머리줄·왼쪽 메뉴·만들기 구역은 숨김(공방 왼쪽 패널이 대신)
+const NEWS_SKIN = `
+:root{--bg:#eef0f4;--panel:#fff;--line:#e2e5eb;--line2:#eef0f4;--ink:#1b2130;--ink2:#3f4756;--muted:#707887;--faint:#9aa1ad;--acc:#2f5bea;--acc-h:#254dd1;--acc-soft:#e9eefc;--ring:rgba(47,91,234,.14)}
+body{background:var(--bg);font-family:Pretendard,'Noto Sans KR',-apple-system,sans-serif;font-size:13.5px;line-height:1.45}
+header,.subbar,.rail,#secMake{display:none!important}
+.shell{display:block}main{max-width:780px;margin:0 auto;padding:22px 26px 140px}
+section.card{border-radius:12px;border:1px solid var(--line);box-shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);padding:0 0 18px;margin:0 0 16px;scroll-margin-top:18px}
+section.card h2{background:#fff;font-size:15px;font-weight:700;letter-spacing:-.01em;padding:16px 20px 13px;margin:0 0 6px;border-bottom:1px solid var(--line2);border-radius:12px 12px 0 0}
+section.card h2 .step{background:var(--acc-soft);color:var(--acc);font-weight:800;font-size:11px;border-radius:6px}
+section.card>*:not(h2){margin-left:20px;margin-right:20px}
+label.fl{font-size:12px;font-weight:600;color:var(--ink2);margin:14px 0 5px}
+input[type=text],input[type=password],input[type=date],input[type=number],select,textarea{background:#fff;border:1px solid #cfd4dd;border-radius:8px;padding:8px 10px;font-size:13.5px}
+input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--ring)}
+input[type=file]{border:1px dashed #cfd4dd;background:#f8f9fb;border-radius:8px}
+button{font-weight:600;border-radius:8px;font-size:13px}
+button.pri{background:var(--acc)}button.pri:hover{background:var(--acc-h)}
+button.sec{border:1px solid #cfd4dd;color:var(--ink)}button.sec:hover{background:#f5f6f9;border-color:#b9c0cc}
+.hint{color:#5f6775;font-size:12.5px;line-height:1.6}.hint b{color:var(--ink)}
+.status{background:#f5f6f9;border-color:var(--line)}
+.pgToggle{background:#fff;border:0;border-top:1px solid var(--line2);border-radius:0;padding:16px 0 4px;margin-top:8px;font-size:14px;font-weight:700;scroll-margin-top:18px}
+.pgToggle input{accent-color:var(--acc)}
+.sub{background:#f8f9fb;border:1px solid var(--line2);border-radius:10px}
+.chip{border-color:#cfd4dd;border-radius:999px}.chip:hover{border-color:var(--acc);background:var(--acc-soft)}
+.calGrid .cell{border-color:var(--line);border-radius:8px}
+details.help{background:#f8f9fb;border-color:var(--line)}details.help summary{color:var(--acc)}
+#editBadge{display:none}
+::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:#cfd4dd;border-radius:10px;border:2px solid var(--bg)}
+`;
+function newsSkin(w) {
+  const d = w.document, st = d.createElement('style'); st.id = 'ncSkin'; st.textContent = NEWS_SKIN; d.head.appendChild(st);
+  // 제목·단추·항목 앞의 그림 문자(이모지)는 공방 화면처럼 덜어 냄 (상태 안내 문구는 그대로)
+  const EMO = /^[\s←-⯿☀-➿️‍\u{1F000}-\u{1FAFF}]+/u;
+  d.querySelectorAll('section.card h2, button, label.fl, summary, .pgToggle span').forEach(n => { n.childNodes.forEach(c => { if (c.nodeType === 3 && EMO.test(c.nodeValue)) c.nodeValue = c.nodeValue.replace(EMO, ''); }); });
+  // 머리줄의 호·상태가 바뀌면 공방 패널도 갱신
+  const watch = ['heroYm', 'heroSeason', 'hdrStatus', 'editBadge'].map(id => d.getElementById(id)).filter(Boolean);
+  newsObs = new MutationObserver(() => { if (sideTab === 'news') newsHeroUpdate(); });
+  watch.forEach(n => newsObs.observe(n, { childList: true, characterData: true, subtree: true, attributes: true }));
+  d.addEventListener('change', e => { if (e.target && /^pg[A-Z]/.test(e.target.id || '') && sideTab === 'news') renderSide(); if (e.target && /^in(Year|Month|Ratio)$/.test(e.target.id || '')) setTimeout(newsHeroUpdate, 50); });
+}
+function setNewsMode(on) {
+  newsMode = !!on; $('#stage').classList.toggle('newsmode', newsMode);
+  if (newsMode) { endEdit(); sel = []; renderOverlay(); newsEngine(); }
+  renderInspector(); if (sideTab === 'news') renderSide();
+}
+function newsInfo() {
+  const w = newsWin; if (!w || !w.S) return null;
+  const d = w.document, t = id => (d.getElementById(id) || {}).textContent || '';
+  return { y: w.S.year, m: w.S.month, ratio: w.S.ratio, season: t('heroSeason'), stat: t('hdrStatus'), badge: t('editBadge') };
+}
+function newsHeroUpdate() {
+  const i = newsInfo(), h = $('#nwHero'); if (!h) return;
+  if (!i) { h.innerHTML = `<div class="nw-ym">소식지</div><div class="nw-stat">${newsReady ? '소식지 엔진을 여는 중…' : '내용 채우기를 누르면 소식지 엔진이 열립니다'}</div>`; return; }
+  const R = { '45': '4:5 세로 1080×1350', '11': '1:1 정사각 1080×1080', '916': '9:16 세로 1080×1920' }[i.ratio] || i.ratio;
+  h.innerHTML = `<div class="nw-top"><span class="nw-kicker">NARACHA NEWS LETTER</span>${i.season ? `<span class="nw-season">${esc(i.season)}</span>` : ''}</div><div class="nw-ym">${i.y}<small>년</small> ${i.m}<small>월호</small></div><div class="nw-meta">${esc(R)}</div>${i.stat ? `<div class="nw-stat">${esc(i.stat)}</div>` : ''}`;
+}
+function newsGo(id) {
+  setNewsMode(true);
+  newsEngine().then(w => { const d = w.document; if (id === 'settingsCard' && w.showSettings) w.showSettings(true); const el = d.getElementById(id); if (!el) return; const tg = el.closest('.pgToggle') || el; tg.scrollIntoView({ behavior: 'smooth', block: 'start' }); tg.animate([{ background: '#e9eefc' }, { background: getComputedStyle(tg).backgroundColor }], { duration: 1200 }); });
+}
+function renderNewsSide(body) {
+  const w = newsWin, d = w && w.document, on = id => { const c = d && d.getElementById(id); return c ? c.checked : true; };
+  const isNews = !!doc.news;
+  body.innerHTML = `<div class="nw-hero" id="nwHero"></div>
+  <div class="seg nw-mode"><button data-nm="edit" aria-pressed="${newsMode}">내용 채우기</button><button data-nm="design" aria-pressed="${!newsMode}">디자인 다듬기</button></div>
+  <h3>내용</h3>
+  <div class="nw-nav">
+    <button class="nw-it" data-go="secBasic"><span class="nw-ic"><svg class="ic"><use href="#i-settings"/></svg></span><span class="nw-t">기본 설정<small>호 · 비율 · 로고 · 표지 · 배경</small></span></button>
+    ${NEWS_NAV.map(([id, t]) => `<div class="nw-it pg${on(id) ? '' : ' off'}" data-go="${id}"><label class="nw-sw" title="이 쪽 넣기/빼기"><input type="checkbox" data-pg="${id}" ${on(id) ? 'checked' : ''}><i></i></label><span class="nw-t">${t}</span></div>`).join('')}
+    <button class="nw-it" data-go="secArchive"><span class="nw-ic"><svg class="ic"><use href="#i-folder"/></svg></span><span class="nw-t">지난 호 보관함<small>보관 · 클라우드 · 다른 PC에서 이어서</small></span></button>
+    <button class="nw-it" data-go="settingsCard"><span class="nw-ic"><svg class="ic"><use href="#i-link"/></svg></span><span class="nw-t">데이터 연결<small>나라차 프로그램 접속키</small></span></button>
+  </div>
+  <h3>디자인</h3>
+  <button class="btn primary full" id="nwImport"><svg class="ic"><use href="#i-news"/></svg>공방 디자인으로 가져오기</button>
+  <p class="hint">채운 내용으로 소식지를 그려 <b>글 상자 · 사진 · 도형 · 벡터 장식</b>으로 바꾼 새 문서를 엽니다. 글꼴·색·배치·사진을 자유롭게 다듬으세요.</p>
+  <button class="btn full" id="nwTvDoc"><svg class="ic"><use href="#i-tv"/></svg>TV 화면(16:9) 디자인으로 가져오기</button>
+  ${isNews ? `<button class="btn full" id="nwRe" style="margin-top:6px"><svg class="ic"><use href="#i-refresh"/></svg>바뀐 쪽 다시 가져오기…</button><p class="hint">명단·일정이 바뀌면 그 쪽만 새로 가져와 바꿉니다. 다른 쪽에서 다듬은 것은 그대로입니다.</p>` : ''}
+  <h3>내보내기${isNews ? '' : ' <small style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--ui-muted)">(지금 문서)</small>'}</h3>
+  <div class="tile nw-out"><button id="nwPng"><svg class="ic"><use href="#i-img"/></svg>밴드용 PNG</button><button id="nwPdf"><svg class="ic"><use href="#i-pdf"/></svg>PDF</button><button id="nwVideo" style="grid-column:1/-1;flex-direction:row;justify-content:center"><svg class="ic"><use href="#i-tv"/></svg>TV 영상 MP4</button></div>
+  <p class="hint">최종 결과물은 모두 공방에서 만듭니다 — 다듬은 그대로 PNG·PDF로, TV 영상은 <b>TV 화면(16:9) 디자인</b>을 다듬은 뒤 넘김 효과·움직임·배경 음악을 넣어 TV에서 재생되는 MP4로 저장합니다.</p>`;
+  newsHeroUpdate();
+  body.onclick = e => {
+    const nm = e.target.closest('[data-nm]'); if (nm) { setNewsMode(nm.dataset.nm === 'edit'); return; }
+    if (e.target.closest('.nw-sw')) return;
+    const go = e.target.closest('[data-go]'); if (go) { newsGo(go.dataset.go); return; }
+    const id = (e.target.closest('button') || {}).id;
+    if (id === 'nwImport') newsImport(false); else if (id === 'nwTvDoc') newsImport(true); else if (id === 'nwRe') newsReimport();
+    else if (id === 'nwPng' || id === 'nwPdf') { if (!doc.news && !window.confirm('지금 문서는 소식지가 아닙니다. 지금 문서를 그대로 내보낼까요? (소식지는 먼저 [공방 디자인으로 가져오기])')) return; setNewsMode(false); openDownload(id === 'nwPng' ? 'png' : 'pdfhq'); }
+    else if (id === 'nwVideo') newsVideo();
+  };
+  body.onchange = e => { const c = e.target.closest('[data-pg]'); if (!c) return; newsEngine().then(w2 => { const x = w2.document.getElementById(c.dataset.pg); if (x && x.checked !== c.checked) { x.checked = c.checked; x.dispatchEvent(new w2.Event('change', { bubbles: true })); x.dispatchEvent(new w2.Event('input', { bubbles: true })); } c.closest('.nw-it').classList.toggle('off', !c.checked); }); };
+  if (!newsReady && newsMode) newsEngine();
+}
+function renderNewsInspector() {
+  const ins = $('#inspector'); const w = newsWin, made = w && w.MADE || [];
+  ins.innerHTML = `<h2 class="phead"><span>미리보기</span></h2><button class="btn full" id="nwPrev"><svg class="ic"><use href="#i-refresh"/></svg>${made.length ? '미리보기 새로 그리기' : '미리보기 그리기'}</button>
+  <p class="hint">내용을 고친 뒤 눌러 보세요. 쪽을 누르면 크게 봅니다.</p><div class="nw-pv" id="nwPv">${made.map((p, i) => `<button class="nw-pvi" data-i="${i}"><img alt="" src="${p.__thumb || (p.__thumb = thumbOf(p.canvas))}"><span>${i + 1}. ${esc(NC.news.labelOf(p.name))}</span></button>`).join('') || '<p class="hint" style="text-align:center;padding:24px 0">아직 미리보기가 없습니다</p>'}</div>`;
+  ins.onclick = e => {
+    if (e.target.closest('#nwPrev')) { const b = $('#nwPrev'); b.disabled = true; b.lastChild.textContent = '그리는 중…'; newsEngine().then(w2 => NC.news.prepare(w2)).then(() => renderNewsInspector()).catch(err => { toast('미리보기 실패: ' + err.message, true); renderNewsInspector(); }); return; }
+    const it = e.target.closest('.nw-pvi'); if (it && w && w.openViewer) w.openViewer(Number(it.dataset.i));
+  };
+}
+function thumbOf(c) { const k = 240 / c.width, t = document.createElement('canvas'); t.width = 240; t.height = Math.round(c.height * k); t.getContext('2d').drawImage(c, 0, 0, t.width, t.height); return t.toDataURL('image/jpeg', 0.82); }
+function newsFmt(wpx, hpx) { if (wpx === 1080 && hpx === 1350) return 'ig45'; if (wpx === 1080 && hpx === 1080) return 'ig'; if (wpx === 1080 && hpx === 1920) return 'story'; return ''; }
+// 엔진이 그린 쪽들 → 공방 페이지 (그림은 지금 doc.assets 가 아니라 따로 모아 돌려줌)
+function newsPages(cap, into) {
+  const keep = doc.assets; doc.assets = into || {};
+  try { const pages = NC.news.convert(cap, { addAsset, uid }); pages.forEach((p, i) => { p.news = cap[i].name; p.label = cap[i].label; }); return { pages, assets: doc.assets }; } finally { doc.assets = keep; }
+}
+async function newsCapture(tv) {
+  const w = await newsEngine(); setStatus(tv ? 'TV 화면을 그리는 중…' : '소식지를 그리는 중…');
+  try { const cap = await NC.news.capture(w, { tv }); if (!cap.length) throw new Error('만들 쪽이 없습니다. 내용 채우기에서 넣을 쪽을 켜 주세요.'); return { w, cap }; } finally { setStatus(''); }
+}
+async function newsImport(tv) {
+  let r; try { r = await newsCapture(tv); } catch (e) { toast(e.message, true); return; }
+  const { w, cap } = r, S = w.S;
+  if (doc.pages.some(p => p.els.length) && !window.confirm(`${S.year}년 ${S.month}월호 소식지${tv ? ' TV 화면' : ''} ${cap.length}쪽을 새 문서로 엽니다. 지금 문서를 닫을까요? (지금 문서는 저장된 상태로 남습니다)`)) return;
+  if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
+  const { pages, assets } = newsPages(cap);
+  await store.disconnect();
+  const nd = newDoc(); const W0 = cap[0].w, H0 = cap[0].h;
+  nd.w = Math.round(W0 * NC.news.PX * 100) / 100; nd.h = Math.round(H0 * NC.news.PX * 100) / 100; nd.fmt = newsFmt(W0, H0);
+  nd.name = `${S.year}년 ${S.month}월호 소식지${tv ? ' TV' : ''}`; nd.pages = pages; nd.assets = assets; nd.fonts = []; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.rules = doc.rules;
+  nd.news = { ym: `${S.year}-${String(S.month).padStart(2, '0')}`, ratio: tv ? 'tv' : S.ratio, tv: !!tv, at: Date.now() };
+  doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer);
+  if (await store.folderReady()) { try { await store.saveIntoFolder(doc); } catch (e) { toast('폴더에 저장하지 못했습니다: ' + e.message, true); } }
+  zoom = 0; newsMode = false; $('#stage').classList.remove('newsmode'); renderAll(); fitCanvas(); updateSaveBadge();
+  toast(`${doc.name} ${pages.length}쪽을 가져왔습니다 — 글자·사진·장식을 눌러 다듬으세요`);
+}
+// 바뀐 쪽만 다시: 엔진이 새로 그린 쪽 중 고른 것만 이 문서의 같은 쪽과 바꿈(없던 쪽은 제자리에 끼워 넣음)
+async function newsReimport() {
+  let r; try { r = await newsCapture(doc.news && doc.news.tv); } catch (e) { toast(e.message, true); return; }
+  const { cap } = r; const have = new Map(doc.pages.map((p, i) => [p.news, i]));
+  let d = $('#dlgNewsRe'); if (d) d.remove();
+  d = document.createElement('dialog'); d.id = 'dlgNewsRe'; d.className = 'nw-dlg';
+  d.innerHTML = `<div class="dhead"><h2>바뀐 쪽 다시 가져오기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><p class="hint">체크한 쪽만 새 내용으로 바꿉니다. <b>이미 있는 쪽을 바꾸면 그 쪽에서 다듬은 것은 사라집니다</b>(되돌리기 가능). 새로 생긴 쪽은 처음부터 체크되어 있습니다.</p><div class="nw-re">${cap.map((c, i) => { const ex = have.has(c.name); return `<label class="nw-rei"><img alt="" src="${thumbOf(c.canvas)}"><span><input type="checkbox" data-i="${i}" ${ex ? '' : 'checked'}> ${i + 1}. ${esc(c.label)}</span><em class="${ex ? '' : 'new'}">${ex ? '디자인에 있음' : '새 쪽'}</em></label>`; }).join('')}</div><div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" data-close>취소</button><button class="btn primary" id="nwReGo">고른 쪽 바꾸기</button></div></div>`;
+  document.body.appendChild(d); d.querySelectorAll('[data-close]').forEach(b => b.onclick = () => d.close()); d.addEventListener('close', () => d.remove()); d.showModal();
+  $('#nwReGo').onclick = () => {
+    const idx = [...d.querySelectorAll('input[data-i]:checked')].map(x => Number(x.dataset.i)); if (!idx.length) { d.close(); return; }
+    const { pages, assets } = newsPages(idx.map(i => cap[i]), {}); Object.assign(doc.assets, assets);
+    let n = 0;
+    idx.forEach((ci, k) => { const pg = pages[k], at = doc.pages.findIndex(p => p.news === cap[ci].name); if (at >= 0) doc.pages[at] = pg; else { let pos = doc.pages.length; for (let j = ci - 1; j >= 0; j--) { const q = doc.pages.findIndex(p => p.news === cap[j].name); if (q >= 0) { pos = q + 1; break; } } doc.pages.splice(pos, 0, pg); } n++; });
+    doc.news.at = Date.now(); d.close(); commit(); goto(Math.min(cur, doc.pages.length - 1)); toastUndo(`${n}쪽을 새 내용으로 바꿨습니다`);
+  };
+}
+// 소식지 TV 영상: TV(16:9) 디자인 문서에서 MP4로. 지금 문서가 세로 소식지면 TV 화면 디자인을 먼저 가져옴
+async function newsVideo() {
+  setNewsMode(false);
+  if (doc.news && doc.news.tv) { if (!doc.video) doc.video = { dur: 5, trans: 'soft', turn: 1.2, loop: true, q: '1080' }; sideTab = 'video'; renderRail(); renderSide(); openVideoMaker(); return; }
+  if (!window.confirm('TV 영상은 16:9 가로 화면으로 다시 배치한 «TV 화면 디자인»에서 만듭니다.\n지금 TV 화면 디자인을 새 문서로 가져올까요? (지금 문서는 저장된 상태로 남습니다)\n\n가져온 뒤 다듬고, 왼쪽 «영상» 메뉴에서 MP4로 저장하세요.')) return;
+  await newsImport(true);
+  if (doc.news && doc.news.tv) { doc.video = { dur: 5, trans: 'soft', turn: 1.2, loop: true, q: '1080' }; commit(); sideTab = 'video'; renderRail(); renderSide(); }
+}
+/* ======================= 영상 만들기 (쪽 = 장면, 요소 애니메이션, 배경 음악 → MP4) ======================= */
+const VIDEO = NC.video;
+const vset = () => Object.assign({}, VIDEO.DEF, doc.video || {});
+const fmtT = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+function videoPages() { return doc.pages.map((pg, i) => ({ pg, i })).filter(x => !x.pg.vOff); }
+function videoTotal() { const V = vset(), ps = videoPages(); return ps.reduce((a, { pg }, k) => a + Number(pg.vdur || V.dur) + ((k < ps.length - 1 || V.loop) && (pg.vtrans || V.trans) !== 'none' ? Number(V.turn) : 0), 0); }
+// 층들을 세로로 쌓아 여러 장씩 한 번에 그린 뒤 잘라 씀 (한 장씩 그리면 매번 한글 글꼴 수십 MB를 다시 읽어 아주 느림)
+async function videoLayers(list, dpi, onProgress, cancelled) {
+  const W = Math.round(doc.w / 25.4 * dpi), H = Math.round(doc.h / 25.4 * dpi), per = Math.max(1, Math.min(40, Math.floor(30000 / H)));
+  const items = []; list.forEach((it, pi) => it.sets.forEach((st, si) => items.push({ pg: it.pg, st, pi, si })));
+  const out = list.map(it => new Array(it.sets.length));
+  await loadScript('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js', () => window.htmlToImage);
+  for (let s0 = 0; s0 < items.length; s0 += per) {
+    if (cancelled && cancelled()) return null;
+    if (onProgress) onProgress(s0, items.length);
+    const part = items.slice(s0, s0 + per);
+    const keepMarks = doc.cropMarks; doc.cropMarks = false;
+    // 바깥 상자는 화면 밖에 숨기고, 그 안의 '쌓은 상자'를 그림 (바깥 상자를 그리면 숨긴 위치까지 옮겨져 빈 그림이 됨)
+    const tmp = document.createElement('div'); tmp.style.cssText = 'position:fixed;left:-99999px;top:0';
+    const stack = document.createElement('div'); stack.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;background:transparent'; tmp.appendChild(stack);
+    try { stack.innerHTML = part.map((it, i) => sheetHTML({ id: 'vl' + i, bg: it.pg.bg || '#ffffff', els: it.st.els }, 'thumb')).join(''); } finally { doc.cropMarks = keepMarks; }
+    [...stack.children].forEach((n, i) => { if (!part[i].st.withBg) n.classList.add('transp'); n.style.flex = 'none'; });
+    document.body.appendChild(tmp);
+    try {
+      await Promise.all(Array.from(stack.querySelectorAll('img')).map(im => im.complete ? null : new Promise(r => { im.onload = im.onerror = r; })));
+      const r = stack.getBoundingClientRect();
+      const big = await htmlToImage.toCanvas(stack, { pixelRatio: dpi / 96, width: Math.ceil(r.width), height: Math.ceil(r.height), fontEmbedCSS: await fontCSSFor(stack), cacheBust: false, skipAutoScale: true });
+      const ph = big.height / part.length;
+      part.forEach((it, i) => { const c = document.createElement('canvas'); c.width = W; c.height = H; c.getContext('2d').drawImage(big, 0, Math.round(i * ph), Math.min(big.width, Math.round(ph * W / H)), Math.round(ph), 0, 0, W, H); out[it.pi][it.si] = c; });
+      big.width = big.height = 0;
+    } finally { tmp.remove(); }
+  }
+  if (onProgress) onProgress(items.length, items.length);
+  return out;
+}
+async function videoBuild(q, onProgress, cancelled) {
+  const ps = videoPages(); if (!ps.length) throw new Error('영상에 넣을 쪽이 없습니다');
+  const { W, H } = VIDEO.outSize(doc.w, doc.h, q || vset().q);
+  await ensureLibFonts(ps.map(x => x.pg)).catch(() => {}); return VIDEO.build({ doc, pages: ps, W, H, renderLayers: videoLayers, onProgress, cancelled });
+}
+let audioCache = { key: '', buf: null };
+async function videoAudio() {
+  const a = doc.audio; if (!a || !a.src) return null;
+  if (audioCache.key !== a.src) { audioCache = { key: a.src, buf: await VIDEO.decode(src(a.src)) }; }
+  return Object.assign({ buf: audioCache.buf }, a);
+}
+function renderVideoSide(body) {
+  const V = vset(), ps = doc.pages, tot = videoTotal();
+  body.innerHTML = `<div class="wz-card vd-hero"><div class="wz-year">영상<small>으로 만들기</small></div><p class="hint" style="margin:0 0 8px">쪽마다 한 장면이 되어 차례로 넘어가는 영상을 만듭니다. 요소를 고르면 오른쪽 <b>애니메이션</b>에서 움직임을 넣을 수 있어요.</p><div class="vd-sum"><b>${videoPages().length}</b>장면 · <b>${fmtT(tot)}</b> · ${(() => { const o = VIDEO.outSize(doc.w, doc.h, V.q); return o.W + '×' + o.H; })()}${doc.audio ? ' · 음악' : ''}</div><div class="row" style="gap:6px;margin-top:8px"><button class="btn" id="vdPlay" style="flex:1;justify-content:center"><svg class="ic"><use href="#i-play"/></svg>미리보기</button><button class="btn primary" id="vdSave" style="flex:1;justify-content:center"><svg class="ic"><use href="#i-video"/></svg>MP4 저장</button></div></div>
+  <h3>장면 <small style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--ui-muted)">체크한 쪽만 · 시간은 −/+ 로</small></h3>
+  <div class="vd-scenes">${ps.map((pg, i) => `<div class="vd-sc${pg.vOff ? ' off' : ''}${i === cur ? ' on' : ''}" data-i="${i}"><input type="checkbox" data-vin="${i}" ${pg.vOff ? '' : 'checked'} title="영상에 넣기"><div class="vd-th tbox" data-w="${doc.w}" data-h="${doc.h}">${sheetHTML(pg, 'thumb')}</div><div class="vd-meta"><b>${i + 1}${pg.label ? ' · ' + esc(pg.label) : ''}</b><div class="vd-row"><span class="vd-dur"><button data-vd="-1" title="짧게">−</button><em>${Number(pg.vdur || V.dur).toFixed(1)}초</em><button data-vd="1" title="길게">+</button></span><select data-vt title="다음 장면으로 넘어가는 효과"><option value="">${VIDEO.TRANS.find(t => t[0] === V.trans)[1]} (기본)</option>${VIDEO.TRANS.map(([v, t]) => `<option value="${v}" ${pg.vtrans === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>${pg.els.some(VIDEO.hasAnim) ? `<span class="vd-anim"><svg class="ic"><use href="#i-anim"/></svg>움직임 ${pg.els.filter(VIDEO.hasAnim).length}</span>` : ''}</div></div>`).join('')}</div>
+  <h3>한꺼번에</h3>
+  <div class="grid2"><label class="f"><span>기본 장면 길이</span><select id="vdDur">${[2, 3, 4, 5, 6, 7, 8, 10].map(v => `<option value="${v}" ${Number(V.dur) === v ? 'selected' : ''}>${v}초</option>`).join('')}</select></label><label class="f"><span>기본 넘김 효과</span><select id="vdTrans">${VIDEO.TRANS.map(([v, t]) => `<option value="${v}" ${V.trans === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
+  <div class="grid2"><label class="f"><span>넘기는 시간</span><select id="vdTurn">${[[0.5, '빠르게 0.5초'], [0.8, '보통 0.8초'], [1, '1초'], [1.2, '천천히 1.2초']].map(([v, t]) => `<option value="${v}" ${Number(V.turn) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label><label class="f"><span>화질</span><select id="vdQ"><option value="1080" ${V.q !== '720' ? 'selected' : ''}>1080p (기본)</option><option value="720" ${V.q === '720' ? 'selected' : ''}>720p (가볍게)</option></select></label></div>
+  <label class="vd-chk"><input type="checkbox" id="vdLoop" ${V.loop ? 'checked' : ''}> 끝나면 첫 장면으로 넘어가게 <small>(TV에서 반복 재생할 때)</small></label>
+  <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" id="vdAutoAnim" title="쪽마다 글자·사진·묶음을 위에서 아래로 차례로 나타나게 (작은 장식·배경은 그대로)"><svg class="ic"><use href="#i-anim"/></svg>차례로 나타나기 (모든 쪽)</button><button class="btn sm" id="vdClrAnim">움직임 모두 빼기</button><button class="btn sm" id="vdDurAll">모든 장면 기본 길이로</button></div>
+  <h3>배경 음악</h3>
+  ${doc.audio ? `<div class="vd-music"><svg class="ic"><use href="#i-music"/></svg><b>${esc(doc.audio.name || '음악')}</b><button class="btn sm" id="vdMusicDel">빼기</button></div>
+  <div class="grid2"><label class="f"><span>소리 크기 <small id="vdVolV">${Math.round((doc.audio.vol == null ? 0.8 : doc.audio.vol) * 100)}%</small></span><input type="range" id="vdVol" min="0" max="1" step="0.05" value="${doc.audio.vol == null ? 0.8 : doc.audio.vol}"></label><label class="vd-chk" style="align-self:end"><input type="checkbox" id="vdFade" ${doc.audio.fade !== false ? 'checked' : ''}> 끝에서 서서히 작게</label></div>` : ''}
+  <label class="btn full" style="justify-content:center"><svg class="ic"><use href="#i-music"/></svg>${doc.audio ? '다른 음악으로 바꾸기' : '음악 파일 넣기 (MP3 · M4A · WAV)'}<input type="file" id="vdMusic" accept="audio/*" hidden></label>
+  <p class="hint">영상보다 짧은 음악은 이어서 반복됩니다. 저작권 걱정 없는 음악(유튜브 오디오 보관함 등)을 쓰세요. 음악은 문서에 함께 저장됩니다.</p>`;
+  requestAnimationFrame(() => fitBoxes(body, '.vd-th', 64));
+  const setV = (k, v) => { doc.video = Object.assign(vset(), { [k]: v }); commit(); renderSide(); };
+  body.onclick = async e => {
+    const t = e.target; const sc = t.closest('.vd-sc');
+    const vd = t.closest('[data-vd]'); if (vd && sc) { const pg = doc.pages[Number(sc.dataset.i)], v = Number(pg.vdur || vset().dur); pg.vdur = Math.max(1, Math.min(60, Math.round((v + Number(vd.dataset.vd) * (v < 3 ? 0.5 : 1)) * 2) / 2)); commit(); renderSide(); return; }
+    if (sc && !t.closest('input,select,button')) { goto(Number(sc.dataset.i)); return; }
+    const id = (t.closest('button') || {}).id;
+    if (id === 'vdPlay') openVideoPlayer(); else if (id === 'vdSave') openVideoMaker();
+    else if (id === 'vdAutoAnim') { let n = 0; doc.pages.forEach(pg => { pg.els.forEach(el => { delete el.anim; }); n += VIDEO.autoAnimate(pg, doc.w, doc.h); }); commit(); renderAll(); toastUndo(`글자·사진·묶음 ${n}개에 '차례로 나타나기'를 넣었습니다`); }
+    else if (id === 'vdClrAnim') { doc.pages.forEach(pg => pg.els.forEach(el => { delete el.anim; })); commit(); renderAll(); toastUndo('모든 움직임을 뺐습니다'); }
+    else if (id === 'vdDurAll') { doc.pages.forEach(pg => { delete pg.vdur; delete pg.vtrans; }); commit(); renderSide(); }
+    else if (id === 'vdMusicDel') { delete doc.audio; commit(); renderSide(); }
+  };
+  body.onchange = async e => {
+    const t = e.target; const sc = t.closest('.vd-sc');
+    if (t.dataset.vin != null) { doc.pages[Number(t.dataset.vin)].vOff = !t.checked || undefined; commit(); renderSide(); return; }
+    if (t.matches('[data-vt]') && sc) { const pg = doc.pages[Number(sc.dataset.i)]; if (t.value) pg.vtrans = t.value; else delete pg.vtrans; commit(); renderSide(); return; }
+    if (t.id === 'vdDur') setV('dur', Number(t.value)); else if (t.id === 'vdTrans') setV('trans', t.value); else if (t.id === 'vdTurn') setV('turn', Number(t.value)); else if (t.id === 'vdQ') setV('q', t.value); else if (t.id === 'vdLoop') setV('loop', t.checked);
+    else if (t.id === 'vdFade') { doc.audio.fade = t.checked; commit(); }
+    else if (t.id === 'vdVol') { commit(); }
+    else if (t.id === 'vdMusic') { const f = t.files[0]; if (!f) return; if (f.size > 25 * 1048576) { toast('음악 파일이 너무 큽니다 (25MB 이하)', true); return; } const d = await fileToDataURL(f); try { setStatus('음악을 읽는 중…'); await VIDEO.decode(d); } catch (err) { toast('이 음악 파일은 읽을 수 없습니다', true); return; } finally { setStatus(''); } doc.audio = { src: addAsset(d), name: f.name.replace(/\.[^.]+$/, ''), vol: 0.8, fade: true }; commit(); renderSide(); toast('배경 음악을 넣었습니다'); }
+  };
+  body.oninput = e => { if (e.target.id === 'vdVol') { doc.audio.vol = Number(e.target.value); $('#vdVolV').textContent = Math.round(doc.audio.vol * 100) + '%'; } };
+}
+// 미리보기 재생 (첫 장면부터, 또는 지금 쪽부터)
+async function openVideoPlayer(fromCur) {
+  let d = $('#dlgVplay'); if (d) d.remove();
+  d = document.createElement('dialog'); d.id = 'dlgVplay'; d.className = 'nw-dlg vd-dlg';
+  d.innerHTML = `<div class="dhead"><h2>영상 미리보기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><div class="vd-stage"><canvas id="vpCv"></canvas><div class="vd-load" id="vpLoad">장면을 준비하는 중…</div></div><div class="vd-ctl"><button class="btn icon" id="vpPlay" title="재생/멈춤 (스페이스)"><svg class="ic"><use href="#i-play"/></svg></button><input type="range" id="vpSeek" min="0" max="1" step="0.01" value="0"><span id="vpTime">0:00 / 0:00</span><button class="btn primary" id="vpSave"><svg class="ic"><use href="#i-video"/></svg>MP4 저장</button></div></div>`;
+  document.body.appendChild(d); let P = null, stop = false;
+  d.querySelector('[data-close]').onclick = () => d.close(); d.addEventListener('close', () => { stop = true; if (P) P.destroy(); d.remove(); }); d.showModal();
+  try {
+    const V = await videoBuild(null, (k, n) => { const l = $('#vpLoad'); if (l) l.textContent = `장면을 준비하는 중… ${Math.round(k / Math.max(1, n) * 100)}%`; }, () => stop); if (!V || stop) return;
+    const audio = await videoAudio().catch(() => null);
+    const cv = $('#vpCv'); $('#vpLoad').remove(); P = VIDEO.player(cv, V, audio);
+    const seek = $('#vpSeek'); seek.max = V.total;
+    const ic = () => { $('#vpPlay use').setAttribute('href', P.isPlaying() ? '#i-pause' : '#i-play'); };
+    P.onTime = t => { seek.value = t; $('#vpTime').textContent = `${fmtT(t)} / ${fmtT(V.total)}`; ic(); };
+    if (fromCur) { const ps = videoPages(); let T = 0; for (const { pg, i } of ps) { if (i >= cur) break; T += Number(pg.vdur || vset().dur) + Number(vset().turn); } P.seek(T); }
+    $('#vpPlay').onclick = () => { P.toggle(); ic(); }; seek.oninput = () => P.seek(Number(seek.value));
+    d.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); P.toggle(); ic(); } });
+    $('#vpSave').onclick = () => { d.close(); openVideoMaker(); };
+    P.play(); ic();
+  } catch (e) { const l = $('#vpLoad'); if (l) l.textContent = '준비하지 못했습니다: ' + e.message; }
+}
+// MP4 저장
+function openVideoMaker() {
+  if (newsMode) setNewsMode(false);
+  if (doc.news && !doc.video) doc.video = { dur: 5, trans: 'soft', turn: 1.2, loop: !!doc.news.tv, q: '1080' }; // 소식지: 예전 TV 영상과 같은 기본값
+  let d = $('#dlgVideo'); if (d) d.remove();
+  const V = vset(), o = VIDEO.outSize(doc.w, doc.h, V.q), n = videoPages().length;
+  d = document.createElement('dialog'); d.id = 'dlgVideo'; d.className = 'nw-dlg vd-dlg';
+  d.innerHTML = `<div class="dhead"><h2>MP4 영상 저장</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><div class="vd-stage"><canvas id="vidCv"></canvas><div class="vd-load" id="vidProg">${n}장면 · ${fmtT(videoTotal())} · ${o.W}×${o.H}${doc.audio ? ' · 음악 «' + esc(doc.audio.name || '') + '»' : ''}</div></div>
+  <p class="hint">장면 길이·넘김 효과·음악은 왼쪽 <b>영상</b> 메뉴에서, 요소 움직임은 요소를 고른 뒤 오른쪽 <b>애니메이션</b>에서 정합니다. 영상은 실제 길이만큼 녹화되며, 만드는 동안 이 창을 가리거나 최소화하면 끊깁니다. 저장된 MP4는 TV·셋톱·휴대폰·SNS에서 재생되는 일반 형식입니다.</p>
+  <div class="row" style="justify-content:flex-end"><button class="btn" data-close>닫기</button><button class="btn primary" id="vidGo"><svg class="ic"><use href="#i-video"/></svg>영상 만들기</button></div></div>`;
+  document.body.appendChild(d); d.querySelectorAll('[data-close]').forEach(b => b.onclick = () => d.close()); d.showModal();
+  let busy = false, stop = false; d.addEventListener('cancel', e => { if (busy) e.preventDefault(); }); d.addEventListener('close', () => { stop = true; d.remove(); });
+  const go = $('#vidGo');
+  go.onclick = async () => {
+    if (busy) { stop = true; return; }
+    busy = true; stop = false; go.lastChild.textContent = '중지'; const pr = $('#vidProg');
+    try {
+      const Vb = await videoBuild(null, (k, nn) => { pr.textContent = `장면을 준비하는 중… ${Math.round(k / Math.max(1, nn) * 100)}%`; }, () => stop); if (!Vb) throw new Error('중지했습니다');
+      const audio = await videoAudio().catch(() => null);
+      const res = await VIDEO.record({ V: Vb, canvas: $('#vidCv'), audio, cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `녹화 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; } });
+      if (!res) { pr.textContent = '중지했습니다'; return; }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = `${(doc.name || '영상').replace(/[\\/:*?"<>|]/g, '_')}.${res.ext}`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+      pr.textContent = `저장했습니다 — ${(res.blob.size / 1048576).toFixed(1)}MB · ${res.note || res.warn || ''}`; if (res.warn) toast(res.warn, true); else toast('영상을 저장했습니다');
+    } catch (e) { pr.textContent = e.message; } finally { busy = false; if (document.body.contains(go)) go.lastChild.textContent = '영상 만들기'; }
+  };
+}
+const RAIL = [['pages', '페이지', 'i-pages'], ['tpl', '템플릿', 'i-tpl'], ['news', '소식지', 'i-news'], ['video', '영상', 'i-video'], ['elems', '요소', 'i-elems'], ['text', '텍스트', 'i-text'], ['photo', '사진', 'i-img'], ['upload', '업로드', 'i-upload'], ['project', '프로젝트', 'i-folder'], ['ai', 'AI 도구', 'i-ai'], ['bg', '배경', 'i-bg'], ['theme', '테마', 'i-theme'], ['chart', '차트', 'i-chart'], ['layers', '레이어', 'i-layers']];
+function renderRail() { $('#rail').innerHTML = RAIL.map(([k, t, ic]) => `<button data-tab="${k}" aria-selected="${sideTab === k}" title="${t}"><svg class="ic"><use href="#${ic}"/></svg><span>${t}</span></button>`).join(''); $$('#rail button').forEach(b => b.onclick = () => { sideTab = b.dataset.tab; if (sideTab !== 'news' && newsMode) setNewsMode(false); renderRail(); renderSide(); }); }
 function tmpSheet(w, h, els, bg) { const tmp = Object.assign({}, doc, { w, h, bleed: 0, cropMarks: false }); const saved = doc; doc = tmp; try { return sheetHTML({ id: 'tmp', bg: bg || '#ffffff', els }, 'thumb'); } finally { doc = saved; } }
 function fitBoxes(root, sel_, maxH) { root.querySelectorAll(sel_).forEach(bx => { const w = Number(bx.dataset.w), h = Number(bx.dataset.h), n = Number(bx.dataset.n) || 1; const bw = bx.clientWidth; if (!bw) return; const k = Math.min(bw / (w * MM * n + (n - 1) * 4), (maxH || 110) / (h * MM)); const total = w * MM * k * n + (n - 1) * 4; bx.querySelectorAll(':scope > .sheet').forEach((sh, i) => { sh.style.transform = `scale(${k})`; sh.style.left = ((bw - total) / 2 + i * (w * MM * k + 4)) + 'px'; }); bx.style.height = (h * MM * k) + 'px'; }); }
 function renderSide() {
@@ -796,6 +1097,10 @@ function renderSide() {
     $('#pgDel').onclick = () => { if (doc.pages.length === 1) { toast('마지막 페이지는 지울 수 없습니다', true); return; } if (!window.confirm(`${cur + 1}쪽을 지울까요?`)) return; doc.pages.splice(cur, 1); commit(); goto(Math.min(cur, doc.pages.length - 1)); };
     $('#pgUp').onclick = () => { if (cur === 0) return; [doc.pages[cur - 1], doc.pages[cur]] = [doc.pages[cur], doc.pages[cur - 1]]; commit(); goto(cur - 1); };
     $('#pgDown').onclick = () => { if (cur >= doc.pages.length - 1) return; [doc.pages[cur + 1], doc.pages[cur]] = [doc.pages[cur], doc.pages[cur + 1]]; commit(); goto(cur + 1); };
+  } else if (sideTab === 'news') {
+    renderNewsSide(body);
+  } else if (sideTab === 'video') {
+    renderVideoSide(body);
   } else if (sideTab === 'tpl') {
     const filt = tplFiltered();
     body.innerHTML = `${filt ? tplNavHTML() : ''}<div class="wz-card" ${filt ? 'hidden' : ''}><div class="wz-year">${yearNow}<small>년</small></div><p class="hint" style="margin:0 0 8px">연도별 달력 모양과 테마를 미리 보며 표지·인성·달력 26쪽을 한 번에 만듭니다.</p><button class="btn primary full" id="wzOpen"><svg class="ic"><use href="#i-cal"/></svg>캘린더 마법사 열기</button></div>
@@ -939,7 +1244,7 @@ function renderElems() {
     try { if (nm.trim() === '삭제') { await NC.lib.removeMine(it.lib.id); toast('내 그림에서 지웠습니다'); } else if (nm.trim()) { await NC.lib.renameMine(it.lib.id, nm.trim()); toast('이름을 바꿨습니다'); } renderElems(); } catch (err) { toast(err.message, true); } };
   let tq; $('#elSearch').oninput = e => { elQ = e.target.value; clearTimeout(tq); tq = setTimeout(() => { renderElems(); const i = $('#elSearch'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
 }
-function elName(el) { if (el.name) return el.name; if (el.type === 'text') return (el.text || '글자').split('\n')[0].slice(0, 20); if (el.type === 'image') return '이미지'; if (el.type === 'shape') return (FX.SHAPES.find(s => s[0] === el.kind) || [])[1] || '도형'; if (el.type === 'path') return '펜 선'; if (el.type === 'chart') return '차트'; if (el.type === 'cal') return `${el.year}년 ${el.month}월 달력`; if (el.type === 'mini') return `미니 달력 ${el.month}월`; return el.type; }
+function elName(el) { if (el.name) return el.name; if (el.type === 'text') return (el.text || '글자').split('\n')[0].slice(0, 20); if (el.type === 'image') return '이미지'; if (el.type === 'shape') return (FX.SHAPES.find(s => s[0] === el.kind) || [])[1] || '도형'; if (el.type === 'path') return el.d ? '벡터 모양' : '펜 선'; if (el.type === 'chart') return '차트'; if (el.type === 'cal') return `${el.year}년 ${el.month}월 달력`; if (el.type === 'mini') return `미니 달력 ${el.month}월`; return el.type; }
 
 /* ---- 사진: 나라차 자료실 ---- */
 let photoCat = '', photoQ = '';
@@ -1262,6 +1567,7 @@ document.addEventListener('pointerdown', e => { if ($('#fpPop') && !e.target.clo
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#fpPop')) { closeFontPop(); e.stopPropagation(); } }, true);
 
 function renderInspector() {
+  if (newsMode) { renderNewsInspector(); return; }
   const ins = $('#inspector'); const els = selEls(); ins.onclick = null;
   if (!els.length) {
     const pg = page();
@@ -1270,8 +1576,9 @@ function renderInspector() {
     <h3>배경</h3><div class="swrow">${['#ffffff', '#FFE89A', '#E6EDF2', '#DDF3EA', '#FDE7E4', '#F0EBFB', '#1E2B5A', '#1a1a1a'].map(c => `<button class="swb" data-pgbg="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>
     <label class="f"><span>직접 고르기</span><input type="color" data-k="pg.bg" value="${/^#[0-9a-f]{6}$/i.test(pg.bg) ? pg.bg : '#ffffff'}"></label>
     <p class="hint">그라데이션·패턴 배경은 왼쪽 "배경" 메뉴에서 고릅니다. 요소를 누르면 그 요소의 속성이 여기에 나옵니다. 빈 곳을 끌면 여러 요소를 함께 고릅니다.</p>
+    <h3 class="anim-h"><svg class="ic"><use href="#i-video"/></svg>영상 장면</h3><div class="grid2">${F('보여 주는 시간', 'pg.vdur', pg.vdur || vset().dur, { type: 'slider', min: 1, max: 20, step: 0.5, unit: '초', def: vset().dur })}${F('다음으로 넘김', 'pg.vtrans', pg.vtrans || '', { type: 'select', options: [['', '기본 (' + VIDEO.TRANS.find(t => t[0] === vset().trans)[1] + ')']].concat(VIDEO.TRANS) })}</div><div class="row" style="gap:6px"><button class="btn sm" id="pgVplay"><svg class="ic"><use href="#i-play"/></svg>이 쪽부터 미리보기</button><button class="btn sm" id="pgVtab">영상 메뉴</button></div>
     <h3>단축키</h3><p class="hint">T 글자 추가 · P 펜 · Ctrl+D 복제 · Ctrl+G 그룹 · Ctrl+Z 취소 · 화살표 이동 · Delete 삭제 · Ctrl+휠 확대</p>`;
-    ins.onclick = e => { const b = e.target.closest('[data-pgbg]'); if (b) { pg.bg = b.dataset.pgbg; commit(); rerender(); } };
+    ins.onclick = e => { if (e.target.closest('#pgVplay')) { openVideoPlayer(true); return; } if (e.target.closest('#pgVtab')) { sideTab = 'video'; renderRail(); renderSide(); return; } const b = e.target.closest('[data-pgbg]'); if (b) { pg.bg = b.dataset.pgbg; commit(); rerender(); } };
     return;
   }
   if (els.length > 1) {
@@ -1336,6 +1643,10 @@ function renderInspector() {
     ${el.kind === 'line' ? `<div class="grid2">${F('끝 화살표', 'arrowEnd', el.arrowEnd, { type: 'check' })}${F('시작 화살표', 'arrowStart', el.arrowStart, { type: 'check' })}</div>` : `<h3>채우기</h3>${fillBlock}${(el.fillType || 'solid') === 'solid' ? `${F('채우기 색', 'fill', el.fill || '#000000', { type: 'color' })}${sw('fill', el.fill)}<button class="btn sm" data-set="fill:">채우기 없음</button>` : ''}`}
     <h3>선</h3>${F('두께', 'strokeW', el.strokeW || 0, { type: 'slider', min: 0, max: 8, step: 0.1, unit: 'mm', def: 0 })}<div class="grid2">${F('선 색', 'stroke', el.stroke || (el.kind === 'line' ? el.fill : '#000000'), { type: 'color' })}${F('점선', 'dash', el.dash || '', { type: 'select', options: [['', '실선'], ['3 2', '긴 점선'], ['1.5 1.5', '점선'], ['0.1 2', '점점선'], ['6 2 1.5 2', '쇄선']] })}</div>${F('선 끝', 'cap', el.cap || 'butt', { type: 'select', options: [['butt', '각지게'], ['round', '둥글게'], ['square', '네모']] })}${el.kind !== 'line' ? '<button class="btn sm" data-set="stroke:">선 없음</button>' : ''}
     ${shadowBlock()}` + geo;
+  } else if (el.type === 'path' && el.d) {
+    h += `<h3>벡터 모양</h3>${fillBlock}${(el.fillType || 'solid') === 'solid' ? `${F('채우기 색', 'fill', el.fill || '#FFE89A', { type: 'color' })}<button class="btn sm" data-set="fill:">채우기 없음</button>` : el.fillType === 'raw' ? '<p class="hint" style="margin:2px 0 8px">원래 그라데이션을 쓰고 있습니다. 단색·그라데이션을 고르면 바뀝니다.</p>' : ''}
+    <div class="grid2">${F('선 색', 'stroke', el.stroke || '#000000', { type: 'color' })}${F('선 두께', 'strokeW', el.strokeW || 0, { type: 'slider', min: 0, max: 8, step: 0.1, unit: 'mm', def: 0 })}</div>
+    ${shadowBlock()}<p class="hint">소식지 등에서 가져온 벡터 모양입니다. 크게 인쇄해도 선명하며, 크기를 바꾸면 모양이 함께 늘어납니다.</p>` + geo;
   } else if (el.type === 'path') {
     h += `<h3>펜 선</h3>${F('두께', 'strokeW', el.strokeW == null ? 0.8 : el.strokeW, { type: 'slider', min: 0.1, max: 8, step: 0.1, unit: 'mm', def: 0.8 })}<div class="grid2">${F('선 색', 'stroke', el.stroke || '#000000', { type: 'color' })}${F('점선', 'dash', el.dash || '', { type: 'select', options: [['', '실선'], ['3 2', '긴 점선'], ['1.5 1.5', '점선'], ['0.1 2', '점점선']] })}</div>
     <div class="grid3">${F('부드럽게', 'smooth', el.smooth !== false, { type: 'check' })}${F('닫힌 모양', 'closed', el.closed, { type: 'check' })}${F('선 끝', 'cap', el.cap || 'round', { type: 'select', options: [['round', '둥글게'], ['butt', '각지게'], ['square', '네모']] })}</div>
@@ -1372,10 +1683,14 @@ function renderInspector() {
     <div class="grid3">${F('제목 크기', 's.titleSize', s.titleSize, { type: 'number', step: 0.5 })}${F('요일 크기', 's.wdSize', s.wdSize, { type: 'number', step: 0.5 })}${F('숫자 크기', 's.numSize', s.numSize, { type: 'number', step: 0.5 })}</div>
     <div class="grid2">${F('글자 색', 's.color', s.color, { type: 'color' })}${F('일요일 색', 's.sunColor', s.sunColor, { type: 'color' })}</div><div class="grid2">${F('월 제목 보이기', 's.showTitle', s.showTitle, { type: 'check' })}${F('주 시작', 's.weekStart', s.weekStart, { type: 'select', options: [[0, '일요일'], [1, '월요일']] })}</div><label class="f"><span>글꼴</span>${fontPicker('s.fontNum', s.fontNum)}</label>` + geo;
   }
+  { const an = el.anim || {}; // 영상 애니메이션 (영상으로 저장할 때 이 요소가 나타나는 방식)
+    h += `<h3 class="anim-h"><svg class="ic"><use href="#i-anim"/></svg>애니메이션 <small>영상용</small></h3><div class="anim-grid">${VIDEO.ANIMS.map(([v, t]) => `<button type="button" data-anim="${v}" aria-pressed="${(an.t || 'none') === v}"><i class="am am-${v}"></i>${t}</button>`).join('')}</div>${an.t && an.t !== 'none' ? `<div class="grid2">${F('시작', 'anim.d', an.d || 0, { type: 'slider', min: 0, max: 10, step: 0.1, unit: '초', def: 0 })}${F('걸리는 시간', 'anim.s', an.s || 0.8, { type: 'slider', min: 0.2, max: 3, step: 0.1, unit: '초', def: 0.8 })}</div><button class="btn sm" id="iAnimPlay"><svg class="ic"><use href="#i-play"/></svg>이 쪽부터 미리보기</button>` : '<p class="hint">고르면 영상에서 이 요소가 그 방식으로 나타납니다.</p>'}`; }
   h += `<h3>동작</h3><div class="row"><button class="btn sm" id="iDup">복제</button><button class="btn sm" id="iFront">맨 앞</button><button class="btn sm" id="iBack">맨 뒤</button><button class="btn sm danger" id="iDel">삭제</button></div>`;
   ins.innerHTML = h;
   ins.onmousedown = e => { if (e.target.closest('[data-tfi]') && editing) e.preventDefault(); };
   ins.onclick = async e => {
+    const ab = e.target.closest('[data-anim]'); if (ab) { const v = ab.dataset.anim; if (v === 'none') delete el.anim; else el.anim = Object.assign({ d: 0, s: 0.8 }, el.anim || {}, { t: v }); commit(); renderInspector(); if (sideTab === 'video') renderSide(); return; }
+    if (e.target.closest('#iAnimPlay')) { openVideoPlayer(true); return; }
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.tfi) { toggleFmt(b.dataset.tfi); if (!editing) return; b.classList.toggle('on'); return; }
     if (b.dataset.tfi2) { const k = b.dataset.tfi2; selEls().forEach(x => { if (x.type === 'text') x[k] = !x[k]; }); commit(); rerender(); return; }
@@ -2094,13 +2409,18 @@ async function checkResolution(pages) {
 // 광선·그림자·혼합 모드·그라데이션 글자·필터까지 그대로. 실패하면 html2canvas로 대신 그림
 const fontDataCache = new Map(); let fontCssText = null;
 async function fontCSSFor(node) {
-  const used = new Set(); node.querySelectorAll('*').forEach(e => getComputedStyle(e).fontFamily.split(',').forEach(f => used.add(f.trim().replace(/^["']|["']$/g, ''))));
+  // 쓰인 글꼴과 그 굵기만 넣음 (한글 글꼴은 굵기 하나가 수 MB라, 모두 넣으면 그림 한 장에 수십 MB를 읽어 아주 느림)
+  const used = new Set(), wts = new Map(); node.querySelectorAll('*').forEach(e => { const cs = getComputedStyle(e), w = Number(cs.fontWeight) || 400; cs.fontFamily.split(',').forEach(f => { const fam = f.trim().replace(/^["']|["']$/g, ''); used.add(fam); if (!wts.has(fam)) wts.set(fam, new Set()); wts.get(fam).add(w); }); });
   if (!fontCssText) { try { fontCssText = await (await fetch('fonts/fonts.css')).text(); } catch (e) { fontCssText = null; } }
   const toData = async url => { if (!fontDataCache.has(url)) fontDataCache.set(url, fetch(url).then(r => r.blob()).then(b => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); }))); return fontDataCache.get(url); };
   const out = [];
   const webCss = (($('#webfontCss') || {}).textContent || '') + '\n' + (($('#libfontCss') || {}).textContent || '');
-  for (const block of ((fontCssText || '') + '\n' + webCss).match(/@font-face\s*{[^}]*}/g) || []) {
-    const fam = (block.match(/font-family:\s*['"]?([^;'"]+)['"]?/) || [])[1]; if (!fam || !used.has(fam.trim())) continue;
+  const blocks = ((fontCssText || '') + '\n' + webCss).match(/@font-face\s*{[^}]*}/g) || [];
+  const famOf = b => ((b.match(/font-family:\s*['"]?([^;'"]+)['"]?/) || [])[1] || '').trim(), wOf = b => { const m = b.match(/font-weight:\s*([^;}]+)/); if (!m) return [400, 400]; const v = m[1].trim().split(/\s+/).map(x => x === 'bold' ? 700 : x === 'normal' ? 400 : Number(x)); return [v[0], v[1] || v[0]]; };
+  // 글꼴마다 쓰인 굵기에 브라우저가 고를 면(가장 가까운 굵기, 범위 굵기면 그대로)만 남김
+  const keepW = new Map(); used.forEach(fam => { const have = [...new Set(blocks.filter(b => famOf(b) === fam).map(b => wOf(b).join('-')))].map(k => k.split('-').map(Number)); if (!have.length) return; const need = new Set(); (wts.get(fam) || [400]).forEach(w => { const r = have.find(([a1, b1]) => w >= a1 && w <= b1); if (r) { need.add(r.join('-')); return; } let best = have[0], bd = Infinity; have.forEach(h => { const d = Math.abs(h[0] - w) - (h[0] > w && w >= 500 ? 0.5 : 0); if (d < bd) { bd = d; best = h; } }); need.add(best.join('-')); }); keepW.set(fam, need); });
+  for (const block of blocks) {
+    const fam = famOf(block); if (!fam || !used.has(fam)) continue; const kw = keepW.get(fam); if (kw && !kw.has(wOf(block).join('-'))) continue;
     let css = block; for (const m of block.matchAll(/url\(['"]?([^'")]+)['"]?\)/g)) { const u = new URL(m[1], new URL('fonts/fonts.css', location.href)).href; try { css = css.replace(m[0], `url(${await toData(u)})`); } catch (e) {} }
     out.push(css);
   }
@@ -2821,7 +3141,7 @@ async function runRacha() {
 }
 
 // 점검용 (주소에 ?qa 가 있을 때만): 자동 시험에서 문서 상태를 읽음
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { get doc() { return doc; }, get sel() { return sel; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { renderPageCanvas, videoLayers, fontCSSFor, get doc() { return doc; }, get sel() { return sel; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML };
 
 /* ---- 패널 너비 조절 ---- */
 (function () {

@@ -116,11 +116,26 @@ NC.fx = (function () {
     return d;
   }
   function pathSVG(el) {
+    if (el.d) return dPathSVG(el);
     const w = el.w, h = el.h; const pts = el.pts || []; const id = 'pg' + el.id;
     const f = el.closed && el.fill ? fillAttr(el, id) : { attr: 'fill="none"', defs: '' };
     const d = el.smooth === false ? (pts.map((p, i) => (i ? 'L' : 'M') + p[0] + ' ' + p[1]).join(' ') + (el.closed ? ' Z' : '')) : smoothPath(pts, el.closed);
     const sh = el.shadow ? `filter:drop-shadow(${el.shX || 0.6}mm ${el.shY || 0.7}mm ${el.shB || 0.5}mm ${rgba(el.shC || '#000000', el.shA == null ? 0.3 : el.shA)});` : '';
     return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" preserveAspectRatio="none" style="display:block;overflow:visible;${sh}" xmlns="http://www.w3.org/2000/svg"><defs>${f.defs}</defs><path d="${d}" ${f.attr} stroke="${el.stroke || '#333'}" stroke-width="${el.strokeW == null ? 0.8 : el.strokeW}" stroke-linecap="${el.cap || 'round'}" stroke-linejoin="round" ${el.dash ? `stroke-dasharray="${el.dash}"` : ''} vector-effect="non-scaling-stroke"/></svg>`;
+  }
+  // 벡터 모양(가져온 소식지 장식 등): 원래 좌표(viewBox, px 단위)의 SVG 경로를 그대로. 크기를 바꾸면 모양·선이 함께 늘어남
+  function dPathSVG(el) {
+    const id = 'pg' + el.id, PXMM = 25.4 / 96;
+    let defs = '', fill = 'none';
+    if (el.fillType === 'raw' && el.gdef) { defs += el.gdef; fill = `url(#${el.gid})`; }
+    else if (el.fillType === 'gradient') { const f = fillAttr(el, id); defs += f.defs; fill = `url(#${id})`; }
+    else if (el.fill) fill = el.fill;
+    const sw = el.stroke && el.strokeW > 0 ? el.strokeW / PXMM : 0;
+    const stroke = sw ? `stroke="${el.stroke}" stroke-width="${Math.round(sw * 100) / 100}" stroke-linecap="${el.cap || 'butt'}" stroke-linejoin="${el.join || 'miter'}"${el.strokeA != null ? ` stroke-opacity="${el.strokeA}"` : ''}${el.dash ? ` stroke-dasharray="${el.dash}"` : ''}${el.strokeUnder ? ' paint-order="stroke"' : ''}` : '';
+    let body = `<path d="${el.d}" fill="${fill}"${el.fillA != null && fill !== 'none' ? ` fill-opacity="${el.fillA}"` : ''}${el.rule ? ` fill-rule="${el.rule}"` : ''} ${stroke}/>`;
+    (el.clipD ? String(el.clipD).split('|') : []).forEach((cd, i) => { defs += `<clipPath id="${id}c${i}"><path d="${cd}"/></clipPath>`; body = `<g clip-path="url(#${id}c${i})">${body}</g>`; });
+    const sh = el.shadow ? `filter:drop-shadow(${el.shX || 0.6}mm ${el.shY || 0.7}mm ${el.shB || 0.5}mm ${rgba(el.shC || '#000000', el.shA == null ? 0.3 : el.shA)});` : '';
+    return `<svg viewBox="0 0 ${el.vw} ${el.vh}" width="100%" height="100%" preserveAspectRatio="none" style="display:block;overflow:visible;${sh}" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${body}</svg>`;
   }
   /* ---------- 이미지 ---------- */
   const CLIPS = [['none', '없음'], ['circle', '원'], ['rounded', '둥근 모서리'], ['star', '별'], ['hexagon', '육각형'], ['heart', '하트'], ['diamond', '마름모'], ['blob', '물방울'], ['tri', '삼각형'], ['pill', '알약']];
