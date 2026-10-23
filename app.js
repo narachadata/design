@@ -3293,9 +3293,12 @@ const ST_BG = { w: ['#ffffff', 'Place it on a perfectly flat, solid pure white (
 const ST_REFS = [['none', '없음', '참고 그림 없이 그립니다', '➖'], ['racha', '라차 마스코트', '도장 펭귄을 똑같이', '🐧'], ['mine', '내 그림에서', '보관함의 그림을 참고', '🖼️'], ['file', '파일 올리기', '내 PC의 그림을 참고', '📁']];
 const ST_REFROLE = [['same', '이 사람을 똑같이 (1번 사람)'], ['style', '그림체만 비슷하게']];
 const ST_HERO = [['people', '사람', '수련생 · 사범님', '🧒'], ['racha', '라차만', '도장 펭귄 마스코트', '🐧'], ['both', '사람 + 라차', '함께 나와요', '🤝'], ['none', '배경만', '사람 없이 장소·계절', '🏞️']];
-const ST_BELT = [['white', '흰띠', '#ffffff', 'a white belt'], ['yellow', '노란띠', '#f6c90e', 'a yellow belt'], ['orange', '주황띠', '#f39c12', 'an orange belt'], ['green', '초록띠', '#2e9e4f', 'a green belt'], ['blue', '파란띠', '#2f6fe4', 'a blue belt'], ['purple', '보라띠', '#8e44ad', 'a purple belt'], ['brown', '밤띠', '#7b4a2a', 'a brown belt'], ['red', '빨간띠', '#d63031', 'a red belt'], ['poom', '품띠', 'linear-gradient(90deg,#d63031 50%,#111 50%)', 'a red-and-black poom belt and a red-and-black collar on the dobok'], ['black', '검은띠', '#111111', 'a black belt and a black collar on the dobok'], ['mixed', '여러 색', 'conic-gradient(#f6c90e,#2e9e4f,#2f6fe4,#d63031,#f6c90e)', '']];
+const ST_BELT = [['white', '흰띠', '#ffffff', 'a white belt'], ['yellow', '노란띠', '#f6c90e', 'a yellow belt'], ['orange', '주황띠', '#f39c12', 'an orange belt'], ['green', '초록띠', '#2e9e4f', 'a green belt'], ['blue', '파란띠', '#2f6fe4', 'a blue belt'], ['purple', '보라띠', '#8e44ad', 'a purple belt'], ['brown', '밤띠', '#7b4a2a', 'a brown belt'], ['red', '빨간띠', '#d63031', 'a red belt'], ['poom', '품띠', 'linear-gradient(90deg,#d63031 50%,#111 50%)', 'a red-and-black poom belt'], ['black', '검은띠', '#111111', 'a black belt'], ['mixed', '여러 색', 'conic-gradient(#f6c90e,#2e9e4f,#2f6fe4,#d63031,#f6c90e)', '']];
 const ST_MOOD = [['happy', '😄', '밝게 웃음', 'a big, bright smile'], ['kiai', '😤', '기합!', 'shouting a powerful kihap with the mouth open'], ['focus', '🧐', '진지한 집중', 'a serious, focused expression'], ['proud', '😊', '뿌듯함', 'a proud, confident smile'], ['wink', '😉', '윙크', 'a playful wink'], ['wow', '😲', '깜짝', 'a surprised, excited face'], ['moved', '🥹', '감동', 'touched, happy tears in the eyes']];
-const ST_OUTFIT = [['dobok', '도복', 'a clean white taekwondo uniform (dobok) with a crossed V-neck collar', true], ['gear', '겨루기 보호구', 'a white dobok with taekwondo sparring gear (a red or blue chest protector and headgear)', true], ['demo', '시범단 도복', 'a black-and-white taekwondo demonstration team uniform', true], ['hanbok', '한복', 'a colorful traditional Korean hanbok', false], ['casual', '평상복', 'casual everyday clothes', false]];
+// 옷: [키, 이름, 영어, 띠를 맴, 도복 상의(V넥 깃·가슴 엠블럼)] — 나라차 운영규정 '수련 복장 규정'(흰 도복 원칙, 흰 상의+검정 바지·검정 도복·나라차 티셔츠+검정 바지 허용)
+const ST_OUTFIT = [['dobok', '흰 도복', 'a clean white taekwondo dobok (white V-neck pullover top and white pants)', true, true], ['blackpants', '흰 상의+검정 바지', 'a white taekwondo dobok top (V-neck pullover) with black dobok pants', true, true], ['black', '검정 도복', 'a black taekwondo dobok (black V-neck pullover top and black pants)', true, true], ['tee', '나라차 티셔츠', 'a navy long-sleeve T-shirt with black dobok pants', true, false], ['gear', '겨루기 보호구', 'a white taekwondo dobok with full sparring gear: a blue or red chest protector, headgear, forearm and shin guards and gloves', true, false], ['demo', '시범단 도복', 'a black-and-white taekwondo demonstration team uniform', true, false], ['hanbok', '한복', 'a colorful traditional Korean hanbok', false, false], ['casual', '평상복', 'casual everyday clothes', false, false]];
+const ST_DOBOK = 'The dobok top is a taekwondo-style pullover with a V-neck opening, not a wrap-over judo or karate jacket, so there are no overlapping lapels. The V-neck collar is a contrasting trim band that ends in a small black square at the bottom point of the V.';
+const ST_EMBLEM = 'a red dot and a short red stroke above a large curved navy-blue swoosh, together shaped like a flying-kick figure, symbol only with no text';
 const ST_AGE = [['kid-m', '어린이 남자', '👦', 'boy', 'about 8 years old', 'm'], ['kid-f', '어린이 여자', '👧', 'girl', 'about 8 years old', 'f'], ['tod-m', '유아 남자', '🧒', 'little boy', 'about 5 years old', 'm'], ['tod-f', '유아 여자', '👶', 'little girl', 'about 5 years old', 'f'], ['teen-m', '청소년 남자', '🧑', 'teenage boy', 'about 15 years old', 'm'], ['teen-f', '청소년 여자', '👱‍♀️', 'teenage girl', 'about 15 years old', 'f'], ['man', '성인 남자', '👨', 'man', 'in his 30s', 'm'], ['woman', '성인 여자', '👩', 'woman', 'in her 30s', 'f'], ['master-m', '사범님 (남)', '🥋', 'taekwondo master instructor, a kind and confident man', 'in his 40s', 'm'], ['master-f', '사범님 (여)', '🥋', 'taekwondo master instructor, a kind and confident woman', 'in her 40s', 'f']];
 const ST_HAIR = { m: ['a short neat haircut', 'a bowl cut', 'short curly hair', 'a buzz cut', 'short spiky hair', 'side-parted hair'], f: ['a high ponytail', 'two braids', 'a bob cut', 'pigtails', 'long straight hair with a headband', 'a low bun'] };
 const ST_RACE = [['kr', '한국인', 'Korean'], ['white', '백인', 'white'], ['black', '흑인', 'Black'], ['sea', '동남아시아', 'Southeast Asian'], ['sa', '남아시아', 'South Asian'], ['latin', '라틴', 'Latino'], ['mixed', '여러 인종 섞임', 'mixed-race']];
@@ -3319,8 +3322,8 @@ const ST_QUICK = [
   ['✏️ 색칠 도안', { use: 'poster', style: 'line', ref: 'none', hero: 'people', belt: 'white', mood: 'happy', outfit: 'dobok', people: [{ age: 'kid-m', race: 'kr', belt: '', pose: 'sidekick' }], poseMode: 'each', scenes: [] }],
   ['🌸 계절 배경', { use: 'wide', style: 'water', ref: 'none', hero: 'none', scenes: ['spring', 'park'] }],
 ];
-const STU_DEF = { step: 1, use: 'element', style: 'chibi', sticker: false, brand: false, ref: 'none', refRole: 'same', mineId: '', hero: 'people', belt: 'yellow', mood: 'happy', outfit: 'dobok', logoSpace: false, people: [{ age: 'kid-m', race: 'kr', belt: '', pose: 'frontkick' }], rachaPose: 'frontkick', poseMode: 'each', group: 'photo', scenes: [], extras: [], extra: '', cut: true, autoSave: true, quick: -1 };
-let stu = (() => { try { const v = Object.assign(clone(STU_DEF), JSON.parse(localStorage.getItem('naracal-studio') || '{}')); if (!ST_USE.some(u => u[0] === v.use)) v.use = 'element'; if (!ST_STYLES.some(s => s[0] === v.style)) { if (v.style === 'sticker') v.sticker = true; v.style = 'chibi'; } v.people = (v.people || []).slice(0, 6).map(p => Object.assign({ age: 'kid-m', race: 'kr', belt: '', pose: 'ready' }, p, { age: ST_AGE.some(a => a[0] === p.age) ? p.age : p.age === 'master' ? 'master-m' : 'kid-m', race: ST_RACE.some(r => r[0] === p.race) ? p.race : 'kr' })); if (!v.people.length) v.people = clone(STU_DEF.people); if (v.ref === 'logo') { v.ref = 'none'; v.logoSpace = true; } v.scenes = (v.scenes || []).filter(k => ST_SCENE.some(x => x[0] === k)); v.extras = (v.extras || []).filter(k => ST_EXTRA.some(x => x[0] === k)); if (!ST_HERO.some(h => h[0] === v.hero)) v.hero = 'people'; return v; } catch (e) { return clone(STU_DEF); } })();
+const STU_DEF = { step: 1, use: 'element', style: 'chibi', sticker: false, brand: false, ref: 'none', refRole: 'same', mineId: '', hero: 'people', belt: 'yellow', mood: 'happy', outfit: 'dobok', logo: true, people: [{ age: 'kid-m', race: 'kr', belt: '', pose: 'frontkick' }], rachaPose: 'frontkick', poseMode: 'each', group: 'photo', scenes: [], extras: [], extra: '', cut: true, autoSave: true, quick: -1 };
+let stu = (() => { try { const v = Object.assign(clone(STU_DEF), JSON.parse(localStorage.getItem('naracal-studio') || '{}')); if (!ST_USE.some(u => u[0] === v.use)) v.use = 'element'; if (!ST_STYLES.some(s => s[0] === v.style)) { if (v.style === 'sticker') v.sticker = true; v.style = 'chibi'; } v.people = (v.people || []).slice(0, 6).map(p => Object.assign({ age: 'kid-m', race: 'kr', belt: '', pose: 'ready' }, p, { age: ST_AGE.some(a => a[0] === p.age) ? p.age : p.age === 'master' ? 'master-m' : 'kid-m', race: ST_RACE.some(r => r[0] === p.race) ? p.race : 'kr' })); if (!v.people.length) v.people = clone(STU_DEF.people); if (v.ref === 'logo') v.ref = 'none'; if (!ST_OUTFIT.some(o => o[0] === v.outfit)) v.outfit = 'dobok'; v.scenes = (v.scenes || []).filter(k => ST_SCENE.some(x => x[0] === k)); v.extras = (v.extras || []).filter(k => ST_EXTRA.some(x => x[0] === k)); if (!ST_HERO.some(h => h[0] === v.hero)) v.hero = 'people'; return v; } catch (e) { return clone(STU_DEF); } })();
 let stuRefFile = '', stuEdited = '', stuChatN = 0, stuChatOpen = false, stuRefDone = false, stuSnap = null, stuSig = '', stuVisited = new Set([1]);
 const stuSave = () => { try { localStorage.setItem('naracal-studio', JSON.stringify(stu)); } catch (e) {} };
 const stFind = (L, k) => L.find(x => x[0] === k) || L[0];
@@ -3331,19 +3334,37 @@ const stuBgOf = S => stuStickerOn(S) ? ST_BG.s : ST_BG[stuStyleOf(S)[6]] || ST_B
 const stuPeopleOf = S => S.hero === 'people' || S.hero === 'both' ? S.people : [];
 const stuIsMaster = p => /^master/.test(p.age);
 const stuBeltKey = (S, p, i) => p.belt || (stuIsMaster(p) ? 'black' : S.belt === 'mixed' ? ['yellow', 'green', 'blue', 'red', 'orange', 'purple'][i % 6] : S.belt);
-function stuRefSrc(S) {
+function stuBaseRefs(S) {
   S = S || stu;
   if (S.ref === 'racha') return [ASSETS['mascot-03'], ASSETS['mascot-01']].filter(Boolean);
   if (S.ref === 'mine') { const it = NC.lib.mine().find(x => x.id === S.mineId); return it ? [NC.lib.url(it.file)].filter(Boolean) : []; }
   if (S.ref === 'file') return stuRefFile ? [stuRefFile] : [];
   return [];
 }
+// 도복 가슴 엠블럼: 사람이 도복 상의·나라차 티셔츠를 입거나 라차가 나올 때
+const stuLogoOn = S => !!S.logo && S.hero !== 'none' && (S.hero !== 'people' || stFind(ST_OUTFIT, S.outfit)[4] || S.outfit === 'tee') && !['line', 'icon'].includes(S.style);
+// 엠블럼 그림: 가로형 로고(brand-horizontal)의 왼쪽 심볼만 잘라 한 번 만들어 둠
+let stuEmblemUrl = '', stuEmblemBusy = false, stuOnEmblem = null;
+function stuEmblem() {
+  if (stuEmblemUrl || stuEmblemBusy || !ASSETS['brand-horizontal']) return stuEmblemUrl;
+  stuEmblemBusy = true;
+  AI.loadImg(ASSETS['brand-horizontal']).then(im => { const k = 2000 / im.naturalWidth, W = 2000, H = Math.round(im.naturalHeight * k), c = document.createElement('canvas'); c.width = Math.round(W * 0.24); c.height = H; c.getContext('2d').drawImage(im, 0, 0, W, H); stuEmblemUrl = stuTrim(c).toDataURL('image/png'); if (stuOnEmblem) stuOnEmblem(); }).catch(() => {});
+  return '';
+}
+// 그림 둘레의 빈 곳(투명·흰색)을 잘라냄 — 참고 그림 판에서 대상이 작아지지 않게
+function stuTrim(src) {
+  const W = src.width, H = src.height, d = src.getContext('2d').getImageData(0, 0, W, H).data; let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) { const i = (y * W + x) * 4; if (d[i + 3] > 16 && (d[i] < 245 || d[i + 1] < 245 || d[i + 2] < 245)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
+  if (x1 < 0) return src; const pad = 4, c = document.createElement('canvas'); x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); c.width = Math.min(W, x1 + pad) - x0; c.height = Math.min(H, y1 + pad) - y0; c.getContext('2d').drawImage(src, -x0, -y0); return c;
+}
+function stuRefSrc(S) { S = S || stu; const L = stuBaseRefs(S); if (stuLogoOn(S) && stuEmblem()) L.push(stuEmblemUrl); return L; }
 // 참고 그림 판: 목표 비율 캔버스 가운데에 나란히 (비율이 가로로 늘어나지 않게 — 공식 가이드: 원하는 비율의 참고 그림을 주는 것이 가장 확실)
 async function stuRefSheet(list, aspect) {
   const [aw, ah] = aspect.split(':').map(Number), W = aw >= ah ? 1024 : Math.round(1024 * aw / ah), H = aw >= ah ? Math.round(1024 * ah / aw) : 1024;
-  const ims = await Promise.all(list.map(AI.loadImg)), c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
-  const gap = W * 0.04, boxW = (W * 0.86 - gap * (ims.length - 1)) / ims.length, boxH = H * 0.86; let ox = W * 0.07;
-  ims.forEach(im => { const k = Math.min(boxW / im.naturalWidth, boxH / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k; x.drawImage(im, ox + (boxW - w) / 2, (H - h) / 2, w, h); ox += boxW + gap; });
+  const ims = (await Promise.all(list.map(AI.loadImg))).map(im => { const t = document.createElement('canvas'); t.width = im.naturalWidth; t.height = im.naturalHeight; t.getContext('2d').drawImage(im, 0, 0); return stuTrim(t); });
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+  const wt = list.map(u => u === stuEmblemUrl ? 0.45 : 1), sum = wt.reduce((a, b) => a + b, 0), gap = W * 0.04, unit = (W * 0.9 - gap * (ims.length - 1)) / sum; let ox = W * 0.05;
+  ims.forEach((im, i) => { const boxW = unit * wt[i], boxH = H * 0.9 * (wt[i] < 1 ? 0.45 : 1), k = Math.min(boxW / im.width, boxH / im.height), w = im.width * k, h = im.height * k; x.drawImage(im, ox + (boxW - w) / 2, (H - h) / 2, w, h); ox += boxW + gap; });
   return c.toDataURL('image/png');
 }
 const stuOrient = a => { const [w, h] = a.split(':').map(Number); return w === h ? 'square' : w > h ? 'horizontal (landscape)' : 'vertical (portrait)'; };
@@ -3351,25 +3372,27 @@ const stuOrient = a => { const [w, h] = a.split(':').map(Number); return w === h
 function stuPrompt(S, next) {
   S = S || stu;
   const use = stuUseOf(S), st = stuStyleOf(S), aspect = use[3], orient = stuOrient(aspect), cut = stuCutOf(S), sticker = stuStickerOn(S);
-  const ppl = stuPeopleOf(S), racha = S.hero === 'racha' || S.hero === 'both', none = S.hero === 'none', refs = stuRefSrc(S).length, outfit = stFind(ST_OUTFIT, S.outfit);
+  const ppl = stuPeopleOf(S), racha = S.hero === 'racha' || S.hero === 'both', none = S.hero === 'none', refs = stuBaseRefs(S).length, logo = stuLogoOn(S) && !!stuEmblemUrl, outfit = stFind(ST_OUTFIT, S.outfit);
   const group = ppl.length > 1 && S.poseMode === 'group', n = ppl.length + (racha ? 1 : 0);
   const hairIdx = { m: 0, f: 0 };
-  const personOf = (p, i) => { const a = stFind(ST_AGE, p.age), race = stFind(ST_RACE, p.race)[2], hair = ST_HAIR[a[5]][(hairIdx[a[5]]++) % 6], belt = outfit[3] ? `, ${stFind(ST_BELT, stuBeltKey(S, p, i))[3]}` : ''; return `${/^master/.test(p.age) ? `the ${race} ${a[3]} ${a[4]}` : `a ${race} ${a[3]}, ${a[4]}`}, with ${hair}${belt}`; };
-  const rachaDesc = S.ref === 'racha' && refs ? 'Racha, our penguin mascot (as in the reference sheet), in his white taekwondo uniform with a black belt' : 'Racha, our taekwondo dojang\'s penguin mascot: a cute, round gray penguin with a dark gray head and back, a white face and belly, an orange beak and feet, wearing a white taekwondo uniform with a black belt';
+  const personOf = (p, i) => { const a = stFind(ST_AGE, p.age), race = stFind(ST_RACE, p.race)[2], hair = ST_HAIR[a[5]][(hairIdx[a[5]]++) % 6], bk = stuBeltKey(S, p, i), belt = outfit[3] ? `, ${stFind(ST_BELT, bk)[3]}${outfit[4] ? ` and ${bk === 'black' ? 'a black' : 'a red-and-black'} collar` : ''}` : ''; return `${/^master/.test(p.age) ? `the ${race} ${a[3]} ${a[4]}` : `a ${race} ${a[3]}, ${a[4]}`}, with ${hair}${belt}`; };
+  const rachaDobok = 'a white taekwondo dobok (V-neck pullover top with a black collar, not a wrap-over judo jacket) and a black belt';
+  const rachaDesc = S.ref === 'racha' && refs ? `Racha, our penguin mascot (as in the reference sheet), in ${rachaDobok}` : `Racha, our taekwondo dojang's penguin mascot: a cute, round gray penguin with a dark gray head and back, a white face and belly, an orange beak and feet, wearing ${rachaDobok}`;
   const rachaPose = ST_FLIPPER[S.rachaPose] || stFind(ST_POSE, S.rachaPose)[2];
-  const rachaAlone = S.ref === 'racha' && refs ? `Racha wears his white taekwondo uniform with a black belt and is ${rachaPose}.` : `Racha is a cute, round gray penguin with a dark gray head and back, a white face and belly, and an orange beak and feet. He wears a white taekwondo uniform with a black belt and is ${rachaPose}.`;
+  const rachaAlone = S.ref === 'racha' && refs ? `Racha wears ${rachaDobok} and is ${rachaPose}.` : `Racha is a cute, round gray penguin with a dark gray head and back, a white face and belly, and an orange beak and feet. He wears ${rachaDobok} and is ${rachaPose}.`;
   const what = none ? 'a background scene' : n === 1 ? (racha ? 'Racha, our taekwondo dojang\'s penguin mascot' : 'a taekwondo student') : `${n} taekwondo ${racha && ppl.length ? 'friends (people and our penguin mascot)' : 'members'}`;
   const L = [];
   if (next) L.push(`Now create the next ${orient} ${aspect} image in this same series. Keep exactly the same art style, line weight, color palette and ${stuSig === stuSigOf(S) ? 'the same character designs (faces, hairstyles, body proportions, outfits)' : 'the same character design style'} as the image you just made. What changes is described below.`);
   else L.push(`Create a ${orient} ${aspect} ${st[4]}${sticker ? ' (die-cut sticker)' : ''} of ${what}.`);
-  if (!next && refs) L.push(S.ref === 'racha' ? 'The attached reference sheet shows Racha, our penguin mascot, from two angles. Draw Racha exactly as in the reference: same body shape, proportions, face, colors and outfit. If any written description below differs from the reference, follow the reference.' : S.refRole === 'same' ? 'The person in the attached image is subject 1: keep the same face, hairstyle and body proportions.' : 'Match the art style, line weight and colors of the attached reference image.');
+  if (!next && !refs && logo) L.push('The attached image shows our NARACHA emblem (the red-and-navy symbol).');
+  if (!next && refs) L.push((S.ref === 'racha' ? 'The attached reference sheet shows Racha, our penguin mascot, from two angles. Draw Racha exactly as in the reference: same body shape, proportions, face, colors and outfit. If any written description below differs from the reference, follow the reference.' : S.refRole === 'same' ? 'The person in the attached image is subject 1: keep the same face, hairstyle and body proportions.' : 'Match the art style, line weight and colors of the attached reference image.') + (logo ? ' The small red-and-navy symbol on the right of the reference sheet is our NARACHA emblem.' : ''));
   if (none) L.push('There are no people, animals or characters at all, only the scene.');
   else if (n === 1) L.push(racha ? rachaAlone : `The subject is ${personOf(ppl[0], 0)}, wearing ${outfit[2]}, ${stFind(ST_POSE, ppl[0].pose || 'ready')[2]}.`);
   else {
     if (ppl.length) {
       L.push(`${ppl.length > 2 ? `All ${ppl.length} people wear` : ppl.length === 2 ? 'Both people wear' : 'The person wears'} ${outfit[2]}${outfit[3] ? (ppl.length > 1 ? ' and have bare feet' : ' and has bare feet') : ''}.`);
       const list = ppl.map((p, i) => `${i + 1}) ${personOf(p, i)}${group ? '' : ', ' + stFind(ST_POSE, p.pose || 'ready')[2]}`);
-      if (group && S.group === 'photo' && ppl.length >= 4) { /* 단체 사진: 사범님·어른·청소년은 뒷줄(사범님 가운데), 어린이는 앞줄 */ const tall = p => /^(master|man|woman|teen)/.test(p.age); let back = list.filter((x, i) => tall(ppl[i])), front = list.filter((x, i) => !tall(ppl[i])); if (!back.length || !front.length) { const h = Math.ceil(ppl.length / 2); back = list.slice(0, h); front = list.slice(h); } const mi = back.findIndex(x => /master/.test(x)); if (mi >= 0 && back.length > 2) back.splice(Math.floor(back.length / 2), 0, back.splice(mi, 1)[0]); L.push(`Back row, standing, from left to right: ${back.join('; ')}. Front row, ${front.length > 3 ? 'kneeling' : 'standing slightly in front'}, from left to right: ${front.join('; ')}.`); }
+      if (group && S.group === 'photo' && ppl.length >= 4) { /* 단체 사진: 사범님·어른·청소년은 뒷줄(사범님 가운데), 어린이는 앞줄 */ const tall = p => /^(master|man|woman|teen)/.test(p.age); let back = list.filter((x, i) => tall(ppl[i])), front = list.filter((x, i) => !tall(ppl[i])); if (!back.length || !front.length) { const h = Math.ceil(ppl.length / 2); back = list.slice(0, h); front = list.slice(h); } const mi = back.findIndex(x => /master/.test(x)); if (mi >= 0 && back.length > 2) back.splice(Math.floor(back.length / 2), 0, back.splice(mi, 1)[0]); L.push(`${back.length === 1 ? `Standing behind the children in the center: ${back[0]}` : `Back row, standing, from left to right: ${back.join('; ')}`}. Front row, ${front.length > 3 ? 'kneeling' : 'standing slightly in front'}, from left to right: ${front.join('; ')}.`); }
       else L.push(`From left to right: ${list.join('; ')}.`);
     }
     if (racha) L.push(`With them is ${rachaDesc}, ${group ? 'joining in' : rachaPose}.`);
@@ -3391,8 +3414,10 @@ function stuPrompt(S, next) {
   if (sticker) L.push('Turn it into a die-cut sticker with a thick, even white border around the entire silhouette.');
   if (cut) L.push(stuBgOf(S)[1]);
   if (ppl.length && outfit[3] && S.style !== 'icon') L.push(`Taekwondo details: ${ppl.length > 1 ? 'everyone has bare feet' : 'bare feet'}. ${ppl.length > 1 ? 'Each belt' : 'The belt'} wraps twice around the waist and is tied in a flat knot at the front center, with two equal-length ends hanging down. Hands look natural, with five fingers each.`);
-  if (S.logoSpace && ppl.length && outfit[3]) L.push('Leave the left chest of each dobok plain and clean (a flat white area about the size of a palm) so a logo can be added later.');
-  L.push('There are no words, letters, numbers or logos anywhere in the image.');
+  if (ppl.length && outfit[4] && S.style !== 'icon') L.push(ST_DOBOK);
+  const logoNow = stuLogoOn(S);
+  if (logoNow) { const tee = ppl.length && S.outfit === 'tee', many = n > 1; L.push(`${logo ? 'Copy the emblem from the reference exactly and place' : 'Place'} a small ${tee ? 'white one-color ' : ''}NARACHA emblem on the left chest of ${many ? 'every top' : 'the top'}${tee ? ' (T-shirt)' : ''}: ${ST_EMBLEM}. It is small, about the size of a palm.`); }
+  L.push(logoNow ? 'Apart from that small chest emblem, there are no words, letters, numbers or other logos anywhere in the image.' : 'There are no words, letters, numbers or logos anywhere in the image.');
   L.push(`The final image must be ${orient} ${aspect}${aspect === '1:1' ? '' : ', not square'}.`);
   return { en: L.join(' '), aspect, cut };
 }
@@ -3401,7 +3426,7 @@ function stuSummary(S) {
   S = S || stu; const use = stuUseOf(S), ppl = stuPeopleOf(S);
   const who = ppl.map(p => `${stFind(ST_AGE, p.age)[1]}${p.race !== 'kr' ? '(' + stFind(ST_RACE, p.race)[1] + ')' : ''}`); if (S.hero === 'racha' || S.hero === 'both') who.push('라차');
   const pose = S.hero === 'none' ? '—' : ppl.length > 1 && S.poseMode === 'group' ? stFind(ST_GROUP, S.group)[1] : [...new Set(ppl.map(p => stFind(ST_POSE, p.pose || 'ready')[1]).concat(S.hero !== 'people' ? [stFind(ST_POSE, S.rachaPose)[1]] : []))].join('·');
-  const dress = S.hero === 'none' ? '—' : !ppl.length ? `라차(검은띠) · ${stFind(ST_MOOD, S.mood)[2]}` : `${stFind(ST_BELT, S.belt)[1]} · ${stFind(ST_MOOD, S.mood)[2]} · ${stFind(ST_OUTFIT, S.outfit)[1]}`;
+  const dress = S.hero === 'none' ? '—' : !ppl.length ? `라차(검은띠${stuLogoOn(S) ? '·엠블럼' : ''}) · ${stFind(ST_MOOD, S.mood)[2]}` : `${stFind(ST_BELT, S.belt)[1]} · ${stFind(ST_MOOD, S.mood)[2]} · ${stFind(ST_OUTFIT, S.outfit)[1]}${stuLogoOn(S) ? ' · 엠블럼' : ''}`;
   return [['용도', `${use[1]} · ${use[5]}${stuCutOf(S) ? ' · 배경 없음' : ''}`], ['그림체', stuStyleOf(S)[1] + (stuStickerOn(S) ? ' · 스티커' : '')], ['참고', S.ref === 'none' ? '없음' : stFind(ST_REFS, S.ref)[1]], ['주인공', S.hero === 'none' ? '배경만' : who.join(', ')], ['차림', dress], ['포즈', pose], ['배경', S.scenes.map(k => stFind(ST_SCENE, k)[3]).join(', ') || '—'], ['추가', S.extras.map(k => stFind(ST_EXTRA, k)[1]).concat(S.extra.trim() ? [S.extra.trim()] : []).join(', ') || '—']];
 }
 function stuStepSub(n) {
@@ -3417,7 +3442,7 @@ function stuClassify(S) {
   const who = S.hero === 'none' ? '' : S.hero === 'racha' ? '라차' : (ppl.length > 1 ? `${ppl.length}명` : `${stFind(ST_AGE, (ppl[0] || {}).age || 'kid-m')[1]} ${stFind(ST_BELT, stuBeltKey(S, ppl[0] || {}, 0))[1]}`) + (S.hero === 'both' ? '+라차' : '');
   const scene = S.scenes.map(x => stFind(ST_SCENE, x)[3]);
   const name = [pose, who, scene[0]].filter(Boolean).join(' · ') + ` (${stuStyleOf(S)[1]})`;
-  const kw = ['AI', stuStyleOf(S)[1], stuUseOf(S)[1], stuUseOf(S)[5], cut ? '투명 배경 누끼 PNG' : '배경 있음', ppl.length > 1 ? '단체' : '', stFind(ST_MOOD, S.mood)[2], ppl.length ? stFind(ST_OUTFIT, S.outfit)[1] : '', pose, who, ...ppl.map(p => `${stFind(ST_AGE, p.age)[1]} ${stFind(ST_RACE, p.race)[1]} ${stFind(ST_BELT, stuBeltKey(S, p, 0))[1]}`), ...scene, S.hero === 'racha' || S.hero === 'both' ? '라차 마스코트 펭귄' : '', '태권도 나라차', ...S.extras.map(e => stFind(ST_EXTRA, e)[1]), S.extra].filter(Boolean).join(' ');
+  const kw = ['AI', stuStyleOf(S)[1], stuUseOf(S)[1], stuUseOf(S)[5], cut ? '투명 배경 누끼 PNG' : '배경 있음', ppl.length > 1 ? '단체' : '', stFind(ST_MOOD, S.mood)[2], ppl.length ? stFind(ST_OUTFIT, S.outfit)[1] : '', pose, who, ...ppl.map(p => `${stFind(ST_AGE, p.age)[1]} ${stFind(ST_RACE, p.race)[1]} ${stFind(ST_BELT, stuBeltKey(S, p, 0))[1]}`), ...scene, S.hero === 'racha' || S.hero === 'both' ? '라차 마스코트 펭귄' : '', stuLogoOn(S) ? '나라차 로고 엠블럼' : '', '태권도 나라차', ...S.extras.map(e => stFind(ST_EXTRA, e)[1]), S.extra].filter(Boolean).join(' ');
   return { cat: ST_CATS[k][0], catName: ST_CATS[k][1], name, kw };
 }
 // 되돌리기 단추가 있는 알림 (문서 되돌리기와 따로)
@@ -3484,14 +3509,16 @@ function renderStudio(body) {
       if (stu.ref === 'file') h += `<div class="row" style="margin-top:8px"><button class="btn sm" data-act="pickRef">그림 파일 고르기</button>${stuRefFile ? '<span class="hint" style="margin:0">✓ 골랐습니다</span>' : ''}</div>`;
       if (stu.ref === 'mine' || stu.ref === 'file') h += `<h4>참고 그림을 어떻게 쓸까요?</h4><div class="stu-chips">${ST_REFROLE.map(r => chip('data-role', r[0], stu.refRole === r[0], r[1])).join('')}</div>`;
       if (refs.length) h += `<div class="stu-refprev">${refs.map(s => `<img src="${s}" alt="참고 그림">`).join('')}<p class="hint">오른쪽 <b>① 참고 그림 복사</b>를 누르면 이 그림이 복사되고 채팅이 열립니다. 채팅 칸에 먼저 붙여 넣으세요.</p></div>`;
+      if (stu.ref === 'none' && refs.length) h += '<p class="hint" style="margin-top:6px">참고 그림은 나라차 엠블럼만 들어갑니다 (주인공 단계에서 끌 수 있어요).</p>';
       else if (stu.ref === 'none') h += '<p class="hint" style="margin-top:10px">참고 그림 없이 그립니다. 바로 <b>다음</b>으로 가세요. 라차를 그리면 "라차 마스코트"를 고르는 것이 가장 똑같이 나와요.</p>'; }
     if (n === 4) { const ppl = stu.hero === 'people' || stu.hero === 'both';
       h = `<div class="stu-cards four">${ST_HERO.map(r => card('data-hero', r[0], stu.hero === r[0], r[3], r[1], r[2])).join('')}</div>`;
       if (stu.hero === 'none') h += '<p class="hint" style="margin-top:10px">사람·라차 없이 장소·계절 배경만 그립니다. 마지막 단계에서 배경·상황을 고르세요.</p>';
       else { if (ppl) h += `<h4>띠 색</h4><div class="stu-chips">${ST_BELT.map(b => chip('data-belt', b[0], stu.belt === b[0], `<i class="sw" style="background:${b[2]}"></i>${b[1]}`)).join('')}</div>`;
         h += `<h4>표정</h4><div class="stu-chips">${ST_MOOD.map(m => chip('data-mood', m[0], stu.mood === m[0], `<span class="emo">${m[1]}</span>${m[2]}`)).join('')}</div>`;
-        if (ppl) h += `<h4>옷</h4><div class="stu-chips">${ST_OUTFIT.map(o => chip('data-outfit', o[0], stu.outfit === o[0], o[1])).join('')}</div>${stFind(ST_OUTFIT, stu.outfit)[3] ? `<div class="stu-opts"><label class="chk"><input type="checkbox" id="stuLogo" ${stu.logoSpace ? 'checked' : ''}> 도복 가슴에 로고 넣을 자리 비워 두기 (로고는 공방에서 얹어요)</label></div>` : ''}`;
-        else h += '<p class="hint" style="margin-top:10px">라차는 늘 흰 도복에 검은띠로 그립니다.</p>'; } }
+        if (ppl) h += `<h4>옷</h4><div class="stu-chips">${ST_OUTFIT.map(o => chip('data-outfit', o[0], stu.outfit === o[0], o[1])).join('')}</div><p class="hint" style="margin:6px 0 0">나라차 운영규정의 복장: 흰 도복(심사·예식) · 흰 상의+검정 바지 · 검정 도복 · 나라차 티셔츠+검정 바지. 유급자·품은 빨강·검정 깃, 유단자는 검정 깃으로 그립니다.</p>`;
+        else h += '<p class="hint" style="margin-top:10px">라차는 늘 흰 도복(검정 깃)에 검은띠로 그립니다.</p>';
+        if (stuLogoOn(Object.assign({}, stu, { logo: true }))) h += `<div class="stu-opts"><label class="chk"><input type="checkbox" id="stuLogo" ${stu.logo ? 'checked' : ''}> 🥋 왼쪽 가슴에 나라차 엠블럼 넣기 <small class="hint" style="margin:0">(참고 그림 판에 엠블럼이 함께 들어가 Gemini가 보고 따라 그려요)</small></label></div>`; } }
     if (n === 5) h = !stuPeopleOf(stu).length ? `<div class="stu-empty">${stu.hero === 'none' ? '🏞️<p>배경만 그립니다 — 인원 단계는 건너뜁니다.</p>' : '🐧<p>라차만 그립니다 — 인원 단계는 건너뜁니다.</p>'}</div>` : `<div class="stu-count"><button class="btn" data-act="pplMinus" ${stu.people.length <= 1 ? 'disabled' : ''} aria-label="한 명 빼기">−</button><b>${stu.people.length}명</b><button class="btn" data-act="pplPlus" ${stu.people.length >= 6 ? 'disabled' : ''} aria-label="한 명 더하기">＋</button><span class="hint" style="margin:0">최대 6명</span></div>
       ${stu.people.length >= 5 ? '<p class="stu-warn">5명 이상이면 얼굴·손이 작아져 어색해지기 쉬워요. 인쇄물에는 1~3명씩 "오려 쓰는 그림"으로 따로 만들어 배치하면 더 깔끔합니다.</p>' : ''}
       <div class="stu-chips" style="margin:8px 0"><button class="stu-chip" data-act="allKr">모두 한국인</button><button class="stu-chip" data-act="mixRace">🌏 다국적으로 섞기</button><button class="stu-chip" data-act="mixGender">남녀 섞기</button></div>
@@ -3517,6 +3544,7 @@ function renderStudio(body) {
   };
   const all = () => { stuSave(); steps(); pane(); side(); };
   const change = (resetChat) => { if (resetChat) { stuChatN = 0; stuChatOpen = false; stuRefDone = false; } stu.quick = -1; stuSave(); steps(); pane(); side(); };
+  stuOnEmblem = () => { if (body.isConnected && $('#stuPane')) all(); }; stuEmblem();
   const refocus = (attr, val) => { const b = body.querySelector(`[${attr}="${val}"]`); if (b) b.focus({ preventScroll: true }); };
   all();
   body.onclick = async e => {
@@ -3565,7 +3593,7 @@ function renderStudio(body) {
     if (t.id === 'stuCut') { stu.cut = t.checked; change(); }
     if (t.id === 'stuSticker') { stu.sticker = t.checked; change(true); }
     if (t.id === 'stuBrand') { stu.brand = t.checked; change(); }
-    if (t.id === 'stuLogo') { stu.logoSpace = t.checked; change(); }
+    if (t.id === 'stuLogo') { stu.logo = t.checked; change(true); }
     if (t.id === 'stuAuto') { stu.autoSave = t.checked; stuSave(); } };
   body.oninput = e => { if (e.target.id === 'stuExtra') { stu.extra = e.target.value; stuSave(); steps(); side(); } if (e.target.id === 'stuEn') { stuEdited = e.target.value; $('#stuEdBar').innerHTML = '<p class="stu-edbar">✎ 직접 고친 영어 글을 복사합니다 — 고른 내용은 반영되지 않아요 (아래 "고른 내용대로 다시 쓰기"로 되돌림)</p>'; } };
   // 받은 그림: 배경 지우기 → 분류해 보관 → 결과 카드(해상도·인쇄 크기 안내)
