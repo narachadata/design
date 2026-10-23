@@ -95,7 +95,7 @@ NC.astream = (function () {
   }
   // mp4·m4a: 필요한 조각만 잘라 디코더로 (프라이밍 지연을 고려해 0.3초 앞에서 시작해 버림)
   async function mp4Source(blob, info, from) {
-    const S = info.samples; let i = Math.max(0, S.findIndex(s => s.t + s.d > from - 0.3)); if (i < 0) i = S.length;
+    const S = info.samples; let i = S.findIndex(s => s.t + s.d > from - 0.3); if (i < 0) i = S.length;
     const out = []; let err = null, skipUntil = from;
     const dec = new AudioDecoder({ output: ad => { const n = ad.numberOfFrames, ch = ad.numberOfChannels, t0 = ad.timestamp / 1e6, sr = ad.sampleRate; const c = []; for (let k = 0; k < Math.min(2, ch); k++) { const a = new Float32Array(n); ad.copyTo(a, { planeIndex: k, format: 'f32-planar' }); c.push(a); } ad.close(); let st = 0; if (t0 < skipUntil) st = Math.min(n, Math.round((skipUntil - t0) * ad.sampleRate)); if (st >= n) return; out.push({ c: c.map(a => a.subarray(st)), n: n - st, sr }); }, error: e => { err = e; } }); // 표본률은 닫기 전에 읽어 둠
     const cfg = { codec: info.codec, sampleRate: info.sr, numberOfChannels: info.ch }; if (info.desc) cfg.description = info.desc; dec.configure(cfg);
@@ -169,10 +169,13 @@ NC.astream = (function () {
   const peakCache = new Map();
   async function peaks(blob, key, n, onProgress) {
     if (peakCache.has(key)) return peakCache.get(key);
+    const p = peaks0(blob, n, onProgress); peakCache.set(key, p); p.then(v => { if (!v) peakCache.delete(key); }, () => peakCache.delete(key)); return p;  // 계산 중인 것도 함께 씀
+  }
+  async function peaks0(blob, n, onProgress) {
     const info = await probe(blob), dur = info.dur || 0; if (!dur) return null;
     const out = new Float32Array(n), r = await reader(blob, 0), STEP = OUT; let done = 0;
     for (let t = 0; t < dur; t += 1) { const [L] = await r.read(STEP); const k0 = Math.floor(t / dur * n), k1 = Math.min(n - 1, Math.floor((t + 1) / dur * n)); let m = 0; for (let i = 0; i < L.length; i += 32) { const v = Math.abs(L[i]); if (v > m) m = v; } for (let k = k0; k <= k1; k++) out[k] = Math.max(out[k], m); done++; if (done % 60 === 0) { if (onProgress) onProgress(t / dur); await new Promise(res => setTimeout(res, 0)); } }
-    r.close(); peakCache.set(key, out); return out;
+    r.close(); return out;
   }
   return { probe, reader, bufferReader, peaks, OUT };
 })();

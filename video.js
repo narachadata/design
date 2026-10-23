@@ -146,7 +146,7 @@ NC.video = (function () {
   // 시각 T에 화면에 나오는 동영상 층들
   function activeVideos(V, T) { const { i, q } = at(V, T), A = V.scenes[i], out = []; A.layers.forEach(L => { if (L.vEl) out.push({ L, t: q }); }); if (q >= A.dur && A.turn) { const B = V.scenes[(i + 1) % V.scenes.length]; B.layers.forEach(L => { if (L.vEl) out.push({ L, t: 0 }); }); } return out; }
   // 미리보기: 재생 중이면 동영상도 재생(어긋나면 맞춤), 멈췄으면 그 시각으로 감기
-  function syncVideos(V, T, playing) { const act = new Set(); activeVideos(V, T).forEach(({ L, t }) => { const v = L.vEl, mt = mediaTime(L, t); act.add(v); if (playing) { if (Math.abs(v.currentTime - mt) > 0.25) v.currentTime = mt; if (v.paused) v.play().catch(() => {}); } else { if (!v.paused) v.pause(); if (Math.abs(v.currentTime - mt) > 0.04) v.currentTime = mt; } }); (V.videos || []).forEach(v => { if (!act.has(v) && !v.paused) v.pause(); }); }
+  function syncVideos(V, T, playing) { const act = new Set(); activeVideos(V, T).forEach(({ L, t }) => { const v = L.vEl, mt = mediaTime(L, t); act.add(v); if (playing) { if (Math.abs(v.currentTime - mt) > 0.25) v.currentTime = mt; if (v.paused) v.play().catch(() => {}); } else { if (!v.paused) v.pause(); if (Math.abs(v.currentTime - mt) > 0.004) v.currentTime = mt; } }); (V.videos || []).forEach(v => { if (!act.has(v) && !v.paused) v.pause(); }); }
   // 저장: 프레임마다 정확한 시각으로 감고 기다림
   async function seekVideos(V, T) { await Promise.all(activeVideos(V, T).map(({ L, t }) => new Promise(res => { const v = L.vEl, mt = mediaTime(L, t); if (Math.abs(v.currentTime - mt) < 0.001 && v.readyState >= 2) { res(); return; } const done = () => { v.removeEventListener('seeked', done); clearTimeout(to); res(); }, to = setTimeout(done, 1500); v.addEventListener('seeked', done); v.currentTime = mt; }))); }
   // 글자 효과: 글자 층을 한 번만 그려 두고 글자·단어·줄 칸만 잘라 보여 줌
@@ -242,7 +242,7 @@ NC.video = (function () {
 
   /* ---------- 소리 ---------- */
   let AC = null;
-  const ctx = () => AC || (AC = new (window.AudioContext || window.webkitAudioContext)());
+  const ctx = () => AC || (AC = (() => { try { return new AudioContext({ sampleRate: 48000 }); } catch (e) { return new (window.AudioContext || window.webkitAudioContext)(); } })());  // 영상 표준 48kHz
   async function decode(url) { const ab = await (await fetch(url)).arrayBuffer(); return await ctx().decodeAudioData(ab); }
   // 음악 예약: a = {vol, from(곡의 몇 초부터), start(영상 몇 초에 시작), fin·fout(서서히 크게·작게 초), fade(옛 문서: 끝 2.5초)}
   // T0 = 지금 재생을 시작하는 영상 시각, when = 그 순간의 소리 시계 시각, total = 영상 길이
@@ -270,16 +270,18 @@ NC.video = (function () {
   // ---- 소리 목록(voices): 배경 음악·트랙 클립·동영상 속 소리를 같은 방식으로 ----
   // voice = { buf(AudioBuffer) 또는 blob·url(파일), at(영상 몇 초에 시작), off(원본 몇 초부터), len(초, 없으면 끝까지), vol, fin, fout, loop }
   const vEnd = (v, total) => Math.min(total, v.len != null ? v.at + v.len : total);
-  function envAt(v, t, total) { const end = vEnd(v, total), vol = v.vol == null ? 1 : Number(v.vol); let g = vol; if (v.fin > 0 && t < v.at + v.fin) g *= Math.max(0, (t - v.at) / v.fin); if (v.fout > 0 && t > end - v.fout) g *= Math.max(0, (end - t) / v.fout); return g; }
+  // 음량 점(vk): [[클립 시작부터 초, 배율], …] — 점 사이는 직선으로 이어지고, 첫 점 앞·끝 점 뒤는 그 점의 값
+  function vkAt(vk, s) { if (s <= vk[0][0]) return vk[0][1]; for (let i = 1; i < vk.length; i++) if (s <= vk[i][0]) { const a = vk[i - 1], b = vk[i]; return a[1] + (b[1] - a[1]) * (s - a[0]) / Math.max(1e-6, b[0] - a[0]); } return vk[vk.length - 1][1]; }
+  function envAt(v, t, total) { const end = vEnd(v, total), vol = v.vk && v.vk.length ? vkAt(v.vk, t - v.at) : v.vol == null ? 1 : Number(v.vol); let g = vol; if (v.fin > 0 && t < v.at + v.fin) g *= Math.max(0, (t - v.at) / v.fin); if (v.fout > 0 && t > end - v.fout) g *= Math.max(0, (end - t) / v.fout); return g; }
   // 미리보기·실시간 녹화: 짧은 소리는 버퍼로, 파일은 오디오 플레이어로 (몇 시간짜리도 바로 재생)
   function playVoices(ac, dest, voices, T0, when, total) {
     const stops = [];
     (voices || []).forEach(v => {
       const end = vEnd(v, total); if (end <= T0) return;
-      const g = ac.createGain(), vol = v.vol == null ? 1 : Number(v.vol), at = t => when + (t - T0);
-      g.gain.setValueAtTime(envAt(v, Math.max(T0, v.at), total), Math.max(when, at(v.at)));
-      if (v.fin > 0 && T0 < v.at + v.fin) g.gain.linearRampToValueAtTime(vol, at(v.at + v.fin));
-      if (v.fout > 0 && end - v.fout > T0) { g.gain.setValueAtTime(vol, at(end - v.fout)); g.gain.linearRampToValueAtTime(0.0001, at(end)); }
+      const g = ac.createGain(), at = t => when + (t - T0), t1 = Math.max(T0, v.at);
+      // 음량이 꺾이는 시각(페이드 끝·시작, 음량 점)마다 값을 정해 직선으로 이음 — 내보내기(envAt)와 같은 모양
+      const ks = new Set([end]); if (v.fin > 0) ks.add(v.at + v.fin); if (v.fout > 0) ks.add(end - v.fout); (v.vk || []).forEach(k => ks.add(v.at + Number(k[0])));
+      g.gain.setValueAtTime(envAt(v, t1, total), at(t1)); [...ks].filter(t => t > t1 && t <= end).sort((a, b) => a - b).forEach(t => g.gain.linearRampToValueAtTime(envAt(v, t, total), at(t)));
       g.connect(dest);
       const startAt = Math.max(when, at(v.at)), pos = Number(v.off || 0) + Math.max(0, T0 - v.at), dur = end - Math.max(T0, v.at);
       if (v.buf) { const s2 = ac.createBufferSource(); s2.buffer = v.buf; s2.loop = !!v.loop && v.buf.duration < dur + pos; if (s2.loop) { s2.loopStart = Math.min(Number(v.off || 0), v.buf.duration - 0.05); s2.loopEnd = v.buf.duration; } s2.connect(g); s2.start(startAt, s2.loop ? pos % v.buf.duration : Math.min(pos, v.buf.duration), s2.loop ? undefined : dur); stops.push(() => { try { s2.stop(); } catch (e) {} g.disconnect(); }); }
@@ -293,21 +295,24 @@ NC.video = (function () {
   // 저장: 1초씩 필요한 구간만 읽어 섞음 → 48kHz 스테레오 덩어리를 차례로 넘김 (긴 파일도 메모리를 조금만 씀)
   async function mixVoices(voices, total, onBlock, onProgress, cancelled) {
     const SR = 48000, BL = SR, N = Math.ceil(total * SR);
+    let env = 1; const CEIL = 0.891, K = 1 - Math.exp(-1 / (0.15 * SR));  // 리미터: 여러 소리가 겹쳐 1을 넘으면 찌그러지는 대신 순간적으로 줄임(-1 dBFS 천장)
+    const silent = { read: async n => [new Float32Array(n), new Float32Array(n)], close() {} };
+    try {
     for (let p = 0; p < N; p += BL) {
       if (cancelled && cancelled()) return false;
       const n = Math.min(BL, N - p), t0 = p / SR, L = new Float32Array(n), R = new Float32Array(n);
       for (const v of voices || []) {
         const end = vEnd(v, total); if (end <= t0) { if (v._r) { v._r.close(); v._r = null; } continue; } if (v.at >= t0 + n / SR) continue;
-        if (!v._r) { const rel = Math.max(0, t0 - v.at); v._r = v.buf ? NC.astream.bufferReader(v.buf, Number(v.off || 0) + rel, !!v.loop, Number(v.off || 0)) : await NC.astream.reader(v.blob, Number(v.off || 0) + rel, { loop: !!v.loop, loopFrom: Number(v.off || 0) }); }
+        if (!v._r) { const rel = Math.max(0, t0 - v.at); try { v._r = v.buf ? NC.astream.bufferReader(v.buf, Number(v.off || 0) + rel, !!v.loop, Number(v.off || 0)) : await NC.astream.reader(v.blob, Number(v.off || 0) + rel, { loop: !!v.loop, loopFrom: Number(v.off || 0) }); } catch (e) { console.warn('소리를 읽지 못해 무음으로 둡니다', e); v._r = silent; } }  /* 소리 하나 때문에 전체 저장이 실패하지 않게 */
         const i0 = Math.max(0, Math.round((v.at - t0) * SR)), i1 = Math.min(n, Math.round((end - t0) * SR)); if (i1 <= i0) continue;
         const [a, b] = await v._r.read(i1 - i0);
         for (let i = i0; i < i1; i++) { const g = envAt(v, t0 + i / SR, total); L[i] += a[i - i0] * g; R[i] += b[i - i0] * g; }
       }
-      for (let i = 0; i < n; i++) { L[i] = Math.max(-1, Math.min(1, L[i])); R[i] = Math.max(-1, Math.min(1, R[i])); }
+      for (let i = 0; i < n; i++) { const pk = Math.max(Math.abs(L[i]), Math.abs(R[i])), need = pk > CEIL ? CEIL / pk : 1; env = need < env ? need : env + (need - env) * K; L[i] *= env; R[i] *= env; }
       await onBlock(L, R, t0); if (onProgress) onProgress(Math.min(1, (p + n) / N));
     }
-    (voices || []).forEach(v => { if (v._r) { v._r.close(); v._r = null; } });
     return true;
+    } finally { (voices || []).forEach(v => { if (v._r) { try { v._r.close(); } catch (e) {} v._r = null; } }); }  // 중지·오류 때도 디코더를 닫음
   }
   // 음악 파형(타임라인용): 칸마다 최댓값
   function peaks(buf, n) { const d = buf.getChannelData(0), step = Math.max(1, Math.floor(d.length / n)), out = new Float32Array(n); for (let i = 0; i < n; i++) { let m = 0; const s0 = i * step, e0 = Math.min(d.length, s0 + step); for (let k = s0; k < e0; k += 16) { const v = Math.abs(d[k]); if (v > m) m = v; } out[i] = m; } return out; }
@@ -327,19 +332,19 @@ NC.video = (function () {
   }
 
   /* ---------- 녹화 ---------- */
-  function mimeFor(withAudio) {
+  function mimeFor(withAudio, big) {
     if (!window.MediaRecorder) return '';
     if (!withAudio) return NC.news.tvMime();
-    const list = ['video/mp4;codecs=avc1.4d0028,mp4a.40.2', 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
+    const list = [...(big ? ['video/mp4;codecs=avc1.640033,mp4a.40.2'] : []), 'video/mp4;codecs=avc1.4d0028,mp4a.40.2', 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
     for (const m of list) { try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) {} } return '';
   }
   // o = { V, canvas, audio:{buf,vol,fade}, onProgress(p, T), cancelled() } → { blob, ext, note | warn } | null(중지)
   function record(o) {
     return new Promise((resolve, reject) => {
-      const V = o.V, withA = !!(V.voices && V.voices.length), mime = mimeFor(withA);
+      const V = o.V, withA = !!(V.voices && V.voices.length), mime = mimeFor(withA, V.W * V.H > 2100000);
       if (!mime) { reject(new Error('이 브라우저는 영상 저장을 지원하지 않습니다. 크롬(Chrome)에서 열어 주세요.')); return; }
       const cv = o.canvas; cv.width = V.W; cv.height = V.H; const x = cv.getContext('2d'); drawAt(x, V, 0);
-      const vs = cv.captureStream(30); let dest = null, snd = null;
+      const vs = cv.captureStream(o.fps || 30); let dest = null, snd = null;
       if (withA) { const ac = ctx(); ac.resume && ac.resume(); dest = ac.createMediaStreamDestination(); }
       const stream = new MediaStream([...vs.getVideoTracks(), ...(dest ? dest.stream.getAudioTracks() : [])]);
       const bps = Math.round(Math.min(12e6, Math.max(5e6, V.W * V.H * 4.5)));
@@ -376,8 +381,10 @@ NC.video = (function () {
   const MUXER = 'https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.min.js';
   function load(url, test) { if (test()) return Promise.resolve(); return new Promise((res, rej) => { const s = document.createElement('script'); s.src = url; s.onload = () => test() ? res() : rej(new Error('라이브러리를 불러오지 못했습니다')); s.onerror = () => rej(new Error('라이브러리를 불러오지 못했습니다 (인터넷 연결 확인)')); document.head.appendChild(s); }); }
   const canFast = () => !!(window.VideoEncoder && window.VideoFrame);
+  // H.264 레벨: 화면 크기×fps에 맞는 가장 낮은 레벨 (1080p30=4.0, 1080p60=4.2, 4K30=5.1, 4K60=5.2) — 엄격한 TV 디코더가 거부하지 않게
+  function avcLevel(W, H, fps) { const fs = Math.ceil(W / 16) * Math.ceil(H / 16), r = fs * fps; const T = [[0x1f, 3600, 108000], [0x20, 5120, 216000], [0x28, 8192, 245760], [0x2a, 8704, 522240], [0x32, 22080, 589824], [0x33, 36864, 983040], [0x34, 36864, 2073600]]; return (T.find(t => fs <= t[1] && r <= t[2]) || T[T.length - 1])[0]; }
   async function pickCodec(W, H, fps, bps) {
-    const big = W * H > 2100000, list = big ? ['avc1.640033', 'avc1.4d0033'] : ['avc1.4d0028', 'avc1.640028', 'avc1.4d002a', 'avc1.42e028', 'avc1.42e01f']; // TV 호환: Main 4.0 먼저
+    const lv = avcLevel(W, H, fps).toString(16), list = ['4d00', '6400', '42e0'].map(p => `avc1.${p}${lv}`); // TV 호환: Main 먼저
     for (const codec of list) { try { const r = await VideoEncoder.isConfigSupported({ codec, width: W, height: H, bitrate: bps, framerate: fps, avc: { format: 'avc' } }); if (r.supported) return codec; } catch (e) {} }
     return null;
   }
@@ -389,20 +396,27 @@ NC.video = (function () {
   // o = { V, fps, audio:{buf,vol,fade}, canvas(미리보기), onProgress(p, T), cancelled() } → { blob, ext, note } | null(중지)
   async function encode(o) {
     const V = o.V, W = V.W, H = V.H, fps = Number(o.fps || 30), N = Math.max(1, Math.ceil(V.total * fps));
-    const bps = Math.round(Math.min(16e6, Math.max(5e6, W * H * fps * 0.15)));
+    const bps = Math.round(Math.min(W * H > 2100000 ? 45e6 : 16e6, Math.max(5e6, W * H * fps * 0.15)));  // 4K는 유튜브 권장(35~68Mbps)에 맞춰 상한 45Mbps
     await load(MUXER, () => !!window.Mp4Muxer);
     const codec = await pickCodec(W, H, fps, bps); if (!codec) throw new Error('이 컴퓨터에서 H.264 인코더를 쓸 수 없습니다');
     let aOk = false; const hasA = !!(V.voices && V.voices.length);
     if (hasA) {
       if (!window.AudioEncoder) throw new Error('소리 인코더 없음');
-      try { aOk = (await AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 160000 })).supported; } catch (e) { aOk = false; }
+      try { aOk = (await AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 192000 })).supported; } catch (e) { aOk = false; }
       if (!aOk) throw new Error('이 브라우저는 AAC 소리 인코딩을 지원하지 않습니다');
     }
     const aBuf = hasA;
     const target = new Mp4Muxer.ArrayBufferTarget();
     const muxer = new Mp4Muxer.Muxer({ target, video: { codec: 'avc', width: W, height: H, frameRate: fps }, audio: aBuf ? { codec: 'aac', numberOfChannels: 2, sampleRate: 48000 } : undefined, fastStart: 'in-memory', firstTimestampBehavior: 'offset' });
-    let err = null;
-    const ve = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: e => { err = e; } });
+    let err = null; const aq = []; let ai = 0, aP = 0;
+    if (aBuf) {
+      const ae = new AudioEncoder({ output: (c, m) => aq.push([c, m]), error: e => { err = e; } });
+      ae.configure({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 192000 });
+      const ok = await mixVoices(V.voices, V.total, async (L, R, t0) => { const n = L.length, data = new Float32Array(n * 2); data.set(L, 0); data.set(R, n); const ad = new AudioData({ format: 'f32-planar', sampleRate: 48000, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(t0 * 1e6), data }); ae.encode(ad); ad.close(); if (ae.encodeQueueSize > 20) await new Promise(r => setTimeout(r, 0)); if (err) throw err; }, p => { if (o.onProgress) o.onProgress(p * 0.1, 0); }, o.cancelled);
+      if (!ok) { try { ae.close(); } catch (e) {} return null; }
+      await ae.flush(); ae.close(); if (err) throw err; aP = 0.1;
+    }
+    const ve = new VideoEncoder({ output: (c, m) => { while (ai < aq.length && aq[ai][0].timestamp <= c.timestamp) { const [ac2, am] = aq[ai++]; muxer.addAudioChunk(ac2, am); } muxer.addVideoChunk(c, m); }, error: e => { err = e; } });
     ve.configure({ codec, width: W, height: H, bitrate: bps, framerate: fps, avc: { format: 'avc' }, latencyMode: 'quality' });
     const cv = o.canvas || document.createElement('canvas'); cv.width = W; cv.height = H; const x = cv.getContext('2d', { willReadFrequently: false });
     const us = 1e6 / fps;
@@ -412,17 +426,11 @@ NC.video = (function () {
       const T = Math.min(i / fps, V.total - 0.001); if (V.videos && V.videos.length) await seekVideos(V, T); drawAt(x, V, T);
       const fr = new VideoFrame(cv, { timestamp: Math.round(i * us), duration: Math.round(us) });
       ve.encode(fr, { keyFrame: i % (fps * 2) === 0 }); fr.close();
-      if (ve.encodeQueueSize > 6 || i % 10 === 0) { await new Promise(r => setTimeout(r, 0)); if (o.onProgress) o.onProgress(i / N * (aBuf ? 0.9 : 1), T); }
+      if (ve.encodeQueueSize > 6 || i % 10 === 0) { await new Promise(r => setTimeout(r, 0)); if (o.onProgress) o.onProgress(aP + i / N * (1 - aP), T); }
       while (ve.encodeQueueSize > 12) await new Promise(r => setTimeout(r, 4));
     }
     await ve.flush(); ve.close(); if (err) throw err;
-    if (aBuf) {
-      const ae = new AudioEncoder({ output: (c, m) => muxer.addAudioChunk(c, m), error: e => { err = e; } });
-      ae.configure({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 160000 });
-      const ok = await mixVoices(V.voices, V.total, async (L, R, t0) => { const n = L.length, data = new Float32Array(n * 2); data.set(L, 0); data.set(R, n); const ad = new AudioData({ format: 'f32-planar', sampleRate: 48000, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(t0 * 1e6), data }); ae.encode(ad); ad.close(); if (ae.encodeQueueSize > 20) await new Promise(r => setTimeout(r, 0)); if (err) throw err; }, p => { if (o.onProgress) o.onProgress(0.9 + p * 0.1, V.total * p); }, o.cancelled);
-      if (!ok) { try { ae.close(); } catch (e) {} return null; }
-      await ae.flush(); ae.close(); if (err) throw err;
-    }
+    while (ai < aq.length) { const [ac2, am] = aq[ai++]; muxer.addAudioChunk(ac2, am); }
     muxer.finalize();
     if (o.onProgress) o.onProgress(1, V.total);
     const prof = { '42': 'Baseline', '4d': 'Main', '64': 'High' }[codec.slice(5, 7)] || '', lvl = (parseInt(codec.slice(9, 11), 16) / 10).toFixed(1);
@@ -517,5 +525,5 @@ NC.video = (function () {
     let n = 0; list.slice(0, 8).forEach((u, k) => { const an = { t: u.t, d: Math.round(0.18 * k * 100) / 100, s: 0.7 }; u.els.forEach(e => { e.anim = Object.assign({}, an); n++; }); });
     return n;
   }
-  return { ANIMS, TEXT_ANIMS, OUTS, LOOPS, KBS, CAMS, TRANS, DEF, outSize, build, timing, drawAt, sceneStarts, at, player, record, encode, canFast, decode, peaks, hasAnim, moves, autoAnimate, defragMulti, ctx, schedule, scheduleSfx, playVoices, mixVoices, syncVideos, seekVideos, CAP_STYLES };
+  return { vkAt, ANIMS, TEXT_ANIMS, OUTS, LOOPS, KBS, CAMS, TRANS, DEF, outSize, build, timing, drawAt, sceneStarts, at, player, record, encode, canFast, decode, peaks, hasAnim, moves, autoAnimate, defragMulti, ctx, schedule, scheduleSfx, playVoices, mixVoices, syncVideos, seekVideos, CAP_STYLES };
 })();

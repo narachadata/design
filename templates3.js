@@ -64,7 +64,7 @@
       els.push(motif(0, w - m - 14 * u, m * 0.6, 14 * u)); els.push(motif(1, w - m - 30 * u, h * 0.42 - 12 * u, 9 * u));
       els.push(S('rect', m, h * 0.48, w - 2 * m, h * 0.3, { fill: P_.soft, radius: 2 * u, name: '안내 상자' }));
       els.push(T(c.body, m + 4 * u, h * 0.48 + 4 * u, w - 2 * m - 8 * u, h * 0.3 - 8 * u, { font: fB, size: 4.2 * u, lh: 1.75, weight: 500, color: INK, name: '본문' }));
-      if (c.cta) { els.push(S('pill', w / 2 - 22 * u, h * 0.82, 44 * u, 9 * u, { fill: P_.ac })); els.push(T(c.cta, w / 2 - 22 * u, h * 0.82 + 2.2 * u, 44 * u, 5 * u, { font: fB, size: 4.4 * u, weight: 700, color: WHITE, align: 'center', name: '버튼' })); }
+      if (c.cta) { els.push(S('pill', w / 2 - 22 * u, h * 0.82, 44 * u, 9 * u, { fill: P_.ac })); els.push(T(c.cta, w / 2 - 22 * u, h * 0.82 + 2.2 * u, 44 * u, 5 * u, { font: fB, size: 4.4 * u, weight: 700, color: inkOn(P_.ac, WHITE), align: 'center', name: '버튼' })); }
       els.push(T(`${o.biz.name}  ·  ${ADDR}  ·  ${PHONE}`, m, h - m - 3 * u, w - 2 * m, 4 * u, { font: fB, size: 2.9 * u, color: tx, align: 'center', name: '하단 정보' }));
       return P(P_.bg, els, o.label);
     }
@@ -81,7 +81,7 @@
       let bodyT = c.body, bodyH = bodyT.split('\n').length * 3.9 * 0.3528 * 1.7 + 2; const lim = (c.cta ? ctaY : Hu - 10) - 1;
       if (y + bodyH > lim) { const ls_ = c.body.split('\n'); bodyT = ls_.find(l => /문의|일시|기간|접수|오픈|—/.test(l)) || ls_[ls_.length - 1]; bodyH = 3.9 * 0.3528 * 1.7 + 2; }
       if (y + bodyH <= lim) els.push(T(bodyT, m + 6 * u, y * u, w - 2 * m - 12 * u, bodyH * u, { font: fB, size: 3.9 * u, lh: 1.7, weight: 500, color: tx, align: 'center', name: '본문' }));
-      if (c.cta) { els.push(S('pill', w / 2 - 20 * u, ctaY * u, 40 * u, 8 * u, { fill: P_.fg })); els.push(T(c.cta, w / 2 - 20 * u, (ctaY + 1.5) * u, 40 * u, 5 * u, { font: fB, size: 4 * u, weight: 700, color: P_.ac, align: 'center', valign: 'middle', name: '버튼' })); }
+      if (c.cta) { els.push(S('pill', w / 2 - 20 * u, ctaY * u, 40 * u, 8 * u, { fill: P_.fg })); els.push(T(c.cta, w / 2 - 20 * u, (ctaY + 1.5) * u, 40 * u, 5 * u, { font: fB, size: 4 * u, weight: 700, color: inkOn(P_.fg, P_.ac), align: 'center', valign: 'middle', name: '버튼' })); }
       els.push(motif(1, m, m, 10 * u)); els.push(motif(2, w - m - 10 * u, m * 0.8, 10 * u)); els.push(motif(3, m * 0.8, h - m - 12 * u, 9 * u));
       els.push(T(o.biz.name, m, h - m - 3 * u, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3 * u, weight: 700, color: dark ? WHITE : P_.fg, align: 'center', ls: 0.2 }));
       return P(P_.bg, els, o.label);
@@ -128,8 +128,8 @@
       // 나라차태권도 현수막: 왼쪽에 한글 로고를 세로 가운데로 두고 글은 그 오른쪽부터 (멀리서도 도장 이름이 먼저 보이게)
       const ours = o.biz.name === '나라차태권도', lgH = h * 0.42, lgW = ours ? lgH * 1.98 : 0, tx = ours ? w * 0.03 + lgW + w * 0.03 : w * 0.04, tw = w * 0.82 - tx;
       if (ours) { els.push(S('rect', tx - w * 0.015, h * 0.22, Math.max(1, h * 0.005), h * 0.56, { fill: P_.fg, name: '구분선', opacity: 0.3 })); els.push(I(isDark(P_.bg) ? 'asset:brand-korean-white' : 'asset:brand-korean', w * 0.03, (h - lgH) / 2, lgW, lgH, { name: '로고' })); }
-      els.push(T(c.title.replace('\n', ' '), tx, h * 0.17, tw, h * 0.4, { font: fT, size: h * 0.46, weight: 900, color: P_.fg, lh: 1, name: '제목' }));
-      els.push(T((c.sub + '   ' + (c.cta ? '☎ ' + PHONE : '')).trim(), tx, h * 0.62, tw, h * 0.22, { font: fB, size: h * 0.22, weight: 700, color: P_.ac, lh: 1, name: '부제' }));
+      els.push(T(c.title.replace('\n', ' '), tx, h * 0.17, tw, h * 0.4, { font: fT, size: h * 0.46, weight: 900, color: inkOn(P_.bg, P_.fg, 3), lh: 1, name: '제목' }));
+      els.push(T((c.sub + '   ' + (c.cta ? '☎ ' + PHONE : '')).trim(), tx, h * 0.62, tw, h * 0.22, { font: fB, size: h * 0.22, weight: 700, color: inkOn(P_.bg, P_.ac, 3), lh: 1, name: '부제' }));
       els.push(motif(0, w * 0.84, h * 0.18, h * 0.6));
       return P(P_.bg, els, o.label);
     }
@@ -166,6 +166,10 @@
   // 이모지 → Noto Emoji 벡터 그림 주소 (Apache 2.0). 기기마다 모양이 달라지거나 크게 인쇄할 때 깨지지 않게
   const emojiSVG = ch => 'https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u' + [...ch].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f').join('_') + '.svg';
   NC.emojiSVG = emojiSVG;
+  // 글자색 대비 자동: 원하는 색이 바탕과 대비가 모자라면 흰색·먹색 중 더 잘 보이는 쪽 (WCAG 대비)
+  function lumOf(hex) { if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return 1; const c = [1, 3, 5].map(i => { const v = parseInt(hex.substr(i, 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+  function cr(a, b) { const x = lumOf(a), y = lumOf(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+  function inkOn(bg, pref, min) { min = min || 4.5; if (cr(pref, bg) >= min) return pref; return cr('#FFFFFF', bg) >= cr('#111111', bg) ? '#FFFFFF' : '#111111'; }
   function isDark(hex) { if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return false; const n = parseInt(hex.slice(1), 16); return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 < 120; }
   const SIZE = { poster: [210, 297, '포스터'], flyer: [148, 210, '전단지'], sns: [285.75, 285.75, 'SNS'], story: [285.75, 508, 'SNS'], card4x5: [285.75, 357.19, '카드뉴스'], postcard: [148, 105, '명함·카드'], banner: [3000, 700, '현수막·입간판'], yt: [338.67, 190.5, '웹·영상'] };
   const LAYOUT_FOR = { poster: ['band', 'center', 'split', 'frame', 'minimal'], flyer: ['band', 'center', 'minimal', 'frame'], sns: ['center', 'minimal', 'frame', 'split'], story: ['story'], card4x5: ['center', 'band'], postcard: ['frame', 'minimal'], banner: ['banner'], yt: ['split', 'minimal'] };

@@ -18,7 +18,7 @@ NC.fx = (function () {
   }
   function textStyle(el) {
     const grad = el.fillType === 'gradient';
-    let s = `font-family:'${el.font}';font-size:${el.size}pt;font-weight:${el.weight};font-style:${el.italic ? 'italic' : 'normal'};text-align:${el.align};line-height:${el.lh};letter-spacing:${el.ls}em;`;
+    let s = `font-family:'${el.font}','Pretendard','Noto Sans KR',sans-serif;font-size:${el.size}pt;font-weight:${el.weight};font-style:${el.italic ? 'italic' : 'normal'};text-align:${el.align};line-height:${el.lh};letter-spacing:${el.ls}em;`;
     s += grad ? `background:linear-gradient(${el.gAngle || 90}deg,${el.g1},${el.g2});-webkit-background-clip:text;background-clip:text;color:transparent;` : `color:${el.color};`;
     if (el.strokeW > 0) s += `-webkit-text-stroke:${el.strokeW}pt ${el.strokeC};paint-order:stroke fill;`;
     s += textShadows(el, grad);
@@ -45,7 +45,7 @@ NC.fx = (function () {
     const defs = grad ? `<defs><linearGradient id="${id}" gradientTransform="rotate(${(el.gAngle || 90) - 90})"><stop offset="0" stop-color="${el.g1}"/><stop offset="1" stop-color="${el.g2}"/></linearGradient></defs>` : '';
     const stroke = el.strokeW > 0 ? `stroke="${el.strokeC}" stroke-width="${el.strokeW * PT}" paint-order="stroke fill" stroke-linejoin="round"` : '';
     const sh = textShadows(el, true).replace('filter:', '').replace(';', '');
-    return `<svg viewBox="0 0 ${W} ${Hh}" width="100%" height="100%" style="overflow:visible;display:block;${sh ? `filter:${sh};` : ''}" xmlns="http://www.w3.org/2000/svg">${defs}<path id="p${el.id}" d="${d}" fill="none"/><text font-family="${esc(el.font)}" font-size="${fs}" font-weight="${el.weight}" font-style="${el.italic ? 'italic' : 'normal'}" letter-spacing="${el.ls * fs}" fill="${fill}" ${stroke}><textPath href="#p${el.id}" startOffset="50%" text-anchor="middle">${esc(text)}</textPath></text></svg>`;
+    return `<svg viewBox="0 0 ${W} ${Hh}" width="100%" height="100%" style="overflow:visible;display:block;${sh ? `filter:${sh};` : ''}" xmlns="http://www.w3.org/2000/svg">${defs}<path id="p${el.id}" d="${d}" fill="none"/><text font-family="${esc(el.font)}, Pretendard, 'Noto Sans KR', sans-serif" font-size="${fs}" font-weight="${el.weight}" font-style="${el.italic ? 'italic' : 'normal'}" letter-spacing="${el.ls * fs}" fill="${fill}" ${stroke}><textPath href="#p${el.id}" startOffset="50%" text-anchor="middle">${esc(text)}</textPath></text></svg>`;
   }
   const TEXT_PRESETS = [
     { id: 'plain', name: '기본', st: { fillType: 'solid', strokeW: 0, shadow: false, glow: false, d3: 0, bg: '' } },

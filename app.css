@@ -83,7 +83,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .stage .canvas-wrap{position:relative;flex:none;margin:84px 40px 64px}
 .stage .sheet{box-shadow:0 18px 48px rgba(16,24,40,.22),0 2px 6px rgba(16,24,40,.1);transform-origin:0 0;position:absolute;left:0;top:0}
 .stage .ovl{position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none}
-.stage .toolbar{position:absolute;left:50%;top:14px;transform:translateX(-50%);display:flex;gap:2px;z-index:5;align-items:center;background:#fff;padding:5px 6px;border-radius:12px;box-shadow:0 6px 24px rgba(16,24,40,.14),0 1px 2px rgba(16,24,40,.08);max-width:calc(100% - 24px);flex-wrap:wrap;justify-content:center}
+.stage .toolbar{position:absolute;left:12px;right:12px;margin:0 auto;width:fit-content;top:14px;transform:none;display:flex;gap:2px;z-index:5;align-items:center;background:#fff;padding:5px 6px;border-radius:12px;box-shadow:0 6px 24px rgba(16,24,40,.14),0 1px 2px rgba(16,24,40,.08);max-width:calc(100% - 24px);flex-wrap:wrap;justify-content:center}
 .stage .toolbar .btn{border-color:transparent;background:transparent}
 .stage .toolbar .btn:hover{background:var(--ui-field);border-color:transparent}
 .stage .toolbar .tgroup{padding:0 4px}
@@ -929,7 +929,7 @@ dialog.loc-dlg{width:min(520px,94vw)}
 .pos9{display:grid;grid-template-columns:repeat(3,36px);gap:4px;margin:6px 0}.pos9 button{height:30px;border:1px solid var(--ui-line2);background:#fff;border-radius:6px;cursor:pointer}.pos9 button.on{background:var(--ui-accent);color:#fff;border-color:var(--ui-accent)}
 /* 보기 방식 */
 .vtl-bar .tview{background:#2a303d;border-color:#363d4d;color:#e6e9f0}.vtl-bar .tview:hover{background:#343b4b}
-body.tl-wide{--tlh:300px}body.tl-wide.tl-tall{--tlh:440px}
+body.tl-wide{--tlh:clamp(190px,38vh,300px)}body.tl-wide.tl-tall{--tlh:clamp(260px,55vh,440px)}
 body.tl-wide .app{height:calc(100% - var(--tlh))}
 body.tl-wide .vtl{position:fixed;left:64px;right:0;bottom:0;height:var(--tlh);display:flex;z-index:40}
 body.tl-focus .app{grid-template-columns:64px 0 0 1fr 0 0}
@@ -972,3 +972,56 @@ body.tl-wide .tl-grip{display:block}
 .chatzone span{font-size:12px;color:var(--ui-muted)}
 .chatzone small{font-size:12px;color:var(--ui-accent);font-weight:600}
 @media (max-width:700px){.aimode{grid-template-columns:1fr}}
+
+/* 음량 선(고무줄)·점 — 소리 조각을 조금 높여 끌기 쉽게 */
+.tl-aud,.tl-heads .h-aud{height:54px}.tl-au{height:44px}.tl-au canvas{height:44px}
+.tl-audio,.tl-heads .h-audio{height:52px}.tl-fx{height:42px}.tl-fx span{line-height:16px;position:relative;z-index:1}
+.tl-vk{position:absolute;left:0;top:3px;bottom:3px;right:0;pointer-events:none;z-index:2}
+.tl-vk svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.tl-vk .ln{fill:none;stroke:#fff;stroke-width:1.5;vector-effect:non-scaling-stroke;opacity:.9}
+.tl-vk .hit{fill:none;stroke:transparent;stroke-width:12;vector-effect:non-scaling-stroke;pointer-events:stroke;cursor:ns-resize}
+.tl-vk i{position:absolute;width:9px;height:9px;margin:-5px 0 0 -5px;border-radius:50%;background:#ffd34d;border:1.5px solid #3a2a00;pointer-events:auto;cursor:move;box-shadow:0 0 0 2px rgba(0,0,0,.25)}
+.tl-vk i:hover{transform:scale(1.3)}
+#vkTip{position:fixed;z-index:9999;pointer-events:none;background:#111;color:#fff;font:600 11px/1 system-ui,sans-serif;padding:5px 7px;border-radius:5px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+
+/* 로고 = 메인 화면 단추 */
+#brandHome{cursor:pointer;border-radius:10px;padding:3px 6px 3px 3px;margin-left:-3px;transition:background .15s}
+#brandHome:hover{background:var(--ui-accent-soft)}
+#brandHome:focus-visible{outline:2px solid var(--ui-accent);outline-offset:1px}
+
+/* 좁은 보기(작업 영역 아래·좁은 노트북)에서도 보기 방식·내보내기·닫기가 늘 보이게: 폭에 따라 덜 중요한 것부터 숨기고, 그래도 넘치면 막대를 옆으로 밀어 봄 */
+.vtl{container-type:inline-size}
+.vtl-bar{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
+.vtl-bar>*{flex-shrink:0}
+.vtl-bar .grow{flex:1 1 0;min-width:4px}
+@container (max-width:1180px){.vtl-bar #tlZoom,.vtl-bar .tl-tot,.vtl-bar #tlMsg{display:none}}
+@container (max-width:1020px){.vtl-bar #tlFirst,.vtl-bar #tlStop,.vtl-bar #tlKeys{display:none}.vtl-bar .tview{font-size:0;gap:0;padding:5px 7px}.vtl-bar .tview .ic{margin:0}}
+@container (max-width:860px){.vtl-bar #tlPrevF,.vtl-bar #tlNextF,.vtl-bar #tlZo,.vtl-bar #tlZi,.vtl-bar .tsep{display:none}.vtl-bar #tlSave{font-size:0;gap:0;padding:5px 8px}.vtl-bar .tl-time{font-size:13px}}
+@container (max-width:640px){.vtl-bar #tlText,.vtl-bar #tlRec,.vtl-bar #tlRedo{display:none}}
+
+/* 알림을 popover(맨 위층)로: 브라우저 기본 popover 위치·테두리 지우기, 넓은 타임라인이면 그 위에 */
+.toast{top:auto;right:auto;margin:0;border:0;overflow:visible;inset-block-start:auto;inset-inline-end:auto}
+body.tl-wide .toast{bottom:calc(var(--tlh, 300px) + 16px)}
+
+/* 트랙이 많아지면 위아래로 스크롤 (머리 칸도 함께), 눈금은 늘 위에 */
+.tl-scroll{overflow-y:auto}
+.tl-heads{overflow:hidden}
+.tl-heads::after{content:'';display:block;height:18px}
+.tl-ruler{position:sticky;top:0;z-index:4}
+.tl-heads .th.rl{position:sticky;top:0;z-index:2;background:#1c1f26}
+
+/* 영상 미리보기·저장 창: 낮은 화면(1366×768 노트북)에서도 실행 단추가 보이게 */
+dialog.vd-dlg .dbody{max-height:calc(92vh - 64px)}
+@media (max-height:860px){.vd-stage{height:min(42vh,520px)}}
+dialog.vd-dlg .dbody>.row:last-child{position:sticky;bottom:0;background:var(--ui-panel,#fff);padding-top:8px;z-index:2}
+
+/* 낮은 화면에서 왼쪽 메뉴 14개가 다 보이게 */
+@media (max-height:780px){.rail button{padding:5px 2px;gap:2px;font-size:10px}.rail button .ic{width:18px;height:18px}}
+/* AI 창 안의 글자 링크 */
+#dlgAI .lnk{border:0;background:none;color:#2f6fe4;cursor:pointer;padding:0;font:inherit;text-decoration:underline}
+
+/* 영상 집중 보기: 숨긴 칸이 빠지며 작업 영역이 0px 칸에 들어가던 것 */
+body.tl-focus .stage{grid-column:4}
+
+/* 다운로드 패널: 실행 단추는 늘 보이게 */
+#dlPanel #dlGo{position:sticky;bottom:0;z-index:2;box-shadow:0 -8px 14px rgba(255,255,255,.95)}

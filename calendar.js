@@ -82,7 +82,7 @@ NC.cal = (function () {
   }
 
   /* ---------- 달력 요소 ---------- */
-  const CAL_DEF = { weekStart: 0, rows: 'merge', wdLang: 'en', wdH: 5.5, wdSize: 8, daySize: 7.5, evSize: 7, fontNum: 'Montserrat', fontBody: 'Noto Sans KR', outer: '#444444', outerW: 0.35, line: '#BBBBBB', lineW: 0.2, sunBg: '#F1F1F1', satBg: '', sunColor: '#E0564B', satColor: '#222222', dayColor: '#222222', evColor: '#1a1a1a', holColor: '#E0564B', noteColor: '#1F5BD6', wdColor: '#222222', showHol: true, showWd: true, showHolName: true, cellPad: 1.2 };
+  const CAL_DEF = { weekStart: 0, rows: 'merge', wdLang: 'en', wdH: 5.5, wdSize: 8, daySize: 7.5, evSize: 7, fontNum: 'Montserrat', fontBody: 'Noto Sans KR', outer: '#444444', outerW: 0.35, line: '#BBBBBB', lineW: 0.2, sunBg: '#F1F1F1', satBg: '', sunColor: '#E0564B', satColor: '#000000', dayColor: '#000000', evColor: '#000000', holColor: '', noteColor: '#1F5BD6', wdColor: '#000000', showHol: true, showWd: true, showHolName: true, cellPad: 1.2 };
   const MINI_DEF = { fontNum: 'Montserrat', titleSize: 9, wdSize: 4.4, numSize: 5, sunColor: '#E0564B', color: '#222222', showTitle: true, weekStart: 0 };
   const COLORS = { red: '#E0564B', blue: '#1F5BD6', green: '#2F7D32', gray: '#888888' };
   function calHTML(el, doc) {
@@ -110,7 +110,7 @@ NC.cal = (function () {
         const col = cs.numColor || ((dow === 0 || isHol) ? s.sunColor : dow === 6 ? s.satColor : s.dayColor);
         inner += `<div class="d" style="font-family:'${s.fontNum}';font-size:${s.daySize}pt;color:${col}">${days.join(' / ')}</div>`;
         days.forEach(d => {
-          if (s.showHolName) (hol[`${y}-${pad(m)}-${pad(d)}`] || []).forEach(hn => { inner += `<div class="ev" style="font-size:${cs.size || s.evSize}pt;color:${s.holColor}">${esc(hn)}</div>`; });
+          if (s.showHolName) (hol[`${y}-${pad(m)}-${pad(d)}`] || []).forEach(hn => { inner += `<div class="ev" style="font-size:${cs.size || s.evSize}pt;color:${s.holColor || s.sunColor}">${esc(hn)}</div>`; });
           (el.events || []).filter(e => e.d === d).forEach(e => { inner += `<div class="ev" style="font-size:${cs.size || s.evSize}pt;color:${COLORS[e.color] || e.color || cs.color || s.evColor};${cs.bold ? 'font-weight:700;' : ''}">${esc(e.text)}</div>`; });
         });
       }
