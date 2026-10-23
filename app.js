@@ -3155,8 +3155,8 @@ function renderAI() {
     const modes = `<div class="aimode"><label class="${chat ? 'on' : ''}"><input type="radio" name="aimode" value="chat" ${chat ? 'checked' : ''}><b>내 채팅 요금제로</b><span>키·추가 요금 없음. 지시문을 복사해 쓰던 채팅(Claude·Gemini·ChatGPT)에 붙여 넣고, 받은 답·그림을 공방에 붙여 넣습니다.</span></label>
       <label class="${chat ? '' : 'on'}"><input type="radio" name="aimode" value="api" ${chat ? '' : 'checked'}><b>API 키로 자동</b><span>버튼 한 번에 끝나지만, 구독과 별도로 쓴 만큼 요금이 듭니다.</span></label></div>`;
     if (chat) {
-      body.innerHTML = `${modes}<div class="grid2"><label class="f"><span>문구·프롬프트 다듬기에 쓸 채팅</span>${sel('chatText', ['claude', 'gemini', 'chatgpt'])}</label><label class="f"><span>그림 그리기에 쓸 채팅</span>${sel('chatImage', ['gemini', 'chatgpt'])}</label></div>
-      <p class="hint">채팅은 이 브라우저에 로그인된 계정(지금 쓰는 요금제)을 그대로 씁니다. 처음 한 번은 열린 새 탭에서 로그인해 두세요. 채팅 사이트에 자동으로 입력하지는 않고, 관장님이 붙여 넣고 보내는 방식입니다.</p>`;
+      body.innerHTML = `${modes}<div class="grid2"><label class="f"><span>문구·프롬프트 다듬기에 쓸 채팅</span>${sel('chatText', ['claude', 'gemini', 'chatgpt'])}</label><label class="f"><span>그림 그리기에 쓸 채팅</span>${sel('chatImage', ['gemini', 'claude', 'chatgpt'])}</label></div>
+      <p class="hint">채팅은 이 브라우저에 로그인된 계정(지금 쓰는 요금제)을 그대로 씁니다. 처음 한 번은 열린 새 탭에서 로그인해 두세요. 채팅 사이트에 자동으로 입력하지는 않고, 관장님이 붙여 넣고 보내는 방식입니다. Claude 채팅에서 만든 그림·디자인도 이미지로 복사하거나 내려받아 받는 칸에 넣으면 똑같이 쓸 수 있습니다.</p>`;
       body.querySelectorAll('[name=aimode]').forEach(r => r.onchange = () => { AI.cfg.mode = r.value; AI.saveCfg(); renderAI(); });
       return;
     }
