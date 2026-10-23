@@ -938,3 +938,8 @@ body.tl-focus .side,body.tl-focus .rsz,body.tl-focus .inspector{display:none}
 .tl-heads .th span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tl-heads .th span small{overflow:hidden;text-overflow:ellipsis}
 .tl-heads .tm{flex:none;width:22px}
+/* 넓은 타임라인: 왼쪽 끝~오른쪽 끝, 위 창들은 위로 줄어듦 */
+body.tl-wide .vtl{left:0}
+.tl-grip{position:absolute;left:0;right:0;top:-4px;height:8px;cursor:ns-resize;z-index:3;display:none}
+body.tl-wide .tl-grip{display:block}
+.tl-grip:hover,.tl-grip:active{background:linear-gradient(180deg,transparent 3px,#5b8cff 3px,#5b8cff 5px,transparent 5px)}
