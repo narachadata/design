@@ -119,9 +119,21 @@ NC.vtpl = (function () {
     } },
   ];
   // 크기별로 장면 만들기: 문서 요소 형식으로 다듬어 돌려줌 (id·그림 정리는 공방이 함)
+  // 숏츠·릴스 안전 영역: 세로(9:16) 화면은 위 약 12%(상태 표시·제목)와 아래 약 22%(설명·단추 줄)가 앱 화면에 가려짐
+  // → 그 안에 들어간 글자·로고·작은 띠는 안전 영역 안으로 옮김(화면을 덮는 배경·사진은 그대로). 같은 줄의 띠와 글자는 함께 움직이도록 아래쪽부터 묶어서 옮김
+  function safeShorts(pg, S) {
+    const top = S.h * 0.12, bot = S.h * 0.78, big = e => e.h > S.h * 0.45 || (e.w >= S.w * 0.98 && e.h > S.h * 0.3);
+    const inFrame = e => e.x >= -0.5 && e.y >= -0.5 && e.x + e.w <= S.w + 0.5 && e.y + e.h <= S.h + 0.5;  // 화면 밖으로 일부러 걸친 장식은 빼고
+    const els = (pg.els || []).filter(e => !big(e) && inFrame(e)); if (!els.length) return;
+    const minY = Math.min(...els.map(e => e.y)), maxB = Math.max(...els.map(e => e.y + e.h));
+    let d = 0; if (maxB > bot) d = -(maxB - bot); if (minY + d < top) d = top - minY; if (maxB + d > bot && minY + d > top) d = Math.max(top - minY, bot - maxB);  // 내용 묶음 전체를 같은 거리만큼 옮겨 간격 유지
+    if (maxB - minY > bot - top) d = (top + bot) / 2 - (minY + maxB) / 2;  // 안전 영역보다 크면 가운데 맞춤
+    if (Math.abs(d) > 0.5) els.forEach(e => { e.y = Math.round((e.y + d) * 100) / 100; });
+  }
   function make(id, sizeKey) {
     const t = LIST.find(x => x.id === id); if (!t) return null; const S = SIZES[sizeKey] || SIZES['169'];
     const r = t.build(S);
+    if (sizeKey === '916') r.pages.forEach(pg => safeShorts(pg, S));
     return { w: S.w, h: S.h, fmt: sizeKey === '916' ? 'story' : sizeKey === '45' ? 'ig45' : '', name: t.name, pages: r.pages, sfx: (r.sfx || []).map(x => Object.assign({ vol: 1, name: (NC.media.SOUNDS.find(s => 'b:' + s.id === x.ref) || {}).name || '효과음' }, x)), audio: t.music ? { src: 'b:' + t.music, name: (NC.media.SOUNDS.find(s => s.id === t.music) || {}).name || '', vol: 0.7, from: 0, fin: 0.5, fout: 2 } : null, video: Object.assign({ q: '1080', fps: 30, loop: false }, t.video) };
   }
   const total = (id, sizeKey) => { const r = make(id, sizeKey); if (!r) return 0; return r.pages.reduce((a, p, i) => a + Number(p.vdur || r.video.dur) + (i < r.pages.length - 1 || r.video.loop ? Number(r.video.turn || 0) : 0), 0); };
