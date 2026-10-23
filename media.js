@@ -8,17 +8,19 @@ NC.media = (function () {
   /* ---------- ① 내 PC 원본 ---------- */
   const DB = 'naracha-media', ST = 'files';
   let dbp = null;
-  const db = () => dbp || (dbp = new Promise((res, rej) => { const r = indexedDB.open(DB, 1); r.onupgradeneeded = () => r.result.createObjectStore(ST, { keyPath: 'id' }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }));
+  // 예전 판에서 만든 저장소에 'files' 칸이 없으면 판 번호를 올려 칸을 새로 만듦 (그대로 두면 transaction 오류)
+  const openDB = v => new Promise((res, rej) => { const r = v ? indexedDB.open(DB, v) : indexedDB.open(DB); r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains(ST)) r.result.createObjectStore(ST, { keyPath: 'id' }); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('다른 창에서 공방이 열려 있어 저장소를 고치지 못했습니다. 다른 공방 창을 닫고 다시 해 주세요.')); });
+  const db = () => dbp || (dbp = (async () => { let d = await openDB(); if (!d.objectStoreNames.contains(ST)) { const v = d.version + 1; d.close(); d = await openDB(v); } d.onversionchange = () => { d.close(); dbp = null; }; return d; })().catch(e => { dbp = null; throw e; }));
   const tx = async (mode, fn) => { const d = await db(); return new Promise((res, rej) => { const t = d.transaction(ST, mode), s = t.objectStore(ST), r = fn(s); t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); }); };
   const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const urls = new Map(); // id → blob 주소 (이번 창에서)
   // 파일 고르기: 손잡이를 얻을 수 있으면 손잡이만 기억(복사하지 않음), 아니면 이 브라우저 안에 사본
   async function pick(accept) {
     if (window.showOpenFilePicker) {
-      const hs = await window.showOpenFilePicker({ multiple: true, types: [{ description: accept === 'video' ? '동영상' : accept === 'audio' ? '소리' : '동영상·소리', accept: accept === 'video' ? { 'video/*': ['.mp4', '.mov', '.webm', '.m4v'] } : accept === 'audio' ? { 'audio/*': ['.mp3', '.m4a', '.wav', '.aac', '.ogg'] } : { 'video/*': ['.mp4', '.mov', '.webm', '.m4v'], 'audio/*': ['.mp3', '.m4a', '.wav', '.aac', '.ogg'] } }] });
+      const hs = await window.showOpenFilePicker({ multiple: true, types: [{ description: accept === 'video' ? '동영상' : accept === 'audio' ? '소리' : '동영상·소리', accept: accept === 'video' ? { 'video/*': ['.mp4', '.mov', '.webm', '.m4v'] } : accept === 'audio' ? { 'audio/*': ['.mp3', '.m4a', '.wav', '.aac', '.ogg', '.flac', '.opus'] } : { 'video/*': ['.mp4', '.mov', '.webm', '.m4v'], 'audio/*': ['.mp3', '.m4a', '.wav', '.aac', '.ogg', '.flac', '.opus'] } }] });
       const out = []; for (const h of hs) out.push(await addHandle(h)); return out;
     }
-    return new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.multiple = true; i.accept = accept === 'video' ? 'video/*' : accept === 'audio' ? 'audio/*' : 'video/*,audio/*'; i.onchange = async () => { const out = []; for (const f of i.files) out.push(await addFile(f)); res(out); }; i.click(); });
+    return new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.multiple = true; i.accept = accept === 'video' ? 'video/*' : accept === 'audio' ? 'audio/*,.m4a,.mp3,.wav,.aac' : 'video/*,audio/*,.m4a'; i.onchange = async () => { const out = []; for (const f of i.files) out.push(await addFile(f)); res(out); }; i.click(); });
   }
   async function addHandle(h, id) { const f = await h.getFile(); const rec = { id: id || rid(), name: f.name, size: f.size, type: f.type, lastModified: f.lastModified, handle: h }; await tx('readwrite', s => s.put(rec)); urls.set(rec.id, URL.createObjectURL(f)); return meta(rec); }
   async function addFile(f, id) { const rec = { id: id || rid(), name: f.name, size: f.size, type: f.type, lastModified: f.lastModified, blob: f }; await tx('readwrite', s => s.put(rec)); urls.set(rec.id, URL.createObjectURL(f)); return meta(rec); }
@@ -136,6 +138,12 @@ NC.media = (function () {
     const key = ref; if (bufs.has(key)) return bufs.get(key);
     const u = await urlOf(ref, ask, assetURL); const ab = await (await fetch(u)).arrayBuffer(); const b = await ac.decodeAudioData(ab); bufs.set(key, b); return b;
   }
+  // 원본 파일 자체(읽지 않고 가리키기만): 긴 파일을 조금씩 읽을 때
+  async function blobOf(ref, ask) {
+    if (ref.startsWith('m:')) { const rec = await tx('readonly', st => st.get(ref.slice(2))); if (!rec) { const e = new Error('이 PC에 원본이 없습니다'); e.code = 'missing'; throw e; } if (rec.blob) return rec.blob; let p = await rec.handle.queryPermission({ mode: 'read' }); if (p !== 'granted' && ask) p = await rec.handle.requestPermission({ mode: 'read' }); if (p !== 'granted') { const e = new Error(`"${rec.name}" 원본을 읽으려면 허락이 필요합니다`); e.code = 'perm'; throw e; } return rec.handle.getFile(); }
+    if (ref.startsWith('shared:')) { const path = ref.slice(7), sub = path.slice(0, path.indexOf('/')), name = path.slice(path.indexOf('/') + 1); const d = await shareDir(sub, false); return (await d.getFileHandle(name)).getFile(); }
+    return (await fetch(ref)).blob();
+  }
   const isLocal = ref => typeof ref === 'string' && ref.startsWith('m:');
-  return { pick, addFile, addHandle, file, has, relink, SOUNDS, render, listShared, sharedURL, share, saveResult, urlOf, audio, isLocal };
+  return { pick, addFile, addHandle, file, has, relink, SOUNDS, render, listShared, sharedURL, share, saveResult, urlOf, audio, isLocal, blobOf };
 })();

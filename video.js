@@ -267,6 +267,48 @@ NC.video = (function () {
     (list || []).forEach(x => { if (!x.buf) return; const off0 = Number(x.off || 0), len = x.dur ? Math.min(Number(x.dur), x.buf.duration - off0) : x.buf.duration - off0; if (len <= 0 || x.at + len <= T0) return; const s2 = ac.createBufferSource(), g = ac.createGain(); s2.buffer = x.buf; g.gain.value = x.vol == null ? 1 : Number(x.vol); s2.connect(g).connect(dest); if (x.at >= T0) s2.start(when + (x.at - T0), off0, len); else s2.start(when, off0 + (T0 - x.at), len - (T0 - x.at)); srcs.push(s2); });
     return { stop() { srcs.forEach(s2 => { try { s2.stop(); } catch (e) {} }); } };
   }
+  // ---- 소리 목록(voices): 배경 음악·트랙 클립·동영상 속 소리를 같은 방식으로 ----
+  // voice = { buf(AudioBuffer) 또는 blob·url(파일), at(영상 몇 초에 시작), off(원본 몇 초부터), len(초, 없으면 끝까지), vol, fin, fout, loop }
+  const vEnd = (v, total) => Math.min(total, v.len != null ? v.at + v.len : total);
+  function envAt(v, t, total) { const end = vEnd(v, total), vol = v.vol == null ? 1 : Number(v.vol); let g = vol; if (v.fin > 0 && t < v.at + v.fin) g *= Math.max(0, (t - v.at) / v.fin); if (v.fout > 0 && t > end - v.fout) g *= Math.max(0, (end - t) / v.fout); return g; }
+  // 미리보기·실시간 녹화: 짧은 소리는 버퍼로, 파일은 오디오 플레이어로 (몇 시간짜리도 바로 재생)
+  function playVoices(ac, dest, voices, T0, when, total) {
+    const stops = [];
+    (voices || []).forEach(v => {
+      const end = vEnd(v, total); if (end <= T0) return;
+      const g = ac.createGain(), vol = v.vol == null ? 1 : Number(v.vol), at = t => when + (t - T0);
+      g.gain.setValueAtTime(envAt(v, Math.max(T0, v.at), total), Math.max(when, at(v.at)));
+      if (v.fin > 0 && T0 < v.at + v.fin) g.gain.linearRampToValueAtTime(vol, at(v.at + v.fin));
+      if (v.fout > 0 && end - v.fout > T0) { g.gain.setValueAtTime(vol, at(end - v.fout)); g.gain.linearRampToValueAtTime(0.0001, at(end)); }
+      g.connect(dest);
+      const startAt = Math.max(when, at(v.at)), pos = Number(v.off || 0) + Math.max(0, T0 - v.at), dur = end - Math.max(T0, v.at);
+      if (v.buf) { const s2 = ac.createBufferSource(); s2.buffer = v.buf; s2.loop = !!v.loop && v.buf.duration < dur + pos; if (s2.loop) { s2.loopStart = Math.min(Number(v.off || 0), v.buf.duration - 0.05); s2.loopEnd = v.buf.duration; } s2.connect(g); s2.start(startAt, s2.loop ? pos % v.buf.duration : Math.min(pos, v.buf.duration), s2.loop ? undefined : dur); stops.push(() => { try { s2.stop(); } catch (e) {} g.disconnect(); }); }
+      else if (v.url) { const el = new Audio(); el.src = v.url; el.preload = 'auto'; el.loop = !!v.loop; const node = ac.createMediaElementSource(el); node.connect(g); let tm = 0, tm2 = 0;
+        const go = () => { try { el.currentTime = pos; } catch (e) {} el.play().catch(() => {}); tm2 = setTimeout(() => el.pause(), dur * 1000); };
+        el.addEventListener('loadedmetadata', () => { const wait = Math.max(0, (startAt - ac.currentTime) * 1000); tm = setTimeout(go, wait); }, { once: true });
+        stops.push(() => { clearTimeout(tm); clearTimeout(tm2); el.pause(); el.removeAttribute('src'); try { node.disconnect(); } catch (e) {} g.disconnect(); }); }
+    });
+    return { stop() { stops.forEach(f => f()); } };
+  }
+  // 저장: 1초씩 필요한 구간만 읽어 섞음 → 48kHz 스테레오 덩어리를 차례로 넘김 (긴 파일도 메모리를 조금만 씀)
+  async function mixVoices(voices, total, onBlock, onProgress, cancelled) {
+    const SR = 48000, BL = SR, N = Math.ceil(total * SR);
+    for (let p = 0; p < N; p += BL) {
+      if (cancelled && cancelled()) return false;
+      const n = Math.min(BL, N - p), t0 = p / SR, L = new Float32Array(n), R = new Float32Array(n);
+      for (const v of voices || []) {
+        const end = vEnd(v, total); if (end <= t0) { if (v._r) { v._r.close(); v._r = null; } continue; } if (v.at >= t0 + n / SR) continue;
+        if (!v._r) { const rel = Math.max(0, t0 - v.at); v._r = v.buf ? NC.astream.bufferReader(v.buf, Number(v.off || 0) + rel, !!v.loop, Number(v.off || 0)) : await NC.astream.reader(v.blob, Number(v.off || 0) + rel, { loop: !!v.loop, loopFrom: Number(v.off || 0) }); }
+        const i0 = Math.max(0, Math.round((v.at - t0) * SR)), i1 = Math.min(n, Math.round((end - t0) * SR)); if (i1 <= i0) continue;
+        const [a, b] = await v._r.read(i1 - i0);
+        for (let i = i0; i < i1; i++) { const g = envAt(v, t0 + i / SR, total); L[i] += a[i - i0] * g; R[i] += b[i - i0] * g; }
+      }
+      for (let i = 0; i < n; i++) { L[i] = Math.max(-1, Math.min(1, L[i])); R[i] = Math.max(-1, Math.min(1, R[i])); }
+      await onBlock(L, R, t0); if (onProgress) onProgress(Math.min(1, (p + n) / N));
+    }
+    (voices || []).forEach(v => { if (v._r) { v._r.close(); v._r = null; } });
+    return true;
+  }
   // 음악 파형(타임라인용): 칸마다 최댓값
   function peaks(buf, n) { const d = buf.getChannelData(0), step = Math.max(1, Math.floor(d.length / n)), out = new Float32Array(n); for (let i = 0; i < n; i++) { let m = 0; const s0 = i * step, e0 = Math.min(d.length, s0 + step); for (let k = s0; k < e0; k += 16) { const v = Math.abs(d[k]); if (v > m) m = v; } out[i] = m; } return out; }
 
@@ -276,7 +318,7 @@ NC.video = (function () {
     let t = 0, playing = false, t0 = 0, raf = 0, snd = null; const P = { onTime: null };
     const draw = () => { if (V.videos && V.videos.length) syncVideos(V, t, playing); drawAt(x, V, Math.min(t, V.total - 0.001)); if (P.onTime) P.onTime(t); };
     const loop = () => { t = (performance.now() - t0) / 1000; if (t >= V.total) { t = V.total; P.pause(); draw(); return; } draw(); raf = requestAnimationFrame(loop); };
-    P.play = () => { if (playing) return; if (t >= V.total - 0.01) t = 0; playing = true; t0 = performance.now() - t * 1000; const ac = ctx(); ac.resume && ac.resume(); const m = audio && audio.buf ? music(audio.buf, audio, ac.destination, t, V.total) : null, fx = scheduleSfx(ac, ac.destination, V.sfx, t, ac.currentTime); snd = { stop() { if (m) m.stop(); fx.stop(); } }; loop(); };
+    P.play = () => { if (playing) return; if (t >= V.total - 0.01) t = 0; playing = true; t0 = performance.now() - t * 1000; const ac = ctx(); ac.resume && ac.resume(); snd = playVoices(ac, ac.destination, V.voices, t, ac.currentTime, V.total); loop(); };
     P.pause = () => { playing = false; cancelAnimationFrame(raf); if (snd) { snd.stop(); snd = null; } (V.videos || []).forEach(v => v.pause()); };
     P.seek = v => { const was = playing; P.pause(); t = Math.max(0, Math.min(V.total, v)); draw(); if (was) P.play(); };
     P.toggle = () => playing ? P.pause() : P.play();
@@ -294,7 +336,7 @@ NC.video = (function () {
   // o = { V, canvas, audio:{buf,vol,fade}, onProgress(p, T), cancelled() } → { blob, ext, note | warn } | null(중지)
   function record(o) {
     return new Promise((resolve, reject) => {
-      const V = o.V, withA = !!((o.audio && o.audio.buf) || (V.sfx && V.sfx.length)), mime = mimeFor(withA);
+      const V = o.V, withA = !!(V.voices && V.voices.length), mime = mimeFor(withA);
       if (!mime) { reject(new Error('이 브라우저는 영상 저장을 지원하지 않습니다. 크롬(Chrome)에서 열어 주세요.')); return; }
       const cv = o.canvas; cv.width = V.W; cv.height = V.H; const x = cv.getContext('2d'); drawAt(x, V, 0);
       const vs = cv.captureStream(30); let dest = null, snd = null;
@@ -317,7 +359,7 @@ NC.video = (function () {
         }).catch(() => resolve({ blob, ext, warn: '변환 중 오류 — 녹화본 그대로 저장했습니다.' }));
       };
       rec.start(1000);
-      const t0 = performance.now(); if (withA) { const ac = ctx(), m = o.audio && o.audio.buf ? music(o.audio.buf, o.audio, dest, 0, V.total) : null, fx = scheduleSfx(ac, dest, V.sfx, 0, ac.currentTime); snd = { stop() { if (m) m.stop(); fx.stop(); } }; }
+      const t0 = performance.now(); if (withA) { const ac = ctx(); snd = playVoices(ac, dest, V.voices, 0, ac.currentTime, V.total); }
       const step = () => {
         if (o.cancelled && o.cancelled()) { stopped = true; if (rec.state !== 'inactive') rec.stop(); return; }
         const T = (performance.now() - t0) / 1000;
@@ -350,13 +392,13 @@ NC.video = (function () {
     const bps = Math.round(Math.min(16e6, Math.max(5e6, W * H * fps * 0.15)));
     await load(MUXER, () => !!window.Mp4Muxer);
     const codec = await pickCodec(W, H, fps, bps); if (!codec) throw new Error('이 컴퓨터에서 H.264 인코더를 쓸 수 없습니다');
-    let aBuf = null, aOk = false;
-    if ((o.audio && o.audio.buf) || (V.sfx && V.sfx.length)) {
+    let aOk = false; const hasA = !!(V.voices && V.voices.length);
+    if (hasA) {
       if (!window.AudioEncoder) throw new Error('소리 인코더 없음');
       try { aOk = (await AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 160000 })).supported; } catch (e) { aOk = false; }
       if (!aOk) throw new Error('이 브라우저는 AAC 소리 인코딩을 지원하지 않습니다');
-      aBuf = await mixAudio(o.audio, V.total, V.sfx);
     }
+    const aBuf = hasA;
     const target = new Mp4Muxer.ArrayBufferTarget();
     const muxer = new Mp4Muxer.Muxer({ target, video: { codec: 'avc', width: W, height: H, frameRate: fps }, audio: aBuf ? { codec: 'aac', numberOfChannels: 2, sampleRate: 48000 } : undefined, fastStart: 'in-memory', firstTimestampBehavior: 'offset' });
     let err = null;
@@ -370,19 +412,15 @@ NC.video = (function () {
       const T = Math.min(i / fps, V.total - 0.001); if (V.videos && V.videos.length) await seekVideos(V, T); drawAt(x, V, T);
       const fr = new VideoFrame(cv, { timestamp: Math.round(i * us), duration: Math.round(us) });
       ve.encode(fr, { keyFrame: i % (fps * 2) === 0 }); fr.close();
-      if (ve.encodeQueueSize > 6 || i % 10 === 0) { await new Promise(r => setTimeout(r, 0)); if (o.onProgress) o.onProgress(i / N * (aBuf ? 0.95 : 1), T); }
+      if (ve.encodeQueueSize > 6 || i % 10 === 0) { await new Promise(r => setTimeout(r, 0)); if (o.onProgress) o.onProgress(i / N * (aBuf ? 0.9 : 1), T); }
       while (ve.encodeQueueSize > 12) await new Promise(r => setTimeout(r, 4));
     }
     await ve.flush(); ve.close(); if (err) throw err;
     if (aBuf) {
       const ae = new AudioEncoder({ output: (c, m) => muxer.addAudioChunk(c, m), error: e => { err = e; } });
       ae.configure({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 160000 });
-      const L = aBuf.getChannelData(0), R = aBuf.getChannelData(1), STEP = 4800;
-      for (let p = 0; p < aBuf.length; p += STEP) {
-        const n = Math.min(STEP, aBuf.length - p), data = new Float32Array(n * 2); data.set(L.subarray(p, p + n), 0); data.set(R.subarray(p, p + n), n);
-        const ad = new AudioData({ format: 'f32-planar', sampleRate: 48000, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(p / 48000 * 1e6), data }); ae.encode(ad); ad.close();
-        if (ae.encodeQueueSize > 20) await new Promise(r => setTimeout(r, 0));
-      }
+      const ok = await mixVoices(V.voices, V.total, async (L, R, t0) => { const n = L.length, data = new Float32Array(n * 2); data.set(L, 0); data.set(R, n); const ad = new AudioData({ format: 'f32-planar', sampleRate: 48000, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(t0 * 1e6), data }); ae.encode(ad); ad.close(); if (ae.encodeQueueSize > 20) await new Promise(r => setTimeout(r, 0)); if (err) throw err; }, p => { if (o.onProgress) o.onProgress(0.9 + p * 0.1, V.total * p); }, o.cancelled);
+      if (!ok) { try { ae.close(); } catch (e) {} return null; }
       await ae.flush(); ae.close(); if (err) throw err;
     }
     muxer.finalize();
@@ -479,5 +517,5 @@ NC.video = (function () {
     let n = 0; list.slice(0, 8).forEach((u, k) => { const an = { t: u.t, d: Math.round(0.18 * k * 100) / 100, s: 0.7 }; u.els.forEach(e => { e.anim = Object.assign({}, an); n++; }); });
     return n;
   }
-  return { ANIMS, TEXT_ANIMS, OUTS, LOOPS, KBS, CAMS, TRANS, DEF, outSize, build, timing, drawAt, sceneStarts, at, player, record, encode, canFast, decode, peaks, hasAnim, moves, autoAnimate, defragMulti, ctx, schedule, scheduleSfx, syncVideos, seekVideos, CAP_STYLES };
+  return { ANIMS, TEXT_ANIMS, OUTS, LOOPS, KBS, CAMS, TRANS, DEF, outSize, build, timing, drawAt, sceneStarts, at, player, record, encode, canFast, decode, peaks, hasAnim, moves, autoAnimate, defragMulti, ctx, schedule, scheduleSfx, playVoices, mixVoices, syncVideos, seekVideos, CAP_STYLES };
 })();
