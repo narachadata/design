@@ -1052,6 +1052,44 @@ async function videoLayers(list, dpi, onProgress, cancelled) {
   if (onProgress) onProgress(items.length, items.length);
   return out;
 }
+// 보관함: 이 PC에서 고른 음악·효과음·동영상 원본 목록 (영상 메뉴 → 오디오)
+let libFilt = 'all'; const libCache = new Map();
+function libUsedRefs() { let js = ''; try { js = JSON.stringify({ a: doc.audio, t: doc.tracks, p: doc.pages.map(p => p.els) }); } catch (e) {} return id => js.indexOf('"m:' + id + '"') >= 0; }
+async function renderMediaLib() {
+  const bx = $('#vdLib'); if (!bx) return;
+  let list = []; try { list = await NC.media.list(); } catch (e) { if ($('#vdLib')) $('#vdLib').innerHTML = `<p class="hint">보관함을 읽지 못했습니다: ${esc(e.message)}</p>`; return; }
+  if (!$('#vdLib')) return;
+  libCache.clear(); list.forEach(m => libCache.set(m.id, { id: m.id, name: m.name, size: m.size, type: m.type, lastModified: m.lastModified }));
+  const used = libUsedRefs(), A = doc.audio, want = list.filter(m => libFilt === 'all' || m.kind === libFilt);
+  if (!want.length) { $('#vdLib').innerHTML = `<p class="hint" style="margin:4px 0">${list.length ? '이 종류의 파일이 없습니다.' : '아직 비어 있습니다. 위의 <b>내 PC 음악·효과음·동영상</b>으로 파일을 넣으면 여기에 모여 다음에 바로 다시 쓸 수 있습니다.'}</p>`; return; }
+  const mb = n => n >= 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB', dt = t => t ? new Date(t).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) : '';
+  $('#vdLib').innerHTML = want.map(m => { const nm = (m.name || '').replace(/\.[^.]+$/, ''), isV = m.kind === 'video', inDoc = used(m.id);
+    return `<div class="snd-it lib-it${inDoc ? ' used' : ''}">${isV ? `<button class="btn icon sm" data-libplay="${m.id}" title="미리 보기"><svg class="ic"><use href="#i-play"/></svg></button>` : `<button class="btn icon sm snd-play" data-snd="m:${m.id}" title="들어 보기"><svg class="ic"><use href="#i-play"/></svg></button>`}<span class="lib-name" title="${esc(m.name)}"><b>${esc(nm)}</b><small>${isV ? '동영상' : '소리'} · ${mb(m.size || 0)}${m.added ? ' · ' + dt(m.added) : ''}${m.copy ? '' : ' · 내 PC 원본'}${inDoc ? ' · <em>이 문서에 사용</em>' : ''}</small></span>${isV ? `<button class="btn sm" data-libvid="${m.id}">넣기</button>` : `<button class="btn sm" data-setmusic="m:${m.id}" data-name="${esc(nm)}">${A && A.src === 'm:' + m.id ? '사용 중' : '배경음악'}</button><button class="btn sm" data-addsfx="m:${m.id}" data-name="${esc(nm)}" title="타임라인 재생 위치에 효과음으로">효과음</button>`}<button class="btn icon sm lib-del" data-libdel="${m.id}" title="보관함에서 빼기">✕</button></div>`; }).join('');
+}
+async function removeFromLib(id) {
+  const m = libCache.get(id), used = libUsedRefs()(id);
+  if (!window.confirm(`"${m ? m.name : id}"을(를) 보관함에서 뺄까요?${used ? '\n\n이 문서에서 쓰고 있는 파일입니다. 빼면 다음에 열 때 원본을 다시 연결해야 합니다.' : ''}\n(PC의 원본 파일은 지워지지 않습니다)`)) return;
+  try { await NC.media.remove(id); mediaMissing.add(id); vEls.clear(); tl.Vkey = ''; toast('보관함에서 뺐습니다'); renderMediaLib(); if (used) { renderCanvas(); renderTimeline(); } } catch (e) { toast('빼지 못했습니다: ' + e.message, true); }
+}
+async function previewVideoLib(id) {
+  $('#dlgLibV') && $('#dlgLibV').remove();
+  let r; try { r = await NC.media.file(id, true); } catch (e) { r = { missing: true, err: e.message }; }
+  if (!r || !r.url) { if (r && r.needPerm) toast('원본을 읽을 허락이 필요합니다 — 다시 눌러 주세요', true); else toast('이 PC에 원본이 없습니다. 다시 연결하려면 영상 요소를 고르고 "원본 다시 연결"을 누르세요', true); return; }
+  const m = libCache.get(id), d = document.createElement('dialog'); d.id = 'dlgLibV'; d.className = 'nw-dlg vd-dlg';
+  d.innerHTML = `<div class="dhead"><h2>${esc(m ? m.name : '동영상')}</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><div class="vd-stage"><video src="${r.url}" controls autoplay playsinline style="max-width:100%;max-height:100%"></video></div><div class="row" style="justify-content:flex-end"><button class="btn primary" id="libVUse">이 동영상 넣기</button></div></div>`;
+  document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); d.addEventListener('close', () => d.remove()); d.showModal();
+  $('#libVUse').onclick = () => { d.close(); if (m) { doc.media = Object.assign(doc.media || {}, { [m.id]: m }); placeVideo(m); } };
+}
+// 내 PC의 음악 파일을 바로 골라 배경 음악으로 (영상 메뉴 '내 PC 음악'·타임라인 '＋ 배경 음악 넣기' 공용)
+async function pickMusicLocal() {
+  try {
+    const [m] = await NC.media.pick('audio'); if (!m) return;
+    doc.media = Object.assign(doc.media || {}, { [m.id]: m });
+    doc.audio = { src: 'm:' + m.id, name: m.name.replace(/\.[^.]+$/, ''), vol: 0.8, from: 0, fin: 0, fout: 2.5 };
+    commit(); sideTab = 'video'; vTab = 'audio'; renderRail(); renderSide(); renderTimeline();
+    toast(`배경 음악 «${doc.audio.name}»을 넣었습니다 (원본은 이 PC에만 있음)`);
+  } catch (err) { if (err.name !== 'AbortError') toast('음악을 넣지 못했습니다: ' + err.message, true); }
+}
 async function videoBuild(q, onProgress, cancelled) {
   const ps = videoPages(); if (!ps.length) throw new Error('영상에 넣을 쪽이 없습니다');
   const { W, H } = VIDEO.outSize(doc.w, doc.h, q || vset().q);
@@ -1126,13 +1164,16 @@ function renderVideoSide(body) {
     h = `<h3>배경 음악</h3>
     ${A ? `<div class="vd-music"><button class="btn icon sm snd-play" data-snd="${esc(A.src)}" title="들어 보기"><svg class="ic"><use href="#i-play"/></svg></button><b>${esc(aName)}</b><small>${NC.media.isLocal(A.src) ? '내 PC 원본' : A.src.startsWith('shared:') ? '공유 자료' : A.src.startsWith('b:') ? '기본 음악' : '문서 안'}</small><button class="btn sm" id="vdMusicDel">빼기</button></div>
     <div class="grid2"><label class="f"><span>소리 크기 <small id="vdVolV">${Math.round((A.vol == null ? 0.8 : A.vol) * 100)}%</small></span><input type="range" id="vdVol" min="0" max="2" step="0.05" value="${A.vol == null ? 0.8 : A.vol}"></label><label class="f"><span>곡의 몇 초부터</span><input type="number" id="vdFrom" min="0" step="0.5" value="${A.from || 0}"></label></div>
-    <div class="grid2"><label class="f"><span>서서히 크게 (초)</span><input type="number" id="vdFin" min="0" max="10" step="0.5" value="${A.fin || 0}"></label><label class="f"><span>끝에서 서서히 작게 (초)</span><input type="number" id="vdFout" min="0" max="10" step="0.5" value="${A.fout != null ? A.fout : (A.fade === false ? 0 : 2.5)}"></label></div>` : '<p class="hint">아래에서 들어 보고 <b>쓰기</b>를 누르세요. 타임라인 음악 줄을 끌면 시작 위치가 바뀝니다.</p>'}
-    <div class="snd-list">${mus.map(m => `<div class="snd-it"><button class="btn icon sm snd-play" data-snd="b:${m.id}" title="들어 보기"><svg class="ic"><use href="#i-play"/></svg></button><span>${esc(m.name)}</span><button class="btn sm" data-setmusic="b:${m.id}" data-name="${esc(m.name)}">${A && A.src === 'b:' + m.id ? '사용 중' : '쓰기'}</button></div>`).join('')}</div>
-    <div class="row" style="gap:6px;margin-top:6px"><button class="btn sm" id="vdMusicLocal"><svg class="ic"><use href="#i-music"/></svg>내 PC 음악</button><button class="btn sm" id="vdShared">공유 자료</button></div><div id="vdSharedBox"></div>
-    <h3>효과음 <small class="vd-sm">＋ 누르면 재생 위치에</small></h3>
-    <div class="sfx-grid">${sfx.map(x => `<div class="sfx-it"><button class="snd-play" data-snd="b:${x.id}" title="들어 보기"><svg class="ic"><use href="#i-play"/></svg></button><span>${esc(x.name)}</span><button class="sfx-add" data-addsfx="b:${x.id}" data-name="${esc(x.name)}" title="타임라인 재생 위치에 넣기">＋</button></div>`).join('')}</div>
-    <div class="row" style="gap:6px;margin-top:6px"><button class="btn sm" id="vdSfxLocal">내 PC 효과음</button></div>
-    <p class="hint">기본 음악·효과음은 프로그램이 직접 만든 소리라 저작권 걱정이 없습니다. 내 PC 음악은 원본을 이 PC에만 두고 이름만 저장합니다.</p>`;
+    <div class="grid2"><label class="f"><span>서서히 크게 (초)</span><input type="number" id="vdFin" min="0" max="10" step="0.5" value="${A.fin || 0}"></label><label class="f"><span>끝에서 서서히 작게 (초)</span><input type="number" id="vdFout" min="0" max="10" step="0.5" value="${A.fout != null ? A.fout : (A.fade === false ? 0 : 2.5)}"></label></div>` : '<p class="hint">보관함이나 기본 음악에서 골라 <b>배경음악</b>을 누르세요. 타임라인 음악 줄을 끌면 시작 위치가 바뀝니다.</p>'}
+    <h3>보관함 <small class="vd-sm">이 PC에서 쓴 음악·효과음·동영상</small></h3>
+    <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm" id="vdMusicLocal"><svg class="ic"><use href="#i-music"/></svg>내 PC 음악</button><button class="btn sm" id="vdSfxLocal">내 PC 효과음</button><button class="btn sm" id="vdLibVideo"><svg class="ic"><use href="#i-video"/></svg>내 PC 동영상</button><button class="btn sm" id="vdShared">공유 자료</button></div><div id="vdSharedBox"></div>
+    <div class="lib-filt">${[['all', '전체'], ['audio', '소리'], ['video', '동영상']].map(([v, t]) => `<button class="btn sm ${libFilt === v ? 'on' : ''}" data-libf="${v}">${t}</button>`).join('')}</div>
+    <div id="vdLib" class="snd-list"><p class="hint">보관함을 읽는 중…</p></div>
+    <details class="fx"><summary>기본 배경 음악 <small>${mus.length}곡 · 프로그램이 만든 소리</small></summary>
+    <div class="snd-list">${mus.map(m => `<div class="snd-it"><button class="btn icon sm snd-play" data-snd="b:${m.id}" title="들어 보기"><svg class="ic"><use href="#i-play"/></svg></button><span>${esc(m.name)}</span><button class="btn sm" data-setmusic="b:${m.id}" data-name="${esc(m.name)}">${A && A.src === 'b:' + m.id ? '사용 중' : '쓰기'}</button></div>`).join('')}</div></details>
+    <details class="fx"><summary>기본 효과음 <small>${sfx.length}개 · ＋ 누르면 재생 위치에</small></summary>
+    <div class="sfx-grid">${sfx.map(x => `<div class="sfx-it"><button class="snd-play" data-snd="b:${x.id}" title="들어 보기"><svg class="ic"><use href="#i-play"/></svg></button><span>${esc(x.name)}</span><button class="sfx-add" data-addsfx="b:${x.id}" data-name="${esc(x.name)}" title="타임라인 재생 위치에 넣기">＋</button></div>`).join('')}</div></details>
+    <p class="hint">보관함의 원본은 <b>이 PC에만</b> 있고 문서에는 이름만 저장됩니다(드라이브에 올라가지 않음). 기본 음악·효과음은 프로그램이 직접 만든 소리라 저작권 걱정이 없습니다.</p>`;
   } else if (vTab === 'text') {
     const presets = [['type', '타자기', '한 글자씩 쳐지듯'], ['char', '한 글자씩', '톡톡 떠오르기'], ['word', '단어씩', '말하듯 끊어서'], ['line', '한 줄씩', '줄마다 떠오르기'], ['pop', '톡 튀어나오기', '제목 강조'], ['blur', '흐릿하게', '부드럽게 또렷'], ['spin', '돌며 나타나기', '경쾌하게'], ['bounce', '통통 튀며', '아이들 느낌']];
     h = `<p class="hint">${selT.length ? `고른 글자 ${selT.length}개에 적용합니다.` : '글자를 고르면 그 글자에 적용하고, 고른 글자가 없으면 그 효과가 들어간 <b>새 제목</b>을 넣습니다.'}</p>
@@ -1159,6 +1200,7 @@ function renderVideoSide(body) {
     <h3>장면 목록</h3><div class="vd-scenes">${doc.pages.map((pg, i) => `<label class="vd-scl${pg.vOff ? ' off' : ''}"><input type="checkbox" data-vin="${i}" ${pg.vOff ? '' : 'checked'}> ${i + 1}${pg.label ? ' · ' + esc(pg.label) : ''} <small>${Number(pg.vdur || V.dur).toFixed(1)}초</small></label>`).join('')}</div><p class="hint">체크를 풀면 그 쪽은 영상에서 빠집니다. 길이·순서는 아래 타임라인에서 끌어서 바꿉니다.</p>`;
   }
   body.innerHTML = head + `<div class="vd-pane">${h}</div>`;
+  if (vTab === 'audio') renderMediaLib();
   if (vTab === 'tpl') requestAnimationFrame(() => fitBoxes(body, '.vt-th', 150));
   const setV = (k, v) => { doc.video = Object.assign(vset(), { [k]: v }); commit(); renderSide(); renderTimeline(); };
   const applyTo = (els, k, v) => { const defs = { anim: { d: 0, s: 0.8 }, animOut: { s: 0.6, at: 0 }, animLoop: { T: 1.2, a: 1 } }; els.forEach(el => { el[k] = Object.assign({}, defs[k], el[k] || {}, { t: v }); if (k === 'anim' && VIDEO.TEXT_ANIMS.some(x => x[0] === v) && el.type === 'text' && (!el.anim.s || el.anim.s < 1.2)) el.anim.s = Math.max(1.2, Math.min(4, (el.text || '').length * 0.06)); }); commit(); renderAll(); };
@@ -1166,6 +1208,11 @@ function renderVideoSide(body) {
     const t = e.target;
     const vt = t.closest('[data-vtab]'); if (vt) { vTab = vt.dataset.vtab; renderSide(); return; }
     const sp = t.closest('[data-snd]'); if (sp) { previewSound(sp.dataset.snd, sp); return; }
+    const lf = t.closest('[data-libf]'); if (lf) { libFilt = lf.dataset.libf; renderSide(); return; }
+    const lv = t.closest('[data-libvid]'); if (lv) { const m = libCache.get(lv.dataset.libvid); if (m) { doc.media = Object.assign(doc.media || {}, { [m.id]: m }); placeVideo(m); } return; }
+    const lp = t.closest('[data-libplay]'); if (lp) { previewVideoLib(lp.dataset.libplay); return; }
+    const ld = t.closest('[data-libdel]'); if (ld) { removeFromLib(ld.dataset.libdel); return; }
+    const mref = t.closest('[data-setmusic],[data-addsfx]'); if (mref) { const ref = mref.dataset.setmusic || mref.dataset.addsfx; if (ref && ref.startsWith('m:') && libCache.has(ref.slice(2))) doc.media = Object.assign(doc.media || {}, { [ref.slice(2)]: libCache.get(ref.slice(2)) }); }
     const sm = t.closest('[data-setmusic]'); if (sm) { doc.audio = Object.assign({ vol: 0.8, from: 0, fin: 0, fout: 2.5 }, doc.audio && doc.audio.src === sm.dataset.setmusic ? doc.audio : {}, { src: sm.dataset.setmusic, name: sm.dataset.name }); delete doc.audio.fade; commit(); renderSide(); renderTimeline(); toast(`배경 음악: ${sm.dataset.name}`); return; }
     const as = t.closest('[data-addsfx]'); if (as) { addSfx(as.dataset.addsfx, as.dataset.name); return; }
     const tf = t.closest('[data-tfx]'); if (tf) { const v = tf.dataset.tfx; if (selT.length) { applyTo(selT, 'anim', v); toast('글자 효과를 넣었습니다'); } else { const el = addText('h', { text: '제목을 입력하세요', noEdit: true }); el.anim = { t: v, d: 0.2, s: 1.4 }; commit(); renderAll(); } return; }
@@ -1183,10 +1230,10 @@ function renderVideoSide(body) {
     else if (id === 'vdTrAll') { const pg = page(); doc.pages.forEach(p2 => { p2.vtrans = pg.vtrans || V.trans; p2.vturn = pg.vturn; }); commit(); renderTimeline(); toastUndo('모든 장면에 같은 넘김 효과를 넣었습니다'); }
     else if (id === 'vdDurAll') { doc.pages.forEach(pg => { delete pg.vdur; delete pg.vtrans; delete pg.vturn; }); commit(); renderSide(); renderTimeline(); }
     else if (id === 'vdMusicDel') { delete doc.audio; commit(); renderSide(); renderTimeline(); }
-    else if (id === 'vdMusicLocal') { try { const [m] = await NC.media.pick('audio'); if (!m) return; doc.media = Object.assign(doc.media || {}, { [m.id]: m }); doc.audio = { src: 'm:' + m.id, name: m.name.replace(/\.[^.]+$/, ''), vol: 0.8, from: 0, fin: 0, fout: 2.5 }; commit(); renderSide(); renderTimeline(); toast('배경 음악을 넣었습니다 (원본은 이 PC에만 있음)'); } catch (err) { if (err.name !== 'AbortError') toast(err.message, true); } }
+    else if (id === 'vdMusicLocal') pickMusicLocal();
     else if (id === 'vdSfxLocal') { try { const list = await NC.media.pick('audio'); list.forEach(m => { doc.media = Object.assign(doc.media || {}, { [m.id]: m }); addSfx('m:' + m.id, m.name.replace(/\.[^.]+$/, ''), true); }); commit(); renderTimeline(); } catch (err) { if (err.name !== 'AbortError') toast(err.message, true); } }
     else if (id === 'vdShared' || id === 'vdSharedVid') { const bx = $(id === 'vdShared' ? '#vdSharedBox' : '#vdSharedV'); bx.innerHTML = '<p class="hint">공유 자료를 읽는 중…</p>'; try { sharedList = await NC.media.listShared(); } catch (err) { sharedList = []; } const want = id === 'vdShared' ? sharedList.filter(x => x.cat !== 'video') : sharedList.filter(x => x.cat === 'video'); bx.innerHTML = want.length ? `<div class="snd-list">${want.map(x => `<div class="snd-it">${x.cat !== 'video' ? `<button class="btn icon sm snd-play" data-snd="${esc(x.ref)}"><svg class="ic"><use href="#i-play"/></svg></button>` : ''}<span>${esc(x.name)} <small>${x.sub}</small></span>${x.cat === 'music' ? `<button class="btn sm" data-setmusic="${esc(x.ref)}" data-name="${esc(x.name)}">쓰기</button>` : x.cat === 'sfx' ? `<button class="btn sm" data-addsfx="${esc(x.ref)}" data-name="${esc(x.name)}">＋</button>` : `<button class="btn sm" data-addsv="${esc(x.ref)}" data-name="${esc(x.name)}">넣기</button>`}</div>`).join('')}</div>` : `<p class="hint">동기화 폴더의 <b>디자인자료/영상자료/${id === 'vdShared' ? '음악·효과음' : '영상'}</b> 폴더에 파일을 넣으면 여기에 보입니다.${await store.folderReady() ? '' : ' (동기화 폴더가 연결되어 있지 않습니다)'}</p>`; }
-    else if (id === 'vdVideo') addVideoEl();
+    else if (id === 'vdVideo' || id === 'vdLibVideo') addVideoEl();
     const sv = t.closest('[data-addsv]'); if (sv) addVideoRef(sv.dataset.addsv, sv.dataset.name);
   };
   body.onchange = async e => {
@@ -1228,6 +1275,45 @@ async function placeAudio(m) {
 }
 // 동영상 크기·길이·첫 장면(편집 화면·썸네일용 작은 그림)
 function videoInfo(url) { return new Promise((res, rej) => { const v = document.createElement('video'); v.muted = true; v.preload = 'auto'; v.src = url; v.onerror = () => rej(new Error('이 동영상 형식은 브라우저에서 열 수 없습니다 (MP4·H.264로 바꿔 넣어 주세요)')); v.onloadedmetadata = () => { v.currentTime = Math.min(0.5, v.duration / 3 || 0); }; v.onseeked = () => { const W = v.videoWidth, H = v.videoHeight, k = Math.min(1, 640 / Math.max(W, H)), c = document.createElement('canvas'); c.width = Math.round(W * k); c.height = Math.round(H * k); let poster = ''; try { c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); poster = c.toDataURL('image/jpeg', 0.8); } catch (e) {} res({ w: W, h: H, dur: v.duration || 0, poster }); }; }); }
+
+/* ---- 영상 편집은 '영상용 사본'에서 (원본 디자인 보호) ---- */
+function videoNeedsGate() { return doc.pages.some(p => p.els && p.els.length) && !(doc.video && (doc.video.isCopy || doc.video.born)) && !(doc.news && doc.news.tv); }
+function videoGate(then) { if (!videoNeedsGate()) { if (then) then(); return true; } openVideoGate(then); return false; }
+function openVideoGate(then) {
+  let d = $('#dlgVgate');
+  if (!d) { d = document.createElement('dialog'); d.id = 'dlgVgate'; d.innerHTML = `<div class="dhead"><h2>영상 편집은 영상용 사본에서</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="vgBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
+  $('#vgBody').innerHTML = `<p>타임라인에서 장면을 <b>지우거나 자르면 이 디자인의 쪽이 함께 바뀝니다.</b> 인쇄·이미지용 원본 디자인은 그대로 두고, <b>영상용 사본</b>을 따로 저장해 편집하는 것이 안전합니다.</p>
+  <ul class="hint" style="margin:6px 0 12px 18px;line-height:1.7"><li>사본 이름은 <b>"${esc(doc.name || '디자인')} 영상"</b>이 되고, 저장 위치를 고른 뒤 그 파일에서 작업합니다.</li><li>원본은 마지막으로 저장된 상태로 남고 언제든 다시 열 수 있습니다.</li><li>원본을 고친 뒤 사본에도 반영하려면 사본에서 "원본 장면 다시 가져오기"(영상 패널 위)를 누릅니다.</li></ul>
+  <div class="row" style="justify-content:flex-end"><button class="btn" id="vgCancel">취소</button><button class="btn" id="vgDirect" title="권장하지 않음">이 디자인에서 바로 편집</button><button class="btn primary" id="vgCopy">영상용 사본 만들기 (권장)</button></div>`;
+  $('#vgCancel').onclick = () => d.close();
+  $('#vgDirect').onclick = () => { if (!window.confirm('원본 디자인이 영상 편집으로 바뀔 수 있습니다. 그래도 이 문서에서 바로 편집할까요?')) return; doc.video = Object.assign(vset(), { born: 'design' }); commit(); d.close(); if (then) then(); else { sideTab = 'video'; renderRail(); renderSide(); } };
+  $('#vgCopy').onclick = async () => { d.close(); await makeVideoCopy(then); };
+  d.showModal();
+}
+async function makeVideoCopy(then) {
+  const g = $('#dlgVgate'); if (g && g.open) g.close();
+  try { await keepCurrentDoc(); } catch (e) {}
+  gcAssets();
+  const srcName = doc.name || '디자인', srcId = doc.docId || '';
+  const nd = clone(doc); nd.docId = ''; delete nd.saveId; delete nd.lineage; delete nd.savedAt; nd.name = srcName + ' 영상';
+  nd.video = Object.assign(vset(), { isCopy: true, born: 'copy', fromName: srcName, fromId: srcId, fromPages: clone(doc.pages) });
+  try { await store.disconnect(); } catch (e) {}
+  doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); updateSaveBadge();
+  sideTab = 'video'; renderRail(); renderSide();
+  if (await store.folderReady()) { try { await saveNow(); } catch (e) {} }
+  else { setStatus('영상용 사본을 만들었습니다 · 저장(Ctrl+S)을 눌러 저장 위치를 고르세요 (그 전까지는 이 브라우저에 임시 저장)'); toast(`영상용 사본 "${doc.name}"을 만들었습니다. 원본은 그대로 남습니다. 저장(Ctrl+S)으로 위치를 골라 두세요.`); }
+  if (then) then(); else tlShow(true);
+}
+// 사본에서: 원본 디자인의 쪽을 다시 가져오기(장면 내용만 바꾸고 소리·자막 트랙은 유지)
+async function reimportFromSource() {
+  const v = doc.video || {}; if (!v.isCopy) return;
+  let pages = null;
+  try { if (v.fromId && await store.folderReady()) { const h = await store.findDocById(v.fromId); if (h) { const f = await h.getFile(); pages = JSON.parse(await f.text()).pages; } } } catch (e) {}
+  if (!pages) { const j = await store.pickLocal(); if (!j || !j.pages) return; pages = j.pages; }
+  if (!window.confirm(`원본의 ${pages.length}쪽을 이 사본의 장면으로 다시 가져옵니다. 지금 장면의 내용은 원본 내용으로 바뀝니다 (소리·자막 트랙은 유지). 계속할까요?`)) return;
+  const old = doc.pages; doc.pages = clone(pages).map((pg, i) => { const o = old[i]; if (o) { ['vdur', 'vtrans', 'vturn', 'anim', 'vcam', 'vkb'].forEach(k => { if (o[k] != null && pg[k] == null) pg[k] = o[k]; }); } return pg; });
+  commit(); goto(0); toast('원본 장면을 다시 가져왔습니다');
+}
 /* ---- 영상 템플릿 ---- */
 let vtSize = '169';
 // 템플릿 장면을 문서 형식으로: id·묶음 이름 정리, 글자 기본값 채우기
@@ -1260,14 +1346,14 @@ async function openVideoDoc(r, name) {
 }
 async function applyVideoTpl(id) {
   const r = NC.vtpl.make(id, vtSize); if (!r) return; r.pages = vtplPages(r.pages);
-  if (await openVideoDoc(r, `${r.name} (${NC.vtpl.SIZES[vtSize].name})`)) toast(`'${r.name}' 영상 템플릿을 열었습니다 — 아래 타임라인에서 재생해 보세요`);
+  if (await openVideoDoc(r, `${r.name} (${NC.vtpl.SIZES[vtSize].name})`)) { doc.video = Object.assign(vset(), doc.video || {}, { born: 'video' }); markDirty(); toast(`'${r.name}' 영상 템플릿을 열었습니다 — 아래 타임라인에서 재생해 보세요`); }
 }
 async function applyRespToVideo(id) {
   const t = (NC.tpl.list || []).find(x => x.id === id); if (!t) return; const S = NC.vtpl.SIZES[vtSize];
   const pages = brandize(t.build(uid, { w: S.w, h: S.h, screen: true }), S.w, S.h, t);
   pages.forEach(pg => { VIDEO.autoAnimate(pg, S.w, S.h); pg.vcam = 'in'; });
   const r = { w: S.w, h: S.h, fmt: vtSize === '916' ? 'story' : vtSize === '45' ? 'ig45' : '', pages, video: { dur: 4.5, trans: 'soft', turn: 0.8, q: '1080', fps: 30, loop: false }, audio: { src: 'b:m-bright', name: '밝은 아침 (경쾌)', vol: 0.7, from: 0, fin: 0.5, fout: 2 } };
-  if (await openVideoDoc(r, `${t.name} 영상`)) toast(`'${t.name}'을(를) 영상으로 만들었습니다`);
+  if (await openVideoDoc(r, `${t.name} 영상`)) { doc.video = Object.assign(vset(), doc.video || {}, { born: 'video' }); markDirty(); toast(`'${t.name}'을(를) 영상으로 만들었습니다`); }
 }
 function addSfx(ref, name, quiet) {
   const TR = tracks(); let t = TR.find(x => x.id === tl.selTr && x.type === 'audio') || TR.find(x => x.type === 'audio'); if (!t) { t = { id: uid(), type: 'audio', name: '효과음', items: [] }; TR.push(t); }
@@ -1349,6 +1435,7 @@ function tlConnSnap() {
 }
 // 장면 지우기: Delete = 리플 삭제(뒤 장면이 당겨지고 붙은 클립도 함께), Shift+Delete = 틈으로 바꾸기(길이는 그대로, 내용만 비움)
 function tlDeleteScene(gap) {
+  if (videoNeedsGate()) { openVideoGate(); return; }
   if (gap) { const pg = doc.pages[cur]; pg.els = []; pg.bg = '#000000'; pg.label = '빈 틈'; commit(); renderAll(); toastUndo(`${cur + 1}번 장면을 빈 틈으로 바꿨습니다 — 길이와 뒤 장면 위치는 그대로입니다`); return; }
   if (doc.pages.length < 2) { toast('장면이 하나뿐이라 지울 수 없습니다 — Shift+Delete로 빈 틈으로 바꿀 수 있습니다', true); return; }
   const snap = tlConnSnap(); doc.pages.splice(cur, 1); const gone = snap({ dropOrphans: true }); commit(); goto(Math.min(cur, doc.pages.length - 1));
@@ -1356,17 +1443,20 @@ function tlDeleteScene(gap) {
 }
 // 모두 자르기(Shift+Ctrl+B): 재생 헤드를 지나는 장면과 모든 트랙 클립을 한 번에
 function splitItem(t, it, q) {
+  if (videoNeedsGate()) { openVideoGate(); return null; }
   const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), it2 = Object.assign(clone(it), { id: uid(), at: Math.round((it.at + q) * 100) / 100, dur: Math.round((d - q) * 100) / 100 });
   if (t.type === 'audio') { it2.off = Math.round((Number(it.off || 0) + q) * 100) / 100; if (it.vk && it.vk.length) { const vq = Math.round(VIDEO.vkAt(it.vk, q) * 1000) / 1000; it2.vk = [[0, vq]].concat(it.vk.filter(k => k[0] > q).map(k => [Math.round((k[0] - q) * 100) / 100, k[1]])); it.vk = it.vk.filter(k => k[0] < q).concat([[q, vq]]); } }
   it.dur = q; t.items.splice(t.items.indexOf(it) + 1, 0, it2); return it2;
 }
 function tlBladeAll() {
+  if (videoNeedsGate()) { openVideoGate(); return; }
   let n = 0; const T = tl.T; tracks().forEach(t => (t.items || []).slice().forEach(it => { const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), q = Math.round((T - it.at) * 100) / 100; if (q > 0.05 && q < d - 0.05) { splitItem(t, it, q); n++; } }));
   const sel0 = tl.selIt; tl.selIt = null; const pages0 = doc.pages.length; tlSplitScene(true);
   if (doc.pages.length === pages0) { if (n) { commit(); renderTimeline(); } }
   tl.selIt = sel0; toastUndo(`재생 헤드에서 모두 잘랐습니다 (${doc.pages.length > pages0 ? '장면 1개 · ' : ''}클립 ${n}개)`);
 }
 function tlTrim(which) {
+  if (videoNeedsGate()) { openVideoGate(); return; }
   const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { toast('장면 안에 재생 헤드를 두세요', true); return; }
   const q = Math.round((tl.T - x.t0) * 10) / 10, pg = x.pg;
   if (which === 'tail' ? q < 0.3 : x.dur - q < 0.3) { toast('남는 길이가 너무 짧습니다', true); return; }  // 검사를 먼저: 실패하면 동영상 구간도 그대로
@@ -1404,6 +1494,7 @@ function applyTlView() {
   requestAnimationFrame(() => { fitCanvas(); renderTimeline(); });
 }
 function tlShow(on) {
+  if (on && !tl.open && videoNeedsGate()) { openVideoGate(() => tlShow(true)); return; }
   tl.open = !!on; $('#stage').classList.toggle('tlon', tl.open);
   if (!$('#vtl')) {
     const d = document.createElement('div'); d.id = 'vtl'; d.className = 'vtl'; d.tabIndex = -1;
@@ -1526,7 +1617,9 @@ async function tlWave() {
   try {
     let pk, dur;
     if (A.src.startsWith('b:')) { const buf = await NC.media.render(A.src.slice(2)); dur = buf.duration; pk = VIDEO.peaks(buf, Math.max(200, Math.round(dur * 8))); }
-    else { const f = await NC.media.blobOf(A.src, false); dur = (await NC.astream.probe(f)).dur; if (!dur) return; const N = Math.min(20000, Math.max(200, Math.round(dur * 4))); if (!tlWave.busy) { tlWave.busy = true; const msg = $('#tlMsg'); NC.astream.peaks(f, A.src, N, pr => { if (msg && dur > 120) msg.textContent = `음악 파형 계산 ${Math.round(pr * 100)}%`; }).then(() => { tlWave.busy = false; if (msg) msg.textContent = ''; tlWave(); }).catch(() => { tlWave.busy = false; }); } pk = await Promise.race([NC.astream.peaks(f, A.src, N), new Promise(r => setTimeout(() => r(null), 50))]); if (!pk) return; }
+    else { const f = await NC.media.blobOf(A.src, false); dur = (await NC.astream.probe(f)).dur; if (!dur) return; const N = Math.min(20000, Math.max(200, Math.round(dur * 4))); pk = await Promise.race([NC.astream.peaks(f, A.src, N), new Promise(r => setTimeout(() => r(null), 50))]);
+      /* 아직 계산 중이면 뒤에서 마저 계산한 뒤 한 번만 다시 그림 (이미 계산된 파형은 위에서 바로 받으므로 다시 부르지 않음 — 끝없이 되부르던 문제 방지) */
+      if (!pk) { if (!tlWave.busy) { tlWave.busy = true; const msg = $('#tlMsg'); NC.astream.peaks(f, A.src, N, pr => { if (msg && dur > 120) msg.textContent = `음악 파형 계산 ${Math.round(pr * 100)}%`; }).then(() => { tlWave.busy = false; if (msg) msg.textContent = ''; tlWave(); }).catch(() => { tlWave.busy = false; }); } return; } }
     const w = p0.clientWidth, h = p0.clientHeight || 34; c.width = w; c.height = h; const x = c.getContext('2d'), from = Number(A.from || 0), px = tl.pxs; x.fillStyle = 'rgba(255,255,255,.75)';
     for (let i = 0; i < w; i++) { const t = from + i / px, k = Math.floor(((t % dur) / dur) * pk.length), v = pk[k] || 0, hh = Math.max(1, v * h * 0.9); x.fillRect(i, (h - hh) / 2, 1, hh); }
   } catch (e) { if (p0 && e.code) { p0.classList.add('miss'); p0.title = e.message + ' — 눌러서 연결'; } }
@@ -1576,6 +1669,7 @@ function tlSplit() {
   tlSplitScene(false);
 }
 function tlSplitScene(quiet) {
+  if (videoNeedsGate()) { openVideoGate(); return; }
   const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { if (!quiet) toast('장면 안에 재생 위치를 두고 나누세요', true); return; }
   const q = Math.round((tl.T - x.t0) * 10) / 10; if (q < 0.3 || x.dur - q < 0.3) { if (!quiet) toast('장면 끝에 너무 가깝습니다', true); return; }
   const a = x.pg, b = clone(a); b.id = uid(); const gm = {}; b.els.forEach(e => { e.id = uid(); if (e.group) { gm[e.group] = gm[e.group] || uid(); e.group = gm[e.group]; } if (e.anim) { const d = Number(e.anim.d || 0) - q; if (d < 0) delete e.anim; else e.anim.d = d; } });  /* 이미 시작한 움직임은 끝난 모습으로 이어짐(뒤 조각에서 처음부터 다시 튀지 않게) */
@@ -1613,7 +1707,7 @@ function tlWire() {
   const inner = () => $('#tlInner'), tAt = e => (e.clientX - inner().getBoundingClientRect().left) / tl.pxs;
   root.addEventListener('pointerdown', e => {
     const t = e.target; if (t.closest('.vtl-bar') || t.closest('.tl-heads') || t.closest('.tl-meter')) return;
-    if (t.closest('#tlAddMusic')) { sideTab = 'video'; vTab = 'audio'; renderRail(); renderSide(); return; }
+    if (t.closest('#tlAddMusic')) { e.preventDefault(); pickMusicLocal(); return; }
     if (t.closest('#tlHeadCut')) { tlSplit(); return; }
     if (t.closest('[data-mute]')) return;
     const vp = t.closest('[data-vkp]'), vl = t.closest('[data-vline]'); if (vp || vl) { e.preventDefault(); e.stopPropagation(); vkDrag(e, t.closest('[data-it],#tlAu'), vp); return; }
@@ -1726,34 +1820,63 @@ async function openVideoPlayer(fromCur) {
     P.play(); ic();
   } catch (e) { const l = $('#vpLoad'); if (l) l.textContent = '준비하지 못했습니다: ' + e.message; }
 }
-// MP4 저장
+// MP4 저장: 편집 내용을 미리 본 뒤 화질을 골라 저장
 function openVideoMaker() {
   if (newsMode) setNewsMode(false);
   if (doc.news && !doc.video) doc.video = { dur: 5, trans: 'soft', turn: 1.2, loop: !!doc.news.tv, q: '1080' }; // 소식지: 예전 TV 영상과 같은 기본값
   let d = $('#dlgVideo'); if (d) d.remove();
-  const V = vset(), o = VIDEO.outSize(doc.w, doc.h, V.q), n = videoPages().length;
+  const n = videoPages().length, tot = videoTotal();
+  const QS = [['720', 'HD 720p', '파일 작음 · 메신저 전송용'], ['1080', 'Full HD 1080p', '기본 · TV·유튜브·SNS'], ['2160', '4K 2160p', '파일 큼 · 대형 TV·보관용']];
+  const estMB = (q, fps) => { const o = VIDEO.outSize(doc.w, doc.h, q), bps = Math.min(o.W * o.H > 2100000 ? 45e6 : 16e6, Math.max(5e6, o.W * o.H * fps * 0.15)); return (bps + 192000) * tot / 8 / 1048576; };
+  const qBtn = q => { const o = VIDEO.outSize(doc.w, doc.h, q[0]); return `<button type="button" class="vd-qbtn" data-q="${q[0]}" aria-pressed="${(vset().q || '1080') === q[0]}"><b>${q[1]}</b><span>${o.W}×${o.H}</span><small>${q[2]}</small></button>`; };
   d = document.createElement('dialog'); d.id = 'dlgVideo'; d.className = 'nw-dlg vd-dlg';
-  d.innerHTML = `<div class="dhead"><h2>MP4 영상 저장</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><div class="vd-stage"><canvas id="vidCv"></canvas><div class="vd-load" id="vidProg">${n}장면 · ${fmtT(videoTotal())} · ${o.W}×${o.H}${doc.audio ? ' · 음악 «' + esc(doc.audio.name || '') + '»' : ''}</div></div>
-  <p class="hint">장면 길이·넘김 효과·음악은 왼쪽 <b>영상</b> 메뉴에서, 요소 움직임은 요소를 고른 뒤 오른쪽 <b>애니메이션</b>에서 정합니다. 브라우저에 들어 있는 인코더로 한 장씩 만들어 실제 길이보다 빨리 끝납니다(지원하지 않는 브라우저는 실제 시간 녹화로 바꿔 만듭니다). 저장된 MP4는 TV·셋톱·휴대폰·SNS에서 재생되는 일반 형식입니다.</p>
+  d.innerHTML = `<div class="dhead"><h2>MP4 영상 저장</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
+  <div class="vd-stage"><canvas id="vidCv"></canvas><div class="vd-load" id="vidProg">장면을 준비하는 중…</div></div>
+  <div class="vd-ctl"><button class="btn icon" id="vidPlay" title="재생 / 멈춤 (Space)"><svg class="ic"><use href="#i-play"/></svg></button><input type="range" id="vidSeek" min="0" max="${tot}" step="0.01" value="0"><span id="vidTime">0:00 / ${fmtT(tot)}</span><span class="vd-meta">${n}장면${doc.audio ? ' · 음악 «' + esc(doc.audio.name || '') + '»' : ''}</span></div>
+  <p class="hint" style="margin:0">위에서 편집한 내용을 끝까지 확인한 뒤 화질을 고르고 <b>영상 만들기</b>를 누르세요. 미리보기는 가볍게 보여 주고, 저장은 고른 화질로 만듭니다. 장면 길이·넘김·음악은 왼쪽 <b>영상</b> 메뉴와 타임라인에서 고칩니다.</p>
+  <div class="vd-q" id="vidQ">${QS.map(qBtn).join('')}</div>
+  <div class="row" style="align-items:center;gap:12px;flex-wrap:wrap"><label class="f" style="margin:0;flex-direction:row;align-items:center;gap:6px"><span>초당 장면 수</span><select id="vidFps">${[[24, '24fps (영화 느낌)'], [30, '30fps (기본)'], [60, '60fps (부드럽게)']].map(([v, t]) => `<option value="${v}" ${Number(vset().fps || 30) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label><span class="hint" id="vidEst"></span></div>
+  <p class="hint" style="margin:0">저장 형식은 <b>MP4 (H.264 영상 + AAC 소리)</b>입니다. 윈도우·맥의 기본 플레이어, TV, 휴대폰, 유튜브·카톡에서 별도 프로그램 없이 소리까지 재생됩니다.</p>
   <div class="row" style="justify-content:space-between;align-items:center"><label class="vd-chk" style="margin:0"><input type="checkbox" id="vidShare" ${localStorage.getItem('naracal-video-share') === '1' ? 'checked' : ''}> 내 드라이브 '결과물' 폴더에도 저장 <small>(최종 결과물만 온라인에)</small></label><span><button class="btn" data-close>닫기</button> <button class="btn primary" id="vidGo"><svg class="ic"><use href="#i-video"/></svg>영상 만들기</button></span></div></div>`;
   document.body.appendChild(d); d.querySelectorAll('[data-close]').forEach(b => b.onclick = () => d.close()); d.showModal();
   $('#vidShare').onchange = e => { try { localStorage.setItem('naracal-video-share', e.target.checked ? '1' : '0'); } catch (err) {} };
-  let busy = false, stop = false; d.addEventListener('cancel', e => { if (busy) e.preventDefault(); }); d.addEventListener('close', () => { stop = true; d.remove(); });
+  let busy = false, stop = false, P = null, Vp = null;
+  d.addEventListener('cancel', e => { if (busy) e.preventDefault(); }); d.addEventListener('close', () => { stop = true; if (P) P.destroy(); d.remove(); });
+  const curQ = () => vset().q || '1080', curFps = () => Number(vset().fps || 30);
+  const est = () => { const o = VIDEO.outSize(doc.w, doc.h, curQ()), mb = estMB(curQ(), curFps()); $('#vidEst').textContent = `저장 크기 ${o.W}×${o.H} · ${fmtT(tot)} · 파일 약 ${mb < 1 ? '1' : Math.round(mb)}MB`; };
+  const setV = (k, v) => { doc.video = Object.assign(vset(), doc.video || {}, { [k]: v }); markDirty(); est(); };
+  $('#vidQ').onclick = e => { const b = e.target.closest('[data-q]'); if (!b || busy) return; $$('#vidQ [data-q]').forEach(x => x.setAttribute('aria-pressed', x === b)); setV('q', b.dataset.q); };
+  $('#vidFps').onchange = e => setV('fps', Number(e.target.value));
+  est();
+  // 미리보기 플레이어 (가벼운 720p로 준비 — 편집 내용·소리를 그대로 확인)
+  const seek = $('#vidSeek'), ic = () => { const u = $('#vidPlay use'); if (u) u.setAttribute('href', P && P.isPlaying() ? '#i-pause' : '#i-play'); };
+  const startPreview = async () => {
+    try {
+      if (!Vp) { Vp = await videoBuild('720', (k, nn) => { const l = $('#vidProg'); if (l) l.textContent = `장면을 준비하는 중… ${Math.round(k / Math.max(1, nn) * 100)}%`; }, () => stop); if (!Vp || stop) return; }
+      P = VIDEO.player($('#vidCv'), Vp); P.onTime = t => { seek.value = t; $('#vidTime').textContent = `${fmtT(t)} / ${fmtT(Vp.total)}`; ic(); };
+      $('#vidProg').textContent = '미리보기 — ▶를 누르거나 Space'; P.seek(0); ic();
+    } catch (e) { const l = $('#vidProg'); if (l) l.textContent = '미리보기를 준비하지 못했습니다: ' + e.message; }
+  };
+  $('#vidPlay').onclick = () => { if (busy || !P) return; P.toggle(); ic(); if (P.isPlaying()) $('#vidProg').textContent = ''; };
+  seek.oninput = () => { if (P && !busy) P.seek(Number(seek.value)); };
+  d.addEventListener('keydown', e => { if (e.code === 'Space' && !busy && P && !(e.target.matches && e.target.matches('input,select,textarea,button'))) { e.preventDefault(); P.toggle(); ic(); } });
+  startPreview();
   const go = $('#vidGo');
   go.onclick = async () => {
     if (busy) { stop = true; return; }
     busy = true; stop = false; go.lastChild.textContent = '중지'; const pr = $('#vidProg');
+    if (P) { P.destroy(); P = null; ic(); }
     try {
-      const Vb = await videoBuild(null, (k, nn) => { pr.textContent = `장면을 준비하는 중… ${Math.round(k / Math.max(1, nn) * 100)}%`; }, () => stop); if (!Vb) throw new Error('중지했습니다');
+      const Vb = await videoBuild(curQ(), (k, nn) => { pr.textContent = `장면을 준비하는 중… ${Math.round(k / Math.max(1, nn) * 100)}%`; }, () => stop); if (!Vb) throw new Error('중지했습니다');
       // 빠른 방식(WebCodecs + mp4-muxer) 먼저, 안 되면 실제 시간 녹화로
       let res = null, fastErr = null;
-      if (VIDEO.canFast()) { try { res = await VIDEO.encode({ V: Vb, fps: Number(vset().fps || 30), canvas: $('#vidCv'), cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `영상 만드는 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; } }); if (!res && stop) { pr.textContent = '중지했습니다'; return; } } catch (e) { fastErr = e; console.warn('빠른 내보내기 실패, 녹화 방식으로', e); } }
-      if (!res) { if (fastErr) pr.textContent = '빠른 방식을 쓸 수 없어 실제 시간 녹화로 만듭니다 — 이 창을 가리지 마세요'; res = await VIDEO.record({ V: Vb, fps: Number(vset().fps || 30), canvas: $('#vidCv'), cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `녹화 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; } }); }
+      if (VIDEO.canFast()) { try { res = await VIDEO.encode({ V: Vb, fps: curFps(), canvas: $('#vidCv'), cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `영상 만드는 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; seek.value = T; } }); if (!res && stop) { pr.textContent = '중지했습니다'; return; } } catch (e) { fastErr = e; console.warn('빠른 내보내기 실패, 녹화 방식으로', e); } }
+      if (!res) { if (fastErr) pr.textContent = '빠른 방식을 쓸 수 없어 실제 시간 녹화로 만듭니다 — 이 창을 가리지 마세요'; res = await VIDEO.record({ V: Vb, fps: curFps(), canvas: $('#vidCv'), cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `녹화 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; seek.value = T; } }); }
       if (!res) { pr.textContent = '중지했습니다'; return; }
-      const a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = `${(doc.name || '영상').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/[. ]+$/, '').slice(0, 80) || '영상'}${Vb.H > Vb.W ? '_숏츠' : ''}_${Math.min(Vb.W, Vb.H)}p${Number(vset().fps || 30)}.${res.ext}`;  /* 화질·fps가 보이는 이름 (USB·윈도우에서 안전한 글자만) */ document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = `${(doc.name || '영상').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/[. ]+$/, '').slice(0, 80) || '영상'}${Vb.H > Vb.W ? '_숏츠' : ''}_${Math.min(Vb.W, Vb.H)}p${curFps()}.${res.ext}`;  /* 화질·fps가 보이는 이름 (USB·윈도우에서 안전한 글자만) */ document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
       let shared = ''; if ($('#vidShare') && $('#vidShare').checked) { try { if (!(await store.folderReady())) throw new Error('동기화 폴더가 연결되어 있지 않습니다'); shared = await NC.media.saveResult(res.blob, a.download); } catch (err) { toast('결과물 폴더에 저장하지 못했습니다: ' + err.message, true); } }
       const missV = (Vb && Vb.voices && Vb.voices.miss) || []; pr.textContent = `저장했습니다 — ${(res.blob.size / 1048576).toFixed(1)}MB · ${res.note || res.warn || ''}${shared ? ` · 내 드라이브/결과물/${shared}` : ''}${missV.length ? ` · ⚠ 빠진 소리: ${missV.join(', ')}` : ''}`; if (res.warn) toast(res.warn, true); else if (missV.length) toast(`영상을 저장했습니다 — 단, 소리 ${missV.length}개가 빠졌습니다(원본 없음)`, true); else toast('영상을 저장했습니다');
-    } catch (e) { pr.textContent = e.message; } finally { busy = false; if (document.body.contains(go)) go.lastChild.textContent = '영상 만들기'; }
+    } catch (e) { pr.textContent = e.message; } finally { busy = false; if (document.body.contains(go)) { go.lastChild.textContent = '영상 만들기'; if (Vp && !stop) { const msg = $('#vidProg').textContent; P = VIDEO.player($('#vidCv'), Vp); P.onTime = t => { seek.value = t; $('#vidTime').textContent = `${fmtT(t)} / ${fmtT(Vp.total)}`; ic(); }; P.seek(0); $('#vidProg').textContent = msg; } } }
   };
 }
 const RAIL = [['pages', '페이지', 'i-pages'], ['tpl', '템플릿', 'i-tpl'], ['news', '소식지', 'i-news'], ['video', '영상', 'i-video'], ['elems', '요소', 'i-elems'], ['text', '텍스트', 'i-text'], ['photo', '사진', 'i-img'], ['upload', '업로드', 'i-upload'], ['project', '프로젝트', 'i-folder'], ['ai', 'AI 도구', 'i-ai'], ['bg', '배경', 'i-bg'], ['theme', '테마', 'i-theme'], ['chart', '차트', 'i-chart'], ['layers', '레이어', 'i-layers']];
@@ -1777,7 +1900,9 @@ function renderSide() {
   } else if (sideTab === 'news') {
     renderNewsSide(body);
   } else if (sideTab === 'video') {
+    if (videoNeedsGate()) { body.innerHTML = `<div class="wz-card"><b style="font-size:14px">영상 편집은 영상용 사본에서</b><p class="hint" style="margin:6px 0 10px">타임라인에서 장면을 지우거나 자르면 이 디자인의 쪽이 함께 바뀝니다. 원본은 그대로 두고 "${esc(doc.name || '디자인')} 영상" 사본을 만들어 편집하세요.</p><button class="btn primary full" id="vgOpen">영상용 사본 만들기</button><button class="btn full" id="vgDirect2" style="margin-top:6px">이 디자인에서 바로 편집 (원본이 바뀜)</button></div>`; $('#vgOpen').onclick = () => makeVideoCopy(); $('#vgDirect2').onclick = () => openVideoGate(); return; }
     renderVideoSide(body);
+    if (doc.video && doc.video.isCopy) body.insertAdjacentHTML('afterbegin', `<div class="vg-badge">영상용 사본 · 원본: <b>${esc(doc.video.fromName || '')}</b> (원본 디자인은 바뀌지 않습니다) <button class="btn sm" id="vgReimport">원본 장면 다시 가져오기</button></div>`), ($('#vgReimport').onclick = reimportFromSource);
   } else if (sideTab === 'tpl') {
     const filt = tplFiltered();
     body.innerHTML = `${filt ? tplNavHTML() : ''}<div class="wz-card" ${filt ? 'hidden' : ''}><div class="wz-year">${yearNow}<small>년</small></div><p class="hint" style="margin:0 0 8px">연도별 달력 모양과 테마를 미리 보며 표지·인성·달력 26쪽을 한 번에 만듭니다.</p><button class="btn primary full" id="wzOpen"><svg class="ic"><use href="#i-cal"/></svg>캘린더 마법사 열기</button></div>

@@ -32,9 +32,13 @@ NC.media = (function () {
     }
     return new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.multiple = true; i.accept = accept === 'video' ? 'video/*' : accept === 'audio' ? 'audio/*,.m4a,.mp3,.wav,.aac' : 'video/*,audio/*,.m4a'; i.onchange = async () => { const out = []; for (const f of i.files) out.push(await addFile(f)); res(out); }; i.click(); });
   }
-  async function addHandle(h, id) { if (id) fileC.delete('m:' + id); const f = await h.getFile(); const rec = { id: id || rid(), name: f.name, size: f.size, type: f.type, lastModified: f.lastModified, handle: h }; await tx('readwrite', s => s.put(rec)); urls.set(rec.id, URL.createObjectURL(f)); return meta(rec); }
-  async function addFile(f, id) { if (id) fileC.delete('m:' + id); const rec = { id: id || rid(), name: f.name, size: f.size, type: f.type, lastModified: f.lastModified, blob: f }; await tx('readwrite', s => s.put(rec)); urls.set(rec.id, URL.createObjectURL(f)); return meta(rec); }
+  async function addHandle(h, id) { if (id) fileC.delete('m:' + id); const f = await h.getFile(); const rec = { id: id || rid(), name: f.name, size: f.size, type: f.type, lastModified: f.lastModified, added: Date.now(), handle: h }; await tx('readwrite', s => s.put(rec)); urls.set(rec.id, URL.createObjectURL(f)); return meta(rec); }
+  async function addFile(f, id) { if (id) fileC.delete('m:' + id); const rec = { id: id || rid(), name: f.name, size: f.size, type: f.type, lastModified: f.lastModified, added: Date.now(), blob: f }; await tx('readwrite', s => s.put(rec)); urls.set(rec.id, URL.createObjectURL(f)); return meta(rec); }
   const meta = r => ({ id: r.id, name: r.name, size: r.size, type: r.type || '', lastModified: r.lastModified });
+  // 보관함: 이 PC에서 고른 원본 전부 (최근 것부터). kind = 'video' | 'audio'
+  const kindOf = r => /^video\//.test(r.type || '') || /\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(r.name || '') ? 'video' : 'audio';
+  async function list() { const all = await tx('readonly', s => s.getAll()); return (all || []).map(r => Object.assign(meta(r), { kind: kindOf(r), added: r.added || r.lastModified || 0, copy: !!r.blob })).sort((a, b) => b.added - a.added); }
+  async function remove(id) { await tx('readwrite', s => s.delete(id)); const u = urls.get(id); if (u) { try { URL.revokeObjectURL(u); } catch (e) {} urls.delete(id); } fileC.delete('m:' + id); }
   // 원본 열기: 이번 창에서 처음이면 읽기 허락을 받아야 함(버튼을 누른 흐름 안에서 부를 것)
   async function file(id, ask) {
     if (urls.has(id)) return { url: urls.get(id) };
@@ -157,5 +161,5 @@ NC.media = (function () {
     return (await fetch(ref)).blob();
   }
   const isLocal = ref => typeof ref === 'string' && ref.startsWith('m:');
-  return { pick, addFile, addHandle, file, has, relink, SOUNDS, render, listShared, sharedURL, share, saveResult, urlOf, audio, isLocal, blobOf };
+  return { pick, addFile, addHandle, file, has, relink, list, remove, SOUNDS, render, listShared, sharedURL, share, saveResult, urlOf, audio, isLocal, blobOf };
 })();

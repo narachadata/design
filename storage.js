@@ -203,6 +203,8 @@ NC.store = (function () {
     state.setBase = Object.assign({}, r.vals); state.setMod = r.f.lastModified; // 폴더에 없는 이 PC 값은 다음 올리기 때 올라감
     return true;
   }
+  // 문서 번호(docId)로 동기화 폴더 안의 문서 파일 찾기 (영상 사본 → 원본 다시 가져오기용)
+  async function findDocById(id) { if (!id) return null; const docs = await listDocs(); for (const x of docs) { try { const f = await x.handle.getFile(); if (f.size > 40 * 1024 * 1024) continue; const t = await f.text(); const m = t.match(/"docId":"([^"]+)"/); if (m && m[1] === id) return x.handle; } catch (e) {} } return null; }
   async function listDocs() {
     if (!(await folderReady())) return [];
     const out = [];
@@ -305,5 +307,5 @@ NC.store = (function () {
 
   return { snapshot, listSnapshots, readSnapshot, state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
     writeCopy, pcName, setPcName, adopt, descends,
-    connectFolder, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
+    connectFolder, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, findDocById, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
 })();

@@ -33,6 +33,10 @@ NC.imgedit = (function () {
     if (fillHoles) { pass(false); const touches = new Uint8Array(sizes.length); for (let x = 0; x < W; x++) { if (lab[x] >= 0) touches[lab[x]] = 1; if (lab[(H - 1) * W + x] >= 0) touches[lab[(H - 1) * W + x]] = 1; } for (let y = 0; y < H; y++) { if (lab[y * W] >= 0) touches[lab[y * W]] = 1; if (lab[y * W + W - 1] >= 0) touches[lab[y * W + W - 1]] = 1; } for (let i = 0; i < W * H; i++) if (lab[i] >= 0 && !touches[lab[i]] && sizes[lab[i]] < minPx * 4) alpha[i] = 1; }
   }
   // 알파 가장자리 매끈하게 (작은 박스 블러)
+  // 1px 안으로 줄이기(가장자리 흰 테두리 제거) — 3×3 최소값
+  function erodeAlpha(alpha, W, H) { const out = new Float32Array(W * H); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let m = 1; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy; const v = (nx < 0 || ny < 0 || nx >= W || ny >= H) ? 0 : alpha[ny * W + nx]; if (v < m) m = v; } out[y * W + x] = m; } return out; }
+  // 안쪽으로만 부드럽게: 흐린 값이 원래 경계 밖으로 번지지 않게 min()
+  function featherIn(alpha, W, H, r) { if (!r) return alpha; const b = blurAlpha(alpha, W, H, r); for (let i = 0; i < W * H; i++) b[i] = Math.min(b[i], alpha[i] > 0 ? b[i] : 0, alpha[i] > 0.999 ? 1 : b[i]) ; for (let i = 0; i < W * H; i++) if (alpha[i] <= 0) b[i] = 0; return b; }
   function blurAlpha(alpha, W, H, r) {
     if (!r) return alpha; const tmp = new Float32Array(W * H); const out = new Float32Array(W * H); const n = 2 * r + 1;
     for (let y = 0; y < H; y++) { let s = 0; for (let x = -r; x <= r; x++) s += alpha[y * W + Math.min(W - 1, Math.max(0, x))]; for (let x = 0; x < W; x++) { tmp[y * W + x] = s / n; s += alpha[y * W + Math.min(W - 1, x + r + 1)] - alpha[y * W + Math.max(0, x - r)]; } }
@@ -53,8 +57,8 @@ NC.imgedit = (function () {
   async function removeColorFromSrc(srcUrl, color, opts) {
     const img = await loadImg(srcUrl); const W = img.naturalWidth, H = img.naturalHeight;
     const c = document.createElement('canvas'); c.width = W; c.height = H; const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
-    const id = ctx.getImageData(0, 0, W, H); const o = Object.assign({ color: color || '#ffffff', tol: 22, soft: 8, connected: true, despill: true, feather: 1, minPx: Math.round(W * H / 4000) }, opts);
-    let a = colorMask(id.data, W, H, o); removeIslands(a, W, H, o.minPx, true); a = blurAlpha(a, W, H, o.feather);
+    const id = ctx.getImageData(0, 0, W, H); const o = Object.assign({ color: color || '#ffffff', tol: 22, soft: 16, connected: true, despill: true, feather: 1, minPx: Math.round(W * H / 4000) }, opts);
+    let a = colorMask(id.data, W, H, o); removeIslands(a, W, H, o.minPx, true); a = erodeAlpha(a, W, H); a = featherIn(a, W, H, o.feather);
     const out = ctx.createImageData(W, H); applyMask(id.data, out.data, W, H, a, o.color, o.despill); ctx.putImageData(out, 0, 0);
     return c.toDataURL('image/png');
   }
@@ -68,7 +72,7 @@ NC.imgedit = (function () {
       const W = img.naturalWidth, H = img.naturalHeight;
       const orig = document.createElement('canvas'); orig.width = W; orig.height = H; orig.getContext('2d').drawImage(img, 0, 0);
       const work = document.createElement('canvas'); work.width = W; work.height = H; work.getContext('2d').drawImage(img, 0, 0);
-      st = { W, H, orig, work, hist: [], tool: 'bg', color: '#ffffff', tol: 22, soft: 8, connected: true, despill: true, feather: 1, minPx: Math.round(W * H / 4000), brush: 30, hard: 70, zoom: 1, crop: null, onApply };
+      st = { W, H, orig, work, hist: [], tool: 'bg', color: '#ffffff', tol: 22, soft: 16, connected: true, despill: true, feather: 1, minPx: Math.round(W * H / 4000), brush: 30, hard: 70, zoom: 1, crop: null, onApply };
       render(); fit();
       d.showModal();
     }).catch(e => alert(e.message));
@@ -135,7 +139,7 @@ NC.imgedit = (function () {
   function runRemove() {
     const ctx = st.work.getContext('2d'); const id = ctx.getImageData(0, 0, st.W, st.H);
     let a = colorMask(id.data, st.W, st.H, { color: st.color, tol: st.tol, soft: st.soft, connected: st.connected });
-    a = blurAlpha(a, st.W, st.H, st.feather);
+    a = erodeAlpha(a, st.W, st.H); a = featherIn(a, st.W, st.H, st.feather);
     const out = ctx.createImageData(st.W, st.H); applyMask(id.data, out.data, st.W, st.H, a, st.color, st.despill); ctx.putImageData(out, 0, 0);
     msg(`${st.color} 색을 지웠습니다. 남은 부분은 지우개로, 지나치게 지워진 곳은 복원 브러시로 다듬으세요.`);
   }

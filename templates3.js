@@ -20,7 +20,7 @@
   };
   /* ---- 계절 팔레트와 장식 ---- */
   const SEASON = {
-    '봄': { bg: '#FFF0F5', bg2: '#FBD3E0', fg: '#7A2E4F', ac: '#E86A8E', soft: WHITE, tx: '#3a2a33', sub: '#8a5a6a', motifs: ['🌸', '🌷', '🌱', '🐝', '🦋'], fontT: 'Jua' },
+    '봄': { bg: '#FFF0F5', bg2: '#FBD3E0', fg: '#7A2E4F', ac: '#C2456B', soft: WHITE, tx: '#3a2a33', sub: '#8a5a6a', motifs: ['🌸', '🌷', '🌱', '🐝', '🦋'], fontT: 'Jua' },
     '여름': { bg: '#E6F6FB', bg2: '#BFE8F5', fg: '#0E5A8A', ac: '#FFB300', soft: WHITE, tx: '#17324a', sub: '#4a6a80', motifs: ['☀️', '🌊', '🍉', '⛱️', '🐬'], fontT: 'Black Han Sans' },
     '가을': { bg: '#FFF4E3', bg2: '#F2B266', fg: '#6B3A1E', ac: '#D1521F', soft: WHITE, tx: '#3a2a1e', sub: '#7a5a40', motifs: ['🍁', '🍂', '🌰', '🎃', '🍎'], fontT: 'Gowun Batang' },
     '겨울': { bg: '#EAF1FA', bg2: '#DCEBF7', fg: '#1B2A4A', ac: '#D13B3B', soft: WHITE, tx: '#1a2232', sub: '#55657f', motifs: ['❄️', '⛄', '🎄', '🧣', '⭐'], fontT: 'Do Hyeon' },
@@ -94,7 +94,7 @@
       els.push(motif(0, w * 0.5 + m, m, 18 * u));
       if (o.biz.illu && o.useIllu) els.push(I(o.biz.illu, w * 0.5 + m, h * 0.12, w * 0.5 - 2 * m, h * 0.42, { pos: '50% 100%', name: '삽화' }));
       els.push(T(c.body, w * 0.5 + m, h * 0.6, w * 0.5 - 2 * m, h * 0.25, { font: fB, size: 4 * u, lh: 1.75, weight: 500, color: tx, name: '본문' }));
-      if (c.cta) { els.push(S('pill', w * 0.5 + m, h - m - 12 * u, w * 0.5 - 2 * m, 9 * u, { fill: P_.ac })); els.push(T(c.cta, w * 0.5 + m, h - m - 9.8 * u, w * 0.5 - 2 * m, 5 * u, { font: fB, size: 4.2 * u, weight: 700, color: WHITE, align: 'center', name: '버튼' })); }
+      if (c.cta) { els.push(S('pill', w * 0.5 + m, h - m - 12 * u, w * 0.5 - 2 * m, 9 * u, { fill: P_.ac })); els.push(T(c.cta, w * 0.5 + m, h - m - 9.8 * u, w * 0.5 - 2 * m, 5 * u, { font: fB, size: 4.2 * u, weight: 700, color: inkOn(P_.ac, WHITE, 3), align: 'center', name: '버튼' })); }
       els.push(T(o.biz.name + ' · ' + PHONE, w * 0.5 + m, h - m - 2.5 * u, w * 0.5 - 2 * m, 4 * u, { font: fB, size: 2.8 * u, color: sub, name: '하단 정보' }));
       return P(P_.bg, els, o.label);
     }
@@ -140,7 +140,7 @@
       els.push(T(c.title, m, h * 0.36, w - 2 * m, h * 0.22, { font: fT, size: 18 * u, weight: 800, color: dark ? WHITE : P_.fg, lh: 1.08, name: '제목' }));
       els.push(T(c.sub, m, h * 0.6, w - 2 * m, 8 * u, { font: fB, size: 5.4 * u, weight: 600, color: sub, lh: 1.4, name: '부제' }));
       els.push(T(c.body, m, h * 0.68, w - 2 * m, h * 0.16, { font: fB, size: 4.6 * u, lh: 1.7, weight: 500, color: tx, name: '본문' }));
-      if (c.cta) { els.push(S('pill', m, h * 0.87, w - 2 * m, 10 * u, { fill: P_.fg })); els.push(T(c.cta, m, h * 0.87 + 2.6 * u, w - 2 * m, 6 * u, { font: fB, size: 5 * u, weight: 700, color: P_.ac, align: 'center', name: '버튼' })); }
+      if (c.cta) { els.push(S('pill', m, h * 0.87, w - 2 * m, 10 * u, { fill: P_.fg })); els.push(T(c.cta, m, h * 0.87 + 2.6 * u, w - 2 * m, 6 * u, { font: fB, size: 5 * u, weight: 700, color: inkOn(P_.fg, P_.ac, 3), align: 'center', name: '버튼' })); }
       els.push(T(o.biz.name, m, h - m - 4 * u, w - 2 * m, 5 * u, { font: 'Montserrat', size: 3.4 * u, weight: 700, color: dark ? WHITE : P_.fg, ls: 0.2, name: '하단 정보' }));
       return P(P_.bg, els, o.label);
     }
