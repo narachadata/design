@@ -225,6 +225,7 @@ Ctrl+Z 실행 취소(그 쪽으로 돌아가 되돌림) · Ctrl+Shift+Z 다시 �
 - `index.html`, `app.css`, `app.js` 에디터 본체
 - `calendar.js` 달력 요소·공휴일·캘린더 마법사
 - `storage.js` 자동 저장·파일 연결·동기화 폴더(설정·문서)·변경 감지
+- `live.js` 실시간 같이 편집: 같은 문서를 연 PC끼리 요소 단위 변경을 주고받음(BroadcastChannel + Firebase Realtime Database, 설정은 저장·동기화 창)
 - `lib.js` 나라차 자료실(동기화 폴더의 디자인자료) 읽기, 내 그림(AI 그림) 보관함
 - `ai.js` Claude·Gemini 연동(API 방식)과 채팅창 방식 지시문·답 읽기, 흰 배경 제거
 - `defaults.js` 2026년 인성 캘린더 내용(덕목·명언·실천·사자성어)
