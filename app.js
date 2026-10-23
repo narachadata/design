@@ -314,6 +314,8 @@ function renderCanvas() {
 /* ---------- 문서 밖 (미리캔버스처럼 페이지 밖도 작업 공간) ---------- */
 // 회전까지 고려한 요소의 바깥 상자(mm)
 // 여러 요소를 감싸는 상자(회전 반영)
+// 문서 크기 글: SNS·화면용(px) 문서는 px로, 인쇄물은 mm로
+function docSizeLabel(sep) { const f = FORMATS.find(x => x[0] === doc.fmt); sep = sep || '×'; return f && f[5] === 'px' ? `${f[3]}${sep}${f[4]}px` : `${Math.round(doc.w * 100) / 100}${sep}${Math.round(doc.h * 100) / 100}mm`; }
 function unionBox(els) { const bb = els.map(elBox), x = Math.min(...bb.map(b => b.x)), y = Math.min(...bb.map(b => b.y)); return { x, y, w: Math.max(...bb.map(b => b.x + b.w)) - x, h: Math.max(...bb.map(b => b.y + b.h)) - y }; }
 function elBox(el) {
   const a = (el.rot || 0) * Math.PI / 180, c = Math.abs(Math.cos(a)), s_ = Math.abs(Math.sin(a));
@@ -1838,7 +1840,7 @@ function renderSide() {
     body.innerHTML = `<h3>문서</h3>${F('문서 이름', 'doc.name', doc.name)}
     <div class="grid2">${F('도련(mm)', 'doc.bleed', doc.bleed, { type: 'number', min: 0, max: 10, step: 0.5 })}${F('재단선', 'doc.cropMarks', doc.cropMarks, { type: 'check' })}</div>
     <label class="chk"><input type="checkbox" id="guideToggle" ${showGuides() ? 'checked' : ''}> 인쇄 안내선 보기 (빨강: 도련, 파랑: 안전 여백 ${SAFE}mm)</label>
-    <p class="hint">${doc.w}×${doc.h}mm · ${doc.pages.length}쪽 · 크기는 템플릿 탭 아래에서 바꿉니다.</p>
+    <p class="hint">${docSizeLabel()} · ${doc.pages.length}쪽 · 크기는 템플릿 탭 아래에서 바꿉니다.</p>
     <h3>저장 · 동기화</h3>
     <p class="hint">${st.dir && st.handle ? `동기화 폴더 <b>${esc(st.dirName)}</b>의 <b>${esc(st.fileName)}</b>에 자동 저장 중 · 설정값도 함께 동기화` : st.handle ? `파일 <b>${esc(st.fileName)}</b>에 자동 저장 중` : '브라우저에만 자동 저장 중 (여러 PC에서 쓰려면 "저장·동기화"에서 구글 드라이브 폴더 연결)'}</p>
     <div class="tile"><button data-pj="save"><svg class="ic" style="width:22px;height:22px"><use href="#i-save"/></svg>저장·동기화</button><button data-pj="open"><svg class="ic" style="width:22px;height:22px"><use href="#i-open"/></svg>열기</button><button data-pj="new"><svg class="ic" style="width:22px;height:22px"><use href="#i-new"/></svg>새 문서</button><button data-pj="down"><svg class="ic" style="width:22px;height:22px"><use href="#i-upload"/></svg>사본 내려받기</button></div>
@@ -2269,7 +2271,7 @@ function renderInspector() {
   const ins = $('#inspector'); const els = selEls(); ins.onclick = null;
   if (!els.length) {
     const pg = page();
-    ins.innerHTML = `<h2>${cur + 1}쪽 <small>${doc.w}×${doc.h}mm</small></h2>
+    ins.innerHTML = `<h2>${cur + 1}쪽 <small>${docSizeLabel()}</small></h2>
     ${F('페이지 이름', 'pg.label', pg.label)}
     <h3>배경</h3><div class="swrow">${['#ffffff', '#FFE89A', '#E6EDF2', '#DDF3EA', '#FDE7E4', '#F0EBFB', '#1E2B5A', '#1a1a1a'].map(c => `<button class="swb" data-pgbg="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>
     <label class="f"><span>직접 고르기</span><input type="color" data-k="pg.bg" value="${/^#[0-9a-f]{6}$/i.test(pg.bg) ? pg.bg : '#ffffff'}"></label>
@@ -3197,7 +3199,7 @@ function renderDownload() {
   ${S.fmt === 'png' ? `<label class="chk"><input type="checkbox" id="dlTransp" ${S.transp ? 'checked' : ''}> 투명 배경 (쪽 배경색을 빼고 저장 — 로고·스티커용)</label>` : ''}
   ${img && n > 1 ? `<label class="chk"><input type="checkbox" id="dlMerge" ${S.merge ? 'checked' : ''}> 한 장의 이미지로 합치기 (세로로 이어 붙임)</label>` : ''}
   ${img && Number(doc.bleed) > 0 ? `<label class="chk"><input type="checkbox" id="dlImgBleed" ${S.imgBleed ? 'checked' : ''}> 도련 ${doc.bleed}mm 포함 (명함·스티커를 인쇄소에 이미지로 보낼 때)</label>` : ''}
-  <div class="dlinfo"><b>다운로드 정보</b><ul><li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${doc.w} × ${doc.h} mm${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${(px(doc.h + 2 * bleed) * (img && S.merge && n > 1 ? n : 1)).toLocaleString()} px · ${Math.round(dpi)}dpi${(img ? Math.round(dpi) < Math.round(96 * S.scale) - 1 : DL_PDF[S.fmt] && Math.round(dpi) < DL_PDF[S.fmt].dpi - 1) ? ' <b>(크기가 커서 브라우저 한계에 맞춰 낮춤)</b>' : ''}</li>` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
+  <div class="dlinfo"><b>다운로드 정보</b><ul><li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${docSizeLabel(' × ')}${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${(px(doc.h + 2 * bleed) * (img && S.merge && n > 1 ? n : 1)).toLocaleString()} px · ${Math.round(dpi)}dpi${(img ? Math.round(dpi) < Math.round(96 * S.scale) - 1 : DL_PDF[S.fmt] && Math.round(dpi) < DL_PDF[S.fmt].dpi - 1) ? ' <b>(크기가 커서 브라우저 한계에 맞춰 낮춤)</b>' : ''}</li>` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
   ${S.fmt === 'pdfprint' ? `<p class="hint" style="margin:6px 0 0">${bleed ? `도련 ${bleed}mm 포함 작업 사이즈${doc.cropMarks ? ' + 재단선(도련 바깥)' : ''}.` : '<b>도련이 0mm입니다.</b> 프로젝트 탭에서 도련을 넣으세요 (보통 1.5~3mm).'} 대부분의 인쇄소는 재단선 없는 작업 사이즈 파일을 받습니다.<br>이 PDF는 sRGB 그림(300dpi)으로 된 파일입니다. 인쇄소에 "sRGB 기준 CMYK 변환"을 요청하고, 밝은 파랑·초록은 탁해질 수 있으니 시안(교정쇄)으로 확인하세요. 명함처럼 작은 검정 글자가 많으면 "PDF (벡터)"가 더 선명합니다(검정 단색 처리 가능).</p>` : ''}${S.fmt === 'pdfweb' ? '<p class="hint" style="margin:6px 0 0">확대하거나 인쇄하면 글자가 덜 선명할 수 있습니다. 인쇄·보관용은 "PDF (고화질)"을 쓰세요.</p>' : ''}</div>
   <div id="dlWarn"></div><div class="dlprog" id="dlProg"></div>
   <button class="btn primary full" id="dlGo"><svg class="ic"><use href="#i-upload"/></svg>${S.fmt === 'pdfvector' ? '인쇄 창 열기' : '고해상도 다운로드'}</button>`;
@@ -3714,7 +3716,7 @@ function renderResize() {
   $('#rsBody').innerHTML = `<div class="rsgrid"><div>
     <label class="f"><span>새 크기 고르기</span><select id="rsFmt"><option value="">직접 입력</option>${ND_GROUPS.filter(g => g[0] !== 'rec').map(([g, t]) => `<optgroup label="${t}">${FORMATS.filter(f => f[2] === g).map(f => `<option value="${f[0]}" ${S.fmt === f[0] ? 'selected' : ''}>${esc(f[1])} · ${fmtLabel(f)}</option>`).join('')}</optgroup>`).join('')}</select></label>
     <div class="row"><label class="f" style="flex:1"><span>가로</span><input type="number" id="rsW" value="${S.w}" step="0.5"></label><button class="btn sm" id="rsSwap" title="가로·세로 바꾸기" style="margin-top:18px">⇄</button><label class="f" style="flex:1"><span>세로</span><input type="number" id="rsH" value="${S.h}" step="0.5"></label><label class="f" style="width:72px"><span>단위</span><select id="rsU"><option value="mm" ${S.unit === 'mm' ? 'selected' : ''}>mm</option><option value="px" ${S.unit === 'px' ? 'selected' : ''}>px</option></select></label></div>
-    <p class="hint" style="margin:0">지금 크기: ${doc.w} × ${doc.h} mm · 쪽 ${doc.pages.length}개</p>
+    <p class="hint" style="margin:0">지금 크기: ${docSizeLabel(' × ')} · 쪽 ${doc.pages.length}개</p>
     <h3>내용 맞추는 방법</h3>
     <div class="rsmodes">${[['fit', '알맞게 다시 배치 (추천)', '비율을 지키며 크기를 맞추고, 가장자리 요소는 가장자리에, 배경·띠는 새 쪽을 꽉 채웁니다'], ['stretch', '늘려서 채우기', '가로·세로를 따로 늘립니다. 비율 차이가 작을 때'], ['keep', '내용 크기 그대로', '요소 크기는 두고 가운데로만 옮깁니다']].map(([m, t, dd]) => `<label class="rsmode ${S.mode === m ? 'on' : ''}"><input type="radio" name="rsMode" value="${m}" ${S.mode === m ? 'checked' : ''}><b>${t}</b><small>${dd}</small></label>`).join('')}</div>
   </div><div class="rsprev"><span class="hint">미리보기 (${cur + 1}쪽)</span><div class="rsbox" style="width:${ok ? W * k : box}px;height:${ok ? H * k : box}px">${ok ? `<div style="transform:scale(${k * 25.4 / 96});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(W, H, prevPage.els, page().bg)}</div>` : ''}</div>
@@ -3726,10 +3728,10 @@ function renderResize() {
   $('#rsU').onchange = e => { const u = e.target.value; if (u !== S.unit) { const f = u === 'px' ? 96 / 25.4 : 25.4 / 96; S.w = Math.round(S.w * f * 10) / 10; S.h = Math.round(S.h * f * 10) / 10; S.unit = u; } renderResize(); };
   $('#rsSwap').onclick = () => { [S.w, S.h] = [S.h, S.w]; S.fmt = ''; renderResize(); };
   B.querySelectorAll('[name=rsMode]').forEach(r => r.onchange = () => { S.mode = r.value; renderResize(); });
-  $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode); doc.pages = nd.pages; doc.w = W; doc.h = H; doc.fmt = S.fmt || ''; commit(); zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toastUndo(`크기를 ${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm로 바꿨습니다`, () => { zoom = 0; fitCanvas(); }); };
+  $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode); doc.pages = nd.pages; doc.w = W; doc.h = H; doc.fmt = S.fmt || ''; { const f = FORMATS.find(x => x[0] === S.fmt); if (f) doc.bleed = ['print', 'doc', 'cal'].includes(f[2]) && f[5] === 'mm' ? (doc.bleed || 3) : 0; } commit();  /* 인쇄물↔SNS로 바꾸면 도련도 맞춤 */ zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toastUndo(`크기를 ${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm로 바꿨습니다`, () => { zoom = 0; fitCanvas(); }); };
   $('#rsCopy').onclick = async () => {
     const f = FORMATS.find(x => x[0] === S.fmt); const nd = resizedDoc(doc, W, H, S.mode); nd.fmt = S.fmt || ''; nd.name = `${doc.name || '새 디자인'} (${f ? f[1] : `${Math.round(W)}×${Math.round(H)}`})`;
-    if (f && !['print', 'doc', 'cal'].includes(f[2])) nd.bleed = 0;
+    if (f) nd.bleed = ['print', 'doc', 'cal'].includes(f[2]) && f[5] === 'mm' ? (doc.bleed || 3) : 0;
     $('#dlgResize').close(); gcAssets();
     try {
       if (await store.folderReady()) { const h = await store.copyIntoFolder(nd); if (window.confirm(`"${h.name.replace(/\.design\.json$/i, '')}"을(를) 만들었습니다.\n\n확인: 새 크기 디자인을 열어 다듬기\n취소: 지금 문서에서 계속`)) await openFolderDoc(h, '새 크기 디자인을 열었습니다'); else toast('새 크기 사본을 만들었습니다 (열기 목록에 있습니다)'); }
@@ -3999,7 +4001,7 @@ function renderRacha() {
 function runRachaChat() {
   const B = $('#rachaBody'), ids = [...B.querySelectorAll('[data-rid]:checked')].map(c => c.dataset.rid); if (!ids.length) return;
   const all = RACHA.flatMap(g => g[2]), refs = [ASSETS['mascot-03'], ASSETS['mascot-01']].filter(Boolean), box = $('#rChat'), res = $('#rRes'), site = CHAT_SITES[AI.cfg.chatImage][0];
-  let i = 0, sent = 0;
+  let i = 0, sent = 0, refOk = false;
   const cur = () => all.find(x => x[0] === ids[i]);
   const draw = () => {
     if (i >= ids.length) { box.innerHTML = `<p class="hint">고른 ${ids.length}가지를 모두 받았습니다. 아래 그림을 누르면 페이지에 넣습니다.</p>`; $('#rStat').textContent = ''; return; }
@@ -4011,7 +4013,8 @@ function runRachaChat() {
   };
   box.onclick = async e => {
     const k = e.target.dataset && e.target.dataset.rc; if (!k) return;
-    if (k === 'ref') { sent = 0; try { await copyImg(await refSheet(refs)); openChatSite(AI.cfg.chatImage); toast('라차 참고 그림을 복사했습니다 — 열린 채팅 칸에 ⌘V·Ctrl+V로 붙여 넣은 뒤 ② 지시문 복사를 누르세요'); } catch (err) { toast('참고 그림을 복사하지 못했습니다: ' + err.message, true); } }
+    if (k === 'ref') { sent = 0; refOk = true; try { await copyImg(await refSheet(refs)); openChatSite(AI.cfg.chatImage); toast('라차 참고 그림을 복사했습니다 — 열린 채팅 칸에 ⌘V·Ctrl+V로 붙여 넣은 뒤 ② 지시문 복사를 누르세요'); } catch (err) { toast('참고 그림을 복사하지 못했습니다: ' + err.message, true); } }
+    if (k === 'cp' && !refOk) { toast('먼저 ① 라차 참고 그림 복사·채팅 열기를 눌러 채팅에 참고 그림을 붙여 넣어 주세요', true); return; }
     if (k === 'cp') { const [, , pose] = cur(); await sendToChat(AI.chat.image(`The penguin mascot is ${pose}. ${RACHA_STYLE}`, { aspect: '1:1', refs: sent ? 0 : 1, next: !!sent }), 'image', { open: false, note: '그림이 나오면 오른쪽 클릭 → 이미지 복사 후 ③ 칸에 붙여 넣으세요' }); sent++; }
     if (k === 'skip') { i++; draw(); }
   };
@@ -4021,7 +4024,7 @@ function runRachaChat() {
     try { if (NC.lib.ready || store.state.dir) await NC.lib.saveMine(s, meta); } catch (err) { toast('보관하지 못했습니다: ' + err.message, true); }
     res.insertAdjacentHTML('beforeend', `<button class="rcard" data-rins="" title="눌러서 페이지에 넣기"><img src="${s}" alt=""><span>${esc(name)}</span></button>`);
     const lbl = B.querySelector(`[data-rid="${id}"]`); if (lbl) { lbl.checked = false; lbl.closest('.rchk').classList.add('done'); }
-    toast(`'${name}'을 받았습니다`); i++; draw(); if (sideTab === 'elems') renderSide();
+    toast(`'${name}' 그림을 받았습니다`); i++; draw(); if (sideTab === 'elems') renderSide();
   };
   draw();
 }
