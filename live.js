@@ -33,11 +33,13 @@ NC.live = (function () {
   function emit() { listeners.forEach(f => { try { f(); } catch (e) {} }); }
   // Firebase 콘솔의 "구성(Config)" 글을 붙여 넣으면 { … } 부분만 읽음 (const firebaseConfig = { … }; 전체를 붙여도 됨)
   function parseFbConfig(text) {
-    const m = String(text || '').match(/\{[\s\S]*\}/); if (!m) return null;
+    let t = String(text || ''); const at = t.search(/firebaseConfig\s*=/); if (at >= 0) t = t.slice(at); /* Firebase가 주는 글 통째(import 줄 포함)를 붙여 넣어도 설정 부분만 */
+    t = t.replace(/[\u200b-\u200d\ufeff]/g, '').replace(/[“”]/g, '"').replace(/[‘’]/g, "'");  /* 보이지 않는 글자·둥근 따옴표 정리 */
+    const m = t.match(/\{[\s\S]*?\}/); if (!m) return null;
     let o = null; try { o = JSON.parse(m[0]); } catch (e) { try { o = Function('"use strict"; return (' + m[0] + ')')(); } catch (e2) { return null; } }
     if (!o || !o.apiKey || !o.projectId) return null;
     if (!o.databaseURL) o.databaseURL = `https://${o.projectId}-default-rtdb.firebaseio.com`;
-    const keep = {}; ['apiKey', 'authDomain', 'databaseURL', 'projectId', 'appId', 'storageBucket', 'messagingSenderId'].forEach(k => { if (o[k]) keep[k] = String(o[k]); });
+    const keep = {}; ['apiKey', 'authDomain', 'databaseURL', 'projectId', 'appId', 'storageBucket', 'messagingSenderId'].forEach(k => { if (o[k]) keep[k] = String(o[k]).replace(/\s+/g, ''); });
     if (!keep.authDomain) keep.authDomain = keep.projectId + '.firebaseapp.com';
     return keep;
   }
@@ -216,7 +218,14 @@ NC.live = (function () {
     if (!(await loadFb())) throw new Error(fb.err || 'Firebase 설정이 없습니다');
     const p = new fb.A.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
     try { await fb.A.signInWithPopup(fb.auth, p); }
-    catch (e) { if (/popup-blocked|popup-closed|cancelled-popup|operation-not-supported/.test(e.code || '')) { await fb.A.signInWithRedirect(fb.auth, p); return; } throw e; }
+    catch (e) {
+      if (/popup-blocked|popup-closed|cancelled-popup|operation-not-supported/.test(e.code || '')) { await fb.A.signInWithRedirect(fb.auth, p); return; }
+      const k = (cfg().fb || {}).apiKey || '';
+      if (/api-key-not-valid|invalid-api-key/.test(e.code || e.message || '')) throw new Error(`Firebase API 키가 맞지 않습니다 (저장된 키: ${k.slice(0, 8)}…${k.slice(-4)}, ${k.length}글자 — 정상은 39글자). Firebase 콘솔 → 프로젝트 설정 → 내 앱 → "SDK 설정 및 구성"의 구성 글을 그 PC에서 직접 복사해 다시 붙여 넣고 "설정 저장"을 누르세요.`);
+      if (/unauthorized-domain/.test(e.code || '')) throw new Error('이 주소가 Firebase 승인된 도메인에 없습니다. Authentication → 설정 → 승인된 도메인에 narachadata.github.io 를 추가하세요.');
+      if (/operation-not-allowed/.test(e.code || '')) throw new Error('Firebase에서 Google 로그인이 꺼져 있습니다. Authentication → 로그인 방법 → Google을 사용 설정하세요.');
+      throw e;
+    }
   }
   async function logout() { if (fb.auth) await fb.A.signOut(fb.auth); }
   const now = () => Date.now() + (fb.offset || 0);
@@ -341,7 +350,7 @@ NC.live = (function () {
     const on = (s, f) => { const b = $(s); if (b) b.onclick = async () => { try { await f(); } catch (e) { toast(e.message, true); } }; };
     const chk = $('#lvOn'); if (chk) chk.onchange = () => { setCfg({ on: chk.checked }); sync(); rerender(); };
     const em = $('#lvEmails'); if (em) em.oninput = () => { const r = $('#lvRules'); if (r) r.textContent = rulesText(em.value.split(/\n|,/).map(x => x.trim()).filter(Boolean)); };
-    on('#lvSaveCfg', async () => { const emails = $('#lvEmails').value.split(/\n|,/).map(x => x.trim().toLowerCase()).filter(Boolean); const txt = $('#lvCfg').value.trim(); const f = txt ? parseFbConfig(txt) : null; if (txt && !f) throw new Error('Firebase 구성을 읽지 못했습니다. 콘솔의 구성(Config) 글을 그대로 붙여 넣어 주세요'); setCfg({ emails, fb: f }); if (f) { fb.loading = null; fb.ready = false; await loadFb(); } toast('실시간 설정을 저장했습니다' + (f && !fb.user ? ' — 이제 Google 로그인을 눌러 주세요' : '')); rerender(); });
+    on('#lvSaveCfg', async () => { const emails = $('#lvEmails').value.split(/\n|,/).map(x => x.trim().toLowerCase()).filter(Boolean); const txt = $('#lvCfg').value.trim(); const f = txt ? parseFbConfig(txt) : null; if (txt && !f) throw new Error('Firebase 구성을 읽지 못했습니다. 콘솔의 구성(Config) 글을 그대로 붙여 넣어 주세요'); const prev = JSON.stringify((cfg() || {}).fb || null); setCfg({ emails, fb: f }); if (f && fb.app && prev !== JSON.stringify(f)) { toast('Firebase 설정이 바뀌어 화면을 새로 고칩니다 — 다시 열리면 Google 로그인을 눌러 주세요'); setTimeout(() => location.reload(), 1200); return; } /* 이미 띄운 Firebase는 새 키로 바꿀 수 없어 새로 고침 */ if (f) { fb.loading = null; fb.ready = false; await loadFb(); } toast('실시간 설정을 저장했습니다' + (f && !fb.user ? ' — 이제 Google 로그인을 눌러 주세요' : '')); rerender(); });
     on('#lvClearCfg', async () => { if (!confirm('이 PC의 Firebase 설정을 지울까요? (다른 PC에는 동기화 폴더로 다시 넘어올 수 있습니다)')) return; try { await logout(); } catch (e) {} setCfg({ fb: null }); rerender(); });
     on('#lvCopyRules', async () => { await navigator.clipboard.writeText($('#lvRules').textContent); toast('보안 규칙을 복사했습니다. Firebase 규칙 탭에 붙여 넣고 "게시"를 누르세요'); });
     on('#lvLogin', async () => { await login(); toast('로그인했습니다'); rerender(); });
