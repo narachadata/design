@@ -5,7 +5,7 @@ window.NC = window.NC || {};
 NC.video = (function () {
   const ANIMS = [['none', '없음'], ['fade', '나타나기'], ['rise', '떠오르기'], ['drop', '내려오기'], ['left', '왼쪽에서'], ['right', '오른쪽에서'], ['zoom', '커지며'], ['pop', '톡 튀어나오기'], ['wipe', '펼치기']];
   const TRANS = [['soft', '부드럽게 넘김'], ['fade', '겹치며 바뀜'], ['slide', '옆으로 밀기'], ['up', '위로 밀기'], ['zoom', '다가오며'], ['none', '바로 바뀜']];
-  const DEF = { dur: 5, trans: 'soft', turn: 1, loop: false, q: '1080' };
+  const DEF = { dur: 5, trans: 'soft', turn: 1, loop: false, q: '1080', fps: 30 };
   const ease = t => 1 - Math.pow(1 - t, 3);
   const back = t => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
   const io = p => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
@@ -13,7 +13,7 @@ NC.video = (function () {
 
   // 출력 크기: 짧은 변 1080(또는 720), 긴 변은 1920까지. 짝수로(H.264 규칙)
   function outSize(w, h, q) {
-    const S = q === '720' ? 720 : 1080, L = q === '720' ? 1280 : 1920;
+    const S = q === '720' ? 720 : q === '2160' ? 2160 : 1080, L = q === '720' ? 1280 : q === '2160' ? 3840 : 1920;
     let W, H; if (w >= h) { H = S; W = S * w / h; if (W > L) { W = L; H = L * h / w; } } else { W = S; H = S * h / w; if (H > L) { H = L; W = L * w / h; } }
     W = Math.round(W / 2) * 2; H = Math.round(H / 2) * 2; return { W, H };
   }
@@ -175,6 +175,70 @@ NC.video = (function () {
     });
   }
 
+  /* ---------- 빠른 내보내기: WebCodecs(브라우저 내장 H.264·AAC 인코더) + mp4-muxer(github.com/Vanilagy/mp4-muxer) ----------
+     실제 시간만큼 녹화하지 않고 한 장씩 그려 인코딩 → 훨씬 빠르고, 창을 가려도 끊기지 않고, 프레임이 정확한 일반 MP4. */
+  const MUXER = 'https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.min.js';
+  function load(url, test) { if (test()) return Promise.resolve(); return new Promise((res, rej) => { const s = document.createElement('script'); s.src = url; s.onload = () => test() ? res() : rej(new Error('라이브러리를 불러오지 못했습니다')); s.onerror = () => rej(new Error('라이브러리를 불러오지 못했습니다 (인터넷 연결 확인)')); document.head.appendChild(s); }); }
+  const canFast = () => !!(window.VideoEncoder && window.VideoFrame);
+  async function pickCodec(W, H, fps, bps) {
+    const big = W * H > 2100000, list = big ? ['avc1.640033', 'avc1.4d0033'] : ['avc1.4d0028', 'avc1.640028', 'avc1.4d002a', 'avc1.42e028', 'avc1.42e01f']; // TV 호환: Main 4.0 먼저
+    for (const codec of list) { try { const r = await VideoEncoder.isConfigSupported({ codec, width: W, height: H, bitrate: bps, framerate: fps, avc: { format: 'avc' } }); if (r.supported) return codec; } catch (e) {} }
+    return null;
+  }
+  // 음악을 영상 길이에 맞춰 미리 섞음(반복·크기·끝에서 서서히 작게) → 48kHz 스테레오
+  async function mixAudio(a, total) {
+    const SR = 48000, oac = new OfflineAudioContext(2, Math.ceil(total * SR), SR), src = oac.createBufferSource(), g = oac.createGain();
+    src.buffer = a.buf; src.loop = a.buf.duration < total; const vol = a.vol == null ? 0.8 : Number(a.vol);
+    g.gain.setValueAtTime(vol, 0); if (a.fade !== false && total > 3) { g.gain.setValueAtTime(vol, Math.max(0, total - 2.5)); g.gain.linearRampToValueAtTime(0.0001, total); }
+    src.connect(g).connect(oac.destination); src.start(0); return oac.startRendering();
+  }
+  // o = { V, fps, audio:{buf,vol,fade}, canvas(미리보기), onProgress(p, T), cancelled() } → { blob, ext, note } | null(중지)
+  async function encode(o) {
+    const V = o.V, W = V.W, H = V.H, fps = Number(o.fps || 30), N = Math.max(1, Math.ceil(V.total * fps));
+    const bps = Math.round(Math.min(16e6, Math.max(5e6, W * H * fps * 0.15)));
+    await load(MUXER, () => !!window.Mp4Muxer);
+    const codec = await pickCodec(W, H, fps, bps); if (!codec) throw new Error('이 컴퓨터에서 H.264 인코더를 쓸 수 없습니다');
+    let aBuf = null, aOk = false;
+    if (o.audio && o.audio.buf) {
+      if (!window.AudioEncoder) throw new Error('소리 인코더 없음');
+      try { aOk = (await AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 160000 })).supported; } catch (e) { aOk = false; }
+      if (!aOk) throw new Error('이 브라우저는 AAC 소리 인코딩을 지원하지 않습니다');
+      aBuf = await mixAudio(o.audio, V.total);
+    }
+    const target = new Mp4Muxer.ArrayBufferTarget();
+    const muxer = new Mp4Muxer.Muxer({ target, video: { codec: 'avc', width: W, height: H, frameRate: fps }, audio: aBuf ? { codec: 'aac', numberOfChannels: 2, sampleRate: 48000 } : undefined, fastStart: 'in-memory', firstTimestampBehavior: 'offset' });
+    let err = null;
+    const ve = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: e => { err = e; } });
+    ve.configure({ codec, width: W, height: H, bitrate: bps, framerate: fps, avc: { format: 'avc' }, latencyMode: 'quality' });
+    const cv = o.canvas || document.createElement('canvas'); cv.width = W; cv.height = H; const x = cv.getContext('2d', { willReadFrequently: false });
+    const us = 1e6 / fps;
+    for (let i = 0; i < N; i++) {
+      if (err) throw err;
+      if (o.cancelled && o.cancelled()) { try { ve.close(); } catch (e) {} return null; }
+      const T = Math.min(i / fps, V.total - 0.001); drawAt(x, V, T);
+      const fr = new VideoFrame(cv, { timestamp: Math.round(i * us), duration: Math.round(us) });
+      ve.encode(fr, { keyFrame: i % (fps * 2) === 0 }); fr.close();
+      if (ve.encodeQueueSize > 6 || i % 10 === 0) { await new Promise(r => setTimeout(r, 0)); if (o.onProgress) o.onProgress(i / N * (aBuf ? 0.95 : 1), T); }
+      while (ve.encodeQueueSize > 12) await new Promise(r => setTimeout(r, 4));
+    }
+    await ve.flush(); ve.close(); if (err) throw err;
+    if (aBuf) {
+      const ae = new AudioEncoder({ output: (c, m) => muxer.addAudioChunk(c, m), error: e => { err = e; } });
+      ae.configure({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 160000 });
+      const L = aBuf.getChannelData(0), R = aBuf.getChannelData(1), STEP = 4800;
+      for (let p = 0; p < aBuf.length; p += STEP) {
+        const n = Math.min(STEP, aBuf.length - p), data = new Float32Array(n * 2); data.set(L.subarray(p, p + n), 0); data.set(R.subarray(p, p + n), n);
+        const ad = new AudioData({ format: 'f32-planar', sampleRate: 48000, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(p / 48000 * 1e6), data }); ae.encode(ad); ad.close();
+        if (ae.encodeQueueSize > 20) await new Promise(r => setTimeout(r, 0));
+      }
+      await ae.flush(); ae.close(); if (err) throw err;
+    }
+    muxer.finalize();
+    if (o.onProgress) o.onProgress(1, V.total);
+    const prof = { '42': 'Baseline', '4d': 'Main', '64': 'High' }[codec.slice(5, 7)] || '', lvl = (parseInt(codec.slice(9, 11), 16) / 10).toFixed(1);
+    return { blob: new Blob([target.buffer], { type: 'video/mp4' }), ext: 'mp4', note: `MP4 · H.264 ${prof} ${lvl} · ${W}×${H} · ${fps}fps · ${V.total.toFixed(1)}초${aBuf ? ' · 음악(AAC)' : ''}` };
+  }
+
   /* ---------- 여러 트랙(영상+소리) 조각난 MP4 → 일반 MP4 ----------
      영상만 있으면 소식지 엔진의 mp4Defrag(검증된 원문)를 쓰고, 소리가 함께 있으면 이것을 씀.
      표본(sample)마다 한 묶음(chunk)으로 적어 원래 끼워 넣어진 순서를 그대로 둠. */
@@ -263,5 +327,5 @@ NC.video = (function () {
     let n = 0; list.slice(0, 8).forEach((u, k) => { const an = { t: u.t, d: Math.round(0.18 * k * 100) / 100, s: 0.7 }; u.els.forEach(e => { e.anim = Object.assign({}, an); n++; }); });
     return n;
   }
-  return { ANIMS, TRANS, DEF, outSize, build, drawAt, player, record, decode, hasAnim, autoAnimate, defragMulti };
+  return { ANIMS, TRANS, DEF, outSize, build, drawAt, player, record, encode, canFast, decode, hasAnim, autoAnimate, defragMulti };
 })();
