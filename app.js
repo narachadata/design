@@ -78,15 +78,16 @@ function markDirty() {
   updateSaveBadge();
 }
 async function saveFileNow() {
-  if (store.state.conflict) return;
-  if (store.state.saving) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 800); return; } // 저장 중이면 끝난 뒤 다시
+  if (store.state.conflict) return false;
+  if (store.state.saving) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 800); return false; } // 저장 중이면 끝난 뒤 다시
+  let ok = false;
   try {
     const r = await store.writeFile(doc);
-    if (r === true) setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`);
+    if (r === true) { ok = true; setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); }
     else if (r && r.conflict) await resolveConflict(r.data, r.file);
     else if (r && r.retry) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 3000); }
   } catch (e) { setStatus('파일 저장 실패: ' + e.message); toast('파일 저장 실패: ' + e.message, true); }
-  updateSaveBadge();
+  updateSaveBadge(); return ok;
 }
 // 두 PC가 같은 문서를 고쳐 갈라졌을 때: 어느 쪽을 고르든 다른 쪽은 "충돌 사본" 파일로 남겨 아무것도 잃지 않음
 async function resolveConflict(theirs, file) {
@@ -1071,6 +1072,7 @@ async function videoVoices(ps, total) {
   const { list } = VIDEO.timing(doc, ps);
   for (const x of list) for (const el of x.pg.els) { if (el.type !== 'video' || el.hidden || el.mute) continue; if (NC.media.isLocal(el.src) && mediaMissing.has(el.src.slice(2))) continue; const d0 = el.anim ? Number(el.anim.d || 0) : 0, tin = Number(el.tin || 0), tout = Number(el.tout || el.dur || 0); try { const v = await voiceSrc(el.src); const info = v.blob ? await NC.astream.probe(v.blob).catch(() => null) : null; if (info && info.noAudio) continue; out.push(Object.assign(v, { at: x.t0 + d0, off: tin, len: Math.max(0.05, Math.min(tout - tin, x.dur - d0)), vol: el.vol == null ? 1 : el.vol })); } catch (e) {} }
   if (miss.length) toast(`소리를 읽지 못한 것: ${miss.join(', ')} — 원본이 이 PC에 있는지 확인하세요`, true);
+  out.miss = miss;  // 영상 저장 결과 줄에도 남김(알림은 곧 덮이므로)
   return out;
 }
 // 동영상 원본을 열어 <video>로 (이 PC에 원본이 없으면 검은 화면 + 안내)
@@ -1119,7 +1121,7 @@ function renderVideoSide(body) {
     const sfx = NC.media.SOUNDS.filter(x => x.cat === 'sfx'), mus = NC.media.SOUNDS.filter(x => x.cat === 'music');
     h = `<h3>배경 음악</h3>
     ${A ? `<div class="vd-music"><button class="btn icon sm snd-play" data-snd="${esc(A.src)}" title="들어 보기"><svg class="ic"><use href="#i-play"/></svg></button><b>${esc(aName)}</b><small>${NC.media.isLocal(A.src) ? '내 PC 원본' : A.src.startsWith('shared:') ? '공유 자료' : A.src.startsWith('b:') ? '기본 음악' : '문서 안'}</small><button class="btn sm" id="vdMusicDel">빼기</button></div>
-    <div class="grid2"><label class="f"><span>소리 크기 <small id="vdVolV">${Math.round((A.vol == null ? 0.8 : A.vol) * 100)}%</small></span><input type="range" id="vdVol" min="0" max="1" step="0.05" value="${A.vol == null ? 0.8 : A.vol}"></label><label class="f"><span>곡의 몇 초부터</span><input type="number" id="vdFrom" min="0" step="0.5" value="${A.from || 0}"></label></div>
+    <div class="grid2"><label class="f"><span>소리 크기 <small id="vdVolV">${Math.round((A.vol == null ? 0.8 : A.vol) * 100)}%</small></span><input type="range" id="vdVol" min="0" max="2" step="0.05" value="${A.vol == null ? 0.8 : A.vol}"></label><label class="f"><span>곡의 몇 초부터</span><input type="number" id="vdFrom" min="0" step="0.5" value="${A.from || 0}"></label></div>
     <div class="grid2"><label class="f"><span>서서히 크게 (초)</span><input type="number" id="vdFin" min="0" max="10" step="0.5" value="${A.fin || 0}"></label><label class="f"><span>끝에서 서서히 작게 (초)</span><input type="number" id="vdFout" min="0" max="10" step="0.5" value="${A.fout != null ? A.fout : (A.fade === false ? 0 : 2.5)}"></label></div>` : '<p class="hint">아래에서 들어 보고 <b>쓰기</b>를 누르세요. 타임라인 음악 줄을 끌면 시작 위치가 바뀝니다.</p>'}
     <div class="snd-list">${mus.map(m => `<div class="snd-it"><button class="btn icon sm snd-play" data-snd="b:${m.id}" title="들어 보기"><svg class="ic"><use href="#i-play"/></svg></button><span>${esc(m.name)}</span><button class="btn sm" data-setmusic="b:${m.id}" data-name="${esc(m.name)}">${A && A.src === 'b:' + m.id ? '사용 중' : '쓰기'}</button></div>`).join('')}</div>
     <div class="row" style="gap:6px;margin-top:6px"><button class="btn sm" id="vdMusicLocal"><svg class="ic"><use href="#i-music"/></svg>내 PC 음악</button><button class="btn sm" id="vdShared">공유 자료</button></div><div id="vdSharedBox"></div>
@@ -1190,7 +1192,7 @@ function renderVideoSide(body) {
     else if (['vdFrom', 'vdFin', 'vdFout'].includes(t.id)) { doc.audio[{ vdFrom: 'from', vdFin: 'fin', vdFout: 'fout' }[t.id]] = Math.max(0, Number(t.value) || 0); delete doc.audio.fade; commit(); renderTimeline(); }
     else if (t.id === 'vdVol' || t.id === 'vdPgTurn') { commit(); renderTimeline(); }
   };
-  body.oninput = e => { if (e.target.id === 'vdVol') { doc.audio.vol = Number(e.target.value); $('#vdVolV').textContent = Math.round(doc.audio.vol * 100) + '%'; } if (e.target.id === 'vdPgTurn') { page().vturn = Number(e.target.value); $('#vdTurnV').textContent = page().vturn + '초'; } };
+  body.oninput = e => { if (e.target.id === 'vdVol') { const A = doc.audio, nv = Number(e.target.value), ov = A.vol == null ? 0.8 : Number(A.vol); if (A.vk && A.vk.length && ov > 0) A.vk = A.vk.map(k => [k[0], Math.round(k[1] * nv / ov * 1000) / 1000]); A.vol = nv; $('#vdVolV').textContent = Math.round(nv * 100) + '%'; }  /* 음량 점이 있으면 점 전체를 같은 비율로 */ if (e.target.id === 'vdPgTurn') { page().vturn = Number(e.target.value); $('#vdTurnV').textContent = page().vturn + '초'; } };
 }
 async function addVideoRef(ref, name) {
   try { const u = await NC.media.urlOf(ref, true), info = await videoInfo(u); const k = Math.min(doc.w * 0.8 / info.w, doc.h * 0.8 / info.h); addEl({ type: 'video', src: ref, poster: info.poster ? addAsset(info.poster) : '', name, w: Math.round(info.w * k * 10) / 10, h: Math.round(info.h * k * 10) / 10, x: 0, y: 0, rot: 0, opacity: 1, fit: 'cover', radius: 0, tin: 0, tout: Math.round(info.dur * 10) / 10, dur: info.dur, vol: 1, mute: false }); renderAll(); }
@@ -1746,7 +1748,7 @@ function openVideoMaker() {
       if (!res) { pr.textContent = '중지했습니다'; return; }
       const a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = `${(doc.name || '영상').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/[. ]+$/, '').slice(0, 80) || '영상'}${Vb.H > Vb.W ? '_숏츠' : ''}_${Math.min(Vb.W, Vb.H)}p${Number(vset().fps || 30)}.${res.ext}`;  /* 화질·fps가 보이는 이름 (USB·윈도우에서 안전한 글자만) */ document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
       let shared = ''; if ($('#vidShare') && $('#vidShare').checked) { try { if (!(await store.folderReady())) throw new Error('동기화 폴더가 연결되어 있지 않습니다'); shared = await NC.media.saveResult(res.blob, a.download); } catch (err) { toast('결과물 폴더에 저장하지 못했습니다: ' + err.message, true); } }
-      pr.textContent = `저장했습니다 — ${(res.blob.size / 1048576).toFixed(1)}MB · ${res.note || res.warn || ''}${shared ? ` · 내 드라이브/결과물/${shared}` : ''}`; if (res.warn) toast(res.warn, true); else toast('영상을 저장했습니다');
+      const missV = (Vb && Vb.voices && Vb.voices.miss) || []; pr.textContent = `저장했습니다 — ${(res.blob.size / 1048576).toFixed(1)}MB · ${res.note || res.warn || ''}${shared ? ` · 내 드라이브/결과물/${shared}` : ''}${missV.length ? ` · ⚠ 빠진 소리: ${missV.join(', ')}` : ''}`; if (res.warn) toast(res.warn, true); else if (missV.length) toast(`영상을 저장했습니다 — 단, 소리 ${missV.length}개가 빠졌습니다(원본 없음)`, true); else toast('영상을 저장했습니다');
     } catch (e) { pr.textContent = e.message; } finally { busy = false; if (document.body.contains(go)) go.lastChild.textContent = '영상 만들기'; }
   };
 }
@@ -2623,7 +2625,10 @@ function renderNewDesign() {
 // 다른 문서로 넘어가기 전에 지금 문서 지키기: 파일이 연결돼 있으면 저장, 아니면 이 브라우저에 '직전 문서'로 한 부 보관(저장 ▾ → 직전 문서 되살리기)
 async function keepCurrentDoc() {
   try { flushNudge(); } catch (e) {}
-  if (store.state.handle) { if (store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } return; }
+  if (store.state.handle) {
+    if (!store.state.dirty) return;  // 이미 파일에 저장됨
+    if (!store.state.needPerm) { clearTimeout(fileTimer); if (await saveFileNow()) return; }
+  }  // 파일 저장에 실패했거나 권한 대기·파일 없음이면 아래에서 '직전 문서'로 보관
   if (doc.pages.some(p => p.els.length)) { try { await store.idbSet('doc-prev', JSON.parse(JSON.stringify(doc))); } catch (e) { console.warn('직전 문서 보관 실패', e); } }
 }
 const keepNote = () => store.state.handle ? '지금 문서는 파일에 저장됩니다' : '지금 문서는 파일로 저장하지 않았지만 저장 ▾ → 직전 문서 되살리기로 되살릴 수 있습니다';
@@ -2852,7 +2857,7 @@ function pickSaveLocation(o) {
 async function saveNow() {
   gcAssets();
   try {
-    if (store.state.handle) { clearTimeout(fileTimer); await saveFileNow(); toast('저장했습니다'); return; }
+    if (store.state.handle) { clearTimeout(fileTimer); if (store.state.needPerm) { if (!(await store.requestPermission())) { toast('파일 권한을 허락하지 않아 저장하지 못했습니다 (작업은 이 브라우저에 남아 있습니다)', true); return; } store.state.needPerm = false; } if (await saveFileNow()) toast('저장했습니다'); else if (!store.state.conflict) toast('아직 저장하지 못했습니다 — 파일 권한이나 동기화 상태를 확인해 주세요(위 저장 표시를 누르면 다시 시도)', true); return; }  /* 실패했는데 '저장했습니다'가 뜨던 것 */
     if (await store.folderReady()) { const loc = await pickSaveLocation({ title: '저장', name: doc.name || '새 디자인', ok: '여기에 저장' }); if (!loc) return; doc.name = loc.name; $('#pname').value = doc.name; await store.saveIntoFolder(doc, loc.path); rememberLoc(loc.path); setStatus(`${locLabel(loc.path)}에 저장됨 ${tnow()} · ${store.state.fileName}`); updateSaveBadge(); toast(`${locLabel(loc.path)}에 저장했습니다. 이제 바뀔 때마다 자동 저장됩니다.`); return; }
     if (store.state.supported) { await store.connectNew(doc); updateSaveBadge(); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); toast('저장했습니다. 이제 바뀔 때마다 자동 저장됩니다.'); return; }
     store.download(doc); toast('이 브라우저는 파일 저장을 지원하지 않아 내려받았습니다');
