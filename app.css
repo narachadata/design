@@ -653,3 +653,25 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .rcard img{width:100%;aspect-ratio:1;object-fit:contain;background:repeating-conic-gradient(#f2f3f5 0 25%,#fff 0 50%) 0 0/12px 12px}
 .rcard.fail{border-color:#f0b4b4;background:#fff5f5;cursor:default}.rcard.fail small{color:#b42318}
 #dlgRacha .lnk{border:0;background:none;color:#2f6fe4;cursor:pointer;font-size:12px;padding:0}
+
+/* 글자 크기 (미리캔버스식) */
+.fsz{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0 8px}
+.fsz>span{font-size:12px;color:var(--ink2,#555)}
+.fszc{display:flex;align-items:center;border:1px solid var(--line,#d9dce3);border-radius:8px;overflow:hidden;background:#fff}
+.fszc button{border:0;background:none;width:30px;height:32px;font-size:16px;cursor:pointer;color:inherit}
+.fszc button:hover{background:#f1f3f7}
+.fszc .fszdd{width:22px;font-size:11px;border-left:1px solid var(--line,#d9dce3)}
+.fszc input{width:62px;height:32px;border:0;border-left:1px solid var(--line,#d9dce3);text-align:center;font-size:14px;font-weight:600;-moz-appearance:textfield}
+.fszc input::-webkit-inner-spin-button{display:none}
+.fszc em{font-style:normal;font-size:11px;color:#888;padding:0 8px 0 2px}
+.fszpop{position:fixed;z-index:9999;width:96px;max-height:290px;overflow:auto;background:#fff;border:1px solid #d9dce3;border-radius:10px;box-shadow:0 8px 24px rgba(20,30,60,.16);padding:4px}
+.fszpop button{display:block;width:100%;border:0;background:none;padding:6px 10px;text-align:left;font-size:13px;border-radius:6px;cursor:pointer}
+.fszpop button:hover{background:#f1f3f7}.fszpop button.on{background:#e8eefc;color:#2f5bea;font-weight:700}
+
+/* 문서 밖 작업 공간: 페이지 밖으로 나간 부분은 반투명으로 (내보내기에서는 잘림) */
+.stage #canvas{z-index:1}
+.stage .ghost{position:absolute;left:0;top:0;width:calc(var(--pw) * 1mm);height:calc(var(--ph) * 1mm);transform-origin:0 0;z-index:0;pointer-events:none;overflow:visible;opacity:.32}
+.stage .ghost .page{overflow:visible}
+.stage .ghost .el{pointer-events:auto;cursor:move}
+.stage .ghost:has(.gsel){opacity:.45}
+.stage .ovl{z-index:2}
