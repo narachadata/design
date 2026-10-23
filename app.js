@@ -313,6 +313,8 @@ function renderCanvas() {
 }
 /* ---------- 문서 밖 (미리캔버스처럼 페이지 밖도 작업 공간) ---------- */
 // 회전까지 고려한 요소의 바깥 상자(mm)
+// 여러 요소를 감싸는 상자(회전 반영)
+function unionBox(els) { const bb = els.map(elBox), x = Math.min(...bb.map(b => b.x)), y = Math.min(...bb.map(b => b.y)); return { x, y, w: Math.max(...bb.map(b => b.x + b.w)) - x, h: Math.max(...bb.map(b => b.y + b.h)) - y }; }
 function elBox(el) {
   const a = (el.rot || 0) * Math.PI / 180, c = Math.abs(Math.cos(a)), s_ = Math.abs(Math.sin(a));
   const w = el.w * c + el.h * s_, h = el.w * s_ + el.h * c, cx = el.x + el.w / 2, cy = el.y + el.h / 2;
@@ -374,7 +376,7 @@ const lockedBg = el => el.locked && el.w * el.h >= doc.w * doc.h * 0.6;
 function renderOverlay(guides) {
   const o = $('#ovl'); const els = selEls(); let h = '';
   els.forEach(el => { const single = els.length === 1; h += `<div class="sel${single ? '' : ' multi'}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += (el.type === 'text' && !isWarp(el) ? ['nw', 'ne', 'e', 'se', 'sw', 'w'] : ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']).map(d => `<div class="h ${d}" data-h="${d}"></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; if (el.locked) h += `<button class="lockbadge" data-unlock="${el.id}" title="잠금 풀기 (Ctrl+L)">🔒 잠금 풀기</button>`; h += '</div>'; });
-  if (els.length > 1) { const bx = Math.min(...els.map(e => e.x)), by = Math.min(...els.map(e => e.y)), bw = Math.max(...els.map(e => e.x + e.w)) - bx, bh = Math.max(...els.map(e => e.y + e.h)) - by; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm">${els.some(e => e.locked) ? '' : ['nw', 'ne', 'se', 'sw'].map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="함께 크기 조절 (비율 유지)"></div>`).join('')}</div>`; }
+  if (els.length > 1) { const U = unionBox(els), bx = U.x, by = U.y, bw = U.w, bh = U.h; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm">${els.some(e => e.locked) ? '' : ['nw', 'ne', 'se', 'sw'].map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="함께 크기 조절 (비율 유지)"></div>`).join('')}</div>`; }
   (guides || []).forEach(g => { h += g.v != null ? `<div class="guide v" style="left:${g.v}mm"></div>` : `<div class="guide h" style="top:${g.h}mm"></div>`; });
   h += calOverlay(); h += userGuidesHTML(); try { if (showRulers()) requestAnimationFrame(drawRulers); } catch (e) {} // 고른 요소 범위를 눈금자에 표시
   // 인쇄 안내선: 도련(잘려 나가는 영역)·안전 여백(글자를 두지 않을 영역)
@@ -504,7 +506,7 @@ wrap.addEventListener('pointerdown', e => {
   const p = toMM(e);
   if (tool === 'pen') { pen = { pts: [[r1(p.x), r1(p.y)]] }; $('#ovl').insertAdjacentHTML('beforeend', `<svg class="penprev" viewBox="0 0 ${doc.w} ${doc.h}" style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible"><path d="" fill="none" stroke="#2f5bea" stroke-width="0.6" vector-effect="non-scaling-stroke"/></svg>`); e.preventDefault(); return; }
   const hd = e.target.closest('.ovl .h');
-  if (hd && sel.length > 1 && hd.dataset.g) { const els = selEls(); const bx = Math.min(...els.map(e => e.x)), by = Math.min(...els.map(e => e.y)), bw = Math.max(...els.map(e => e.x + e.w)) - bx, bh = Math.max(...els.map(e => e.y + e.h)) - by; drag = { kind: 'gresize', dir: hd.dataset.h, start: p, box: { x: bx, y: by, w: bw, h: bh }, o: els.map(e => clone(e)), els, moved: false }; e.preventDefault(); return; }
+  if (hd && sel.length > 1 && hd.dataset.g) { const els = selEls(); const U0 = unionBox(els), bx = U0.x, by = U0.y, bw = U0.w, bh = U0.h; drag = { kind: 'gresize', dir: hd.dataset.h, start: p, box: { x: bx, y: by, w: bw, h: bh }, o: els.map(e => clone(e)), els, moved: false }; e.preventDefault(); return; }
   if (hd && sel.length === 1) { const el = find(sel[0]); drag = { kind: hd.dataset.h === 'rot' ? 'rot' : 'resize', dir: hd.dataset.h, el, start: p, o: clone(el), cx: el.x + el.w / 2, cy: el.y + el.h / 2, moved: false }; e.preventDefault(); return; }
   const gl = e.target.closest('.ovl .cgl');
   if (gl && sel.length === 1) { const el = find(sel[0]); const G = calGeom(el); const isC = gl.dataset.cgl[0] === 'c', i = Number(gl.dataset.cgl.slice(1)); drag = { kind: 'cgl', el, isC, i, G, start: p, moved: false, w0: (isC ? G.colW : G.rowH).slice() }; e.preventDefault(); return; }
@@ -790,7 +792,7 @@ $('#btnFront').onclick = () => reorder('front'); $('#btnBack').onclick = () => r
 // 고른 요소를 '덩어리'로: 그룹은 하나로 묶고, 잠긴 요소는 빼고
 function selUnits() {
   const m = new Map(); selEls().filter(e => !e.locked).forEach(e => { const k = e.group || e.id; if (!m.has(k)) m.set(k, []); m.get(k).push(e); });
-  return [...m.values()].map(els => { const x = Math.min(...els.map(e => e.x)), y = Math.min(...els.map(e => e.y)); return { els, x, y, w: Math.max(...els.map(e => e.x + e.w)) - x, h: Math.max(...els.map(e => e.y + e.h)) - y }; });
+  return [...m.values()].map(els => Object.assign({ els }, unionBox(els)));  /* 회전된 요소는 실제 보이는 모양 기준으로 정렬 */
 }
 function moveUnit(u, nx, ny) { const dx = r1(nx - u.x), dy = r1(ny - u.y); u.els.forEach(e => { e.x = r1(e.x + dx); e.y = r1(e.y + dy); }); u.x += dx; u.y += dy; }
 $$('[data-align]').forEach(b => b.onclick = () => {
@@ -1916,7 +1918,7 @@ function renderElems() {
   const si0 = $('#elSearch'), hadF = !!si0 && document.activeElement === si0, caret = hadF ? si0.selectionStart : 0;  // 다시 그려도 검색창 입력이 끊기지 않게
   const body = $('#sidebody'); const q = elQ.trim().toLowerCase();
   const libEls = libElemItems(); const cats = NC.elems.cats.slice(0, 1).concat([['naracha', '나라차']], NC.elems.cats.slice(1));
-  const qw = q.split(/\s+/).filter(Boolean), all = libEls.concat(NC.elems.items).filter(i => { const t = (i.name + ' ' + i.kw).toLowerCase(); return qw.every(w => t.includes(w)); });  // 띄어 쓴 여러 낱말도 찾음
+  const qw = q.split(/\s+/).filter(Boolean), pool = libEls.concat(NC.elems.items), txtOf = i => (i.name + ' ' + i.kw).toLowerCase(); let all = pool.filter(i => qw.every(w => txtOf(i).includes(w))); if (!all.length && qw.length > 1) { const hits = i => qw.filter(w => txtOf(i).includes(w)).length; all = pool.filter(i => hits(i) > 0).sort((a, b) => hits(b) - hits(a)); }  // 모든 낱말이 맞는 것이 없으면 맞는 낱말이 많은 순
   const recent = recentElems().map(getElem).filter(Boolean);
   let h = `<div class="row" style="gap:6px;margin-bottom:6px"><label class="f" style="flex:1;margin:0"><input type="text" id="elSearch" placeholder="요소 검색 (예: 로고, 라차, 별, 말풍선)" value="${esc(elQ)}"></label><button class="btn sm" data-addmine title="내 PC의 PNG·SVG·JPG를 요소로 추가 (자료실에 보관돼 두 PC 모두에서 보임)">＋ 내 요소</button></div><div class="tcats" id="elcats">${cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
   if (elCat === 'naracha' && !q) {
@@ -2191,7 +2193,7 @@ document.addEventListener('keydown', e => {
   if (typeof editing !== 'undefined' && editing) return;
   const ts = selEls().filter(x => x.type === 'text' && !x.locked); if (!ts.length) return;
   e.preventDefault(); e.stopImmediatePropagation();
-  ts.forEach(el => { const v = el.size || 12, st = v < 24 ? 1 : v < 72 ? 2 : v < 200 ? 5 : 10, nv = dir > 0 ? Math.floor(v / st) * st + st : Math.max(1, Math.ceil(v / st) * st - st); scaleTextBy(el, clone(el), nv / v); el.size = nv; });
+  ts.forEach(el => { const v = el.size || 12, nv = dir > 0 ? (FSZ.find(n => n > v + 0.01) || Math.round(v * 1.1)) : ([...FSZ].reverse().find(n => n < v - 0.01) || Math.max(1, Math.round(v * 0.9))); scaleTextBy(el, clone(el), nv / v); el.size = nv; if ((!el.valign || el.valign === 'top') && !(el.warp && el.warp !== 'none')) el.h = 1; });
   commit(); renderAll();
 }, true);
 function fszMenu(btn) {
@@ -2280,7 +2282,7 @@ function renderInspector() {
   if (els.length > 1) {
     const grouped = els.some(e => e.group); const texts = els.filter(e => e.type === 'text');
     ins.innerHTML = `<h2>${els.length}개 선택${grouped ? ' <small>그룹</small>' : ''}</h2><div class="row"><button class="btn sm" id="mGroup">${grouped ? '그룹 해제' : '그룹으로 묶기'}</button><button class="btn sm" id="mLock">모두 잠금</button><button class="btn sm" id="mUnlock">잠금 해제</button></div>
-    <h3>묶음 위치·크기 <small>mm</small></h3><div class="grid4">${(() => { const bx = Math.min(...els.map(e => e.x)), by = Math.min(...els.map(e => e.y)), bw = Math.max(...els.map(e => e.x + e.w)) - bx, bh = Math.max(...els.map(e => e.y + e.h)) - by; return F('X', 'grp.x', r1(bx), { type: 'number', step: 0.5 }) + F('Y', 'grp.y', r1(by), { type: 'number', step: 0.5 }) + F('너비', 'grp.w', r1(bw), { type: 'number', step: 0.5 }) + F('높이', 'grp.h', r1(bh), { type: 'number', step: 0.5 }); })()}</div>
+    <h3>묶음 위치·크기 <small>mm</small></h3><div class="grid4">${(() => { const U9 = unionBox(els), bx = U9.x, by = U9.y, bw = U9.w, bh = U9.h; return F('X', 'grp.x', r1(bx), { type: 'number', step: 0.5 }) + F('Y', 'grp.y', r1(by), { type: 'number', step: 0.5 }) + F('너비', 'grp.w', r1(bw), { type: 'number', step: 0.5 }) + F('높이', 'grp.h', r1(bh), { type: 'number', step: 0.5 }); })()}</div>
     ${F('투명도', 'multi.opacity', els[0].opacity == null ? 1 : els[0].opacity, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 1 })}
     ${texts.length ? `<h3>글자 ${texts.length}개 한꺼번에</h3><div class="row"><label class="f" style="flex:1;margin:0"><span>글꼴</span>${fontPicker('font', texts[0].font)}</label></div><div class="grid2">${F('크기(pt)', 'multi.size', texts[0].size, { type: 'number', step: 0.5 })}${F('색', 'multi.color', texts[0].color, { type: 'color' })}</div>` : ''}
     <p class="hint">도구 막대의 정렬·간격 균등 버튼으로 맞추고, 끌어서 함께 옮깁니다.</p>`;
@@ -2448,7 +2450,7 @@ $('#inspector').addEventListener('input', e => {
   if (k.startsWith('pg.')) { page()[k.slice(3)] = v; renderCanvas(); return; }
   if ((k === 'grp.w' || k === 'grp.h') && !e.__apply) return; // 묶음 너비·높이는 다 친 뒤(Enter·칸 나가기)에만: 한 글자마다 줄이면 1mm로 망가짐
   if (k.startsWith('grp.')) { // 묶음 이동(X·Y) / 비율 유지 크기 조절(너비·높이)
-    const els = selEls().filter(x => !x.locked); if (!els.length) return; const bx = Math.min(...els.map(e => e.x)), by = Math.min(...els.map(e => e.y)), bw = Math.max(...els.map(e => e.x + e.w)) - bx, bh = Math.max(...els.map(e => e.y + e.h)) - by; const kk = k.slice(4);
+    const els = selEls().filter(x => !x.locked); if (!els.length) return; const U9 = unionBox(els), bx = U9.x, by = U9.y, bw = U9.w, bh = U9.h; const kk = k.slice(4);
     if (kk === 'x' || kk === 'y') els.forEach(e => { e[kk] = r1(e[kk] + v - (kk === 'x' ? bx : by)); });
     else { if (v < 1) return; const f = v / (kk === 'w' ? bw : bh); els.forEach(e => { e.x = r1(bx + (e.x - bx) * f); e.y = r1(by + (e.y - by) * f); e.w = r1(e.w * f); e.h = r1(e.h * f); if (e.size) e.size = Math.round(e.size * f * 10) / 10; if (e.strokeW) e.strokeW = Math.round(e.strokeW * f * 100) / 100; if (e.pts) e.pts = e.pts.map(q => [r1(q[0] * f), r1(q[1] * f)]); if (e.html) e.html = e.html.replace(/font-size:\s*([\d.]+)pt/g, (_, z) => 'font-size:' + Math.round(z * f * 2) / 2 + 'pt'); }); }
     renderCanvas(); renderOverlay(); return;
@@ -2464,6 +2466,7 @@ $('#inspector').addEventListener('input', e => {
   // 너비·높이를 숫자로 바꿀 때: 비율 고정이면 다른 쪽도 함께 (그림은 기본으로 고정), 자유 곡선은 점도 함께 늘림
   if ((k === 'w' || k === 'h') && ow > 0 && oh > 0) { const lock = el.ratioLock == null ? el.type === 'image' : el.ratioLock; if (lock) { if (k === 'w') el.h = Math.round(v * oh / ow * 1000) / 1000; else el.w = Math.round(v * ow / oh * 1000) / 1000; } if (el.pts) { const fx = el.w / ow, fy = el.h / oh; el.pts = el.pts.map(q => [q[0] * fx, q[1] * fy]); } if (lock) setTimeout(() => { const o = $(`#inspector input[data-k="${k === 'w' ? 'h' : 'w'}"]`); if (o && document.activeElement !== o) o.value = r1(k === 'w' ? el.h : el.w); }, 0); }
   if (el.type === 'text' && el.html && (k === 'color' || k === 'size')) stripRich(el, k === 'color' ? 'color' : 'size');
+  if (el.type === 'text' && k === 'size' && (!el.valign || el.valign === 'top') && !(el.warp && el.warp !== 'none')) el.h = 1;  /* 그릴 때 내용 높이로 다시 늘어남 */
   if (el.type === 'cal' && ['month', 'year', 's.weekStart', 's.rows'].includes(k)) { const grid = Object.keys(el.cells || {}).filter(x => !x.startsWith('d')); if ((el.merges && el.merges.length) || el.rowH || grid.length) { delete el.merges; delete el.rowH; grid.forEach(x => delete el.cells[x]); cellSel = null; toast('칸 배치가 바뀌어 합친 칸·행 높이·빈 칸 글자를 초기화했습니다 (날짜 칸 색·글자는 날짜를 따라갑니다)'); } }
   if (el.type === 'text') lastTextStyle = { font: el.font, size: el.size, weight: el.weight, color: el.color };
   renderCanvas();
