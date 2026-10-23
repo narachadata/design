@@ -1206,13 +1206,75 @@ function addSfx(ref, name, quiet) {
   t.items.push({ id: uid(), ref, name, at, vol: 1 }); if (!quiet) { commit(); renderTimeline(); toast(`'${name}'을(를) ${t.name} 트랙 ${fmtT(at)}에 넣었습니다 — 타임라인에서 끌어 옮기세요`); }
 }
 
+// 영상 편집 단축키 (프리미어·캡컷·필모라와 같은 키). 타임라인이 열려 있을 때만, 글자 입력 중에는 동작하지 않음
+const TL_KEYS = [['Space', '재생 / 멈춤'], ['K', '멈춤'], ['L', '재생'], ['J', '1초 뒤로'], ['← →', '한 프레임 뒤로 / 앞으로'], ['Shift + ← →', '1초 뒤로 / 앞으로'], ['↑ ↓', '앞 장면 / 다음 장면으로'], ['Home / End', '처음 / 끝으로'],
+  ['Ctrl + B', '재생 헤드에서 자르기 (Ctrl + K도 됨)'], ['Q', '장면 앞부분을 재생 헤드까지 잘라내기'], ['W', '장면 뒷부분을 재생 헤드부터 잘라내기'], ['Delete', '고른 클립(효과음·자막·오버레이·음악) 지우기'], ['Ctrl + Z', '되돌리기'], ['Ctrl + Shift + Z', '다시'],
+  ['T', '재생 위치에 글자 넣기'], ['C', '재생 위치에 자막 넣기'], ['R', '음성 녹음 시작 / 멈춤'], ['Ctrl + =  /  Ctrl + −', '타임라인 늘리기 / 줄이기'], ['Shift + Z', '타임라인 전체 보기'], ['F', '크게 미리보기'], ['Ctrl + E', '내보내기 (MP4)'], ['Esc', '미리보기 닫고 편집으로'], ['?', '단축키 목록']];
 document.addEventListener('keydown', e => {
   if (!tlOn() || editing || document.querySelector('dialog[open]') || (e.target.matches && e.target.matches('input,textarea,select,[contenteditable="true"]'))) return;
-  if (e.code === 'Space' && !e.repeat && !e.ctrlKey && !e.metaKey) { e.preventDefault(); e.stopImmediatePropagation(); tl.playing ? tlPause() : tlPlay(); }
-  else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyB') { e.preventDefault(); e.stopImmediatePropagation(); tlSplit(); }
-  else if (e.key === 'Escape' && $('#vprev') && !$('#vprev').hidden) { tlPause(); tlHidePrev(); }
-  else if (!sel.length && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && $('#vprev') && !$('#vprev').hidden) { e.preventDefault(); e.stopImmediatePropagation(); tlSeek(tl.T + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 1 : 1 / Number(vset().fps || 30))); }
+  const mod = e.ctrlKey || e.metaKey, k = e.key, c = e.code, fps = Number(vset().fps || 30), stop = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  const prevVisible = $('#vprev') && !$('#vprev').hidden, noSel = !sel.length || prevVisible;
+  if (c === 'Space' && !mod) { stop(); if (!e.repeat) tl.playing ? tlPause() : tlPlay(); return; }
+  if (mod && !e.altKey && (c === 'KeyB' || c === 'KeyK')) { stop(); tlSplit(); return; }
+  if (mod && c === 'KeyE') { stop(); tlPause(); openVideoMaker(); return; }
+  if (mod && (k === '=' || k === '+' || c === 'Equal')) { stop(); tl.pxs = Math.min(400, tl.pxs * 1.25); renderTimeline(); return; }
+  if (mod && (k === '-' || c === 'Minus')) { stop(); tl.pxs = Math.max(3, tl.pxs / 1.25); renderTimeline(); return; }
+  if (mod || e.altKey) return;
+  if (k === 'Escape' && prevVisible) { stop(); tlPause(); tlHidePrev(); return; }
+  if (k === '?' || (e.shiftKey && c === 'Slash')) { stop(); tlKeysHelp(); return; }
+  if (e.shiftKey && c === 'KeyZ') { stop(); tl.fit = true; renderTimeline(); return; }
+  if (e.shiftKey) { if ((k === 'ArrowLeft' || k === 'ArrowRight') && noSel) { stop(); tlSeek(tl.T + (k === 'ArrowLeft' ? -1 : 1)); } return; }
+  if ((k === 'ArrowLeft' || k === 'ArrowRight') && noSel) { stop(); tlPause(); tlSeek(tl.T + (k === 'ArrowLeft' ? -1 : 1) / fps); return; }
+  if ((k === 'ArrowUp' || k === 'ArrowDown') && noSel) { stop(); const { list, total } = tlScenes(), eps = 0.01; let to; if (k === 'ArrowUp') { const p = list.filter(x => x.t0 < tl.T - eps).pop(); to = p ? p.t0 : 0; } else { const n = list.find(x => x.t0 > tl.T + eps); to = n ? n.t0 : total; } tlPause(); tlSeek(to); const x = list.find(q => to >= q.t0 && to < q.t0 + q.dur + q.turn); if (x && x.i !== cur) goto(x.i); return; }
+  if (k === 'Home') { stop(); tlPause(); tlSeek(0); return; }
+  if (k === 'End') { stop(); tlPause(); tlSeek(tlScenes().total); return; }
+  if ((k === 'Delete' || k === 'Backspace') && (tl.selIt || tl.selAu)) { stop(); $('#tlDel').click(); return; }
+  if (c === 'KeyK') { stop(); tlPause(); return; }
+  if (c === 'KeyL') { stop(); if (!tl.playing) tlPlay(); return; }
+  if (c === 'KeyJ') { stop(); const was = tl.playing; tlPause(); tlSeek(tl.T - 1, !was); if (was) tlPlay(); return; }
+  if (c === 'KeyQ' || c === 'KeyW') { stop(); tlTrim(c === 'KeyQ' ? 'head' : 'tail'); return; }
+  if (c === 'KeyT') { stop(); $('#tlText').click(); return; }
+  if (c === 'KeyC') { stop(); tlAddCaption(); return; }
+  if (c === 'KeyR') { stop(); tlRecord(); return; }
+  if (c === 'KeyF') { stop(); tlPause(); openVideoPlayer(true); return; }
 }, true);
+// 타임라인 도구 말풍선: 이름 + 단축키(키 모양). 바로 뜸
+(function () {
+  let tip = null, cur0 = null;
+  const show = n => {
+    const t = n.dataset.tip; if (!t) return; if (!tip) { tip = document.createElement('div'); tip.className = 'tltip'; document.body.appendChild(tip); }
+    const m = t.match(/^(.*?)\s*\(([^()]*(?:Ctrl|Shift|Space|Home|End|Delete|Esc|[A-Z?←→↑↓=−+])[^()]*)\)\s*$/);
+    const keys = m ? m[2].split(/\s*,\s*/).map(g => g.split('+').map(x => `<kbd>${esc(x.trim())}</kbd>`).join('<i>+</i>')).join('<i>,</i>') : '';
+    tip.innerHTML = `<span>${esc(m ? m[1] : t)}</span>${keys ? `<em>${keys}</em>` : ''}`; tip.hidden = false;
+    const r = n.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    const below = r.top - h - 10 < 0; tip.style.left = Math.max(6, Math.min(innerWidth - w - 6, r.left + r.width / 2 - w / 2)) + 'px'; tip.style.top = (below ? r.bottom + 8 : r.top - h - 8) + 'px'; tip.classList.toggle('below', below);
+  };
+  document.addEventListener('mouseover', e => {
+    const n = e.target.closest && e.target.closest('#vtl [title], #vtl [data-tip], .tr-pop [title], .tl-menu [title]'); if (n === cur0) return; cur0 = n;
+    if (!n) { if (tip) tip.hidden = true; return; }
+    if (n.hasAttribute('title')) { n.dataset.tip = n.getAttribute('title'); n.removeAttribute('title'); }
+    show(n);
+  });
+  document.addEventListener('pointerdown', () => { if (tip) tip.hidden = true; cur0 = null; }, true);
+})();
+// Q·W: 재생 헤드가 있는 장면의 앞(시작~헤드) 또는 뒤(헤드~끝)를 잘라냄. 뒤 장면은 당겨짐(리플)
+function tlTrim(which) {
+  const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { toast('장면 안에 재생 헤드를 두세요', true); return; }
+  const q = Math.round((tl.T - x.t0) * 10) / 10, pg = x.pg; if (which === 'tail') { if (q < 0.3) { toast('남는 길이가 너무 짧습니다', true); return; } pg.vdur = q; }
+  else { const rest = Math.round((x.dur - q) * 10) / 10; if (rest < 0.3) { toast('남는 길이가 너무 짧습니다', true); return; } pg.vdur = rest; pg.els.forEach(el => { if (el.anim) { const d = Number(el.anim.d || 0) - q; if (d + Number(el.anim.s || 0.8) <= 0) delete el.anim; else el.anim.d = Math.max(0, Math.round(d * 10) / 10); } }); tl.T = x.t0; }
+  commit(); renderTimeline(); tlTimeLabel(); toastUndo(which === 'tail' ? `${x.i + 1}쪽 뒷부분을 잘라냈습니다 (${q}초 남음)` : `${x.i + 1}쪽 앞부분 ${q}초를 잘라냈습니다`);
+}
+function tlAddCaption() {
+  const TR = tracks(); let t = TR.find(x => x.id === tl.selTr && x.type === 'caption') || TR.find(x => x.type === 'caption'); if (!t) { t = { id: uid(), type: 'caption', name: '자막 1', items: [] }; TR.push(t); }
+  const it = { id: uid(), text: '자막을 입력하세요', at: Math.round(tl.T * 10) / 10, dur: 2.5, style: 'outline', pos: 'bottom', size: 0.065 }; t.items.push(it); commit(); renderTimeline(); openItemPop(t, it);
+}
+// 단축키 목록 (? 키 또는 ⌨ 단추)
+function tlKeysHelp() {
+  let d = $('#dlgKeys'); if (d) { d.close(); return; }
+  d = document.createElement('dialog'); d.id = 'dlgKeys'; d.className = 'nw-dlg sm keys-dlg';
+  d.innerHTML = `<div class="dhead"><h2>영상 편집 단축키</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><p class="hint" style="margin-top:0">일반 영상 편집 프로그램(프리미어·캡컷·필모라)과 같은 키입니다. 타임라인이 열려 있을 때 동작하며, 맥에서는 Ctrl 대신 ⌘(Command)도 됩니다. 요소를 고른 상태에서는 화살표가 요소를 움직입니다.</p><table class="keys">${TL_KEYS.map(([a, b]) => `<tr><td>${a.split(/(\s\/\s|\s\+\s)/).map(x => /^\s[\/+]\s$/.test(x) ? `<i>${x.trim()}</i>` : `<kbd>${esc(x.trim())}</kbd>`).join('')}</td><td>${esc(b)}</td></tr>`).join('')}</table></div>`;
+  document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); d.addEventListener('close', () => d.remove()); d.showModal();
+}
 /* ======================= 타임라인 (캡컷식: 장면·움직임·음악·효과음 트랙 + 재생 헤드) ======================= */
 const tl = { T: 0, pxs: 0, playing: false, V: null, Vkey: '', building: null, raf: 0, snd: null, t0: 0, open: null };
 const tlOn = () => !!tl.open;
@@ -1233,13 +1295,13 @@ function tlShow(on) {
   if (!$('#vtl')) {
     const d = document.createElement('div'); d.id = 'vtl'; d.className = 'vtl'; d.tabIndex = -1;
     d.innerHTML = `<div class="vtl-bar">
-      <button class="tb" id="tlUndo" title="되돌리기 (Ctrl+Z)">${tli('undo')}</button><button class="tb" id="tlRedo" title="다시 (Ctrl+Shift+Z)">${tli('redo')}</button><button class="tb" id="tlDel" title="고른 효과음·음악·장면 지우기">${tli('del')}</button><button class="tb" id="tlSplit" title="재생 헤드에서 자르기 (Ctrl+B)">${tli('cut')}</button><button class="tb" id="tlText" title="글자 넣기 (타자기 효과)">${tli('text')}</button><button class="tb" id="tlRec" title="음성 녹음 (재생 헤드 위치에)">${tli('mic')}</button>
+      <button class="tb" id="tlUndo" title="되돌리기 (Ctrl+Z)">${tli('undo')}</button><button class="tb" id="tlRedo" title="다시 (Ctrl+Shift+Z)">${tli('redo')}</button><button class="tb" id="tlDel" title="고른 클립 지우기 (Delete)">${tli('del')}</button><button class="tb" id="tlSplit" title="재생 헤드에서 자르기 (Ctrl+B)">${tli('cut')}</button><button class="tb" id="tlText" title="재생 위치에 글자 넣기 (T)">${tli('text')}</button><button class="tb" id="tlRec" title="음성 녹음 (R)">${tli('mic')}</button>
       <span class="tsep"></span>
-      <button class="tb" id="tlFirst" title="처음으로 (Home)">${tli('first')}</button><button class="tb" id="tlPrevF" title="한 프레임 뒤로 (←)">${tli('prevf')}</button><button class="tb tplay" id="tlPlay" title="재생/멈춤 (스페이스)">${tli('play', 20)}</button><button class="tb" id="tlNextF" title="한 프레임 앞으로 (→)">${tli('nextf')}</button><button class="tb" id="tlStop" title="정지 (처음으로)">${tli('stop')}</button>
+      <button class="tb" id="tlFirst" title="처음으로 (Home)">${tli('first')}</button><button class="tb" id="tlPrevF" title="한 프레임 뒤로 (←)">${tli('prevf')}</button><button class="tb tplay" id="tlPlay" title="재생 / 멈춤 (Space)">${tli('play', 20)}</button><button class="tb" id="tlNextF" title="한 프레임 앞으로 (→)">${tli('nextf')}</button><button class="tb" id="tlStop" title="정지 (K)">${tli('stop')}</button>
       <span class="tl-time" id="tlTime">00:00:00:00</span><span class="tl-tot" id="tlTot">/ 00:00:00:00</span><span class="tl-msg" id="tlMsg"></span>
       <span class="grow"></span>
-      <button class="tb" id="tlZo" title="줄이기">−</button><input type="range" id="tlZoom" min="0" max="100" value="40" title="타임라인 확대"><button class="tb" id="tlZi" title="늘리기">+</button><button class="tb" id="tlZf" title="전체 보기"><svg class="ic"><use href="#i-fit"/></svg></button>
-      <span class="tsep"></span><button class="btn sm tview" id="tlView" title="창 배치 바꾸기"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 14h18M9 4v10"/></svg>보기 방식</button><button class="tb" id="tlBig" title="크게 미리보기">${tli('full')}</button><button class="btn sm primary" id="tlSave"><svg class="ic"><use href="#i-video"/></svg>내보내기</button><button class="tb" id="tlClose" title="타임라인 닫기">✕</button></div>
+      <button class="tb" id="tlZo" title="타임라인 줄이기 (Ctrl+−)">−</button><input type="range" id="tlZoom" min="0" max="100" value="40" title="타임라인 확대"><button class="tb" id="tlZi" title="타임라인 늘리기 (Ctrl+=)">+</button><button class="tb" id="tlZf" title="전체 보기 (Shift+Z)"><svg class="ic"><use href="#i-fit"/></svg></button>
+      <button class="tb" id="tlKeys" title="단축키 목록 (?)"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button><span class="tsep"></span><button class="btn sm tview" id="tlView" title="창 배치 바꾸기"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 14h18M9 4v10"/></svg>보기 방식</button><button class="tb" id="tlBig" title="크게 미리보기 (F)">${tli('full')}</button><button class="btn sm primary" id="tlSave" title="내보내기 (Ctrl+E)"><svg class="ic"><use href="#i-video"/></svg>내보내기</button><button class="tb" id="tlClose" title="타임라인 닫기">✕</button></div>
       <div class="vtl-body"><div class="tl-heads" id="tlHeads"></div>
         <div class="tl-scroll" id="tlScroll"><div class="tl-inner" id="tlInner"></div></div>
         <div class="tl-meter"><div class="mt"><i id="mtL"></i></div><div class="mt"><i id="mtR"></i></div><span>L</span><span>R</span></div></div>`;
@@ -1283,7 +1345,7 @@ function renderTimeline() {
   const heads = `<div class="th rl"><button class="tadd" id="tlAddTrack" title="트랙 추가">＋ 트랙</button></div>` + upper.map(t => headHTML(t)).join('') + `<div class="th h-scn">${tli('film', 14)}<span>비디오 1<small>장면</small></span></div><div class="th h-ans">${tli('fx', 14)}<span>효과<small>움직임</small></span></div><div class="th h-aud">${tli('note', 14)}<span>오디오 1<small>배경 음악</small></span><button class="tm" data-mute="audio" title="소리 끄기/켜기"></button></div>` + lower.map(t => headHTML(t)).join('');
   $('#tlHeads').innerHTML = heads;
   $('#tlInner').style.width = Wd + 'px';
-  $('#tlInner').innerHTML = `<div class="tl-ruler" id="tlRuler">${ruler}</div>${upper.map(rowOf).join('')}<div class="tl-track tl-scn">${scenes}</div><div class="tl-track tl-ans">${anims}</div><div class="tl-track tl-aud">${audio}</div>${lower.map(rowOf).join('')}<div class="tl-head" id="tlHead" style="left:${tl.T * px}px"><b class="hh" title="끌어서 이동"></b><button class="hcut" id="tlHeadCut" title="여기서 자르기">✂</button><i></i></div><div class="tl-end" style="left:${total * px}px"></div>`;
+  $('#tlInner').innerHTML = `<div class="tl-ruler" id="tlRuler">${ruler}</div>${upper.map(rowOf).join('')}<div class="tl-track tl-scn">${scenes}</div><div class="tl-track tl-ans">${anims}</div><div class="tl-track tl-aud">${audio}</div>${lower.map(rowOf).join('')}<div class="tl-head" id="tlHead" style="left:${tl.T * px}px"><b class="hh" title="끌어서 이동"></b><button class="hcut" id="tlHeadCut" title="여기서 자르기 (Ctrl+B)">✂</button><i></i></div><div class="tl-end" style="left:${total * px}px"></div>`;
   const m = !!(doc.audio && doc.audio.mute), mb = $('#tlHeads [data-mute="audio"]'); if (mb) { mb.innerHTML = tli(m ? 'mute' : 'vol', 13); mb.classList.toggle('on', m); }
   requestAnimationFrame(() => fitBoxes($('#tlInner'), '.tl-th', 44));
   tlTimeLabel(); tlWave(); tlStrips();
@@ -1359,12 +1421,13 @@ function tlSplit() {
 function tlWire() {
   const root = $('#vtl');
   $('#tlPlay').onclick = () => tl.playing ? tlPause() : tlPlay();
+  $('#tlKeys').onclick = tlKeysHelp;
   $('#tlView').onclick = () => popMenu($('#tlView'), TL_VIEWS.map(([k, t, d]) => [k, (tlView === k ? '✓ ' : '') + t, d]), k => { tlView = k; try { localStorage.setItem('naracal-tlview', k); } catch (e) {} applyTlView(); });
   $('#tlSplit').onclick = tlSplit; $('#tlBig').onclick = () => { tlPause(); openVideoPlayer(true); }; $('#tlSave').onclick = () => { tlPause(); openVideoMaker(); }; $('#tlClose').onclick = () => tlShow(false);
   $('#tlZi').onclick = () => { tl.pxs = Math.min(400, tl.pxs * 1.4); renderTimeline(); }; $('#tlZo').onclick = () => { tl.pxs = Math.max(3, tl.pxs / 1.4); renderTimeline(); }; $('#tlZf').onclick = () => { tl.fit = true; renderTimeline(); };
   $('#tlZoom').oninput = e => { tl.pxs = 3 * Math.pow(400 / 3, Number(e.target.value) / 100); renderTimeline(); };
   $('#tlUndo').onclick = () => undo(); $('#tlRedo').onclick = () => redo();
-  $('#tlFirst').onclick = () => tlSeek(0); $('#tlStop').onclick = () => { tlPause(); tlSeek(0, false); tlHidePrev(); };
+  $('#tlFirst').onclick = () => tlSeek(0); $('#tlStop').onclick = () => tlPause();
   $('#tlPrevF').onclick = () => tlSeek(tl.T - 1 / Number(vset().fps || 30)); $('#tlNextF').onclick = () => tlSeek(tl.T + 1 / Number(vset().fps || 30));
   $('#tlText').onclick = () => { const { list } = tlScenes(), x = list.find(q => tl.T >= q.t0 && tl.T < q.t0 + q.dur + q.turn); if (x && x.i !== cur) goto(x.i); const el = addText('h', { text: '제목을 입력하세요', noEdit: true }); el.anim = { t: 'type', d: Math.max(0, Math.round((tl.T - (x ? x.t0 : 0)) * 10) / 10), s: 1.4 }; commit(); renderAll(); toast('타자기 효과 글자를 넣었습니다 — 두 번 눌러 글을 고치세요'); };
   $('#tlRec').onclick = tlRecord;
@@ -1478,7 +1541,7 @@ async function relinkMedia(ref) { if (!NC.media.isLocal(ref)) return; const id =
 async function openVideoPlayer(fromCur) {
   let d = $('#dlgVplay'); if (d) d.remove();
   d = document.createElement('dialog'); d.id = 'dlgVplay'; d.className = 'nw-dlg vd-dlg';
-  d.innerHTML = `<div class="dhead"><h2>영상 미리보기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><div class="vd-stage"><canvas id="vpCv"></canvas><div class="vd-load" id="vpLoad">장면을 준비하는 중…</div></div><div class="vd-ctl"><button class="btn icon" id="vpPlay" title="재생/멈춤 (스페이스)"><svg class="ic"><use href="#i-play"/></svg></button><input type="range" id="vpSeek" min="0" max="1" step="0.01" value="0"><span id="vpTime">0:00 / 0:00</span><button class="btn primary" id="vpSave"><svg class="ic"><use href="#i-video"/></svg>MP4 저장</button></div></div>`;
+  d.innerHTML = `<div class="dhead"><h2>영상 미리보기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><div class="vd-stage"><canvas id="vpCv"></canvas><div class="vd-load" id="vpLoad">장면을 준비하는 중…</div></div><div class="vd-ctl"><button class="btn icon" id="vpPlay" title="재생 / 멈춤 (Space)"><svg class="ic"><use href="#i-play"/></svg></button><input type="range" id="vpSeek" min="0" max="1" step="0.01" value="0"><span id="vpTime">0:00 / 0:00</span><button class="btn primary" id="vpSave"><svg class="ic"><use href="#i-video"/></svg>MP4 저장</button></div></div>`;
   document.body.appendChild(d); let P = null, stop = false;
   d.querySelector('[data-close]').onclick = () => d.close(); d.addEventListener('close', () => { stop = true; if (P) P.destroy(); d.remove(); }); d.showModal();
   try {
@@ -3701,16 +3764,23 @@ if (/[?&]qa\b/.test(location.search)) window.NCQA = { renderPageCanvas, videoLay
   });
 })();
 
-/* ---- 자동 업데이트: 새 버전이 올라오면 편집 중이 아닐 때 새로고침 ---- */
+/* ---- 새 버전 알림: 작업 중에는 새로고침하지 않고 단추만 보여 줌. 5분 넘게 손대지 않았을 때만 자동으로 ---- */
 (function () {
   const cur_ = window.NARACAL_VER || '';
   if (!cur_ || location.protocol === 'file:') return;
-  let pending = null;
-  async function check() { try { const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return; const j = await r.json(); if (j.ver && j.ver !== cur_) pending = j.ver; } catch (e) {} if (pending) tryReload(); }
-  const busy = () => editing || drag || pen || $('#cellEd') || document.querySelector('dialog[open]') || $('#dlPanel') || store.state.saving;
-  function tryReload() { if (busy()) { setTimeout(tryReload, 15000); return; } setStatus(`새 버전(${pending})이 있어 잠시 후 새로고침합니다`); toast('새 버전이 올라와 10초 뒤 자동으로 새로고침합니다. 작업은 자동 저장되어 있습니다.');
-    setTimeout(async () => { if (busy()) { setTimeout(tryReload, 15000); return; } clearTimeout(nudgeTimer); if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } try { await store.idbSet('doc', doc); } catch (e) {} location.href = location.pathname + '?v=' + pending; }, 10000); }
-  setInterval(check, 60000); window.addEventListener('focus', check); setTimeout(check, 20000);
+  let pending = null, lastInput = Date.now(), timer = 0;
+  ['pointerdown', 'keydown', 'wheel'].forEach(ev => window.addEventListener(ev, () => { lastInput = Date.now(); }, { capture: true, passive: true }));
+  // 같은 버전으로 이미 한 번 새로고침했는데도 옛 파일이 보이면(브라우저 저장본) 다시 새로고침하지 않음 — 되풀이 새로고침 방지
+  const tried = () => { try { return sessionStorage.getItem('nc-reloaded-to') || ''; } catch (e) { return ''; } };
+  async function check() { try { const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return; const j = await r.json(); if (j.ver && j.ver > cur_ && j.ver !== tried()) { pending = j.ver; showBtn(); } } catch (e) {} }
+  const busy = () => editing || drag || pen || $('#cellEd') || document.querySelector('dialog[open]') || $('#dlPanel') || store.state.saving || (typeof tl !== 'undefined' && tl.playing);
+  async function reloadNow() { if (!pending) return; clearTimeout(nudgeTimer); if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } try { await store.idbSet('doc', doc); } catch (e) {} try { sessionStorage.setItem('nc-reloaded-to', pending); } catch (e) {} location.href = location.pathname + '?v=' + pending; }
+  function showBtn() {
+    let b = $('#newVerBtn'); if (!b) { b = document.createElement('button'); b.id = 'newVerBtn'; b.className = 'btn sm newver'; b.title = '저장된 작업은 그대로 두고 새 버전으로 다시 엽니다'; b.onclick = reloadNow; const bar = $('.topbar .grow'); if (bar) bar.after(b); else document.body.appendChild(b); }
+    b.innerHTML = `<svg class="ic"><use href="#i-refresh"/></svg>새 버전 · 새로고침`;
+    clearInterval(timer); timer = setInterval(() => { if (pending && Date.now() - lastInput > 5 * 60000 && !busy()) reloadNow(); }, 30000);
+  }
+  setInterval(check, 120000); window.addEventListener('focus', check); setTimeout(check, 20000);
 })();
 
 /* ---- 기타 ---- */

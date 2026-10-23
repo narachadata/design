@@ -943,3 +943,11 @@ body.tl-wide .vtl{left:0}
 .tl-grip{position:absolute;left:0;right:0;top:-4px;height:8px;cursor:ns-resize;z-index:3;display:none}
 body.tl-wide .tl-grip{display:block}
 .tl-grip:hover,.tl-grip:active{background:linear-gradient(180deg,transparent 3px,#5b8cff 3px,#5b8cff 5px,transparent 5px)}
+/* 타임라인 도구 말풍선 + 단축키 */
+.tltip{position:fixed;z-index:10000;pointer-events:none;display:flex;align-items:center;gap:8px;background:#0f1117;color:#f2f4f8;border:1px solid #2e3340;border-radius:8px;padding:6px 9px;font:600 12.5px/1.2 var(--font-ui);box-shadow:0 8px 24px rgba(0,0,0,.35);white-space:nowrap}
+.tltip em{display:inline-flex;align-items:center;gap:3px;font-style:normal}
+.tltip kbd,.keys kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;background:#2a2f3c;border:1px solid #444b5c;border-bottom-width:2px;font:700 11px/1.2 ui-monospace,Menlo,monospace;color:#fff;text-align:center}
+.tltip i{font-style:normal;color:#8a92a3;font-size:11px}
+.keys{width:100%;border-collapse:collapse;font-size:13px}.keys td{padding:6px 4px;border-bottom:1px solid var(--ui-line)}.keys td:first-child{white-space:nowrap;width:46%}
+.keys kbd{background:#f3f4f7;border-color:#cfd4dd;color:var(--ui-fg)}.keys i{font-style:normal;color:var(--ui-muted);margin:0 3px}
+.topbar .newver{background:#fff7e0;border-color:#f0c35a;color:#7a5200;font-weight:700}.topbar .newver:hover{background:#ffefc2}
