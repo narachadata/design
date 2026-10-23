@@ -16,6 +16,7 @@ NC.live = (function () {
 
   let api = null;                        // app.js가 넘겨주는 함수들 (attach)
   const me = { id: rid(), joined: Date.now() };
+  const canSave = () => !!(api && api.canSave ? api.canSave() : true); /* 이 PC가 문서 파일(동기화 폴더)에 쓸 수 있는지 — 저장 담당은 쓸 수 있는 PC 중에서 고름 */
   let room = null;                       // { docId, bc, fb, peers: Map }
   let base = null;                       // 마지막으로 서로 맞춘 상태 (scan 결과)
   let rn = 0;                            // 받은 원격 변경 번호 (되돌리기 때 상대 변경을 빼는 데 씀)
@@ -155,7 +156,7 @@ NC.live = (function () {
     if (ops.length) send({ kind: 'ops', ops });
   }
   function send(msg, to) {
-    msg = Object.assign({ id: rid(), from: me.id, pc: pcName(), joined: me.joined }, msg); if (to) msg.to = to;
+    msg = Object.assign({ id: rid(), from: me.id, pc: pcName(), joined: me.joined, fs: canSave() }, msg); if (to) msg.to = to;
     seen.set(msg.id, 1);
     if (room.bc) { try { room.bc.postMessage(msg); } catch (e) { console.warn('BroadcastChannel', e); } }
     if (room.fb) room.fb.send(msg, to);
@@ -173,15 +174,15 @@ NC.live = (function () {
   }
   function docFields(d) { const o = {}; for (const k in d) if (k !== 'pages' && !SKIP.includes(k)) o[k] = d[k]; return o; }
   // 접속자 기록. via: 'bc'(같은 브라우저) | 'fb'(Firebase) — 어느 통로로 마지막에 봤는지 남겨 끊김 판정에 씀
-  function touch(msg, p, via) { let x = room.peers.get(msg.from); if (!x) { x = { id: msg.from, pc: msg.pc, joined: msg.joined || Date.now(), color: COLORS[room.peers.size % COLORS.length], bc: 0, fb: 0 }; room.peers.set(msg.from, x); emit(); checkSaver(); } x[via === 'fb' ? 'fb' : 'bc'] = Date.now(); x.pc = msg.pc || x.pc; if (p) { x.cur = p.cur; x.sel = p.sel || []; x.email = p.email || x.email; } paint(); }
+  function touch(msg, p, via) { let x = room.peers.get(msg.from); if (!x) { x = { id: msg.from, pc: msg.pc, joined: msg.joined || Date.now(), color: COLORS[room.peers.size % COLORS.length], bc: 0, fb: 0 }; room.peers.set(msg.from, x); emit(); checkSaver(); } x[via === 'fb' ? 'fb' : 'bc'] = Date.now(); x.pc = msg.pc || x.pc; const fs0 = x.fs; if (typeof msg.fs === 'boolean') x.fs = msg.fs; if (p) { x.cur = p.cur; x.sel = p.sel || []; x.email = p.email || x.email; if (typeof p.fs === 'boolean') x.fs = p.fs; } if (fs0 !== x.fs) { emit(); checkSaver(); } paint(); }
   function prune() { if (!room) return; let ch = false; for (const [id, p] of room.peers) { const bcLive = p.bc && Date.now() - p.bc < 15000, fbLive = p.fb && (room.fb && fb.connected ? p.fbHere : Date.now() - p.fb < 60000); if (!bcLive && !fbLive) { room.peers.delete(id); ch = true; } } if (ch) { emit(); paint(); checkSaver(); } }
   // 가장 먼저 들어온 PC(파일 저장 담당·상태 보내기 담당)
-  function oldest() { let best = me; for (const p of room.peers.values()) if (p.joined < best.joined || (p.joined === best.joined && p.id < best.id)) best = p; return best.id; }
+  function oldest() { const all = [Object.assign({}, me, { fs: canSave() }), ...room.peers.values()], ok = all.filter(p => p.fs !== false), list = ok.length ? ok : all; let best = list[0]; for (const p of list) if (p.joined < best.joined || (p.joined === best.joined && p.id < best.id)) best = p; return best.id; }  /* 파일에 쓸 수 있는 PC 중 가장 먼저 들어온 PC가 저장 담당 */
   let wasSaver = true;
   function checkSaver() { const now = !deferSave(); if (now && !wasSaver && api) api.saveSoon(); wasSaver = now; }
 
   /* ---------- 방 들어가기·나가기 (문서 번호마다 하나) ---------- */
-  function presence() { if (!api) return null; const s = api.state(); const d = api.doc(); return { cur: d.pages[s.cur] && d.pages[s.cur].id, sel: s.sel.slice(0, 20), email: fb.user ? fb.user.email : '' }; }
+  function presence() { if (!api) return null; const s = api.state(); const d = api.doc(); return { cur: d.pages[s.cur] && d.pages[s.cur].id, sel: s.sel.slice(0, 20), email: fb.user ? fb.user.email : '', fs: canSave() }; }
   function join(docId) {
     leave();
     const c = cfg(); if (!c.on || !docId) return;
@@ -266,6 +267,7 @@ NC.live = (function () {
     if (!room) return;
     prune();
     const p = presence(); const ps = J(p); const chg = ps !== lastPres; tick++;
+    if (chg) checkSaver();
     if (chg || tick % 10 === 0) { lastPres = ps; if (room.bc) { const m = { id: rid(), from: me.id, pc: pcName(), joined: me.joined, kind: 'presence', p }; try { room.bc.postMessage(m); } catch (e) {} } }
     if (room.fb && (chg || tick % 40 === 0)) room.fb.pres(p);
     if (queue.length) flush();
