@@ -6,12 +6,22 @@
 window.NC = window.NC || {};
 NC.media = (function () {
   /* ---------- ① 내 PC 원본 ---------- */
-  const DB = 'naracha-media', ST = 'files';
+  // 저장소 이름은 공방 전용. 'naracha-media'는 같은 주소(narachadata.github.io)의 나라차 본 앱이 학생 사진('kv' 칸)에 쓰는 이름이라 절대 열어 바꾸지 않음
+  const DB = 'naracha-design-media', OLD = 'naracha-media', ST = 'files';
   let dbp = null;
-  // 예전 판에서 만든 저장소에 'files' 칸이 없으면 판 번호를 올려 칸을 새로 만듦 (그대로 두면 transaction 오류)
-  const openDB = v => new Promise((res, rej) => { const r = v ? indexedDB.open(DB, v) : indexedDB.open(DB); r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains(ST)) r.result.createObjectStore(ST, { keyPath: 'id' }); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('다른 창에서 공방이 열려 있어 저장소를 고치지 못했습니다. 다른 공방 창을 닫고 다시 해 주세요.')); });
-  const db = () => dbp || (dbp = (async () => { let d = await openDB(); if (!d.objectStoreNames.contains(ST)) { const v = d.version + 1; d.close(); d = await openDB(v); } d.onversionchange = () => { d.close(); dbp = null; }; return d; })().catch(e => { dbp = null; throw e; }));
-  const tx = async (mode, fn) => { const d = await db(); return new Promise((res, rej) => { const t = d.transaction(ST, mode), s = t.objectStore(ST), r = fn(s); t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); }); };
+  const openDB = v => new Promise((res, rej) => { const r = v ? indexedDB.open(DB, v) : indexedDB.open(DB); r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains(ST)) r.result.createObjectStore(ST, { keyPath: 'id' }); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('다른 창에서 공방이 열려 있어 저장소를 준비하지 못했습니다. 다른 공방 창을 닫고 다시 해 주세요.')); });
+  // 예전 판 공방이 'naracha-media'에 'files' 칸을 만들어 둔 PC라면 그 기록만 한 번 복사해 옴 (읽기만, 판 올리기·지우기 없음, 없으면 열지도 않음 — 열면 빈 저장소가 생겨 본 앱을 방해)
+  async function migrateOld(d) {
+    try {
+      if (localStorage.getItem('naracal-media-moved') || !indexedDB.databases) return;
+      if (!(await indexedDB.databases()).some(x => x.name === OLD)) { localStorage.setItem('naracal-media-moved', '1'); return; }
+      const od = await new Promise((res, rej) => { const r = indexedDB.open(OLD); r.onupgradeneeded = () => { r.transaction.abort(); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+      try { if (od.objectStoreNames.contains(ST)) { const all = await new Promise((res, rej) => { const q = od.transaction(ST).objectStore(ST).getAll(); q.onsuccess = () => res(q.result || []); q.onerror = () => rej(q.error); }); if (all.length) await new Promise((res, rej) => { const t = d.transaction(ST, 'readwrite'), st = t.objectStore(ST); all.forEach(rec => st.put(rec)); t.oncomplete = res; t.onerror = t.onabort = () => rej(t.error); }); } } finally { od.close(); }
+      localStorage.setItem('naracal-media-moved', '1');
+    } catch (e) { console.warn('예전 원본 목록 옮기기 실패', e); }
+  }
+  const db = () => dbp || (dbp = (async () => { let d = await openDB(); if (!d.objectStoreNames.contains(ST)) { const v = d.version + 1; d.close(); d = await openDB(v); } d.onversionchange = () => { d.close(); dbp = null; }; await migrateOld(d); return d; })().catch(e => { dbp = null; throw e; }));
+  const tx = async (mode, fn) => { const d = await db(); return new Promise((res, rej) => { const t = d.transaction(ST, mode), s = t.objectStore(ST), r = fn(s); t.oncomplete = () => res(r && r.result); t.onerror = t.onabort = () => rej(t.error || new Error('저장소 기록 실패')); }); };
   const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const urls = new Map(); // id → blob 주소 (이번 창에서)
   // 파일 고르기: 손잡이를 얻을 수 있으면 손잡이만 기억(복사하지 않음), 아니면 이 브라우저 안에 사본
@@ -22,8 +32,8 @@ NC.media = (function () {
     }
     return new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.multiple = true; i.accept = accept === 'video' ? 'video/*' : accept === 'audio' ? 'audio/*,.m4a,.mp3,.wav,.aac' : 'video/*,audio/*,.m4a'; i.onchange = async () => { const out = []; for (const f of i.files) out.push(await addFile(f)); res(out); }; i.click(); });
   }
-  async function addHandle(h, id) { const f = await h.getFile(); const rec = { id: id || rid(), name: f.name, size: f.size, type: f.type, lastModified: f.lastModified, handle: h }; await tx('readwrite', s => s.put(rec)); urls.set(rec.id, URL.createObjectURL(f)); return meta(rec); }
-  async function addFile(f, id) { const rec = { id: id || rid(), name: f.name, size: f.size, type: f.type, lastModified: f.lastModified, blob: f }; await tx('readwrite', s => s.put(rec)); urls.set(rec.id, URL.createObjectURL(f)); return meta(rec); }
+  async function addHandle(h, id) { if (id) fileC.delete('m:' + id); const f = await h.getFile(); const rec = { id: id || rid(), name: f.name, size: f.size, type: f.type, lastModified: f.lastModified, handle: h }; await tx('readwrite', s => s.put(rec)); urls.set(rec.id, URL.createObjectURL(f)); return meta(rec); }
+  async function addFile(f, id) { if (id) fileC.delete('m:' + id); const rec = { id: id || rid(), name: f.name, size: f.size, type: f.type, lastModified: f.lastModified, blob: f }; await tx('readwrite', s => s.put(rec)); urls.set(rec.id, URL.createObjectURL(f)); return meta(rec); }
   const meta = r => ({ id: r.id, name: r.name, size: r.size, type: r.type || '', lastModified: r.lastModified });
   // 원본 열기: 이번 창에서 처음이면 읽기 허락을 받아야 함(버튼을 누른 흐름 안에서 부를 것)
   async function file(id, ask) {
@@ -139,7 +149,9 @@ NC.media = (function () {
     const u = await urlOf(ref, ask, assetURL); const ab = await (await fetch(u)).arrayBuffer(); const b = await ac.decodeAudioData(ab); bufs.set(key, b); return b;
   }
   // 원본 파일 자체(읽지 않고 가리키기만): 긴 파일을 조금씩 읽을 때
-  async function blobOf(ref, ask) {
+  const fileC = new Map();  // m:아이디 → File (handle.getFile()은 부를 때마다 새 File이라 캐시가 안 맞음)
+  async function blobOf(ref, ask) { if (fileC.has(ref)) return fileC.get(ref); const f = await blobOf0(ref, ask); if (ref.startsWith('m:')) fileC.set(ref, f); return f; }
+  async function blobOf0(ref, ask) {
     if (ref.startsWith('m:')) { const rec = await tx('readonly', st => st.get(ref.slice(2))); if (!rec) { const e = new Error('이 PC에 원본이 없습니다'); e.code = 'missing'; throw e; } if (rec.blob) return rec.blob; let p = await rec.handle.queryPermission({ mode: 'read' }); if (p !== 'granted' && ask) p = await rec.handle.requestPermission({ mode: 'read' }); if (p !== 'granted') { const e = new Error(`"${rec.name}" 원본을 읽으려면 허락이 필요합니다`); e.code = 'perm'; throw e; } return rec.handle.getFile(); }
     if (ref.startsWith('shared:')) { const path = ref.slice(7), sub = path.slice(0, path.indexOf('/')), name = path.slice(path.indexOf('/') + 1); const d = await shareDir(sub, false); return (await d.getFileHandle(name)).getFile(); }
     return (await fetch(ref)).blob();

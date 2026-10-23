@@ -98,7 +98,7 @@ async function resolveConflict(theirs, file) {
     gcAssets();
     const copy = takeTheirs ? await store.writeCopy(doc, store.pcName()) : await store.writeCopy(theirs, who);
     st.lastMod = file.lastModified; store.adopt(theirs);
-    if (takeTheirs) { st.dirty = false; await loadDoc(theirs); }
+    if (takeTheirs) { st.dirty = false; await loadDoc(theirs, undefined, true); }
     st.conflict = false;
     if (!takeTheirs) await saveFileNow(); // 이 PC 내용을 상대 저장본 다음 판으로 저장
     toast(`충돌 사본을 보관했습니다: ${copy}`);
@@ -129,14 +129,30 @@ function missingDialog() {
   const list = [...mediaMissing].map(id => ({ id, m: (doc.media || {})[id] || {}, where: [...new Set(mediaRefs().filter(r => r.id === id).map(r => r.where))].join(', ') }));
   let d = $('#dlgMiss'); if (d) d.remove(); d = document.createElement('dialog'); d.id = 'dlgMiss'; d.className = 'nw-dlg sm';
   d.innerHTML = `<div class="dhead"><h2>원본 영상이 없습니다</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><p class="hint" style="margin-top:0">원본 영상이 이 PC에 없으므로 <b>그 부분은 빈 공간</b>으로 보입니다. 편집 내용(자르기·움직임·자막 등)은 그대로 남아 있으니, 원본 파일을 연결하면 바로 이어서 편집할 수 있습니다. 공방 그림·기본 음악·공유 자료처럼 온라인에 있는 것은 모두 정상으로 불러왔습니다.</p>
-  <div class="miss-list">${list.map(x => `<div class="miss-it" data-mid="${x.id}"><span><b>${esc(x.m.name || '이름 없는 파일')}</b><small>${esc(x.where)}${x.m.size ? ' · ' + (x.m.size / 1048576).toFixed(1) + 'MB' : ''}</small></span><button class="btn sm primary" data-relink="${x.id}">원본 연결</button></div>`).join('')}</div>
+  <div class="miss-list">${list.map(x => `<div class="miss-it" data-mid="${esc(x.id)}"><span><b>${esc(x.m.name || '이름 없는 파일')}</b><small>${esc(x.where)}${x.m.size ? ' · ' + (x.m.size / 1048576).toFixed(1) + 'MB' : ''}</small></span><button class="btn sm primary" data-relink="${esc(x.id)}">원본 연결</button></div>`).join('')}</div>
   <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" data-close>그대로 열기</button></div></div>`;
   document.body.appendChild(d); d.querySelectorAll('[data-close]').forEach(b => b.onclick = () => d.close()); d.addEventListener('close', () => d.remove()); d.showModal();
   d.onclick = async e => { const b = e.target.closest('[data-relink]'); if (!b) return; const id = b.dataset.relink; try { const m0 = (doc.media || {})[id] || {}; const m = await NC.media.relink(id); if (m0.name && m.name !== m0.name && !window.confirm(`고른 파일 이름(${m.name})이 원래 이름(${m0.name})과 다릅니다. 이 파일로 연결할까요?`)) return; mediaMissing.delete(id); b.closest('.miss-it').classList.add('ok'); b.textContent = '연결됨'; b.disabled = true; vEls.clear(); renderCanvas(); if (tlOn()) { tl.Vkey = ''; renderTimeline(); } if (!mediaMissing.size) { d.close(); toast('원본을 모두 연결했습니다'); } } catch (err) { if (err.name !== 'AbortError') toast(err.message, true); } };
 }
-async function loadDoc(j, from) {
+// 문서 파일 정리: 남이 준 문서·채팅 답·버전 기록을 열어도 스크립트가 실행되지 않게 (글 상자 html은 서식만 남기고, 화면에 들어가는 값에서 따옴표·꺾쇠를 막음)
+const DOC_BAD = /[<>"`]|javascript:|expression\(/i, DOC_ID = /^[\w-]{1,60}$/, DOC_TEXTISH = ['text', 'html', 'name', 'title', 'label', 'note', 'caption', 'alt', 'rows', 'data', 'labels', 'cells', 'series', 'values', 'kw', 'prompt'];  // 글 내용(화면에 넣을 때 esc 처리됨)은 그대로
+function cleanVals(o, depth) { for (const k in o) { if (DOC_TEXTISH.includes(k)) continue; const v = o[k]; if (typeof v === 'string') { if (DOC_BAD.test(v)) delete o[k]; } else if (Array.isArray(v)) { o[k] = v.map(x => typeof x === 'string' && DOC_BAD.test(x) ? '' : x); if (depth < 2) o[k].forEach(x => { if (x && typeof x === 'object') cleanVals(x, depth + 1); }); } else if (v && typeof v === 'object' && depth < 2) cleanVals(v, depth + 1); } }
+function sanitizeDoc(d) {
+  d.pages = (Array.isArray(d.pages) ? d.pages : []).filter(p => p && typeof p === 'object').map(p => Object.assign(newPage(), p)); if (!d.pages.length) d.pages = [newPage()];
+  if (!d.calendar || typeof d.calendar !== 'object') d.calendar = newDoc().calendar;
+  d.pages.forEach(p => { if (!DOC_ID.test(String(p.id || ''))) p.id = uid(); if (DOC_BAD.test(String(p.bg || ''))) p.bg = '#ffffff';
+    p.els = (Array.isArray(p.els) ? p.els : []).filter(e => e && typeof e === 'object');
+    p.els.forEach(e => { if (!DOC_ID.test(String(e.id || ''))) e.id = uid();
+      if (e.type === 'text') { for (const k in TEXT_DEF) if (e[k] === undefined) e[k] = TEXT_DEF[k]; if (e.html) { const box = document.implementation.createHTMLDocument('').createElement('div'); box.innerHTML = String(e.html); e.html = richHTML(box) || undefined; if (!e.html) delete e.htmlFor; } }
+      cleanVals(e, 0); }); });
+  (d.tracks || []).forEach(t => { if (t && typeof t === 'object') { if (!DOC_ID.test(String(t.id || ''))) t.id = uid(); (t.items || []).forEach(it => { if (it && typeof it === 'object') { if (!DOC_ID.test(String(it.id || ''))) it.id = uid(); cleanVals(it, 0); } }); } });
+  if (d.audio && typeof d.audio === 'object') cleanVals(d.audio, 0);
+  if (d.media && typeof d.media === 'object') Object.keys(d.media).forEach(k => { if (!DOC_ID.test(k)) delete d.media[k]; else if (d.media[k] && typeof d.media[k] === 'object') cleanVals(d.media[k], 0); });
+}
+async function loadDoc(j, from, quiet) {
   if (!j || !j.pages) throw new Error('문서 형식이 아닙니다');
   if (j.v !== 2) throw new Error('이 프로그램의 문서 파일이 아닙니다');
+  { const d0 = Object.assign(newDoc(), j); sanitizeDoc(d0); j = d0; }
   doc = Object.assign(newDoc(), j); doc.assets = doc.assets || {}; doc.holidays = doc.holidays || {}; doc.fonts = doc.fonts || [];
   if (!doc.calendar.theme || !doc.calendar.theme.id) doc.calendar.theme = Object.assign({ id: 'classic' }, doc.calendar.theme || {});
   const m8 = doc.calendar.months && doc.calendar.months[7]; if (m8 && !m8.image && /우정/.test(m8.virtue || '')) { m8.image = 'asset:illu-08-friendship'; doc.pages.forEach(p => p.els.forEach(e => { if (e.type === 'image' && e.role === 'illust' && e.month === 8 && !e.src) e.src = m8.image; })); }
@@ -145,7 +161,7 @@ async function loadDoc(j, from) {
   $('#pname').value = doc.name || '';
   hist.push(snapshot()); histMeta = [{ cur: 0, sel: [] }]; hptr = 0;
   renderAll(); if (from) toast(from);
-  checkMedia(true);
+  checkMedia(!quiet);
 }
 async function checkExternalChange() {
   const st = store.state; if (st.conflict || editing || $('#cellEd') || drag) return;
@@ -155,7 +171,7 @@ async function checkExternalChange() {
   // 여기 저장 안 한 변경이 있거나, 상대가 내 마지막 저장을 못 보고 저장했으면 충돌
   if (st.dirty || !store.descends(j)) { await resolveConflict(j, ch.file); return; }
   st.lastMod = ch.file.lastModified; store.adopt(j);
-  await loadDoc(j, `${j.savedBy || '다른 PC'}에서 바뀐 내용을 불러왔습니다`);
+  await loadDoc(j, `${j.savedBy || '다른 PC'}에서 바뀐 내용을 불러왔습니다`, true);
 }
 // 동기화 폴더의 설정값(API 키·모델·최근 사용 목록): 다른 PC가 바꾼 건 가져오고, 여기서 바뀐 건 올림
 function applySyncedSettings() { try { Object.assign(AI.cfg, JSON.parse(localStorage.getItem('naracal-ai-v1') || '{}')); } catch (e) {} }
@@ -324,7 +340,7 @@ function fitCanvas() {
   // 위에 떠 있는 도구 막대와 아래 쪽 이동 막대에 페이지가 가리지 않게 그 높이만큼 비워 두고 맞춤
   const st = $('#stage'), tb = st.querySelector('.toolbar'), top = tb ? tb.offsetTop + tb.offsetHeight + 14 : 24, bot = st.classList.contains('tlon') && $('#vtl') && !document.body.classList.contains('tl-wide') ? $('#vtl').offsetHeight + 18 : 64;
   const w = st.clientWidth - 80, h = st.clientHeight - top - bot - 4;
-  const k = zoom || Math.min(w / (doc.w * MM), h / (doc.h * MM));
+  const k = zoom || Math.max(0.03, Math.min(Math.max(w, 60) / (doc.w * MM), Math.max(h, 60) / (doc.h * MM)));
   // 문서 밖으로 나간 요소가 있으면 그만큼 작업 화면을 넓혀 스크롤로 닿게 함 (좌우·위아래 같은 폭이라 페이지가 가운데에 그대로)
   const ov = pageOverflow(page()), px = Math.ceil(Math.max(ov.l, ov.r) * MM * k), py = Math.ceil(Math.max(ov.t, ov.b) * MM * k);
   const sc = $('#scroller'), prev = fitCanvas.pad || [0, 0];
@@ -375,7 +391,7 @@ function renderThumbs() {
 function renderAll() { renderCanvas(); renderSide(); renderInspector(); if (tlOn()) { if (!tl.playing) tlHidePrev(); renderTimeline(); } }
 function rerender(opts) { opts = opts || {}; renderCanvas(); if (!opts.noPanel) renderInspector(); clearTimeout(thumbTimer); thumbTimer = setTimeout(() => { if (sideTab === 'pages') renderThumbs(); else if (sideTab === 'layers') renderSide(); if (tlOn()) { if (!tl.playing) tlHidePrev(); renderTimeline(); } }, 150); }
 function goto(i) { endEdit(); cur = clamp(i, 0, doc.pages.length - 1); sel = []; selDay = null; cellSel = null; renderAll(); }
-function select(ids) { endEdit(); sel = ids.filter(id => find(id)); selDay = null; if (cellSel && !sel.includes(cellSel.id)) cellSel = null; renderOverlay(); renderInspector(); if (sideTab === 'layers' || (sideTab === 'video' && ['text', 'motion', 'trans'].includes(vTab))) renderSide(); updateToolbarState(); }
+function select(ids) { endEdit(); sel = ids.filter(id => find(id)); if (sel.length) { tl.selIt = null; tl.selAu = false; tl.selScene = false; } selDay = null; if (cellSel && !sel.includes(cellSel.id)) cellSel = null; renderOverlay(); renderInspector(); if (sideTab === 'layers' || (sideTab === 'video' && ['text', 'motion', 'trans'].includes(vTab))) renderSide(); updateToolbarState(); }
 function groupOf(id) { const el = find(id); if (!el || !el.group) return [id]; return page().els.filter(e => e.group === el.group).map(e => e.id); }
 function updateToolbarState() { const n = sel.length; const g = selEls().some(e => e.group); const b = $('#btnGroup'); if (b) { b.hidden = n < 2 && !g; b.textContent = g ? '그룹 해제' : '그룹'; } const ds = $('#btnDist'); if (ds) ds.hidden = n < 3; }
 
@@ -633,7 +649,7 @@ function richHTML(dom) {
     const tag = n.tagName; if (tag === 'BR') { out.push('<br>'); return; }
     const block = /^(DIV|P|LI|H[1-6]|TR|UL|OL)$/.test(tag);
     if (block && out.length && !/<br>$/.test(out[out.length - 1])) out.push('<br>');
-    const st = block ? '' : styleOf(n); if (st) { formatted = true; out.push(`<span style="${st}">`); }
+    const st = block ? '' : styleOf(n); if (st) { formatted = true; out.push(`<span style="${esc(st)}">`); }
     n.childNodes.forEach(c => walk(c));
     if (st) out.push('</span>');
   };
@@ -674,7 +690,7 @@ function placeTextBar() { const b = $('#textBar'); if (!b || !editing) return; c
 function updTextBar() { const b = $('#textBar'); if (!b || !editing) return; Object.entries(FMT_CMD).forEach(([k, c]) => { const x = b.querySelector(`[data-tf="${k}"]`); try { x.classList.toggle('on', document.queryCommandState(c)); } catch (e) {} }); $$('#inspector [data-tfi]').forEach(x => { try { x.classList.toggle('on', document.queryCommandState(FMT_CMD[x.dataset.tfi])); } catch (e) {} }); }
 document.addEventListener('selectionchange', () => { if (editing) updTextBar(); });
 // 편집 중이 아닐 때 Ctrl+B·I·U는 고른 글 상자 전체에
-document.addEventListener('keydown', e => { if (editing || !(e.ctrlKey || e.metaKey) || (e.target.matches && e.target.matches('input,textarea,select')) || document.querySelector('dialog[open]')) return; const k = { b: 'bold', i: 'italic', u: 'underline' }[e.key.toLowerCase()]; if (k && selEls().some(x => x.type === 'text')) { e.preventDefault(); toggleFmt(k); } }, true);
+document.addEventListener('keydown', e => { if (editing || !(e.ctrlKey || e.metaKey) || (e.target.matches && e.target.matches('input,textarea,select')) || document.querySelector('dialog[open]')) return; const k = { b: 'bold', i: 'italic', u: 'underline' }[e.key.toLowerCase()]; if (k && selEls().some(x => x.type === 'text')) { e.preventDefault(); e.stopImmediatePropagation(); toggleFmt(k); } }, true);
 // 고른 글자 크기 바꾸기: 임시 font 태그로 감싼 뒤 pt 크기 span으로 바꿈
 function sizeSel(f) {
   const el = find(editing.dataset.id); if (!el) return; const sel = getSelection(); if (!sel.rangeCount || sel.isCollapsed) { toast('크기를 바꿀 글자를 먼저 드래그해 고르세요'); return; }
@@ -706,10 +722,12 @@ document.addEventListener('keydown', e => { if (e.code === 'Space' && !editing &
 document.addEventListener('keyup', e => { if (e.code === 'Space') { spaceDown = false; $('#stage').classList.remove('panning', 'grabbing'); } });
 window.addEventListener('blur', () => { spaceDown = false; panDrag = null; $('#stage').classList.remove('panning', 'grabbing'); });
 $('#scroller').addEventListener('pointerdown', e => { if (!spaceDown) return; e.preventDefault(); e.stopPropagation(); const sc = $('#scroller'); panDrag = { x: e.clientX, y: e.clientY, sl: sc.scrollLeft, st: sc.scrollTop }; $('#stage').classList.add('grabbing'); }, true);
+// 페이지 밖 회색 작업 공간: 누르면 선택 풀기, 끌면 영역 고르기 (미리캔버스처럼). 손바닥(Space)은 위 처리기가 먼저 가져감
+$('#scroller').addEventListener('pointerdown', e => { if (e.button !== 0 || spaceDown || e.target !== $('#scroller') || tool === 'pen') return; if ($('#cellEd')) closeCellEditor(true); if (editing) endEdit(); flushNudge(); if (!e.shiftKey) { cellSel = null; select([]); } drag = { kind: 'marq', start: toMM(e), moved: false, base: e.shiftKey ? sel.slice() : [] }; });
 document.addEventListener('pointermove', e => { if (!panDrag) return; const sc = $('#scroller'); sc.scrollLeft = panDrag.sl - (e.clientX - panDrag.x); sc.scrollTop = panDrag.st - (e.clientY - panDrag.y); });
 document.addEventListener('pointerup', () => { if (panDrag) { panDrag = null; $('#stage').classList.remove('grabbing'); } });
 // Ctrl+0 화면에 맞춤 · Ctrl+1 실제 크기(100%) · Ctrl+= 확대 · Ctrl+- 축소
-document.addEventListener('keydown', e => { if (!(e.ctrlKey || e.metaKey) || e.altKey || (e.target.matches && e.target.matches('input,textarea,select')) || document.querySelector('dialog[open]')) return; const k = e.key; if (k === '0') { e.preventDefault(); zoom = 0; fitCanvas(); } else if (k === '1') { e.preventDefault(); zoomAt(1); } else if (k === '=' || k === '+') { e.preventDefault(); zoomAt((zoom || kScale()) * 1.25); } else if (k === '-') { e.preventDefault(); zoomAt((zoom || kScale()) / 1.25); } }, true);
+document.addEventListener('keydown', e => { if (!(e.ctrlKey || e.metaKey) || e.altKey || (e.target.matches && e.target.matches('input,textarea,select')) || document.querySelector('dialog[open]')) return; if (tlOn() && /^[=+\-]$/.test(e.key)) return; const k = e.key; if (k === '0') { e.preventDefault(); zoom = 0; fitCanvas(); } else if (k === '1') { e.preventDefault(); zoomAt(1); } else if (k === '=' || k === '+') { e.preventDefault(); zoomAt((zoom || kScale()) * 1.25); } else if (k === '-') { e.preventDefault(); zoomAt((zoom || kScale()) / 1.25); } }, true);
 $('#zoomIn').onclick = () => zoomAt((zoom || kScale()) * 1.2);
 $('#zoomOut').onclick = () => zoomAt((zoom || kScale()) / 1.2);
 $('#zoomFit').onclick = () => { zoom = 0; fitCanvas(); };
@@ -787,7 +805,12 @@ $('#btnUndo').onclick = undo; $('#btnRedo').onclick = redo;
 /* ---------- 요소 추가 ---------- */
 const TEXT_DEF = Object.assign({ type: 'text', text: '글자를 입력하세요', x: 20, y: 20, w: 80, h: 10, rot: 0, font: 'Pretendard', size: 14, weight: 400, italic: false, color: '#1a1a1a', align: 'left', lh: 1.3, ls: 0, strokeW: 0, strokeC: '#ffffff', shadow: false, shC: '#000000', shA: 0.25, shX: 0.6, shY: 0.7, shB: 0.4, bg: '', pad: 0, opacity: 1, valign: 'top', name: '' }, FX.TEXT_FX_DEF);
 function addEl(el, at) { el.id = el.id || uid(); delete el.gen; if (at !== false) { el.x = r1(clamp((doc.w - el.w) / 2, 0, doc.w)); el.y = r1(clamp((doc.h - el.h) / 2, 0, doc.h)); } page().els.push(el); commit(); select([el.id]); rerender(); return el; }
-function addEls(els, name) { if (!els.length) return; els.forEach(e => delete e.gen); const xs = els.map(e => e.x), ys = els.map(e => e.y); const bw = Math.max(...els.map(e => e.x + e.w)) - Math.min(...xs), bh = Math.max(...els.map(e => e.y + e.h)) - Math.min(...ys); const ox = r1(clamp((doc.w - bw) / 2, 0, doc.w)) - Math.min(...xs), oy = r1(clamp((doc.h - bh) / 2, 0, doc.h)) - Math.min(...ys); const g = els.length > 1 ? uid() : null; els.forEach(e => { e.id = e.id || uid(); e.x = r1(e.x + ox); e.y = r1(e.y + oy); if (g) e.group = g; page().els.push(e); }); commit(); select(els.map(e => e.id)); rerender(); noteRecentElem(name); }
+function addEls(els, name) { if (!els.length) return; els.forEach(e => delete e.gen);
+  { /* 문서 크기에 맞춰 요소 크기 조절 (현수막에선 점처럼, 명함에선 넘치던 것) — 묶음 전체를 같은 비율로 */
+    const bw0 = Math.max(...els.map(e => e.x + e.w)) - Math.min(...els.map(e => e.x)), bh0 = Math.max(...els.map(e => e.y + e.h)) - Math.min(...els.map(e => e.y));
+    const kk = Math.min(docK(), doc.w * 0.6 / Math.max(1, bw0), doc.h * 0.6 / Math.max(1, bh0));
+    if (Math.abs(kk - 1) > 0.02) els.forEach(e => { e.x *= kk; e.y *= kk; e.w = r1(e.w * kk); e.h = r1(e.h * kk); if (e.size) e.size = Math.round(e.size * kk * 10) / 10; if (e.strokeW) e.strokeW = Math.round(e.strokeW * kk * 100) / 100; if (e.radius) e.radius *= kk; if (Array.isArray(e.pts)) e.pts = e.pts.map(q => [q[0] * kk, q[1] * kk]); }); }
+  const xs = els.map(e => e.x), ys = els.map(e => e.y); const bw = Math.max(...els.map(e => e.x + e.w)) - Math.min(...xs), bh = Math.max(...els.map(e => e.y + e.h)) - Math.min(...ys); const ox = r1(clamp((doc.w - bw) / 2, 0, doc.w)) - Math.min(...xs), oy = r1(clamp((doc.h - bh) / 2, 0, doc.h)) - Math.min(...ys); const g = els.length > 1 ? uid() : null; els.forEach(e => { e.id = e.id || uid(); e.x = r1(e.x + ox); e.y = r1(e.y + oy); if (g) e.group = g; page().els.push(e); }); commit(); select(els.map(e => e.id)); rerender(); noteRecentElem(name); }
 // 새 요소 크기는 문서 크기에 맞춤 (A5 기준. 현수막에서 너무 작거나 스티커에서 너무 크지 않게)
 const docK = () => clamp(Math.min(doc.w, doc.h) / 148, 0.35, 20);
 function addText(preset, st) { const base = Object.assign({}, TEXT_DEF, lastTextStyle || {}); const k = docK(); const p0 = preset === 'h' ? { text: '제목을 입력하세요', size: 36, weight: 700, w: 120, h: 16, ls: -0.02 } : preset === 's' ? { text: '부제목을 입력하세요', size: 20, weight: 500, w: 100, h: 10 } : { text: '본문 글을 입력하세요', size: 12, weight: 400, w: 90, h: 8 }; const p = Object.assign({}, p0, { size: Math.round(p0.size * k * 2) / 2, w: r1(Math.min(p0.w * k, doc.w * 0.9)), h: r1(p0.h * k) }); if (st && st.text && !st.w) p.w = r1(Math.min(doc.w * 0.8, Math.max(p.w, 20 * k))); const noEdit = st && st.noEdit; if (st) delete st.noEdit; const el = addEl(Object.assign(base, p, st || {})); if (noEdit) return el; freshText = el.id; setTimeout(() => { const d = $(`#canvas [data-id="${el.id}"]`); if (d && !(el.warp && el.warp !== 'none')) startEdit(d); }, 50); return el; }
@@ -931,11 +954,11 @@ async function newsCapture(tv) {
   const w = await newsEngine(); setStatus(tv ? 'TV 화면을 그리는 중…' : '소식지를 그리는 중…');
   try { const cap = await NC.news.capture(w, { tv }); if (!cap.length) throw new Error('만들 쪽이 없습니다. 내용 채우기에서 넣을 쪽을 켜 주세요.'); return { w, cap }; } finally { setStatus(''); }
 }
-async function newsImport(tv) {
+async function newsImport(tv, asked) {
   let r; try { r = await newsCapture(tv); } catch (e) { toast(e.message, true); return; }
   const { w, cap } = r, S = w.S;
-  if (doc.pages.some(p => p.els.length) && !window.confirm(`${S.year}년 ${S.month}월호 소식지${tv ? ' TV 화면' : ''} ${cap.length}쪽을 새 문서로 엽니다. 지금 문서를 닫을까요? (지금 문서는 저장된 상태로 남습니다)`)) return;
-  if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
+  if (!asked && doc.pages.some(p => p.els.length) && !window.confirm(`${S.year}년 ${S.month}월호 소식지${tv ? ' TV 화면' : ''} ${cap.length}쪽을 새 문서로 엽니다. 지금 문서를 닫을까요? (${keepNote()})`)) return;
+  await keepCurrentDoc();
   const { pages, assets } = newsPages(cap);
   await store.disconnect();
   const nd = newDoc(); const W0 = cap[0].w, H0 = cap[0].h;
@@ -967,8 +990,8 @@ async function newsReimport() {
 async function newsVideo() {
   setNewsMode(false);
   if (doc.news && doc.news.tv) { if (!doc.video) doc.video = { dur: 5, trans: 'soft', turn: 1.2, loop: true, q: '1080' }; sideTab = 'video'; renderRail(); renderSide(); openVideoMaker(); return; }
-  if (!window.confirm('TV 영상은 16:9 가로 화면으로 다시 배치한 «TV 화면 디자인»에서 만듭니다.\n지금 TV 화면 디자인을 새 문서로 가져올까요? (지금 문서는 저장된 상태로 남습니다)\n\n가져온 뒤 다듬고, 왼쪽 «영상» 메뉴에서 MP4로 저장하세요.')) return;
-  await newsImport(true);
+  if (!window.confirm('TV 영상은 16:9 가로 화면으로 다시 배치한 «TV 화면 디자인»에서 만듭니다.\n지금 TV 화면 디자인을 새 문서로 가져올까요? (' + keepNote() + ')\n\n가져온 뒤 다듬고, 왼쪽 «영상» 메뉴에서 MP4로 저장하세요.')) return;
+  await newsImport(true, true);
   if (doc.news && doc.news.tv) { doc.video = { dur: 5, trans: 'soft', turn: 1.2, loop: true, q: '1080' }; commit(); sideTab = 'video'; renderRail(); renderSide(); }
 }
 /* ======================= 영상 만들기 (쪽 = 장면, 요소 애니메이션, 배경 음악 → MP4) ======================= */
@@ -1043,8 +1066,8 @@ async function voiceSrc(ref) {
 async function videoVoices(ps, total) {
   const out = [], miss = [];
   const add = async (ref, o, label) => { try { out.push(Object.assign(await voiceSrc(ref), o)); } catch (e) { miss.push(label + (e.code === 'perm' ? ' (허락 필요)' : '')); } };
-  const A = doc.audio; if (A && A.src && !A.mute) await add(A.src, { at: Number(A.start || 0), off: Number(A.from || 0), vol: A.vol == null ? 0.8 : A.vol, fin: Number(A.fin || 0), fout: A.fout != null ? Number(A.fout) : (A.fade === false ? 0 : 2.5), loop: true }, '배경 음악');
-  for (const t of tracks()) { if (t.type !== 'audio' || t.mute) continue; for (const it of t.items || []) await add(it.ref, { at: Number(it.at || 0), off: Number(it.off || 0), len: it.dur ? Number(it.dur) : null, vol: it.vol == null ? 1 : it.vol, fin: Number(it.fin || 0), fout: Number(it.fout || 0) }, it.name || '소리'); }
+  const A = doc.audio; if (A && A.src && !A.mute) await add(A.src, { at: Number(A.start || 0), off: Number(A.from || 0), vol: A.vol == null ? 0.8 : A.vol, vk: A.vk, fin: Number(A.fin || 0), fout: A.fout != null ? Number(A.fout) : (A.fade === false ? 0 : 2.5), loop: true }, '배경 음악');
+  for (const t of tracks()) { if (t.type !== 'audio' || t.mute) continue; for (const it of t.items || []) await add(it.ref, { at: Number(it.at || 0), off: Number(it.off || 0), len: it.dur ? Number(it.dur) : null, vol: it.vol == null ? 1 : it.vol, vk: it.vk, fin: Number(it.fin || 0), fout: Number(it.fout || 0) }, it.name || '소리'); }
   const { list } = VIDEO.timing(doc, ps);
   for (const x of list) for (const el of x.pg.els) { if (el.type !== 'video' || el.hidden || el.mute) continue; if (NC.media.isLocal(el.src) && mediaMissing.has(el.src.slice(2))) continue; const d0 = el.anim ? Number(el.anim.d || 0) : 0, tin = Number(el.tin || 0), tout = Number(el.tout || el.dur || 0); try { const v = await voiceSrc(el.src); const info = v.blob ? await NC.astream.probe(v.blob).catch(() => null) : null; if (info && info.noAudio) continue; out.push(Object.assign(v, { at: x.t0 + d0, off: tin, len: Math.max(0.05, Math.min(tout - tin, x.dur - d0)), vol: el.vol == null ? 1 : el.vol })); } catch (e) {} }
   if (miss.length) toast(`소리를 읽지 못한 것: ${miss.join(', ')} — 원본이 이 PC에 있는지 확인하세요`, true);
@@ -1068,11 +1091,11 @@ async function videoOverlays(V) {
 }
 const soundName = ref => { if (!ref) return ''; if (ref.startsWith('b:')) { const s0 = NC.media.SOUNDS.find(x => x.id === ref.slice(2)); return s0 ? s0.name : '기본 소리'; } return ''; };
 let sndPrev = null; // 효과음·음악 들어 보기
-async function previewSound(ref, btn) {
+async function previewSound(ref, btn, from, maxS) {  // from: 몇 초부터, maxS: 최대 몇 초만 (몇 시간짜리 원본을 끝까지 틀지 않게)
   if (sndPrev) { try { sndPrev.stop(); } catch (e) {} const was = sndPrev.ref; sndPrev = null; $$('.snd-play.on').forEach(b => b.classList.remove('on')); if (was === ref) return; }
   try {
     if (ref.startsWith('b:')) { const ac = VIDEO.ctx(); ac.resume && ac.resume(); const buf = await NC.media.render(ref.slice(2)), s2 = ac.createBufferSource(); s2.buffer = buf; s2.connect(ac.destination); s2.start(); sndPrev = { stop: () => s2.stop(), ref }; s2.onended = () => { if (sndPrev && sndPrev.ref === ref) { sndPrev = null; if (btn) btn.classList.remove('on'); } }; }
-    else { const el = new Audio(await NC.media.urlOf(ref, true, r => src(r))); el.play(); sndPrev = { stop: () => el.pause(), ref }; el.onended = () => { if (sndPrev && sndPrev.ref === ref) { sndPrev = null; if (btn) btn.classList.remove('on'); } }; }
+    else { const el = new Audio(await NC.media.urlOf(ref, true, r => src(r))); if (from) el.currentTime = from; el.play(); let tmx = 0; if (maxS) tmx = setTimeout(() => { if (sndPrev && sndPrev.ref === ref) { el.pause(); sndPrev = null; } }, maxS * 1000); sndPrev = { stop: () => { clearTimeout(tmx); el.pause(); }, ref }; el.onended = () => { if (sndPrev && sndPrev.ref === ref) { sndPrev = null; if (btn) btn.classList.remove('on'); } }; }
     if (btn) btn.classList.add('on');
   } catch (e) { toast(e.message, true); }
 }
@@ -1219,8 +1242,8 @@ function videoTplHTML() {
   <div class="vt-rlist">${resp.slice(0, 80).map(t => `<button data-vresp="${t.id}">${esc(t.name)}</button>`).join('')}</div>`;
 }
 async function openVideoDoc(r, name) {
-  if (doc.pages.some(p => p.els.length) && !window.confirm(`"${name}" 영상 템플릿을 새 문서로 엽니다. 지금 문서를 닫을까요? (지금 문서는 저장된 상태로 남습니다)`)) return false;
-  if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
+  if (doc.pages.some(p => p.els.length) && !window.confirm(`"${name}" 영상 템플릿을 새 문서로 엽니다. 지금 문서를 닫을까요? (${keepNote()})`)) return false;
+  await keepCurrentDoc();
   await store.disconnect();
   const nd = newDoc(); nd.w = r.w; nd.h = r.h; nd.fmt = r.fmt || ''; nd.name = name; nd.pages = r.pages; nd.video = r.video; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.rules = doc.rules;
   if (r.audio) nd.audio = r.audio; if (r.sfx && r.sfx.length) nd.sfx = r.sfx.map(x => Object.assign({ id: uid() }, x));
@@ -1248,27 +1271,33 @@ function addSfx(ref, name, quiet) {
 
 // 영상 편집 단축키 (프리미어·캡컷·필모라와 같은 키). 타임라인이 열려 있을 때만, 글자 입력 중에는 동작하지 않음
 const TL_KEYS = [['Space', '재생 / 멈춤'], ['K', '멈춤'], ['L', '재생'], ['J', '1초 뒤로'], ['← →', '한 프레임 뒤로 / 앞으로'], ['Shift + ← →', '1초 뒤로 / 앞으로'], ['↑ ↓', '앞 장면 / 다음 장면으로'], ['Home / End', '처음 / 끝으로'],
-  ['Ctrl + B', '재생 헤드에서 자르기 (Ctrl + K도 됨)'], ['Q', '장면 앞부분을 재생 헤드까지 잘라내기'], ['W', '장면 뒷부분을 재생 헤드부터 잘라내기'], ['Delete', '고른 클립(효과음·자막·오버레이·음악) 지우기'], ['Ctrl + Z', '되돌리기'], ['Ctrl + Shift + Z', '다시'],
+  ['Ctrl + B', '재생 헤드에서 자르기 (Ctrl + K도 됨)'], ['Shift + Ctrl + B', '모두 자르기: 재생 헤드를 지나는 장면·자막·소리를 한 번에'], ['Q', '장면 앞부분을 재생 헤드까지 잘라내기'], ['W', '장면 뒷부분을 재생 헤드부터 잘라내기'], [';  /  \'', '앞 · 다음 편집점으로 (장면 경계와 클립 시작·끝)'], ['Alt + [  /  Alt + ]', '재생 헤드 앞 · 뒤 잘라내기 (Q · W와 같음, 파이널컷 방식)'], ['Delete', '고른 클립 지우기 · 장면을 고르면 리플 삭제(뒤 장면이 당겨지고, 그 장면에 붙은 자막·소리도 함께)'], ['Shift + Delete', '장면을 빈 틈으로 바꾸기 (길이·뒤 위치는 그대로)'], ['Ctrl + Z', '되돌리기'], ['Ctrl + Shift + Z', '다시'],
   ['T', '재생 위치에 글자 넣기'], ['C', '재생 위치에 자막 넣기'], ['R', '음성 녹음 시작 / 멈춤'], ['Ctrl + =  /  Ctrl + −', '타임라인 늘리기 / 줄이기'], ['Shift + Z', '타임라인 전체 보기'], ['F', '크게 미리보기'], ['Ctrl + E', '내보내기 (MP4)'], ['Esc', '미리보기 닫고 편집으로'], ['?', '단축키 목록']];
 document.addEventListener('keydown', e => {
-  if (!tlOn() || editing || document.querySelector('dialog[open]') || (e.target.matches && e.target.matches('input,textarea,select,[contenteditable="true"]'))) return;
+  if (!tlOn() || editing || $('#cellEd') || e.isComposing || e.keyCode === 229 || document.querySelector('dialog[open]') || (e.target.matches && e.target.matches('input,textarea,select,[contenteditable="true"]'))) return;
+  if (cellSel && !(e.ctrlKey || e.metaKey)) return;  // 달력 칸을 고른 채 바로 쓰는 글자(한글 ㄱ=R 등)를 영상 단축키로 가로채지 않음
+  if (sideTab !== 'video' && !(e.target.closest && e.target.closest('#vtl')) && !(e.ctrlKey || e.metaKey) && (/^Key[TCRQWJKLF]$/.test(e.code) || ['Space', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code))) return;
   const mod = e.ctrlKey || e.metaKey, k = e.key, c = e.code, fps = Number(vset().fps || 30), stop = () => { e.preventDefault(); e.stopImmediatePropagation(); };
   const prevVisible = $('#vprev') && !$('#vprev').hidden, noSel = !sel.length || prevVisible;
   if (c === 'Space' && !mod) { stop(); if (!e.repeat) tl.playing ? tlPause() : tlPlay(); return; }
-  if (mod && !e.altKey && (c === 'KeyB' || c === 'KeyK')) { stop(); tlSplit(); return; }
+  if (mod && !e.altKey && (c === 'KeyB' || c === 'KeyK')) { stop(); if (e.shiftKey) tlBladeAll(); else tlSplit(); return; }
   if (mod && c === 'KeyE') { stop(); tlPause(); openVideoMaker(); return; }
   if (mod && (k === '=' || k === '+' || c === 'Equal')) { stop(); tl.pxs = Math.min(400, tl.pxs * 1.25); renderTimeline(); return; }
   if (mod && (k === '-' || c === 'Minus')) { stop(); tl.pxs = Math.max(3, tl.pxs / 1.25); renderTimeline(); return; }
+  if (e.altKey && !mod && (c === 'BracketLeft' || c === 'BracketRight')) { stop(); tlTrim(c === 'BracketLeft' ? 'head' : 'tail'); return; }  /* 파이널컷 Option+[ / ] = 앞·뒤 잘라내기 (Q·W와 같음) */
   if (mod || e.altKey) return;
   if (k === 'Escape' && prevVisible) { stop(); tlPause(); tlHidePrev(); return; }
   if (k === '?' || (e.shiftKey && c === 'Slash')) { stop(); tlKeysHelp(); return; }
   if (e.shiftKey && c === 'KeyZ') { stop(); tl.fit = true; renderTimeline(); return; }
+  if ((k === 'Delete' || k === 'Backspace') && e.shiftKey && tl.selScene && noSel) { stop(); tlDeleteScene(true); return; }  /* Shift+Delete = 빈 틈으로 */
   if (e.shiftKey) { if ((k === 'ArrowLeft' || k === 'ArrowRight') && noSel) { stop(); tlSeek(tl.T + (k === 'ArrowLeft' ? -1 : 1)); } return; }
   if ((k === 'ArrowLeft' || k === 'ArrowRight') && noSel) { stop(); tlPause(); tlSeek(tl.T + (k === 'ArrowLeft' ? -1 : 1) / fps); return; }
+  if ((c === 'Semicolon' || c === 'Quote') && noSel) { stop(); const { list, total } = tlScenes(), pts = [0, total]; list.forEach(q => pts.push(q.t0, q.t0 + q.dur)); tracks().forEach(t => (t.items || []).forEach(it => { const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3); pts.push(Number(it.at || 0), Number(it.at || 0) + d); })); const u = [...new Set(pts.map(v => Math.round(v * 1000) / 1000))].sort((a, b) => a - b); const to = c === 'Semicolon' ? u.filter(v => v < tl.T - 0.01).pop() : u.find(v => v > tl.T + 0.01); if (to != null) { tlPause(); tlSeek(to); } return; }  /* 파이널컷 ; ' = 앞·다음 편집점(장면 경계와 클립 끝) */
   if ((k === 'ArrowUp' || k === 'ArrowDown') && noSel) { stop(); const { list, total } = tlScenes(), eps = 0.01; let to; if (k === 'ArrowUp') { const p = list.filter(x => x.t0 < tl.T - eps).pop(); to = p ? p.t0 : 0; } else { const n = list.find(x => x.t0 > tl.T + eps); to = n ? n.t0 : total; } tlPause(); tlSeek(to); const x = list.find(q => to >= q.t0 && to < q.t0 + q.dur + q.turn); if (x && x.i !== cur) goto(x.i); return; }
   if (k === 'Home') { stop(); tlPause(); tlSeek(0); return; }
   if (k === 'End') { stop(); tlPause(); tlSeek(tlScenes().total); return; }
   if ((k === 'Delete' || k === 'Backspace') && (tl.selIt || tl.selAu)) { stop(); $('#tlDel').click(); return; }
+  if ((k === 'Delete' || k === 'Backspace') && tl.selScene && noSel) { stop(); tlDeleteScene(e.shiftKey); return; }  /* 파이널컷: Delete = 리플 삭제, Shift+Delete = 빈 틈으로 */
   if (c === 'KeyK') { stop(); tlPause(); return; }
   if (c === 'KeyL') { stop(); if (!tl.playing) tlPlay(); return; }
   if (c === 'KeyJ') { stop(); const was = tl.playing; tlPause(); tlSeek(tl.T - 1, !was); if (was) tlPlay(); return; }
@@ -1298,12 +1327,46 @@ document.addEventListener('keydown', e => {
   document.addEventListener('pointerdown', () => { if (tip) tip.hidden = true; cur0 = null; }, true);
 })();
 // Q·W: 재생 헤드가 있는 장면의 앞(시작~헤드) 또는 뒤(헤드~끝)를 잘라냄. 뒤 장면은 당겨짐(리플)
+// 리플: 장면 길이가 바뀌면 그 뒤의 자막·효과음·오디오·오버레이·배경 음악 시작도 함께 밀고 당김 (편집기 표준)
+function tlRippleSnap(cut) { const its = []; tracks().forEach(tr => (tr.items || []).forEach(it => { if (Number(it.at || 0) >= cut - 1e-6) its.push([it, Number(it.at || 0)]); })); const A = doc.audio && Number(doc.audio.start || 0) > 0 && Number(doc.audio.start || 0) >= cut - 1e-6 ? Number(doc.audio.start) : null; return d => { its.forEach(([it, a]) => { it.at = Math.max(0, Math.round((a + d) * 100) / 100); }); if (A != null) doc.audio.start = Math.max(0, Math.round((A + d) * 100) / 100); }; }
+function tlRipple(cut, d) { if (d) tlRippleSnap(cut)(d); }
+// 연결된 클립(파이널컷 방식): 자막·소리·오버레이는 놓인 장면(주 줄거리 클립)에 붙어 있음 → 장면을 옮기거나 지우면 함께 따라감(지운 장면에 붙은 클립은 함께 지움)
+function tlConnSnap() {
+  const { list } = tlScenes(), recs = []; if (!list.length) return () => 0;
+  const sceneAt = t => list.find(q => t >= q.t0 - 1e-6 && t < q.t0 + q.dur + q.turn - 1e-6) || list[list.length - 1];
+  tracks().forEach(tr => (tr.items || []).forEach(it => { const sc = sceneAt(Number(it.at || 0)); recs.push({ tr, it, id: sc.pg.id, off: Number(it.at || 0) - sc.t0 }); }));
+  let A = null; if (doc.audio && Number(doc.audio.start || 0) > 0) { const sc = sceneAt(Number(doc.audio.start)); A = { id: sc.pg.id, off: Number(doc.audio.start) - sc.t0 }; }
+  return (opt = {}) => { const byId = new Map(tlScenes().list.map(q => [q.pg.id, q])); let gone = 0;
+    recs.forEach(r => { const q = byId.get(r.id); if (!q) { if (opt.dropOrphans) { r.tr.items = r.tr.items.filter(x => x !== r.it); gone++; } return; } r.it.at = Math.max(0, Math.round((q.t0 + r.off) * 100) / 100); });
+    if (A) { const q = byId.get(A.id); if (q) doc.audio.start = Math.max(0, Math.round((q.t0 + A.off) * 100) / 100); }
+    return gone; };
+}
+// 장면 지우기: Delete = 리플 삭제(뒤 장면이 당겨지고 붙은 클립도 함께), Shift+Delete = 틈으로 바꾸기(길이는 그대로, 내용만 비움)
+function tlDeleteScene(gap) {
+  if (gap) { const pg = doc.pages[cur]; pg.els = []; pg.bg = '#000000'; pg.label = '빈 틈'; commit(); renderAll(); toastUndo(`${cur + 1}번 장면을 빈 틈으로 바꿨습니다 — 길이와 뒤 장면 위치는 그대로입니다`); return; }
+  if (doc.pages.length < 2) { toast('장면이 하나뿐이라 지울 수 없습니다 — Shift+Delete로 빈 틈으로 바꿀 수 있습니다', true); return; }
+  const snap = tlConnSnap(); doc.pages.splice(cur, 1); const gone = snap({ dropOrphans: true }); commit(); goto(Math.min(cur, doc.pages.length - 1));
+  toastUndo(`장면을 지우고 뒤 장면을 당겼습니다${gone ? ` (붙어 있던 클립 ${gone}개도 함께 지움)` : ''}`);
+}
+// 모두 자르기(Shift+Ctrl+B): 재생 헤드를 지나는 장면과 모든 트랙 클립을 한 번에
+function splitItem(t, it, q) {
+  const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), it2 = Object.assign(clone(it), { id: uid(), at: Math.round((it.at + q) * 100) / 100, dur: Math.round((d - q) * 100) / 100 });
+  if (t.type === 'audio') { it2.off = Math.round((Number(it.off || 0) + q) * 100) / 100; if (it.vk && it.vk.length) { const vq = Math.round(VIDEO.vkAt(it.vk, q) * 1000) / 1000; it2.vk = [[0, vq]].concat(it.vk.filter(k => k[0] > q).map(k => [Math.round((k[0] - q) * 100) / 100, k[1]])); it.vk = it.vk.filter(k => k[0] < q).concat([[q, vq]]); } }
+  it.dur = q; t.items.splice(t.items.indexOf(it) + 1, 0, it2); return it2;
+}
+function tlBladeAll() {
+  let n = 0; const T = tl.T; tracks().forEach(t => (t.items || []).slice().forEach(it => { const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), q = Math.round((T - it.at) * 100) / 100; if (q > 0.05 && q < d - 0.05) { splitItem(t, it, q); n++; } }));
+  const sel0 = tl.selIt; tl.selIt = null; const pages0 = doc.pages.length; tlSplitScene(true);
+  if (doc.pages.length === pages0) { if (n) { commit(); renderTimeline(); } }
+  tl.selIt = sel0; toastUndo(`재생 헤드에서 모두 잘랐습니다 (${doc.pages.length > pages0 ? '장면 1개 · ' : ''}클립 ${n}개)`);
+}
 function tlTrim(which) {
   const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { toast('장면 안에 재생 헤드를 두세요', true); return; }
   const q = Math.round((tl.T - x.t0) * 10) / 10, pg = x.pg;
+  if (which === 'tail' ? q < 0.3 : x.dur - q < 0.3) { toast('남는 길이가 너무 짧습니다', true); return; }  // 검사를 먼저: 실패하면 동영상 구간도 그대로
   pg.els.forEach(e => { if (e.type !== 'video') return; const d0 = e.anim ? Number(e.anim.d || 0) : 0, used = Math.max(0, q - d0), tin = Number(e.tin || 0), tout = Number(e.tout || e.dur || 0); if (which === 'tail') e.tout = Math.round(Math.min(tout, tin + used) * 100) / 100; else if (used) e.tin = Math.round(Math.min(tout - 0.1, tin + used) * 100) / 100; });
-  if (which === 'tail') { if (q < 0.3) { toast('남는 길이가 너무 짧습니다', true); return; } pg.vdur = q; }
-  else { const rest = Math.round((x.dur - q) * 10) / 10; if (rest < 0.3) { toast('남는 길이가 너무 짧습니다', true); return; } pg.vdur = rest; pg.els.forEach(el => { if (el.anim) { const d = Number(el.anim.d || 0) - q; if (d + Number(el.anim.s || 0.8) <= 0) delete el.anim; else el.anim.d = Math.max(0, Math.round(d * 10) / 10); } }); tl.T = x.t0; }
+  if (which === 'tail') { tlRipple(x.t0 + x.dur, q - x.dur); pg.vdur = q; }
+  else { const rest = Math.round((x.dur - q) * 10) / 10; tlRipple(x.t0 + q, -q); pg.vdur = rest; pg.els.forEach(el => { if (el.anim) { const d = Number(el.anim.d || 0) - q; if (d + Number(el.anim.s || 0.8) <= 0) delete el.anim; else el.anim.d = Math.max(0, Math.round(d * 10) / 10); } }); tl.T = x.t0; }
   commit(); renderTimeline(); tlTimeLabel(); toastUndo(which === 'tail' ? `${x.i + 1}쪽 뒷부분을 잘라냈습니다 (${q}초 남음)` : `${x.i + 1}쪽 앞부분 ${q}초를 잘라냈습니다`);
 }
 function tlAddCaption() {
@@ -1320,11 +1383,13 @@ function tlKeysHelp() {
 /* ======================= 타임라인 (캡컷식: 장면·움직임·음악·효과음 트랙 + 재생 헤드) ======================= */
 const tl = { T: 0, pxs: 0, playing: false, V: null, Vkey: '', building: null, raf: 0, snd: null, t0: 0, open: null };
 const tlOn = () => !!tl.open;
-const fmtTC = (t, fps) => { fps = fps || Number(vset().fps || 30); t = Math.max(0, t); const f = Math.floor((t % 1) * fps + 1e-6), S = Math.floor(t) % 60, M = Math.floor(t / 60) % 60, H = Math.floor(t / 3600), p2 = n => String(n).padStart(2, '0'); return `${p2(H)}:${p2(M)}:${p2(S)}:${p2(f)}`; };
+const fmtTC = (t, fps) => { fps = Math.round(fps || Number(vset().fps || 30)); const F = Math.floor(Math.max(0, t) * fps + 1e-6), f = F % fps, s = Math.floor(F / fps), S = s % 60, M = Math.floor(s / 60) % 60, H = Math.floor(s / 3600), p2 = n => String(n).padStart(2, '0'); return `${p2(H)}:${p2(M)}:${p2(S)}:${p2(f)}`; };
 const TLI = { undo: '<path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-2"/>', redo: '<path d="m15 7 5 5-5 5M20 12H9a5 5 0 0 0 0 10h2"/>', del: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>', cut: '<circle cx="6" cy="7" r="3"/><circle cx="6" cy="17" r="3"/><path d="M8.5 8.5 20 18M8.5 15.5 20 6"/>', text: '<path d="M5 6h14M12 6v13"/>', mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>', first: '<path d="M6 5v14M19 5 9 12l10 7z"/>', prevf: '<path d="M15 5 8 12l7 7"/>', nextf: '<path d="m9 5 7 7-7 7"/>', play: '<path d="M7 5v14l11-7z"/>', pause: '<path d="M8 5v14M16 5v14"/>', stop: '<rect x="6" y="6" width="12" height="12" rx="1"/>', full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>', vol: '<path d="M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 0 1 0 6"/>', mute: '<path d="M4 9v6h4l5 4V5L8 9zM16 9l5 6M21 9l-5 6"/>', film: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4"/>', note: '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>', fx: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>', bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4"/>' };
 const tli = (k, sz) => `<svg class="ic" viewBox="0 0 24 24" style="${sz ? `width:${sz}px;height:${sz}px` : ''}">${TLI[k]}</svg>`;
 const TL_VIEWS = [['wide', '넓은 타임라인 (기본)', '화면 아래 왼쪽 끝~오른쪽 끝, 위 창들은 위로'], ['stage', '작업 영역 아래', '가운데 작업 영역 안에만'], ['focus', '영상 집중', '넓은 타임라인 + 양쪽 패널 접기'], ['tall', '큰 타임라인', '넓고 높게 (트랙이 많을 때)']];
 let tlView = (() => { try { return localStorage.getItem('naracal-tlview') || 'wide'; } catch (e) { return 'wide'; } })();
+// 타임라인은 영상 메뉴에서만(기본): 템플릿·요소 등 다른 메뉴로 가면 평소 공방 화면, 영상 메뉴로 돌아오면 다시 — 보기 방식에서 끄고 켬
+let tlOnlyVideo = (() => { try { return localStorage.getItem('naracal-tlonly') !== '0'; } catch (e) { return true; } })();
 function applyTlView() {
   const v = tl.open ? tlView : 'stage', wide = v !== 'stage', b = document.body, el = $('#vtl');
   b.classList.toggle('tl-wide', wide); b.classList.toggle('tl-focus', v === 'focus'); b.classList.toggle('tl-tall', v === 'tall');
@@ -1350,7 +1415,7 @@ function tlShow(on) {
     $('#stage').appendChild(d); tlWire();
     const gr = document.createElement('div'); gr.className = 'tl-grip'; gr.title = '끌어서 타임라인 높이 조절'; d.prepend(gr);
     gr.addEventListener('pointerdown', e => { if (!document.body.classList.contains('tl-wide')) return; e.preventDefault(); const y0 = e.clientY, h0 = d.offsetHeight; gr.setPointerCapture(e.pointerId);
-      const mv = ev => { const h = Math.max(180, Math.min(innerHeight * 0.75, h0 - (ev.clientY - y0))); document.body.style.setProperty('--tlh', h + 'px'); fitCanvas(); };
+      const mv = ev => { const h = Math.max(180, Math.min(Math.max(220, innerHeight - 380), h0 - (ev.clientY - y0))); document.body.style.setProperty('--tlh', h + 'px'); fitCanvas(); };
       const up = () => { gr.removeEventListener('pointermove', mv); gr.removeEventListener('pointerup', up); try { localStorage.setItem('naracal-tlh-' + (tlView === 'tall' ? 'tall' : 'wide'), parseInt(getComputedStyle(document.body).getPropertyValue('--tlh'))); } catch (err) {} renderTimeline(); };
       gr.addEventListener('pointermove', mv); gr.addEventListener('pointerup', up); });
     const pc = document.createElement('canvas'); pc.id = 'vprev'; pc.className = 'vprev'; pc.hidden = true; $('#canvasWrap').appendChild(pc);
@@ -1380,10 +1445,10 @@ function renderTimeline() {
   let anims = '';
   list.forEach(x => { let lane = 0; x.pg.els.forEach(el => { if (el.hidden || !VIDEO.moves(el) || el.type === 'video') return; const a = el.anim, o = el.animOut, l = el.animLoop, d = a ? Number(a.d || 0) : 0, s2 = a ? Number(a.s || 0.8) : 0, so = o ? Number(o.s || 0.6) : 0, at = o ? Number(o.at || 0) : 0; const L = lane++ % 3, y = 4 + L * 15, x0 = (x.t0 + d) * px, endT = x.t0 + x.dur - at, w = Math.max(6, (endT - x.t0 - d) * px); anims += `<div class="tl-an${sel.includes(el.id) ? ' on' : ''}" data-ael="${el.id}" data-ap="${x.i}" style="left:${x0}px;top:${y}px;width:${w}px" title="${esc(elName(el))} — 끌면 시작 시각, 오른쪽 끝을 끌면 나타나는 시간"><i class="in" style="width:${Math.min(w, s2 * px)}px"></i>${l ? '<i class="lp"></i>' : ''}${o ? `<i class="out" style="width:${Math.min(w, so * px)}px"></i>` : ''}<span>${esc(elName(el))}</span>${a ? '<em class="tl-ah" data-ah="1"></em>' : ''}</div>`; }); });
   let audio = '<button class="tl-add" id="tlAddMusic">＋ 배경 음악 넣기</button>';
-  if (doc.audio) { const A = doc.audio, st = Number(A.start || 0), fin = Number(A.fin || 0), fout = A.fout != null ? Number(A.fout) : (A.fade === false ? 0 : 2.5); audio = `<div class="tl-au${tl.selAu ? ' sel' : ''}${A.mute ? ' muted' : ''}" id="tlAu" style="left:${st * px}px;width:${Math.max(10, (total - st) * px)}px" title="끌어서 시작 위치 옮기기"><canvas id="tlWave"></canvas><span>${tli('note', 11)} ${esc(A.name || soundName(A.src) || '음악')}</span>${fin ? `<i class="fi" style="width:${fin * px}px"></i>` : ''}${fout ? `<i class="fo" style="width:${fout * px}px"></i>` : ''}</div>`; }
+  if (doc.audio) { const A = doc.audio, st = Number(A.start || 0), fin = Number(A.fin || 0), fout = A.fout != null ? Number(A.fout) : (A.fade === false ? 0 : 2.5); audio = `<div class="tl-au${tl.selAu ? ' sel' : ''}${A.mute ? ' muted' : ''}" id="tlAu" style="left:${st * px}px;width:${Math.max(10, (total - st) * px)}px" title="끌어서 시작 위치 옮기기"><canvas id="tlWave"></canvas><span>${tli('note', 11)} ${esc(A.name || soundName(A.src) || '음악')}</span>${vkHTML(A, total - st, px, 0.8)}${fin ? `<i class="fi" style="width:${fin * px}px"></i>` : ''}${fout ? `<i class="fo" style="width:${fout * px}px"></i>` : ''}</div>`; }
   // 행 순서: 오버레이·자막 트랙(위) → 비디오 1 → 효과 → 오디오 1(배경 음악) → 오디오 트랙들
   const upper = TR.filter(t => t.type !== 'audio'), lower = TR.filter(t => t.type === 'audio');
-  const rowOf = t => { const items = (t.items || []).map(it => { const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), cls = t.type === 'audio' ? 'tl-fx' : t.type === 'caption' ? 'tl-cap' : 'tl-ov', sel2 = tl.selIt === it.id ? ' sel' : '', lab = t.type === 'audio' ? esc(it.name || '소리') : t.type === 'caption' ? esc(String(it.text || '').replace(/\n/g, ' ')) : esc(it.name || '오버레이'); return `<div class="${cls}${sel2}${t.mute ? ' muted' : ''}" data-it="${it.id}" data-tid="${t.id}" style="left:${it.at * px}px;width:${Math.max(18, d * px)}px" title="${lab} · ${fmtTC(it.at, fps)} — 끌어 옮기기${t.type === 'audio' ? '(위아래로 다른 트랙)' : ', 두 번 눌러 고치기'}"><span>${t.type === 'overlay' && it.src ? `<img src="${src(it.src)}" alt="">` : ''}${lab}</span><em class="tl-il" data-il="1"></em><em class="tl-ir" data-ir="1"></em></div>`; }).join(''); return `<div class="tl-track tl-${t.type}" data-row="${t.id}">${items}</div>`; };
+  const rowOf = t => { const items = (t.items || []).map(it => { const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), cls = t.type === 'audio' ? 'tl-fx' : t.type === 'caption' ? 'tl-cap' : 'tl-ov', sel2 = tl.selIt === it.id ? ' sel' : '', lab = t.type === 'audio' ? esc(it.name || '소리') : t.type === 'caption' ? esc(String(it.text || '').replace(/\n/g, ' ')) : esc(it.name || '오버레이'); return `<div class="${cls}${sel2}${t.mute ? ' muted' : ''}" data-it="${it.id}" data-tid="${t.id}" style="left:${it.at * px}px;width:${Math.max(18, d * px)}px" title="${lab} · ${fmtTC(it.at, fps)} — 끌어 옮기기${t.type === 'audio' ? '(위아래로 다른 트랙)' : ', 두 번 눌러 고치기'}"><span>${t.type === 'overlay' && it.src ? `<img src="${src(it.src)}" alt="">` : ''}${lab}</span>${t.type === 'audio' ? vkHTML(it, d, px, 1) : ''}<em class="tl-il" data-il="1"></em><em class="tl-ir" data-ir="1"></em></div>`; }).join(''); return `<div class="tl-track tl-${t.type}" data-row="${t.id}">${items}</div>`; };
   const heads = `<div class="th rl"><button class="tadd" id="tlAddTrack" title="트랙 추가">＋ 트랙</button></div>` + upper.map(t => headHTML(t)).join('') + `<div class="th h-scn">${tli('film', 14)}<span>비디오 1<small>장면</small></span></div><div class="th h-ans">${tli('fx', 14)}<span>효과<small>움직임</small></span></div><div class="th h-aud">${tli('note', 14)}<span>오디오 1<small>배경 음악</small></span><button class="tm" data-mute="audio" title="소리 끄기/켜기"></button></div>` + lower.map(t => headHTML(t)).join('');
   $('#tlHeads').innerHTML = heads;
   $('#tlInner').style.width = Wd + 'px';
@@ -1392,6 +1457,47 @@ function renderTimeline() {
   requestAnimationFrame(() => fitBoxes($('#tlInner'), '.tl-th', 44));
   tlTimeLabel(); tlWave(); tlStrips();
 }
+// ---- 음량 선(편집기 표준 '고무줄'): 소리 조각 위 가로선을 위아래로 끌면 음량, 선을 누르면 점이 생겨 그 점부터 따로 조절 ----
+// 세로 눈금은 dB(사람 귀 기준): 맨 위 +6dB(200%), 0dB(100%)는 위에서 1/6쯤, 맨 아래는 소리 끔. 점: [[조각 시작부터 초, 배율], …]
+const VK_TOP = 6, VK_RANGE = 36;
+const vkY = v => v <= 0.0316 ? 1 : Math.min(1, Math.max(0, (VK_TOP - 20 * Math.log10(v)) / VK_RANGE));
+const vkV = y => y >= 0.97 ? 0 : Math.round(Math.pow(10, (VK_TOP - Math.max(0, y) * VK_RANGE) / 20) * 1000) / 1000;
+const vkDb = v => v <= 0 ? '소리 끔' : `${(20 * Math.log10(v)) >= 0 ? '+' : ''}${(20 * Math.log10(v)).toFixed(1)} dB · ${Math.round(v * 100)}%`;
+const vkVal = (o, s, def) => o.vk && o.vk.length ? VIDEO.vkAt(o.vk, s) : o.vol == null ? def : Number(o.vol);
+function vkHTML(o, d, px, def) {
+  const W = Math.max(18, d * px), vk = (o.vk || []).filter(k => k[0] >= 0 && k[0] <= d);
+  const pts = [[0, vkVal(o, 0, def)], ...vk, [d, vkVal(o, d, def)]], poly = pts.map(([q, v]) => `${(q * px).toFixed(1)},${(vkY(v) * 100).toFixed(2)}`).join(' ');
+  return `<div class="tl-vk"><svg viewBox="0 0 ${W.toFixed(1)} 100" preserveAspectRatio="none"><polyline class="ln" points="${poly}"/><polyline class="hit" data-vline="1" points="${poly}"><title>음량 ${vkDb(vkVal(o, 0, def))} — 위아래로 끌어 음량 · 눌러서 점 찍기(그 점부터 따로 조절) · Alt+눌러 처음대로</title></polyline></svg>${vk.map(k => `<i data-vkp="${(o.vk || []).indexOf(k)}" style="left:${k[0] * px}px;top:${vkY(k[1]) * 100}%" title="${vkDb(k[1])} — 끌어 옮기기 · 두 번 눌러 지우기"></i>`).join('')}</div>`;
+}
+// 음량 선·점 끌기: 끄는 동안 옆에 dB 표시, 놓으면 실행 취소 한 단계
+function vkDrag(e, host, vp) {
+  const isBg = host.id === 'tlAu', tr0 = isBg ? null : tracks().find(q => q.id === host.dataset.tid), o = isBg ? doc.audio : tr0 && tr0.items.find(q => q.id === host.dataset.it); if (!o) return;
+  const def = isBg ? 0.8 : 1, d = isBg ? tlScenes().total - Number(o.start || 0) : itemDur(o), px = tl.pxs, box = host.querySelector('.tl-vk').getBoundingClientRect();
+  if (isBg) tl.selAu = true; else { tl.selIt = o.id; tl.selTr = tr0.id; }
+  const sx = e.clientX, sy = e.clientY, sAt = ev => Math.max(0, Math.min(d, (ev.clientX - box.left) / px)), yAt = ev => (ev.clientY - box.top) / box.height;
+  const vk0 = (o.vk || []).map(k => k.slice()), vol0 = o.vol == null ? def : Number(o.vol), s0 = sAt(e);
+  let tip = document.getElementById('vkTip'); if (!tip) { tip = document.createElement('div'); tip.id = 'vkTip'; tip.hidden = true; document.body.appendChild(tip); }
+  const show = (ev, v) => { tip.textContent = vkDb(v); tip.style.left = ev.clientX + 14 + 'px'; tip.style.top = ev.clientY - 30 + 'px'; tip.hidden = false; };
+  let moved = false, move;
+  if (e.altKey && !vp) { delete o.vk; delete o.vol; commit(); renderTimeline(); toast('음량을 처음대로 되돌렸습니다'); return; }
+  if (vp) { const i = Number(vp.dataset.vkp), lo = i > 0 ? vk0[i - 1][0] + 0.05 : 0, hi = i < vk0.length - 1 ? vk0[i + 1][0] - 0.05 : d;
+    move = ev => { const v = vkV(yAt(ev)); o.vk[i] = [Math.round(Math.max(lo, Math.min(hi, sAt(ev))) * 100) / 100, v]; show(ev, v); renderTimeline(); }; }
+  else { // 선 끌기: 점이 없으면 조각 전체, 있으면 누른 곳 양옆 점(구간)을 함께 위아래로
+    const a = vk0.reduce((r, k, j) => k[0] <= s0 ? j : r, -1), b = vk0.findIndex(k => k[0] > s0), dy0 = vkY(vkVal({ vk: vk0, vol: vol0 }, s0, def));
+    move = ev => { const dy = (ev.clientY - sy) / box.height * (ev.shiftKey ? 0.2 : 1); if (!vk0.length) { o.vol = vkV(dy0 + dy); show(ev, o.vol); } else { o.vk = vk0.map(k => k.slice()); [a, b].filter(j => j >= 0).forEach(j => { o.vk[j][1] = vkV(vkY(vk0[j][1]) + dy); }); show(ev, VIDEO.vkAt(o.vk, s0)); } renderTimeline(); }; }
+  const mv = ev => { if (Math.abs(ev.clientX - sx) > 3 || Math.abs(ev.clientY - sy) > 2) moved = true; if (moved) move(ev); };
+  const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); tip.hidden = true;
+    if (vp && !moved) { const i = Number(vp.dataset.vkp), now = performance.now(), L = tl._vkLast; if (L && L.o === o && L.i === i && now - L.t < 450) { o.vk.splice(i, 1); if (!o.vk.length) delete o.vk; tl._vkLast = null; commit(); renderTimeline(); toast('음량 점을 지웠습니다'); return; } tl._vkLast = { o, i, t: now }; }
+    if (moved) commit();
+    else if (!vp) { // 눌러서 점 찍기 (가까운 점이 이미 있으면 그대로)
+      const s1 = Math.round(s0 * 100) / 100, near = vk0.some(k => Math.abs(k[0] - s1) * px < 7);
+      if (!near) { const v = Math.round(vkVal({ vk: vk0, vol: vol0 }, s1, def) * 1000) / 1000; o.vk = vk0.concat([[s1, v]]).sort((p, q) => p[0] - q[0]); commit(); toast('음량 점을 찍었습니다 — 점이나 점 사이 선을 위아래로 끌어 그 구간만 조절하세요'); }
+    }
+    renderTimeline(); if (moved && tl.playing) { tlPause(); tlPlay(); } };
+  window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+}
+// 검색창 한글 조합 보호: 글자를 조합하는 동안에는 다시 그리지 않고(그리면 입력칸이 새로 생겨 'ㅌㅐ'처럼 낱자로 깨짐), 한 글자가 끝나면 검색
+function imeSafe(inp, fn) { inp.addEventListener('compositionstart', () => { inp._comp = true; }); inp.addEventListener('compositionend', e => { inp._comp = false; fn(e); }); inp.oninput = e => { if (e.isComposing || inp._comp) return; fn(e); }; }
 function headHTML(t) {
   const ic = t.type === 'audio' ? 'bell' : t.type === 'caption' ? 'text' : 'eye', toggle = t.type === 'audio' ? (t.mute ? 'mute' : 'vol') : 'eye';
   return `<div class="th h-${t.type}${t.mute ? ' off' : ''}" data-th="${t.id}">${tli(ic, 14)}<span data-tname="${t.id}" title="두 번 눌러 이름 바꾸기">${esc(t.name || TR_LABEL[t.type])}<small>${TR_LABEL[t.type]}</small></span>${t.type !== 'audio' ? `<button class="tm" data-tplus="${t.id}" title="${t.type === 'caption' ? '재생 위치에 자막 넣기' : '재생 위치에 로고·사진 넣기'}">＋</button>` : ''}<button class="tm${t.mute ? ' on' : ''}" data-tmute="${t.id}" title="${t.type === 'audio' ? '소리 끄기/켜기' : '보이기/숨기기'}">${tli(toggle, 13)}</button><button class="tm" data-tdel="${t.id}" title="트랙 지우기">✕</button></div>`;
@@ -1415,7 +1521,7 @@ async function tlWave() {
     let pk, dur;
     if (A.src.startsWith('b:')) { const buf = await NC.media.render(A.src.slice(2)); dur = buf.duration; pk = VIDEO.peaks(buf, Math.max(200, Math.round(dur * 8))); }
     else { const f = await NC.media.blobOf(A.src, false); dur = (await NC.astream.probe(f)).dur; if (!dur) return; const N = Math.min(20000, Math.max(200, Math.round(dur * 4))); if (!tlWave.busy) { tlWave.busy = true; const msg = $('#tlMsg'); NC.astream.peaks(f, A.src, N, pr => { if (msg && dur > 120) msg.textContent = `음악 파형 계산 ${Math.round(pr * 100)}%`; }).then(() => { tlWave.busy = false; if (msg) msg.textContent = ''; tlWave(); }).catch(() => { tlWave.busy = false; }); } pk = await Promise.race([NC.astream.peaks(f, A.src, N), new Promise(r => setTimeout(() => r(null), 50))]); if (!pk) return; }
-    const w = p0.clientWidth, h = 34; c.width = w; c.height = h; const x = c.getContext('2d'), from = Number(A.from || 0), px = tl.pxs; x.fillStyle = 'rgba(255,255,255,.75)';
+    const w = p0.clientWidth, h = p0.clientHeight || 34; c.width = w; c.height = h; const x = c.getContext('2d'), from = Number(A.from || 0), px = tl.pxs; x.fillStyle = 'rgba(255,255,255,.75)';
     for (let i = 0; i < w; i++) { const t = from + i / px, k = Math.floor(((t % dur) / dur) * pk.length), v = pk[k] || 0, hh = Math.max(1, v * h * 0.9); x.fillRect(i, (h - hh) / 2, 1, hh); }
   } catch (e) { if (p0 && e.code) { p0.classList.add('miss'); p0.title = e.message + ' — 눌러서 연결'; } }
 }
@@ -1429,10 +1535,11 @@ async function tlEnsureV() {
   const p = (async () => { const V = await videoBuild('720', (k, n) => { if (msg) msg.textContent = `미리보기 준비 ${Math.round(k / Math.max(1, n) * 100)}%`; }); if (msg) msg.textContent = ''; tl.V = V; tl.Vkey = key; tl.building = null; tlStrips(); return V; })();
   tl.building = { key, p }; try { return await p; } catch (e) { tl.building = null; if (msg) msg.textContent = '미리보기 실패: ' + e.message; throw e; }
 }
-async function tlDraw() { const V = await tlEnsureV(); const c = $('#vprev'); if (!c) return; if (c.width !== V.W || c.height !== V.H) { c.width = V.W; c.height = V.H; } c.hidden = false; if (V.videos && V.videos.length) VIDEO.syncVideos(V, tl.T, tl.playing); VIDEO.drawAt(c.getContext('2d'), V, Math.min(tl.T, V.total - 0.001)); }
+async function tlDraw() { const V = await tlEnsureV(); const c = $('#vprev'); if (!c) return; if (c.width !== V.W || c.height !== V.H) { c.width = V.W; c.height = V.H; } c.hidden = false; if (V.videos && V.videos.length) { if (tl.playing) VIDEO.syncVideos(V, tl.T, true); else { const tok = tl.drawTok = (tl.drawTok || 0) + 1; V.videos.forEach(v => { if (!v.paused) v.pause(); }); await VIDEO.seekVideos(V, tl.T); if (tok !== tl.drawTok) return; } } VIDEO.drawAt(c.getContext('2d'), V, Math.min(tl.T, V.total - 0.001)); }
 function tlHidePrev() { const c = $('#vprev'); if (c) c.hidden = true; }
 async function tlPlay() {
-  if (tl.playing) return; let V; try { V = await tlEnsureV(); } catch (e) { return; }
+  if (tl.playing || tl.starting) return; let V; tl.starting = true; tl.cancelStart = false; try { V = await tlEnsureV(); } catch (e) { return; } finally { tl.starting = false; }  /* 준비 중 두 번 눌러도 한 번만 */
+  if (tl.cancelStart) { tl.cancelStart = false; return; }
   if (tl.T >= V.total - 0.05) tl.T = 0;
   tl.playing = true; $('#tlPlay').innerHTML = tli('pause', 20); tlMeter(true);
   const ac = VIDEO.ctx(); ac.resume && ac.resume();
@@ -1454,25 +1561,28 @@ function tlMeter(on) {
   const buf = new Float32Array(512), lvl = a => { a.getFloatTimeDomainData(buf); let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i])); const db = 20 * Math.log10(m || 1e-6); return Math.max(0, Math.min(100, (db + 48) / 48 * 100)); };
   const step = () => { L.style.height = lvl(tl.an[0]) + '%'; R.style.height = lvl(tl.an[1]) + '%'; tl.mraf = requestAnimationFrame(step); }; step();
 }
-function tlPause() { if (!tl.playing) return; tl.playing = false; cancelAnimationFrame(tl.raf); if (tl.snd) { tl.snd.stop(); tl.snd = null; } if (tl.V && tl.V.videos) tl.V.videos.forEach(v => v.pause()); const b = $('#tlPlay'); if (b) b.innerHTML = tli('play', 20); tlMeter(false); tlTimeLabel(); }
+function tlPause() { if (tl.starting) tl.cancelStart = true; if (!tl.playing) return; tl.playing = false; cancelAnimationFrame(tl.raf); if (tl.snd) { tl.snd.stop(); tl.snd = null; } if (tl.V && tl.V.videos) tl.V.videos.forEach(v => v.pause()); const b = $('#tlPlay'); if (b) b.innerHTML = tli('play', 20); tlMeter(false); tlTimeLabel(); }
 function tlFollow() { const sc = $('#tlScroll'), x = tl.T * tl.pxs; if (!sc) return; if (x < sc.scrollLeft + 40 || x > sc.scrollLeft + sc.clientWidth - 60) sc.scrollLeft = Math.max(0, x - sc.clientWidth * 0.3); }
-function tlSeek(T, show) { const { total } = tlScenes(); tl.T = Math.max(0, Math.min(total, T)); tlTimeLabel(); if (tl.playing) { tlPause(); tlPlay(); } else if (show !== false) tlDraw().catch(() => {}); }
+function tlSeek(T, show) { const { total, list } = tlScenes(); tl.T = Math.max(0, Math.min(total, T)); tlTimeLabel(); if (!tl.playing) { const x = list.find(q => tl.T >= q.t0 && tl.T < q.t0 + q.dur + q.turn) || list[list.length - 1]; if (x && x.i !== cur && doc.pages[x.i]) { cur = x.i; renderInspector(); if (typeof renderThumbs === 'function') renderThumbs(); } } if (tl.playing) { tlPause(); tlPlay(); } else if (show !== false) tlDraw().catch(() => {}); }
 // 장면 나누기: 재생 위치에서 지금 장면을 둘로 (뒤쪽은 복제본, 움직임 시작을 그만큼 당김)
 function tlSplit() {
-  if (tl.selIt) { for (const t of tracks()) { const it = (t.items || []).find(q => q.id === tl.selIt); if (!it) continue; const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), q = Math.round((tl.T - it.at) * 100) / 100; if (q > 0.1 && q < d - 0.1) { const it2 = Object.assign(clone(it), { id: uid(), at: Math.round((it.at + q) * 100) / 100, dur: Math.round((d - q) * 100) / 100 }); if (t.type === 'audio') it2.off = Math.round((Number(it.off || 0) + q) * 100) / 100; it.dur = q; t.items.splice(t.items.indexOf(it) + 1, 0, it2); tl.selIt = it2.id; commit(); renderTimeline(); toastUndo(`'${it.name || '클립'}'을 ${fmtTC(tl.T).slice(3)}에서 잘랐습니다 — 필요 없는 조각을 골라 Delete`); return; } } }
-  const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { toast('장면 안에 재생 위치를 두고 나누세요', true); return; }
-  const q = Math.round((tl.T - x.t0) * 10) / 10; if (q < 0.3 || x.dur - q < 0.3) { toast('장면 끝에 너무 가깝습니다', true); return; }
-  const a = x.pg, b = clone(a); b.id = uid(); const gm = {}; b.els.forEach(e => { e.id = uid(); if (e.group) { gm[e.group] = gm[e.group] || uid(); e.group = gm[e.group]; } if (e.anim) { const d = Number(e.anim.d || 0) - q; if (d + Number(e.anim.s || 0.8) <= 0) delete e.anim; else e.anim.d = Math.max(0, d); } });
+  if (tl.selIt) { for (const t of tracks()) { const it = (t.items || []).find(q => q.id === tl.selIt); if (!it) continue; const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), q = Math.round((tl.T - it.at) * 100) / 100; if (q > 0.1 && q < d - 0.1) { const it2 = splitItem(t, it, q); tl.selIt = it2.id; commit(); renderTimeline(); toastUndo(`'${it.name || '클립'}'을 ${fmtTC(tl.T).slice(3)}에서 잘랐습니다 — 필요 없는 조각을 골라 Delete`); return; } } }
+  tlSplitScene(false);
+}
+function tlSplitScene(quiet) {
+  const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { if (!quiet) toast('장면 안에 재생 위치를 두고 나누세요', true); return; }
+  const q = Math.round((tl.T - x.t0) * 10) / 10; if (q < 0.3 || x.dur - q < 0.3) { if (!quiet) toast('장면 끝에 너무 가깝습니다', true); return; }
+  const a = x.pg, b = clone(a); b.id = uid(); const gm = {}; b.els.forEach(e => { e.id = uid(); if (e.group) { gm[e.group] = gm[e.group] || uid(); e.group = gm[e.group]; } if (e.anim) { const d = Number(e.anim.d || 0) - q; if (d < 0) delete e.anim; else e.anim.d = d; } });  /* 이미 시작한 움직임은 끝난 모습으로 이어짐(뒤 조각에서 처음부터 다시 튀지 않게) */
   // 동영상: 앞 조각은 자른 지점에서 끝나고, 뒤 조각은 자른 지점부터 이어서 재생
   a.els.forEach((e, k) => { if (e.type !== 'video') return; const e2 = b.els[k], d0 = e.anim ? Number(e.anim.d || 0) : 0, used = Math.max(0, q - d0), tin = Number(e.tin || 0), tout = Number(e.tout || e.dur || 0); if (!used) return; const cut = Math.min(tout, tin + used); e.tout = Math.round(cut * 100) / 100; e2.tin = Math.round(cut * 100) / 100; e2.tout = tout; if (e2.anim) e2.anim.d = 0; });
   b.vdur = Math.round((x.dur - q) * 10) / 10; a.vdur = q; b.vtrans = a.vtrans; b.vturn = a.vturn; a.vtrans = 'none'; a.els.forEach(e => { delete e.animOut; });
-  doc.pages.splice(x.i + 1, 0, b); commit(); goto(x.i + 1); renderTimeline(); toastUndo(`${x.i + 1}쪽을 ${q}초에서 나눴습니다`);
+  doc.pages.splice(x.i + 1, 0, b); commit(); goto(x.i + 1); renderTimeline(); if (!quiet) toastUndo(`${x.i + 1}쪽을 ${q}초에서 나눴습니다`);
 }
 function tlWire() {
   const root = $('#vtl');
   $('#tlPlay').onclick = () => tl.playing ? tlPause() : tlPlay();
   $('#tlKeys').onclick = tlKeysHelp;
-  $('#tlView').onclick = () => popMenu($('#tlView'), TL_VIEWS.map(([k, t, d]) => [k, (tlView === k ? '✓ ' : '') + t, d]), k => { tlView = k; try { localStorage.setItem('naracal-tlview', k); } catch (e) {} applyTlView(); });
+  $('#tlView').onclick = () => popMenu($('#tlView'), TL_VIEWS.map(([k, t, d]) => [k, (tlView === k ? '✓ ' : '') + t, d]).concat([['only', (tlOnlyVideo ? '✓ ' : '　') + '영상 메뉴에서만 타임라인', '다른 메뉴(템플릿·요소·글자 등)로 가면 평소 디자인 공방 화면으로, 영상 메뉴로 돌아오면 다시 나타납니다. 끄면 어느 메뉴에서나 타임라인을 둡니다']]), k => { if (k === 'only') { tlOnlyVideo = !tlOnlyVideo; try { localStorage.setItem('naracal-tlonly', tlOnlyVideo ? '1' : '0'); } catch (e) {} toast(tlOnlyVideo ? '이제 영상 메뉴에서만 타임라인이 보입니다' : '이제 어느 메뉴에서나 타임라인을 둡니다'); if (tlOnlyVideo && sideTab !== 'video') { if (tl.playing) tlPause(); tlShow(false); } return; } tlView = k; try { localStorage.setItem('naracal-tlview', k); } catch (e) {} applyTlView(); });
   $('#tlSplit').onclick = tlSplit; $('#tlBig').onclick = () => { tlPause(); openVideoPlayer(true); }; $('#tlSave').onclick = () => { tlPause(); openVideoMaker(); }; $('#tlClose').onclick = () => tlShow(false);
   $('#tlZi').onclick = () => { tl.pxs = Math.min(400, tl.pxs * 1.4); renderTimeline(); }; $('#tlZo').onclick = () => { tl.pxs = Math.max(3, tl.pxs / 1.4); renderTimeline(); }; $('#tlZf').onclick = () => { tl.fit = true; renderTimeline(); };
   $('#tlZoom').oninput = e => { tl.pxs = 3 * Math.pow(400 / 3, Number(e.target.value) / 100); renderTimeline(); };
@@ -1481,7 +1591,7 @@ function tlWire() {
   $('#tlPrevF').onclick = () => tlSeek(tl.T - 1 / Number(vset().fps || 30)); $('#tlNextF').onclick = () => tlSeek(tl.T + 1 / Number(vset().fps || 30));
   $('#tlText').onclick = () => { const { list } = tlScenes(), x = list.find(q => tl.T >= q.t0 && tl.T < q.t0 + q.dur + q.turn); if (x && x.i !== cur) goto(x.i); const el = addText('h', { text: '제목을 입력하세요', noEdit: true }); el.anim = { t: 'type', d: Math.max(0, Math.round((tl.T - (x ? x.t0 : 0)) * 10) / 10), s: 1.4 }; commit(); renderAll(); toast('타자기 효과 글자를 넣었습니다 — 두 번 눌러 글을 고치세요'); };
   $('#tlRec').onclick = tlRecord;
-  $('#tlDel').onclick = () => { if (tl.selIt) { tracks().forEach(t => { t.items = (t.items || []).filter(q => q.id !== tl.selIt); }); tl.selIt = null; commit(); renderTimeline(); toastUndo('고른 클립을 지웠습니다'); return; } if (tl.selAu && doc.audio) { delete doc.audio; tl.selAu = false; commit(); renderTimeline(); renderSide(); toastUndo('배경 음악을 뺐습니다'); return; } if (doc.pages.length > 1 && window.confirm(`${cur + 1}쪽(장면)을 지울까요?`)) { doc.pages.splice(cur, 1); commit(); goto(Math.min(cur, doc.pages.length - 1)); toastUndo('장면을 지웠습니다'); } };
+  $('#tlDel').onclick = () => { if (tl.selIt) { tracks().forEach(t => { t.items = (t.items || []).filter(q => q.id !== tl.selIt); }); tl.selIt = null; commit(); renderTimeline(); toastUndo('고른 클립을 지웠습니다'); return; } if (tl.selAu && doc.audio) { delete doc.audio; tl.selAu = false; commit(); renderTimeline(); renderSide(); toastUndo('배경 음악을 뺐습니다'); return; } tlDeleteScene(false); };
   root.addEventListener('click', e => {
     const t = e.target, trk = id => tracks().find(x => x.id === id);
     const m = t.closest('[data-mute]'); if (m) { if (!doc.audio) return; doc.audio.mute = !doc.audio.mute || undefined; commit(); renderTimeline(); if (tl.playing) { tlPause(); tlPlay(); } return; }
@@ -1490,7 +1600,9 @@ function tlWire() {
     const tp = t.closest('[data-tplus]'); if (tp) { const x = trk(tp.dataset.tplus); if (x.type === 'caption') { const it = { id: uid(), text: '자막을 입력하세요', at: Math.round(tl.T * 10) / 10, dur: 2.5, style: 'outline', pos: 'bottom', size: 0.065 }; x.items.push(it); commit(); renderTimeline(); openItemPop(x, it); } else overlayMenu(x, tp); return; }
     if (t.closest('#tlAddTrack')) { trackMenu(t.closest('#tlAddTrack')); return; }
   });
-  root.addEventListener('dblclick', e => { const nm = e.target.closest('[data-tname]'); if (nm) { const x = tracks().find(q => q.id === nm.dataset.tname), v = window.prompt('트랙 이름', x.name); if (v && v.trim()) { x.name = v.trim(); commit(); renderTimeline(); } return; } const it = e.target.closest('[data-it]'); if (!it) return; const x = tracks().find(q => q.id === it.dataset.tid), item = x && x.items.find(q => q.id === it.dataset.it); if (!item) return; if (x.type === 'audio') { x.items = x.items.filter(q => q !== item); commit(); renderTimeline(); toastUndo('클립을 뺐습니다'); } else openItemPop(x, item); });
+  root.addEventListener('dblclick', e => { const vp = e.target.closest('[data-vkp]'); if (vp || e.target.closest('[data-vline]')) { if (vp) { const host = vp.closest('[data-it],#tlAu'), o = host.id === 'tlAu' ? doc.audio : (tracks().find(q => q.id === host.dataset.tid) || { items: [] }).items.find(q => q.id === host.dataset.it); if (o && o.vk) { o.vk.splice(Number(vp.dataset.vkp), 1); if (!o.vk.length) delete o.vk; commit(); renderTimeline(); toast('음량 점을 지웠습니다'); } } return; } const nm = e.target.closest('[data-tname]'); if (nm) { const x = tracks().find(q => q.id === nm.dataset.tname), v = window.prompt('트랙 이름', x.name); if (v && v.trim()) { x.name = v.trim(); commit(); renderTimeline(); } return; } const it = e.target.closest('[data-it]'); if (!it) return; const x = tracks().find(q => q.id === it.dataset.tid), item = x && x.items.find(q => q.id === it.dataset.it); if (!item) return; if (x.type === 'audio') toast('소리 조각은 한 번 누르면 앞부분을 들어 보고, 지우려면 Delete 키나 🗑 단추를 씁니다 · 흰 선을 위아래로 끌면 음량'); else openItemPop(x, item);  /* 두 번 눌러 바로 지우던 것(실수로 잃기 쉬움) */ });
+  $('#tlScroll').addEventListener('scroll', e => { const h = $('#tlHeads'); if (h) h.scrollTop = e.target.scrollTop; });  /* 머리 칸을 트랙과 함께 위아래로 */
+  $('#tlHeads').addEventListener('wheel', e => { if (e.ctrlKey || e.metaKey) return; $('#tlScroll').scrollTop += e.deltaY; e.preventDefault(); }, { passive: false });
   $('#tlScroll').addEventListener('wheel', e => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); tl.pxs = Math.max(3, Math.min(400, tl.pxs * (e.deltaY < 0 ? 1.15 : 1 / 1.15))); renderTimeline(); } }, { passive: false });
   const inner = () => $('#tlInner'), tAt = e => (e.clientX - inner().getBoundingClientRect().left) / tl.pxs;
   root.addEventListener('pointerdown', e => {
@@ -1498,24 +1610,25 @@ function tlWire() {
     if (t.closest('#tlAddMusic')) { sideTab = 'video'; vTab = 'audio'; renderRail(); renderSide(); return; }
     if (t.closest('#tlHeadCut')) { tlSplit(); return; }
     if (t.closest('[data-mute]')) return;
+    const vp = t.closest('[data-vkp]'), vl = t.closest('[data-vline]'); if (vp || vl) { e.preventDefault(); e.stopPropagation(); vkDrag(e, t.closest('[data-it],#tlAu'), vp); return; }
     const sx = e.clientX; let moved = false; const pid = e.pointerId; try { root.setPointerCapture(pid); } catch (err) {}
     let move = null, up = null;
     const lh = t.closest('[data-lh]'), rh = t.closest('[data-rh]'), clip = t.closest('.tl-clip'), tr = t.closest('[data-tr]'), an = t.closest('[data-ael]'), au = t.closest('#tlAu'), itEl = t.closest('[data-it]');
-    tl.selIt = null; tl.selAu = false;
+    tl.selIt = null; tl.selAu = false; tl.selScene = false;
     if (tr) { up = () => openTransPop(Number(tr.dataset.tr), tr); }
-    else if (lh) { const pg = doc.pages[Number(lh.dataset.lh)], d0 = Number(pg.vdur || vset().dur); move = ev => { pg.vdur = Math.max(0.5, Math.round((d0 - (ev.clientX - sx) / tl.pxs) * 10) / 10); renderTimeline(); }; up = () => { if (moved) commit(); }; }
-    else if (rh) { const pg = doc.pages[Number(rh.dataset.rh)], d0 = Number(pg.vdur || vset().dur); move = ev => { pg.vdur = Math.max(0.5, Math.round((d0 + (ev.clientX - sx) / tl.pxs) * 10) / 10); renderTimeline(); }; up = () => { if (moved) commit(); }; }
+    else if (lh) { const pg = doc.pages[Number(lh.dataset.lh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(lh.dataset.lh)), rip = s0 ? tlRippleSnap(s0.t0 + s0.dur) : () => {}; move = ev => { pg.vdur = Math.max(0.5, Math.round((d0 - (ev.clientX - sx) / tl.pxs) * 10) / 10); rip(pg.vdur - d0); renderTimeline(); }; up = () => { if (moved) commit(); }; }
+    else if (rh) { const pg = doc.pages[Number(rh.dataset.rh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(rh.dataset.rh)), rip = s0 ? tlRippleSnap(s0.t0 + s0.dur) : () => {}; move = ev => { pg.vdur = Math.max(0.5, Math.round((d0 + (ev.clientX - sx) / tl.pxs) * 10) / 10); rip(pg.vdur - d0); renderTimeline(); }; up = () => { if (moved) commit(); }; }
     else if (an) { const pg = doc.pages[Number(an.dataset.ap)], el = pg.els.find(q => q.id === an.dataset.ael), edge = t.closest('[data-ah]'); const a0 = el.anim ? Object.assign({}, el.anim) : null; move = ev => { if (!a0) return; const dt = (ev.clientX - sx) / tl.pxs; if (edge) el.anim.s = Math.max(0.2, Math.round((Number(a0.s || 0.8) + dt) * 10) / 10); else el.anim.d = Math.max(0, Math.round((Number(a0.d || 0) + dt) * 10) / 10); renderTimeline(); }; up = () => { if (moved) { commit(); renderInspector(); } else { const i = doc.pages.indexOf(pg); if (i !== cur) goto(i); select([el.id]); renderTimeline(); } }; }
     else if (au) { if (au.classList.contains('miss')) { relinkMedia(doc.audio.src); return; } tl.selAu = true; const s0 = Number(doc.audio.start || 0); move = ev => { doc.audio.start = Math.max(0, Math.round((s0 + (ev.clientX - sx) / tl.pxs) * 10) / 10); renderTimeline(); }; up = () => { if (moved) commit(); }; }
     else if (itEl) { // 트랙 클립: 끌어 옮기기(오디오는 위아래 트랙으로도), 오른쪽 끝은 길이
-      const tr0 = tracks().find(q => q.id === itEl.dataset.tid), it = tr0.items.find(q => q.id === itEl.dataset.it), a0 = it.at, d0 = tr0.type === 'audio' ? itemDur(it) : Number(it.dur || 3), edge = t.closest('[data-ir]'), ledge = t.closest('[data-il]'), o0 = Number(it.off || 0), full = Number(it.full || 0);
-      move = ev => { const dt = (ev.clientX - sx) / tl.pxs; if (ledge) { let d = Math.max(-a0, Math.min(d0 - 0.2, dt)); if (tr0.type === 'audio') d = Math.max(-o0, d); it.at = Math.round((a0 + d) * 100) / 100; it.dur = Math.round((d0 - d) * 100) / 100; if (tr0.type === 'audio') it.off = Math.round((o0 + d) * 100) / 100; } else if (edge) { it.dur = Math.max(0.2, Math.round((d0 + dt) * 10) / 10); if (tr0.type === 'audio' && full) it.dur = Math.min(it.dur, Math.round((full - o0) * 100) / 100); } else { it.at = Math.max(0, Math.round((a0 + dt) * 10) / 10); if (tr0.type === 'audio') { const row = document.elementsFromPoint(ev.clientX, ev.clientY).map(n => n.closest && n.closest('[data-row]')).find(Boolean), dst = row && tracks().find(q => q.id === row.dataset.row); if (dst && dst !== tr0 && dst.type === 'audio') { tr0.items = tr0.items.filter(q => q !== it); dst.items.push(it); itEl.dataset.tid = dst.id; } } } renderTimeline(); };
-      up = () => { tl.selIt = it.id; tl.selTr = itEl.dataset.tid; if (moved) commit(); else { tlSeek(it.at, false); if (tr0.type === 'audio') previewSound(it.ref); } renderTimeline(); }; }
-    else if (clip) { const k0 = Number(clip.dataset.k); move = ev => { if (Math.abs(ev.clientX - sx) > 6) clip.style.transform = `translateX(${ev.clientX - sx}px)`; }; up = ev => { const { list } = tlScenes(), x = tAt(ev); if (moved && Math.abs(ev.clientX - sx) > 12) { let k1 = list.findIndex(s2 => x < s2.t0 + (s2.dur + s2.turn) / 2); if (k1 < 0) k1 = list.length - 1; if (k1 > k0) k1 = Math.max(k0, k1 - 0); const from = list[k0].i, to = list[k1].i; if (from !== to) { const [pg] = doc.pages.splice(from, 1); doc.pages.splice(to, 0, pg); commit(); goto(to); } renderTimeline(); } else { const i = Number(clip.dataset.ci); if (i !== cur) goto(i); tlSeek(Math.max(tl.T, list[k0].t0) < list[k0].t0 + list[k0].dur && tl.T >= list[k0].t0 ? tl.T : list[k0].t0, false); renderTimeline(); } }; }
+      const tr0 = tracks().find(q => q.id === itEl.dataset.tid), it = tr0.items.find(q => q.id === itEl.dataset.it), a0 = it.at, d0 = tr0.type === 'audio' ? itemDur(it) : Number(it.dur || 3), edge = t.closest('[data-ir]'), ledge = t.closest('[data-il]'), o0 = Number(it.off || 0), full = Number(it.full || 0), vk0 = it.vk ? it.vk.map(k => k.slice()) : null; let owner = tr0;
+      move = ev => { const dt = (ev.clientX - sx) / tl.pxs; if (ledge) { let d = Math.max(-a0, Math.min(d0 - 0.2, dt)); if (tr0.type === 'audio') d = Math.max(-o0, d); it.at = Math.round((a0 + d) * 100) / 100; it.dur = Math.round((d0 - d) * 100) / 100; if (tr0.type === 'audio') { it.off = Math.round((o0 + d) * 100) / 100; if (vk0) it.vk = vk0.map(k => [Math.round((k[0] - d) * 100) / 100, k[1]]); } } else if (edge) { it.dur = Math.max(0.2, Math.round((d0 + dt) * 10) / 10); if (tr0.type === 'audio' && full) it.dur = Math.min(it.dur, Math.round((full - o0) * 100) / 100); } else { it.at = Math.max(0, Math.round((a0 + dt) * 10) / 10); if (tr0.type === 'audio') { const row = document.elementsFromPoint(ev.clientX, ev.clientY).map(n => n.closest && n.closest('[data-row]')).find(Boolean), dst = row && tracks().find(q => q.id === row.dataset.row); if (dst && dst !== owner && dst.type === 'audio') { owner.items = owner.items.filter(q => q !== it); dst.items.push(it); owner = dst; itEl.dataset.tid = dst.id; } } } renderTimeline(); };
+      up = () => { tl.selIt = it.id; tl.selTr = itEl.dataset.tid; if (moved) commit(); else { tlSeek(it.at, false); if (tr0.type === 'audio') previewSound(it.ref, null, Number(it.off || 0), 8); } renderTimeline(); }; }
+    else if (clip) { const k0 = Number(clip.dataset.k); move = ev => { if (Math.abs(ev.clientX - sx) > 6) clip.style.transform = `translateX(${ev.clientX - sx}px)`; }; up = ev => { const { list } = tlScenes(), x = tAt(ev); if (moved && Math.abs(ev.clientX - sx) > 12) { let k1 = list.findIndex(s2 => x < s2.t0 + (s2.dur + s2.turn) / 2); if (k1 < 0) k1 = list.length; if (k1 > k0) k1 = Math.max(k0, k1 - 1);  /* 뒤로 옮길 때는 빠진 자리만큼 한 칸 당김 */ const from = list[k0].i, to = list[k1].i; if (from !== to) { const snap = tlConnSnap(); const [pg] = doc.pages.splice(from, 1); doc.pages.splice(to, 0, pg); snap(); commit(); goto(to);  /* 붙은 자막·소리도 장면과 함께 */ } renderTimeline(); } else { const i = Number(clip.dataset.ci); if (i !== cur) goto(i); tl.selScene = true; tlSeek(Math.max(tl.T, list[k0].t0) < list[k0].t0 + list[k0].dur && tl.T >= list[k0].t0 ? tl.T : list[k0].t0, false); renderTimeline(); } }; }
     else { tlSeek(tAt(e)); move = ev => tlSeek(tAt(ev)); }
     const mv = ev => { if (Math.abs(ev.clientX - sx) > 3) moved = true; if (move && moved) move(ev); };
-    const fin = ev => { root.removeEventListener('pointermove', mv); root.removeEventListener('pointerup', fin); try { root.releasePointerCapture(pid); } catch (err) {} if (up) up(ev); };
-    root.addEventListener('pointermove', mv); root.addEventListener('pointerup', fin);
+    const fin = ev => { root.removeEventListener('pointermove', mv); root.removeEventListener('pointerup', fin); root.removeEventListener('pointercancel', fin); try { root.releasePointerCapture(pid); } catch (err) {} if (ev.type === 'pointercancel') { renderTimeline(); return; } if (up) up(ev); };
+    root.addEventListener('pointermove', mv); root.addEventListener('pointerup', fin); root.addEventListener('pointercancel', fin);
   });
 }
 // 트랙 추가 메뉴
@@ -1600,7 +1713,7 @@ async function openVideoPlayer(fromCur) {
     const seek = $('#vpSeek'); seek.max = V.total;
     const ic = () => { $('#vpPlay use').setAttribute('href', P.isPlaying() ? '#i-pause' : '#i-play'); };
     P.onTime = t => { seek.value = t; $('#vpTime').textContent = `${fmtT(t)} / ${fmtT(V.total)}`; ic(); };
-    if (fromCur) { const ps = videoPages(); let T = 0; for (const { pg, i } of ps) { if (i >= cur) break; T += Number(pg.vdur || vset().dur) + Number(vset().turn); } P.seek(T); }
+    if (fromCur) { const x = VIDEO.timing(doc, videoPages()).list.find(q => q.i >= cur); P.seek(x ? x.t0 : 0); }  /* 타임라인과 같은 시간표 */
     $('#vpPlay').onclick = () => { P.toggle(); ic(); }; seek.oninput = () => P.seek(Number(seek.value));
     d.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); P.toggle(); ic(); } });
     $('#vpSave').onclick = () => { d.close(); openVideoMaker(); };
@@ -1629,16 +1742,16 @@ function openVideoMaker() {
       // 빠른 방식(WebCodecs + mp4-muxer) 먼저, 안 되면 실제 시간 녹화로
       let res = null, fastErr = null;
       if (VIDEO.canFast()) { try { res = await VIDEO.encode({ V: Vb, fps: Number(vset().fps || 30), canvas: $('#vidCv'), cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `영상 만드는 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; } }); if (!res && stop) { pr.textContent = '중지했습니다'; return; } } catch (e) { fastErr = e; console.warn('빠른 내보내기 실패, 녹화 방식으로', e); } }
-      if (!res) { if (fastErr) pr.textContent = '빠른 방식을 쓸 수 없어 실제 시간 녹화로 만듭니다 — 이 창을 가리지 마세요'; res = await VIDEO.record({ V: Vb, canvas: $('#vidCv'), cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `녹화 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; } }); }
+      if (!res) { if (fastErr) pr.textContent = '빠른 방식을 쓸 수 없어 실제 시간 녹화로 만듭니다 — 이 창을 가리지 마세요'; res = await VIDEO.record({ V: Vb, fps: Number(vset().fps || 30), canvas: $('#vidCv'), cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `녹화 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; } }); }
       if (!res) { pr.textContent = '중지했습니다'; return; }
-      const a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = `${(doc.name || '영상').replace(/[\\/:*?"<>|]/g, '_')}.${res.ext}`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = `${(doc.name || '영상').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/[. ]+$/, '').slice(0, 80) || '영상'}${Vb.H > Vb.W ? '_숏츠' : ''}_${Math.min(Vb.W, Vb.H)}p${Number(vset().fps || 30)}.${res.ext}`;  /* 화질·fps가 보이는 이름 (USB·윈도우에서 안전한 글자만) */ document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
       let shared = ''; if ($('#vidShare') && $('#vidShare').checked) { try { if (!(await store.folderReady())) throw new Error('동기화 폴더가 연결되어 있지 않습니다'); shared = await NC.media.saveResult(res.blob, a.download); } catch (err) { toast('결과물 폴더에 저장하지 못했습니다: ' + err.message, true); } }
       pr.textContent = `저장했습니다 — ${(res.blob.size / 1048576).toFixed(1)}MB · ${res.note || res.warn || ''}${shared ? ` · 내 드라이브/결과물/${shared}` : ''}`; if (res.warn) toast(res.warn, true); else toast('영상을 저장했습니다');
     } catch (e) { pr.textContent = e.message; } finally { busy = false; if (document.body.contains(go)) go.lastChild.textContent = '영상 만들기'; }
   };
 }
 const RAIL = [['pages', '페이지', 'i-pages'], ['tpl', '템플릿', 'i-tpl'], ['news', '소식지', 'i-news'], ['video', '영상', 'i-video'], ['elems', '요소', 'i-elems'], ['text', '텍스트', 'i-text'], ['photo', '사진', 'i-img'], ['upload', '업로드', 'i-upload'], ['project', '프로젝트', 'i-folder'], ['ai', 'AI 도구', 'i-ai'], ['bg', '배경', 'i-bg'], ['theme', '테마', 'i-theme'], ['chart', '차트', 'i-chart'], ['layers', '레이어', 'i-layers']];
-function renderRail() { $('#rail').innerHTML = RAIL.map(([k, t, ic]) => `<button data-tab="${k}" aria-selected="${sideTab === k}" title="${t}"><svg class="ic"><use href="#${ic}"/></svg><span>${t}</span></button>`).join(''); $$('#rail button').forEach(b => b.onclick = () => { sideTab = b.dataset.tab; if (sideTab !== 'news' && newsMode) setNewsMode(false); renderRail(); renderSide(); if (sideTab === 'video' && !tlOn()) tlShow(true); }); }
+function renderRail() { $('#rail').innerHTML = RAIL.map(([k, t, ic]) => `<button data-tab="${k}" aria-selected="${sideTab === k}" title="${t}"><svg class="ic"><use href="#${ic}"/></svg><span>${t}</span></button>`).join(''); $$('#rail button').forEach(b => b.onclick = () => { sideTab = b.dataset.tab; if (sideTab !== 'news' && newsMode) setNewsMode(false); renderRail(); renderSide(); if (sideTab === 'video') { if (!tlOn()) tlShow(true); } else if (tlOn() && tlOnlyVideo) { if (tl.playing) tlPause(); tlShow(false); } }); }
 function tmpSheet(w, h, els, bg) { const tmp = Object.assign({}, doc, { w, h, bleed: 0, cropMarks: false }); const saved = doc; doc = tmp; try { return sheetHTML({ id: 'tmp', bg: bg || '#ffffff', els }, 'thumb'); } finally { doc = saved; } }
 function fitBoxes(root, sel_, maxH) { root.querySelectorAll(sel_).forEach(bx => { const w = Number(bx.dataset.w), h = Number(bx.dataset.h), n = Number(bx.dataset.n) || 1; const bw = bx.clientWidth; if (!bw) return; const k = Math.min(bw / (w * MM * n + (n - 1) * 4), (maxH || 110) / (h * MM)); const total = w * MM * k * n + (n - 1) * 4; bx.querySelectorAll(':scope > .sheet').forEach((sh, i) => { sh.style.transform = `scale(${k})`; sh.style.left = ((bw - total) / 2 + i * (w * MM * k + 4)) + 'px'; }); bx.style.height = (h * MM * k) + 'px'; }); }
 function renderSide() {
@@ -1675,7 +1788,7 @@ function renderSide() {
     body.querySelectorAll('[data-facet]').forEach(sl => sl.onchange = () => tplGo(() => { tplF[sl.dataset.facet] = sl.value; }));
     $('#tplcats').onclick = e => { const b = e.target.closest('[data-tcat]'); if (!b || b.dataset.tcat === tplCat) return; tplGo(() => { tplCat = b.dataset.tcat; }); };
     const nav = $('#tplNav'); if (nav) nav.onclick = e => { if (e.target.closest('#tplBack')) { tplBackBtn(); return; } if (e.target.closest('#tplHome')) { tplGo(() => { tplCat = 'all'; tplQ = ''; tplF = { format: '', season: '', age: '', occasion: '', biz: '' }; }); return; } const x = e.target.closest('[data-tx]'); if (x) tplGo(() => { const k = x.dataset.tx; if (k === 'cat') tplCat = 'all'; else if (k === 'q') tplQ = ''; else tplF[k] = ''; }); };
-    let tq; $('#tplSearch').oninput = e => { if (!tplQ.trim() && e.target.value.trim()) tplPush(); tplQ = e.target.value; clearTimeout(tq); tq = setTimeout(() => { if (!!tplQ.trim() !== !!$('#tplNav')) { const pos = e.target.selectionStart; renderSide(); const n = $('#tplSearch'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } } else renderGallery(); }, 250); };
+    let tq; imeSafe($('#tplSearch'), e => { if (!tplQ.trim() && e.target.value.trim()) tplPush(); tplQ = e.target.value; clearTimeout(tq); tq = setTimeout(() => { if ($('#tplSearch') && $('#tplSearch')._comp) return; if (!!tplQ.trim() !== !!$('#tplNav')) { const pos = e.target.selectionStart; renderSide(); const n = $('#tplSearch'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } } else renderGallery(); }, 250); });
     $('#docSize').onchange = e => { const s = SIZES.find(x => x[0] === e.target.value); if (s) { $('#docW').value = s[2]; $('#docH').value = s[3]; } };
     $('#docSizeApply').onclick = () => { const w = Number($('#docW').value), h = Number($('#docH').value); if (!(w > 10 && h > 10)) return; const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, w, h, 'fit'); doc.pages = nd.pages; doc.w = w; doc.h = h; doc.fmt = (SIZES.find(x => x[2] === w && x[3] === h) || [''])[0] === 'desk' ? 'desk-cal' : ''; commit(); zoom = 0; renderAll(); toast('문서 크기를 바꾸고 내용을 맞춰 배치했습니다 (Ctrl+Z로 되돌리기)'); };
     $('#docResize').onclick = openResize;
@@ -1703,7 +1816,7 @@ function renderSide() {
       const ref = b.dataset.libimg ? await libInsert(b.dataset.libimg) : b.dataset.img; if (!ref) return;
       const s = selEls(); if (s.length === 1 && s[0].type === 'image') { s[0].src = ref; commit(); rerender(); toast('그림을 바꿨습니다'); } else addImage(ref);
     };
-    const ps = $('#photoSearch'); if (ps) ps.oninput = () => { photoQ = ps.value; const pos = ps.selectionStart; renderSide(); const n = $('#photoSearch'); n.focus(); n.setSelectionRange(pos, pos); };
+    const ps = $('#photoSearch'); if (ps) imeSafe(ps, () => { photoQ = ps.value; const pos = ps.selectionStart; renderSide(); const n = $('#photoSearch'); n.focus(); n.setSelectionRange(pos, pos); });
     $('#imgFile').onchange = async e => { for (const f of e.target.files) addImage(addAsset(await fileToDataURL(f))); e.target.value = ''; renderSide(); };
     $('#imgAI').onclick = () => openAI('image');
   } else if (sideTab === 'upload') {
@@ -1797,9 +1910,11 @@ async function addMyElements() {
   if (n) { elCat = 'naracha'; renderElems(); toast(`내 요소 ${n}개를 추가했습니다 — 요소 → 나라차 → 내 요소`); }
 }
 function renderElems() {
+  { const si = $('#elSearch'); if (si && si._comp) { if (!si._pend) { si._pend = true; si.addEventListener('compositionend', () => { si._pend = false; setTimeout(() => { if (sideTab === 'elems') renderElems(); }, 0); }, { once: true }); } return; } }
+  const si0 = $('#elSearch'), hadF = !!si0 && document.activeElement === si0, caret = hadF ? si0.selectionStart : 0;  // 다시 그려도 검색창 입력이 끊기지 않게
   const body = $('#sidebody'); const q = elQ.trim().toLowerCase();
   const libEls = libElemItems(); const cats = NC.elems.cats.slice(0, 1).concat([['naracha', '나라차']], NC.elems.cats.slice(1));
-  const all = libEls.concat(NC.elems.items).filter(i => !q || (i.name + ' ' + i.kw).toLowerCase().includes(q));
+  const qw = q.split(/\s+/).filter(Boolean), all = libEls.concat(NC.elems.items).filter(i => { const t = (i.name + ' ' + i.kw).toLowerCase(); return qw.every(w => t.includes(w)); });  // 띄어 쓴 여러 낱말도 찾음
   const recent = recentElems().map(getElem).filter(Boolean);
   let h = `<div class="row" style="gap:6px;margin-bottom:6px"><label class="f" style="flex:1;margin:0"><input type="text" id="elSearch" placeholder="요소 검색 (예: 로고, 라차, 별, 말풍선)" value="${esc(elQ)}"></label><button class="btn sm" data-addmine title="내 PC의 PNG·SVG·JPG를 요소로 추가 (자료실에 보관돼 두 PC 모두에서 보임)">＋ 내 요소</button></div><div class="tcats" id="elcats">${cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
   if (elCat === 'naracha' && !q) {
@@ -1820,7 +1935,8 @@ function renderElems() {
   body.oncontextmenu = async e => { const b = e.target.closest('[data-el^="lib-ai-"]'); if (!b) return; e.preventDefault(); const it = getElem(b.dataset.el); if (!it) return;
     const nm = window.prompt(`"${it.name}"\n\n새 이름을 넣으면 이름을 바꿉니다. "삭제"라고 쓰면 내 그림에서 지웁니다 (두 PC 모두에서 사라짐).`, it.name); if (nm == null) return;
     try { if (nm.trim() === '삭제') { await NC.lib.removeMine(it.lib.id); toast('내 그림에서 지웠습니다'); } else if (nm.trim()) { await NC.lib.renameMine(it.lib.id, nm.trim()); toast('이름을 바꿨습니다'); } renderElems(); } catch (err) { toast(err.message, true); } };
-  let tq; $('#elSearch').oninput = e => { elQ = e.target.value; clearTimeout(tq); tq = setTimeout(() => { renderElems(); const i = $('#elSearch'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
+  let tq; imeSafe($('#elSearch'), e => { elQ = e.target.value; clearTimeout(tq); tq = setTimeout(() => { if ($('#elSearch') && $('#elSearch')._comp) return; renderElems(); const i = $('#elSearch'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); });
+  if (hadF) { const i = $('#elSearch'); if (i) { i.focus(); try { i.setSelectionRange(caret, caret); } catch (e) {} } }
 }
 function elName(el) { if (el.name) return el.name; if (el.type === 'text') return (el.text || '글자').split('\n')[0].slice(0, 20); if (el.type === 'image') return '이미지'; if (el.type === 'shape') return (FX.SHAPES.find(s => s[0] === el.kind) || [])[1] || '도형'; if (el.type === 'path') return el.d ? '벡터 모양' : '펜 선'; if (el.type === 'video') return '동영상'; if (el.type === 'chart') return '차트'; if (el.type === 'cal') return `${el.year}년 ${el.month}월 달력`; if (el.type === 'mini') return `미니 달력 ${el.month}월`; return el.type; }
 
@@ -1866,7 +1982,7 @@ function colorUnder(pg, b, skip) {
   return /^#[0-9a-f]{6}$/i.test(pg.bg || '') ? pg.bg : '#ffffff';
 }
 function brandize(pages, W, H, t) {
-  if (!Array.isArray(pages) || t.theme || t.lib || t.holiday) return pages;
+  if (!Array.isArray(pages) || t.theme || t.lib || t.holiday || (t.tags && t.tags.biz && !/태권/.test(t.tags.biz))) return pages;  /* 헬스·유치원 등 다른 업종 템플릿엔 나라차 로고를 붙이지 않음 */
   const txt = (t.name || '') + ' ' + (t.kw || ''), kid = /유아|어린이|칭찬|생일|스티커|키즈|아이/.test(txt) || (t.tags && t.tags.age === '유아'), cert = t.cat === 'cert';
   const mk = (src, b) => ({ id: uid(), type: 'image', src, x: r1(b.x), y: r1(b.y), w: r1(b.w), h: r1(b.h), rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '로고' });
   pages.forEach(pg => {
@@ -1985,7 +2101,7 @@ function openTplPreview(t) {
     const ss = $('#tplSize'); if (ss) ss.onchange = () => { choice = ss.value; draw(); };
     if (t.theme) { $('#tplWizard').onclick = () => { d.close(); openWizard(doc.calendar.year, t.theme.id); }; const rb = $('#tplRetheme'); if (rb) rb.onclick = () => { doc.calendar.theme = clone(t.theme); const y = doc.calendar.year || 2027; const nrep = CAL.retheme(doc, uid, y); ensureAllHolidays(); commit(); renderAll(); d.close(); toast(`"${t.name}" 테마를 ${nrep}쪽에 적용했습니다`); }; return; }
     const ready = async pgs => { if (!t.lib) return true; try { setStatus('자료실 그림을 넣는 중…'); await NC.lib.materialize(pgs, addAsset); return true; } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return false; } finally { setStatus(''); } };
-    $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm('현재 문서를 닫고 새 문서를 만들까요? (지금 문서는 저장된 상태로 남습니다)')) return; if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const pgs = tplPagesFor(t, S); const keepAssets = doc.assets; doc.assets = {}; if (!(await ready(pgs))) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = S.w; nd.h = S.h; nd.fmt = S.fmt || ''; nd.name = t.name; nd.pages = pgs; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; if (!S.screen && ['print', 'doc', 'cal', 'sign'].includes((FORMATS.find(f => f[0] === S.fmt) || [])[2])) nd.bleed = 3; doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)'); zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다 (${label(S)})`); };
+    $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm(`현재 문서를 닫고 새 문서를 만들까요? (${keepNote()})`)) return; await keepCurrentDoc(); const pgs = tplPagesFor(t, S); const keepAssets = doc.assets; doc.assets = {}; if (!(await ready(pgs))) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = S.w; nd.h = S.h; nd.fmt = S.fmt || ''; nd.name = t.name; nd.pages = pgs; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; if (!S.screen && ['print', 'doc', 'cal', 'sign'].includes((FORMATS.find(f => f[0] === S.fmt) || [])[2])) nd.bleed = 3; doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)'); zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다 (${label(S)})`); };
     // 지금 문서에 넣기: 늘 지금 문서 크기로 다시 짜서 넣음. 지금 쪽이 비어 있으면 그 쪽을 바꿈
     $('#tplHere').onclick = async () => { const pg = tplPagesFor(t, docS); if (!(await ready(pg))) return; const emp = !page().els.length; doc.pages.splice(emp ? cur : cur + 1, emp ? 1 : 0, ...pg); const at = emp ? cur : cur + 1; commit(); goto(at); d.close(); toastUndo(emp ? `"${t.name}"을(를) 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`); };
   };
@@ -2043,7 +2159,7 @@ function renderWizard() {
   $('#wzGrid').onclick = e => { const b = e.target.closest('[data-m]'); if (b) { wz.month = Number(b.dataset.m); renderWizard(); } };
   $('#wzGo').onclick = () => {
     const oldName = doc.name, oldW = doc.w, oldH = doc.h; doc.calendar.year = wz.year; doc.calendar.theme = wizardTheme();
-    if (wz.mode === 'replace') { if (doc.pages.some(p => p.els.length) && !window.confirm('현재 문서의 페이지를 모두 지우고 새로 만듭니다. 계속할까요?')) return; doc.w = 224; doc.h = 154; doc.pages = []; doc.name = `${wz.year} 인성 캘린더`; $('#pname').value = doc.name; }
+    if (wz.mode === 'replace') { if (doc.pages.some(p => p.els.length) && !window.confirm('현재 문서의 페이지를 모두 지우고 새로 만듭니다. 계속할까요?')) return; doc.w = 224; doc.h = 154; doc.bleed = doc.bleed || 3; doc.pages = []; doc.name = `${wz.year} 인성 캘린더`; $('#pname').value = doc.name; }
     const pages = wizardPages(wz.kind); doc.pages.push(...pages); ensureAllHolidays(); commit(); goto(wz.mode === 'replace' ? 0 : doc.pages.length - pages.length);
     $('#dlgWizard').close(); { const nm0 = oldName, w0 = oldW, h0 = oldH; toastUndo(`${wz.year}년 ${pages.length}쪽을 만들었습니다`, () => { doc.name = nm0; doc.w = w0; doc.h = h0; $('#pname').value = nm0; zoom = 0; renderAll(); fitCanvas(); }); }
     if (!doc.holidays[wz.year]) setTimeout(() => openHoliday(wz.year), 400);
@@ -2258,7 +2374,7 @@ function renderInspector() {
     <div class="grid2">${F('요일 표기', 's.wdLang', s.wdLang, { type: 'select', options: [['en', 'SUNDAY'], ['short', 'SUN'], ['ko', '일요일'], ['ko1', '일']] })}${F('요일 줄 높이(mm)', 's.wdH', s.wdH, { type: 'number', step: 0.5 })}</div>
     <div class="grid3">${F('요일 크기', 's.wdSize', s.wdSize, { type: 'number', step: 0.5 })}${F('날짜 크기', 's.daySize', s.daySize, { type: 'number', step: 0.5 })}${F('일정 크기', 's.evSize', s.evSize, { type: 'number', step: 0.5 })}</div>
     <div class="grid2"><label class="f"><span>숫자·요일 글꼴</span>${fontPicker('s.fontNum', s.fontNum)}</label><label class="f"><span>일정 글꼴</span>${fontPicker('s.fontBody', s.fontBody)}</label></div>
-    <div class="grid4">${F('일요일 색', 's.sunColor', s.sunColor, { type: 'color' })}${F('토요일 색', 's.satColor', s.satColor, { type: 'color' })}${F('날짜 색', 's.dayColor', s.dayColor, { type: 'color' })}${F('공휴일 색', 's.holColor', s.holColor, { type: 'color' })}</div>
+    <div class="grid4">${F('일요일 색', 's.sunColor', s.sunColor, { type: 'color' })}${F('토요일 색', 's.satColor', s.satColor, { type: 'color' })}${F('날짜 색', 's.dayColor', s.dayColor, { type: 'color' })}${F('공휴일 색', 's.holColor', s.holColor || s.sunColor, { type: 'color' })}</div>
     <div class="grid4">${F('일요일 칸', 's.sunBg', s.sunBg || '#ffffff', { type: 'color' })}${F('안쪽 선', 's.line', s.line, { type: 'color' })}${F('바깥 선', 's.outer', s.outer, { type: 'color' })}${F('메모 색', 's.noteColor', s.noteColor, { type: 'color' })}</div>
     <div class="grid3">${F('안쪽 선 두께', 's.lineW', s.lineW, { type: 'number', step: 0.05, min: 0 })}${F('바깥 선 두께', 's.outerW', s.outerW, { type: 'number', step: 0.05, min: 0 })}${F('칸 여백(mm)', 's.cellPad', s.cellPad, { type: 'number', step: 0.2, min: 0 })}</div>
     <div class="row">${F('요일 줄 보이기', 's.showWd', s.showWd, { type: 'check' })}${F('공휴일 표시', 's.showHol', s.showHol, { type: 'check' })}${F('공휴일 이름', 's.showHolName', s.showHolName, { type: 'check' })}</div><button class="btn sm" data-set="s.sunBg:">일요일 칸 색 없음</button>` + geo;
@@ -2398,6 +2514,9 @@ $('#pname').addEventListener('change', async () => {
 });
 $('#btnNew').onclick = openNewDesign;
 $('#btnOpen').onclick = () => openDrive();
+// 왼쪽 위 로고 = 메인 화면(내 드라이브: 내 디자인 목록·새 디자인 만들기). 지금 문서는 자동 저장 그대로
+$('#brandHome').onclick = () => { if (typeof tlPause === 'function' && tl.playing) tlPause(); document.querySelectorAll('dialog[open]').forEach(d => d.close()); openDrive(); };
+$('#brandHome').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#brandHome').click(); } };
 async function openOtherFile() { try { let j = null; if (store.state.supported) j = await store.openExisting(); else j = await store.pickLocal(); if (j) { await loadDoc(j, '불러왔습니다'); updateSaveBadge(); } } catch (e) { if (e.name !== 'AbortError') toast('열 수 없습니다: ' + e.message, true); } }
 $('#btnSave').onclick = saveNow;
 $('#btnHelp').onclick = () => $('#dlgHelp').showModal();
@@ -2501,9 +2620,21 @@ function renderNewDesign() {
   $('#ndMain').innerHTML = h;
 }
 // 새 문서를 만들고, 동기화 폴더가 있으면 그 폴더에 새 파일로 저장
+// 다른 문서로 넘어가기 전에 지금 문서 지키기: 파일이 연결돼 있으면 저장, 아니면 이 브라우저에 '직전 문서'로 한 부 보관(저장 ▾ → 직전 문서 되살리기)
+async function keepCurrentDoc() {
+  try { flushNudge(); } catch (e) {}
+  if (store.state.handle) { if (store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } return; }
+  if (doc.pages.some(p => p.els.length)) { try { await store.idbSet('doc-prev', JSON.parse(JSON.stringify(doc))); } catch (e) { console.warn('직전 문서 보관 실패', e); } }
+}
+const keepNote = () => store.state.handle ? '지금 문서는 파일에 저장됩니다' : '지금 문서는 파일로 저장하지 않았지만 저장 ▾ → 직전 문서 되살리기로 되살릴 수 있습니다';
+async function restorePrevDoc() {
+  let j = null; try { j = await store.idbGet('doc-prev'); } catch (e) {}
+  if (!j || !j.pages) { toast('되살릴 직전 문서가 없습니다', true); return; }
+  await keepCurrentDoc(); await store.disconnect(); await loadDoc(j, `직전 문서 "${j.name || '디자인'}"를 되살렸습니다 (방금 보던 문서는 다시 '직전 문서'로 보관)`); updateSaveBadge();
+}
 async function createDesign(w, h, name, fmtId) {
   if (fmtId) { const r = recentFormats().filter(x => x !== fmtId); r.unshift(fmtId); try { localStorage.setItem('naracal-recent-formats', JSON.stringify(r.slice(0, 6))); } catch (e) {} }
-  if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
+  await keepCurrentDoc();
   const inDir = await store.folderReady();
   await store.disconnect();
   doc = newDoc(['custom', name, w, h]); doc.name = name; doc.fmt = fmtId || ''; { const f = FORMATS.find(x => x[0] === fmtId); if (f && ['print', 'doc', 'cal'].includes(f[2]) && f[5] === 'mm') doc.bleed = 3; } hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer);
@@ -2767,11 +2898,13 @@ function openFileMenu() {
   <button data-fm="rename"><svg class="ic"><use href="#i-text"/></svg>이름 바꾸기</button><hr>
   <button data-fm="new"><svg class="ic"><use href="#i-new"/></svg>새 디자인…</button>
   <button data-fm="open"><svg class="ic"><use href="#i-folder"/></svg>내 드라이브 (열기)…<kbd>Ctrl+O</kbd></button>
+  <button data-fm="prev"><svg class="ic"><use href="#i-open"/></svg>직전 문서 되살리기 (파일로 저장 안 한 문서)</button>
   <button data-fm="down"><svg class="ic"><use href="#i-upload"/></svg>파일로 내려받기 (JSON)</button><hr>
   <button data-fm="sync"><svg class="ic"><use href="#i-folder"/></svg>저장 · 동기화 설정…</button>`;
   document.body.appendChild(m); m.style.left = Math.max(8, Math.min(b.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px'; m.style.top = (b.bottom + 6) + 'px';
-  m.onclick = e => { const x = e.target.closest('[data-fm]'); if (!x) return; m.remove(); ({ save: saveNow, saveas: saveAs, dup: duplicateDoc, resize: openResize, versions: openVersions, bulk: openBulk, rename: () => { const p = $('#pname'); p.focus(); p.select(); }, new: openNewDesign, open: () => $('#btnOpen').click(), down: () => { gcAssets(); store.download(doc); }, sync: openSaveDialog })[x.dataset.fm](); };
+  m.onclick = e => { const x = e.target.closest('[data-fm]'); if (!x) return; m.remove(); ({ prev: restorePrevDoc, save: saveNow, saveas: saveAs, dup: duplicateDoc, resize: openResize, versions: openVersions, bulk: openBulk, rename: () => { const p = $('#pname'); p.focus(); p.select(); }, new: openNewDesign, open: () => $('#btnOpen').click(), down: () => { gcAssets(); store.download(doc); }, sync: openSaveDialog })[x.dataset.fm](); };
   setTimeout(() => document.addEventListener('pointerdown', function off(ev) { if (!m.contains(ev.target) && ev.target.closest('#btnFileMenu') == null) { m.remove(); } document.removeEventListener('pointerdown', off); }), 0);
+  document.addEventListener('keydown', function escFm(ev) { if (!document.body.contains(m)) { document.removeEventListener('keydown', escFm, true); return; } if (ev.key === 'Escape') { ev.preventDefault(); m.remove(); document.removeEventListener('keydown', escFm, true); $('#btnFileMenu').focus(); } }, true);
 }
 $('#btnFileMenu').onclick = openFileMenu;
 // 저장 단축키 (입력 중에도 동작, 브라우저 기본 저장 창 막기)
@@ -2868,8 +3001,8 @@ function renderAI() {
     ${chat ? `<label class="f" style="margin-top:10px"><span>② 채팅의 답을 복사해 여기에 붙여 넣기 (답 아래 복사 단추 → 여기서 ⌘V·Ctrl+V, 붙여 넣으면 바로 읽음)</span><textarea id="aiAnswer" rows="4" placeholder='{"virtue": "…", "quote": "…"} 처럼 생긴 답'></textarea></label>` : ''}
     <p class="hint">결과를 확인한 뒤 "적용"을 눌러야 들어갑니다. 적용하면 캘린더 데이터와, 해당 달의 역할이 지정된 글 상자가 함께 바뀝니다.</p><div id="aiResult"></div>`;
     $('#aiMonth').onchange = e => { aiCtx.monthIdx = Number(e.target.value); renderAI(); };
-    const showMonth = r => { $('#aiResult').innerHTML = `<div class="aiout">${esc(JSON.stringify(r, null, 2))}</div><div class="row" style="margin-top:8px"><button class="btn primary" id="aiApply">${mi + 1}월에 적용</button></div>`; $('#aiApply').onclick = () => { const n = applyMonthContent(mi, r); commit(); rerender(); $('#dlgAI').close(); toast(`${mi + 1}월 문구를 적용했습니다 (글 상자 ${n}개 갱신)`); }; };
-    const showYear = r => { $('#aiResult').innerHTML = `<div class="aiout">${r.map((x, k) => `${k + 1}월 ${x.virtue} (${x.en}) · ${x.idiom}(${x.hanja})\n  ${x.quote.replace(/\n/g, ' ')}\n  1) ${x.practice[0]}\n  2) ${x.practice[1]}`).join('\n\n')}</div><div class="row" style="margin-top:8px"><button class="btn primary" id="aiApplyY">12개월 모두 적용</button></div>`; $('#aiApplyY').onclick = () => { let n = 0; r.forEach((x, k) => n += applyMonthContent(k, x)); commit(); rerender(); $('#dlgAI').close(); toast(`12개월 문구를 적용했습니다 (글 상자 ${n}개 갱신)`); }; };
+    const showMonth = r => { $('#aiResult').innerHTML = `<div class="aiout" style="white-space:normal"><b style="font-size:15px">${esc(r.virtue)}</b> <small>${esc(r.en || '')}</small><p style="margin:6px 0">${esc(r.quote).replace(/\\n|\n/g, '<br>')}</p><div>1. ${esc(r.practice[0] || '')}<br>2. ${esc(r.practice[1] || '')}</div><small>${esc(r.idiom)}(${esc(r.hanja)}) — ${esc(r.meaning)}</small></div><div class="row" style="margin-top:8px"><button class="btn primary" id="aiApply">${mi + 1}월에 적용</button></div>`; $('#aiApply').onclick = () => { const n = applyMonthContent(mi, r); commit(); rerender(); $('#dlgAI').close(); toast(`${mi + 1}월 문구를 적용했습니다 (글 상자 ${n}개 갱신)`); }; $('#aiApply').scrollIntoView({ block: 'nearest' }); };
+    const showYear = r => { $('#aiResult').innerHTML = `<div class="aiout">${r.map((x, k) => `${k + 1}월 ${esc(x.virtue)} (${esc(x.en)}) · ${esc(x.idiom)}(${esc(x.hanja)})\n  ${esc(x.quote.replace(/\n/g, ' '))}\n  1) ${esc(x.practice[0])}\n  2) ${esc(x.practice[1])}`).join('\n\n')}</div><div class="row" style="margin-top:8px"><button class="btn primary" id="aiApplyY">12개월 모두 적용</button></div>`; $('#aiApplyY').onclick = () => { let n = 0; r.forEach((x, k) => n += applyMonthContent(k, x)); commit(); rerender(); $('#dlgAI').close(); toast(`12개월 문구를 적용했습니다 (글 상자 ${n}개 갱신)`); }; };
     const mArgs = () => ({ year, month: mi + 1, virtue: $('#aiVirtue').value.trim(), hint: $('#aiHint').value.trim() }), yArgs = () => ({ year, previous: months.map(x => x.virtue), hint: $('#aiHint').value.trim() });
     if (chat) {
       $('#aiGoMonth').onclick = () => { aiCtx.ask = 'month'; sendToChat(AI.chat.month(mArgs()), 'text'); };
@@ -3037,6 +3170,7 @@ function openDownload(fmt) {
   p = document.createElement('div'); p.id = 'dlPanel'; p.className = 'dlpanel'; document.body.appendChild(p);
   const b = $('#btnExport').getBoundingClientRect(); p.style.right = Math.max(8, innerWidth - b.right) + 'px'; p.style.top = (b.bottom + 8) + 'px';
   renderDownload();
+  document.addEventListener('keydown', function escDl(ev) { const q = $('#dlPanel'); if (!q) { document.removeEventListener('keydown', escDl, true); return; } if (ev.key === 'Escape' && !document.querySelector('dialog[open]')) { ev.preventDefault(); q.remove(); document.removeEventListener('keydown', escDl, true); const b = $('#btnExport'); if (b) b.focus(); } }, true);
   setTimeout(() => document.addEventListener('pointerdown', function off(ev) { const q = $('#dlPanel'); if (!q) { document.removeEventListener('pointerdown', off); return; } if (!q.contains(ev.target) && !ev.target.closest('#btnExport') && !ev.target.closest('dialog')) { q.remove(); document.removeEventListener('pointerdown', off); } }), 0);
 }
 function renderDownload() {
@@ -3188,7 +3322,7 @@ async function runDownload() {
     if (img) {
       const bl = S.imgBleed && Number(doc.bleed) > 0 ? Number(doc.bleed) : 0, mode = bl ? 'print' : 'thumb';
       let dpi = dlDpi(96 * S.scale, bl); const type = S.fmt === 'png' ? 'image/png' : 'image/jpeg', ext = S.fmt, bg = S.fmt === 'png' ? null : '#ffffff';
-      const toBlob = c => new Promise((r, rej) => c.toBlob(b => b ? r(b) : rej(new Error('이미지가 너무 큽니다. 크기를 줄이거나 ZIP으로 받아 주세요')), type, 0.92));
+      const toBlob = c => new Promise((r, rej) => c.toBlob(b => b ? r(b) : rej(new Error('이미지가 너무 큽니다. 크기를 줄이거나 ZIP으로 받아 주세요')), type, 0.92)).then(b => setDpi(b, dpi, type));
       const transp = S.fmt === 'png' && (S.transp || S.pages === 'sel'); const pgOf = i => transp ? Object.assign({}, doc.pages[i], { bg: 'transparent', transp: true }) : doc.pages[i];
       if (S.pages === 'sel') { // 선택한 요소만: 그 요소만 그린 뒤 둘레(1mm 여유)로 잘라 냄
         const ids = new Set(sel); page().els.forEach(x => { if (x.group && selEls().some(y => y.group === x.group)) ids.add(x.id); });
@@ -3240,6 +3374,13 @@ async function runDownload() {
 }
 // 여러 쪽을 한 장으로 합칠 때 브라우저 한계(한 변 32,000px·1억 화소) 안의 해상도
 function dlMergeDpi(n, bl) { const W = (doc.w + 2 * bl) / 25.4, H = (doc.h + 2 * bl) / 25.4 * n; return Math.max(24, Math.min(30000 / H, 30000 / W, Math.sqrt(100e6 / (W * H)))); }
+// JPG(JFIF 밀도)·PNG(pHYs)에 dpi를 적어 넣음 — 인쇄소 프로그램이 실제 크기(mm)로 읽게
+const CRC32 = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return b => { let c = ~0; for (const x of b) c = t[(c ^ x) & 255] ^ (c >>> 8); return ~c >>> 0; }; })();
+async function setDpi(blob, dpi, type) {
+  try { const d = Math.round(dpi || 0); if (!(d > 0 && d < 65536)) return blob; const u = new Uint8Array(await blob.arrayBuffer());
+    if (type === 'image/jpeg' && u[2] === 0xFF && u[3] === 0xE0 && u[6] === 0x4A && u[7] === 0x46) { u[13] = 1; u[14] = d >> 8; u[15] = d & 255; u[16] = d >> 8; u[17] = d & 255; return new Blob([u], { type }); }
+    if (type === 'image/png' && u[12] === 0x49 && u[13] === 0x48) { const p = Math.round(d / 0.0254), c = new Uint8Array(21), v = new DataView(c.buffer); v.setUint32(0, 9); c.set([0x70, 0x48, 0x59, 0x73], 4); v.setUint32(8, p); v.setUint32(12, p); c[16] = 1; v.setUint32(17, CRC32(c.subarray(4, 17))); return new Blob([u.subarray(0, 33), c, u.subarray(33)], { type }); }
+  } catch (e) {} return blob; }
 function saveBlob(b, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
 async function printVector(pages) {
   const b = Math.max(0, Number(doc.bleed) || 0);
@@ -3899,7 +4040,7 @@ async function runRacha() {
 }
 
 // 점검용 (주소에 ?qa 가 있을 때만): 자동 시험에서 문서 상태를 읽음
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML };
 
 /* ---- 패널 너비 조절 ---- */
 (function () {
@@ -3922,8 +4063,8 @@ if (/[?&]qa\b/.test(location.search)) window.NCQA = { renderPageCanvas, videoLay
   // 같은 버전으로 이미 한 번 새로고침했는데도 옛 파일이 보이면(브라우저 저장본) 다시 새로고침하지 않음 — 되풀이 새로고침 방지
   const tried = () => { try { return sessionStorage.getItem('nc-reloaded-to') || ''; } catch (e) { return ''; } };
   async function check() { try { const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return; const j = await r.json(); if (j.ver && j.ver > cur_ && j.ver !== tried()) { pending = j.ver; showBtn(); } } catch (e) {} }
-  const busy = () => editing || drag || pen || $('#cellEd') || document.querySelector('dialog[open]') || $('#dlPanel') || store.state.saving || (typeof tl !== 'undefined' && tl.playing);
-  async function reloadNow() { if (!pending) return; clearTimeout(nudgeTimer); if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } try { await store.idbSet('doc', doc); } catch (e) {} try { sessionStorage.setItem('nc-reloaded-to', pending); } catch (e) {} location.href = location.pathname + '?v=' + pending; }
+  const busy = () => editing || drag || pen || $('#cellEd') || document.querySelector('dialog[open]') || $('#dlPanel') || store.state.saving || (typeof tl !== 'undefined' && (tl.playing || tl.starting)) || (typeof recState !== 'undefined' && recState);
+  async function reloadNow() { if (!pending) return; clearTimeout(nudgeTimer); if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } try { await store.idbSet('doc', doc); } catch (e) {} try { sessionStorage.setItem('nc-reloaded-to', pending); } catch (e) {} { const u = new URL(location.href); u.searchParams.set('v', pending); location.href = u.href; } }
   function showBtn() {
     let b = $('#newVerBtn'); if (!b) { b = document.createElement('button'); b.id = 'newVerBtn'; b.className = 'btn sm newver'; b.title = '저장된 작업은 그대로 두고 새 버전으로 다시 엽니다'; b.onclick = reloadNow; const bar = $('.topbar .grow'); if (bar) bar.after(b); else document.body.appendChild(b); }
     b.innerHTML = `<svg class="ic"><use href="#i-refresh"/></svg>새 버전 · 새로고침`;
@@ -3933,9 +4074,12 @@ if (/[?&]qa\b/.test(location.search)) window.NCQA = { renderPageCanvas, videoLay
 })();
 
 /* ---- 기타 ---- */
-let toastTimer; function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, err ? 5000 : 2200); }
+// 알림은 맨 위층(popover)에 띄움: 대화창이 열려 있어도 어두운 배경 뒤에 깔리지 않게. 글이 길면 더 오래
+function toastShow(t) { t.hidden = false; try { if (t.showPopover) { if (t.matches(':popover-open')) t.hidePopover(); t.showPopover(); } } catch (e) {} }
+function toastHide(t) { t.hidden = true; try { if (t.hidePopover && t.matches(':popover-open')) t.hidePopover(); } catch (e) {} }
+let toastTimer; function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); toastShow(t); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastHide(t), Math.max(err ? 5000 : 2500, String(msg).length * 70)); }
 // 큰 동작 뒤: 알림에 '되돌리기' 단추 (Ctrl+Z와 같음). after: 되돌린 뒤 할 일
-function toastUndo(msg, after) { const t = $('#toast'); t.className = 'toast act'; t.innerHTML = `<span>${esc(msg)}</span><button type="button">되돌리기</button>`; t.hidden = false; t.querySelector('button').onclick = () => { t.hidden = true; undo(); if (after) after(); toast('되돌렸습니다 (다시 하려면 Ctrl+Shift+Z)'); }; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 7000); }
+function toastUndo(msg, after) { const t = $('#toast'); t.className = 'toast act'; t.innerHTML = `<span>${esc(msg)}</span><button type="button">되돌리기</button>`; toastShow(t); t.querySelector('button').onclick = () => { toastHide(t); undo(); if (after) after(); toast('되돌렸습니다 (다시 하려면 Ctrl+Shift+Z)'); }; clearTimeout(toastTimer); toastTimer = setTimeout(() => toastHide(t), 7000); }
 
 /* ---- 시작 ---- */
 // 같은 문서인지 (문서 번호가 있으면 번호로, 없으면 이름으로)

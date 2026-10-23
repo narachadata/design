@@ -197,7 +197,7 @@
     if (!o.noLogo) { const lh = Math.min(8.5 * u * z, box.h * 0.12), lw = lh * 1.98; add(lh + 1.2 * u, (x, y) => els.push(I(logoFor('brand-korean', contentBg), x + (cw - lw) / 2, y + 1.2 * u, lw, lh, Object.assign({ name: '로고' }, hol.solemn ? { fx: { sat: 0 }, opacity: 0.85 } : {})))); }
     };
     build(1); let total = items.reduce((a, it) => a + it.hh, 0);
-    const z = Math.max(0.7, Math.min(wide ? 2.2 : 1.45, box.h * 0.9 / total)); // 가로 현수막은 글자를 더 크게 if (Math.abs(z - 1) > 0.04) build(z);
+    const z = Math.max(0.7, Math.min(wide ? 2.2 : 1.45, box.h * 0.9 / total)); /* 가로 현수막은 글자를 더 크게 */ if (Math.abs(z - 1) > 0.04) build(z);
     // 넘치면 그림부터 줄이고, 그래도 넘치면 전체를 비율로 줄임
     total = items.reduce((a, it) => a + it.hh, 0);
     if (total > box.h && art) { const cut = Math.min(artBox * 0.6, total - box.h); items[0].hh -= cut; const as2 = artBox - cut; items[0].make = (x, y) => els.push(I(art, x + (cw - as2) / 2, y, as2, as2, { name: '그림' })); total -= cut; }
