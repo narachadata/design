@@ -4256,7 +4256,7 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
     }
   } catch (e) { console.warn(e); }
   updateSaveBadge(); updateToolbarState();
-  NC.live.attach({ doc: () => doc, state: () => ({ cur, sel, drag: !!drag, editing: !!editing || !!$('#cellEd') }), afterRemote: liveAfterRemote, saveSoon: () => { if (store.state.dirty) markDirty(); }, openSettings: openSaveDialog, toast });
+  NC.live.attach({ canSave: () => !!(store.state.handle && !store.state.needPerm), doc: () => doc, state: () => ({ cur, sel, drag: !!drag, editing: !!editing || !!$('#cellEd') }), afterRemote: liveAfterRemote, saveSoon: () => { if (store.state.dirty) markDirty(); }, openSettings: openSaveDialog, toast });
   document.fonts && document.fonts.ready.then(() => renderAll());
 })();
 })();
