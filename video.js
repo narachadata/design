@@ -136,7 +136,7 @@ NC.video = (function () {
   }
   // 동영상 층: 지금 프레임을 상자에 채워(cover/contain) 그림. 둥근 모서리
   function drawVideo(x, L) {
-    const v = L.vEl, b = L.video.box, el = L.video.el; if (!v || !v.videoWidth) { x.fillStyle = '#222'; x.fillRect(b.x, b.y, b.w, b.h); return; }
+    const v = L.vEl, b = L.video.box, el = L.video.el; if (!v || !v.videoWidth) return; // 원본이 없으면 빈 공간
     const vw = v.videoWidth, vh = v.videoHeight, cover = (el.fit || 'cover') !== 'contain', k = cover ? Math.max(b.w / vw, b.h / vh) : Math.min(b.w / vw, b.h / vh), dw = vw * k, dh = vh * k;
     x.save(); x.beginPath(); if (L.video.rad > 0 && x.roundRect) x.roundRect(b.x, b.y, b.w, b.h, L.video.rad); else x.rect(b.x, b.y, b.w, b.h); x.clip();
     x.drawImage(v, b.x + (b.w - dw) / 2, b.y + (b.h - dh) / 2, dw, dh); x.restore();

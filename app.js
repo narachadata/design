@@ -115,6 +115,25 @@ function warnIfRecentOther(j) {
 function tnow() { return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }); }
 function setStatus(t) { $('#status').textContent = t; }
 function updateSaveBadge() { const b = $('#btnSave'); if (!b) return; const st = store.state; b.querySelector('span').textContent = '저장'; b.title = st.handle ? `저장 (Ctrl+S) · ${st.dir ? '동기화 폴더' : '파일'}: ${st.fileName}` : '저장 (Ctrl+S) · 아직 파일로 저장하지 않음'; b.classList.toggle('on', !!st.handle); }
+// 이 PC에 원본이 없는 동영상·소리(내 PC 원본 'm:'만 해당 — 공방 그림·기본 소리·공유 자료는 온라인에 있으므로 늘 열림)
+const mediaMissing = new Set();
+function mediaRefs() { const out = []; doc.pages.forEach((pg, i) => pg.els.forEach(el => { if (el.type === 'video' && NC.media.isLocal(el.src)) out.push({ id: el.src.slice(2), where: `${i + 1}쪽 동영상`, kind: 'video' }); })); if (doc.audio && NC.media.isLocal(doc.audio.src)) out.push({ id: doc.audio.src.slice(2), where: '배경 음악', kind: 'audio' }); (doc.tracks || []).forEach(t => (t.items || []).forEach(it => { if (NC.media.isLocal(it.ref)) out.push({ id: it.ref.slice(2), where: `${t.name} 트랙`, kind: 'audio' }); })); return out; }
+async function checkMedia(warn) {
+  mediaMissing.clear(); const refs = mediaRefs(); if (!refs.length) return;
+  for (const r of refs) { if (!(await NC.media.has(r.id))) mediaMissing.add(r.id); }
+  if (!mediaMissing.size) return;
+  renderCanvas(); if (tlOn()) { tl.Vkey = ''; renderTimeline(); }
+  if (warn) missingDialog();
+}
+function missingDialog() {
+  const list = [...mediaMissing].map(id => ({ id, m: (doc.media || {})[id] || {}, where: [...new Set(mediaRefs().filter(r => r.id === id).map(r => r.where))].join(', ') }));
+  let d = $('#dlgMiss'); if (d) d.remove(); d = document.createElement('dialog'); d.id = 'dlgMiss'; d.className = 'nw-dlg sm';
+  d.innerHTML = `<div class="dhead"><h2>원본 영상이 없습니다</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><p class="hint" style="margin-top:0">원본 영상이 이 PC에 없으므로 <b>그 부분은 빈 공간</b>으로 보입니다. 편집 내용(자르기·움직임·자막 등)은 그대로 남아 있으니, 원본 파일을 연결하면 바로 이어서 편집할 수 있습니다. 공방 그림·기본 음악·공유 자료처럼 온라인에 있는 것은 모두 정상으로 불러왔습니다.</p>
+  <div class="miss-list">${list.map(x => `<div class="miss-it" data-mid="${x.id}"><span><b>${esc(x.m.name || '이름 없는 파일')}</b><small>${esc(x.where)}${x.m.size ? ' · ' + (x.m.size / 1048576).toFixed(1) + 'MB' : ''}</small></span><button class="btn sm primary" data-relink="${x.id}">원본 연결</button></div>`).join('')}</div>
+  <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" data-close>그대로 열기</button></div></div>`;
+  document.body.appendChild(d); d.querySelectorAll('[data-close]').forEach(b => b.onclick = () => d.close()); d.addEventListener('close', () => d.remove()); d.showModal();
+  d.onclick = async e => { const b = e.target.closest('[data-relink]'); if (!b) return; const id = b.dataset.relink; try { const m0 = (doc.media || {})[id] || {}; const m = await NC.media.relink(id); if (m0.name && m.name !== m0.name && !window.confirm(`고른 파일 이름(${m.name})이 원래 이름(${m0.name})과 다릅니다. 이 파일로 연결할까요?`)) return; mediaMissing.delete(id); b.closest('.miss-it').classList.add('ok'); b.textContent = '연결됨'; b.disabled = true; vEls.clear(); renderCanvas(); if (tlOn()) { tl.Vkey = ''; renderTimeline(); } if (!mediaMissing.size) { d.close(); toast('원본을 모두 연결했습니다'); } } catch (err) { if (err.name !== 'AbortError') toast(err.message, true); } };
+}
 async function loadDoc(j, from) {
   if (!j || !j.pages) throw new Error('문서 형식이 아닙니다');
   if (j.v !== 2) throw new Error('이 프로그램의 문서 파일이 아닙니다');
@@ -126,6 +145,7 @@ async function loadDoc(j, from) {
   $('#pname').value = doc.name || '';
   hist.push(snapshot()); histMeta = [{ cur: 0, sel: [] }]; hptr = 0;
   renderAll(); if (from) toast(from);
+  checkMedia(true);
 }
 async function checkExternalChange() {
   const st = store.state; if (st.conflict || editing || $('#cellEd') || drag) return;
@@ -225,6 +245,7 @@ function elHTML(el, mode, ext) {
     const inner = s ? `<img src="${s}" alt="" draggable="false" style="object-fit:${el.fit};object-position:${el.pos};transform:translate(${el.panX || 0}%,${el.panY || 0}%) scale(${z * (el.flip ? -1 : 1)},${z * (el.flipV ? -1 : 1)});${FX.imageFilter(el)}">${el.tint ? `<div class="tint" style="background:${el.tint};opacity:${el.tintA == null ? 0.4 : el.tintA};mix-blend-mode:${el.tintMode || 'multiply'}"></div>` : ''}` : (mode === 'edit' ? '<div style="font-size:3.5mm;color:rgba(0,0,0,.4);text-align:center;padding-top:35%">그림 없음<br>오른쪽에서 넣기</div>' : '');
     return `<div class="el el-image${lock}" data-id="${el.id}" style="${base}${blend}${sh}"><div class="imgclip" style="border-radius:${el.radius || 0}mm;${clip ? `clip-path:${clip};` : ''}${el.border ? `border:${el.borderW || 0.5}mm solid ${el.border};` : ''}${s ? '' : 'outline:0.4mm dashed rgba(0,0,0,.3);'}">${inner}</div></div>`;
   }
+  if (el.type === 'video' && NC.media.isLocal(el.src) && mediaMissing.has(el.src.slice(2))) return `<div class="el el-video vmiss${lock}" data-id="${el.id}" style="${base}">${mode === 'edit' ? `<div class="vmiss-in"><b>원본 영상 없음</b><span>${esc(el.name || '')}</span><small>속성에서 '원본 다시 연결'</small></div>` : ''}</div>`;
   if (el.type === 'video') { const ps = el.poster ? src(el.poster) : ''; const len = Math.max(0, Number(el.tout || el.dur || 0) - Number(el.tin || 0)); return `<div class="el el-video${lock}" data-id="${el.id}" style="${base}${blend}"><div class="imgclip" style="border-radius:${el.radius || 0}mm;background:#1b1f2a">${ps ? `<img src="${ps}" alt="" draggable="false" style="object-fit:${el.fit === 'contain' ? 'contain' : 'cover'}">` : ''}${mode === 'edit' ? `<span class="vbadge">▶ ${len.toFixed(1)}초</span>` : ''}</div></div>`; }
   if (el.type === 'shape') return `<div class="el el-shape${lock}" data-id="${el.id}" style="${base}${blend}">${FX.shapeSVG(el)}</div>`;
   if (el.type === 'path') return `<div class="el el-path${lock}" data-id="${el.id}" style="${base}${blend}">${FX.pathSVG(el)}</div>`;
@@ -1144,18 +1165,27 @@ async function addVideoRef(ref, name) {
   catch (e) { toast('영상을 넣지 못했습니다: ' + e.message, true); }
 }
 async function addVideoEl() {
-  try {
-    const list = await NC.media.pick('video'); if (!list.length) return;
-    for (const m of list) {
-      doc.media = Object.assign(doc.media || {}, { [m.id]: m });
-      const u = (await NC.media.file(m.id, true)).url, info = await videoInfo(u);
-      const k = Math.min(doc.w * 0.8 / info.w, doc.h * 0.8 / info.h), w = Math.round(info.w * k * 10) / 10, h = Math.round(info.h * k * 10) / 10;
-      const poster = info.poster ? addAsset(info.poster) : '';
-      addEl({ type: 'video', src: 'm:' + m.id, poster, name: m.name.replace(/\.[^.]+$/, ''), w, h, x: 0, y: 0, rot: 0, opacity: 1, fit: 'cover', radius: 0, tin: 0, tout: Math.round(info.dur * 10) / 10, dur: info.dur, vol: 1, mute: false });
-      if (info.dur > 0 && window.confirm(`동영상 길이(${info.dur.toFixed(1)}초)에 맞춰 이 장면 길이를 바꿀까요?`)) { page().vdur = Math.round(info.dur * 10) / 10; commit(); }
-    }
-    renderAll(); toast('동영상을 넣었습니다 — 원본은 이 PC에만 있고 문서에는 이름만 저장됩니다');
-  } catch (e) { if (e.name !== 'AbortError') toast('동영상을 넣지 못했습니다: ' + e.message, true); }
+  try { const list = await NC.media.pick('video'); for (const m of list) await placeVideo(m); }
+  catch (e) { if (e.name !== 'AbortError') toast('동영상을 넣지 못했습니다: ' + e.message, true); }
+}
+// 동영상 하나를 지금 쪽에 넣음 (원본은 이 PC에만, 문서에는 이름·크기와 작은 첫 장면만)
+async function placeVideo(m, at) {
+  doc.media = Object.assign(doc.media || {}, { [m.id]: m }); mediaMissing.delete(m.id);
+  const u = (await NC.media.file(m.id, true)).url, info = await videoInfo(u);
+  const k = Math.min(doc.w / info.w, doc.h / info.h), w = Math.round(info.w * k * 10) / 10, h = Math.round(info.h * k * 10) / 10;
+  const el = addEl({ type: 'video', src: 'm:' + m.id, poster: info.poster ? addAsset(info.poster) : '', name: m.name.replace(/\.[^.]+$/, ''), w, h, x: 0, y: 0, rot: 0, opacity: 1, fit: 'cover', radius: 0, tin: 0, tout: Math.round(info.dur * 100) / 100, dur: info.dur, vol: 1, mute: false });
+  const len = Math.round(info.dur * 10) / 10, pg = page();
+  if (info.dur > 0 && Math.abs(Number(pg.vdur || vset().dur) - len) > 0.2) { pg.vdur = len; commit(); }
+  if (tlOn()) { tl.fit = true; renderTimeline(); } else if (sideTab !== 'video') { sideTab = 'video'; renderRail(); renderSide(); tlShow(true); }
+  toast(`동영상 '${m.name}' (${fmtT(info.dur)})을 넣었습니다 — 장면 길이를 영상에 맞췄습니다. ✂(Ctrl+B)로 잘라 필요 없는 부분을 지우세요. 원본은 이 PC에만 있습니다.`);
+  return el;
+}
+// 소리 파일을 오디오 트랙 클립으로
+async function placeAudio(m) {
+  doc.media = Object.assign(doc.media || {}, { [m.id]: m }); mediaMissing.delete(m.id);
+  const TR = tracks(); let t = TR.find(x => x.id === tl.selTr && x.type === 'audio') || TR.find(x => x.type === 'audio'); if (!t) { t = { id: uid(), type: 'audio', name: '오디오 2', items: [] }; TR.push(t); }
+  let dur = 0; try { dur = (await mediaAudio('m:' + m.id, true)).duration; } catch (e) {}
+  t.items.push({ id: uid(), ref: 'm:' + m.id, name: m.name.replace(/\.[^.]+$/, ''), at: Math.round((tl.T || 0) * 10) / 10, vol: 1, dur: dur || undefined }); commit(); renderTimeline();
 }
 // 동영상 크기·길이·첫 장면(편집 화면·썸네일용 작은 그림)
 function videoInfo(url) { return new Promise((res, rej) => { const v = document.createElement('video'); v.muted = true; v.preload = 'auto'; v.src = url; v.onerror = () => rej(new Error('이 동영상 형식은 브라우저에서 열 수 없습니다 (MP4·H.264로 바꿔 넣어 주세요)')); v.onloadedmetadata = () => { v.currentTime = Math.min(0.5, v.duration / 3 || 0); }; v.onseeked = () => { const W = v.videoWidth, H = v.videoHeight, k = Math.min(1, 640 / Math.max(W, H)), c = document.createElement('canvas'); c.width = Math.round(W * k); c.height = Math.round(H * k); let poster = ''; try { c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); poster = c.toDataURL('image/jpeg', 0.8); } catch (e) {} res({ w: W, h: H, dur: v.duration || 0, poster }); }; }); }
@@ -1260,7 +1290,9 @@ document.addEventListener('keydown', e => {
 // Q·W: 재생 헤드가 있는 장면의 앞(시작~헤드) 또는 뒤(헤드~끝)를 잘라냄. 뒤 장면은 당겨짐(리플)
 function tlTrim(which) {
   const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { toast('장면 안에 재생 헤드를 두세요', true); return; }
-  const q = Math.round((tl.T - x.t0) * 10) / 10, pg = x.pg; if (which === 'tail') { if (q < 0.3) { toast('남는 길이가 너무 짧습니다', true); return; } pg.vdur = q; }
+  const q = Math.round((tl.T - x.t0) * 10) / 10, pg = x.pg;
+  pg.els.forEach(e => { if (e.type !== 'video') return; const d0 = e.anim ? Number(e.anim.d || 0) : 0, used = Math.max(0, q - d0), tin = Number(e.tin || 0), tout = Number(e.tout || e.dur || 0); if (which === 'tail') e.tout = Math.round(Math.min(tout, tin + used) * 100) / 100; else if (used) e.tin = Math.round(Math.min(tout - 0.1, tin + used) * 100) / 100; });
+  if (which === 'tail') { if (q < 0.3) { toast('남는 길이가 너무 짧습니다', true); return; } pg.vdur = q; }
   else { const rest = Math.round((x.dur - q) * 10) / 10; if (rest < 0.3) { toast('남는 길이가 너무 짧습니다', true); return; } pg.vdur = rest; pg.els.forEach(el => { if (el.anim) { const d = Number(el.anim.d || 0) - q; if (d + Number(el.anim.s || 0.8) <= 0) delete el.anim; else el.anim.d = Math.max(0, Math.round(d * 10) / 10); } }); tl.T = x.t0; }
   commit(); renderTimeline(); tlTimeLabel(); toastUndo(which === 'tail' ? `${x.i + 1}쪽 뒷부분을 잘라냈습니다 (${q}초 남음)` : `${x.i + 1}쪽 앞부분 ${q}초를 잘라냈습니다`);
 }
@@ -1415,7 +1447,9 @@ function tlSplit() {
   const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { toast('장면 안에 재생 위치를 두고 나누세요', true); return; }
   const q = Math.round((tl.T - x.t0) * 10) / 10; if (q < 0.3 || x.dur - q < 0.3) { toast('장면 끝에 너무 가깝습니다', true); return; }
   const a = x.pg, b = clone(a); b.id = uid(); const gm = {}; b.els.forEach(e => { e.id = uid(); if (e.group) { gm[e.group] = gm[e.group] || uid(); e.group = gm[e.group]; } if (e.anim) { const d = Number(e.anim.d || 0) - q; if (d + Number(e.anim.s || 0.8) <= 0) delete e.anim; else e.anim.d = Math.max(0, d); } });
-  b.vdur = Math.round((x.dur - q) * 10) / 10; a.vdur = q; b.vtrans = a.vtrans; b.vturn = a.vturn; a.vtrans = 'none'; delete a.els.forEach; a.els.forEach(e => { delete e.animOut; });
+  // 동영상: 앞 조각은 자른 지점에서 끝나고, 뒤 조각은 자른 지점부터 이어서 재생
+  a.els.forEach((e, k) => { if (e.type !== 'video') return; const e2 = b.els[k], d0 = e.anim ? Number(e.anim.d || 0) : 0, used = Math.max(0, q - d0), tin = Number(e.tin || 0), tout = Number(e.tout || e.dur || 0); if (!used) return; const cut = Math.min(tout, tin + used); e.tout = Math.round(cut * 100) / 100; e2.tin = Math.round(cut * 100) / 100; e2.tout = tout; if (e2.anim) e2.anim.d = 0; });
+  b.vdur = Math.round((x.dur - q) * 10) / 10; a.vdur = q; b.vtrans = a.vtrans; b.vturn = a.vturn; a.vtrans = 'none'; a.els.forEach(e => { delete e.animOut; });
   doc.pages.splice(x.i + 1, 0, b); commit(); goto(x.i + 1); renderTimeline(); toastUndo(`${x.i + 1}쪽을 ${q}초에서 나눴습니다`);
 }
 function tlWire() {
@@ -1536,7 +1570,7 @@ function openTransPop(i, anchor) {
   m.onclick = e => { const b = e.target.closest('[data-tv]'); if (b) { pg.vtrans = b.dataset.tv; commit(); renderTimeline(); m.querySelectorAll('[data-tv]').forEach(x => x.classList.toggle('on', x === b)); const { list } = tlScenes(), x = list.find(s2 => s2.i === i); if (x) { tl.T = x.t0 + Math.max(0, x.dur - 0.3); tlPlay(); setTimeout(() => { if (tl.playing && tl.T > x.t0 + x.dur + x.turn + 0.3) tlPause(); }, (x.turn + 0.9) * 1000); } return; } if (e.target.id === 'trAll') { doc.pages.forEach(p2 => { p2.vtrans = pg.vtrans || V.trans; p2.vturn = pg.vturn; }); commit(); renderTimeline(); toastUndo('모든 장면에 같은 넘김 효과를 넣었습니다'); close(); } if (e.target.id === 'trClose') close(); };
   m.querySelector('#trTurn').oninput = e => { pg.vturn = Number(e.target.value); $('#trTv').textContent = pg.vturn + '초'; renderTimeline(); }; m.querySelector('#trTurn').onchange = () => commit();
 }
-async function relinkMedia(ref) { if (!NC.media.isLocal(ref)) return; const id = ref.slice(2), m = (doc.media || {})[id]; try { const r = await NC.media.file(id, true); if (r.url) { toast('원본을 읽을 수 있게 됐습니다'); renderTimeline(); return; } if (!window.confirm(`이 PC에 원본 "${m ? m.name : ''}"이(가) 연결되어 있지 않습니다. 이 PC의 파일을 골라 다시 연결할까요?`)) return; await NC.media.relink(id); toast('원본을 다시 연결했습니다'); renderTimeline(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } }
+async function relinkMedia(ref) { if (!NC.media.isLocal(ref)) return; const id = ref.slice(2), m = (doc.media || {})[id]; try { const r = await NC.media.file(id, true); if (r.url) { mediaMissing.delete(id); toast('원본을 읽을 수 있게 됐습니다'); renderCanvas(); renderTimeline(); return; } if (!window.confirm(`이 PC에 원본 "${m ? m.name : ''}"이(가) 연결되어 있지 않습니다. 이 PC의 파일을 골라 다시 연결할까요?`)) return; await NC.media.relink(id); mediaMissing.delete(id); vEls.clear(); tl.Vkey = ''; toast('원본을 다시 연결했습니다'); renderCanvas(); renderTimeline(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } }
 // 미리보기 재생 (첫 장면부터, 또는 지금 쪽부터)
 async function openVideoPlayer(fromCur) {
   let d = $('#dlgVplay'); if (d) d.remove();
@@ -3379,11 +3413,21 @@ $('#scroller').addEventListener('dragover', e => {
   const el = dropTarget(e); $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon')); if (el) { const d = $(`#canvas .el[data-id="${el.id}"]`); if (d) d.classList.add('dropon'); }
 });
 $('#scroller').addEventListener('dragleave', e => { if (!e.relatedTarget || !$('#scroller').contains(e.relatedTarget)) $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon')); });
+// 동영상·소리 파일 끌어다 놓기: 원본은 이 PC에 그대로 두고 위치(손잡이)만 기억 — 길이와 상관없이 편집 가능
+function mediaDrop(e) {
+  const items = [...(e.dataTransfer.items || [])].filter(it => it.kind === 'file' && /^(video|audio)\//.test(it.type)); if (!items.length) return false;
+  e.preventDefault(); e.stopPropagation();
+  const got = items.map(it => ({ type: it.type, file: it.getAsFile(), hp: it.getAsFileSystemHandle ? it.getAsFileSystemHandle().catch(() => null) : Promise.resolve(null) })); // 이벤트 안에서 바로 받아 둬야 함
+  (async () => { for (const g of got) { try { const h = await g.hp; const m = h && h.kind === 'file' ? await NC.media.addHandle(h) : await NC.media.addFile(g.file); if (/^video/.test(g.type)) await placeVideo(m); else await placeAudio(m); } catch (err) { toast('넣지 못했습니다: ' + err.message, true); } } })();
+  return true;
+}
+document.addEventListener('drop', e => { if (e.target.closest && e.target.closest('#vtl') && e.dataTransfer && mediaDrop(e)) return; }, true);
+document.addEventListener('dragover', e => { if (e.target.closest && e.target.closest('#vtl') && e.dataTransfer && [...(e.dataTransfer.items || [])].some(it => it.kind === 'file')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }, true);
 $('#scroller').addEventListener('drop', async e => {
-  const kind = dropKind(e); if (!kind) return; e.preventDefault(); $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon'));
+  const kind = dropKind(e); if (!kind) return; if (kind === 'file' && mediaDrop(e)) return; e.preventDefault(); $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon'));
   const tgt = dropTarget(e), p = toMM(e), pg0 = page(); let refs = [];
   if (kind === 'img') { const v = e.dataTransfer.getData('text/x-nc-img'); const r = v.startsWith('lib|') ? await libInsert(v.slice(4)) : v; if (r) refs = [r]; }
-  else { const fs = [...e.dataTransfer.files].filter(f => /^image\//.test(f.type)); if (!fs.length) { toast('그림 파일(JPG·PNG·SVG 등)만 넣을 수 있습니다', true); return; } for (const f of fs) refs.push(addAsset(await fileToDataURL(f))); }
+  else { const fs = [...e.dataTransfer.files].filter(f => /^image\//.test(f.type)); if (!fs.length) { toast('그림·동영상·소리 파일만 넣을 수 있습니다', true); return; } for (const f of fs) refs.push(addAsset(await fileToDataURL(f))); }
   if (!refs.length || page() !== pg0) return;
   if (tgt && refs.length === 1 && pg0.els.includes(tgt)) { tgt.src = refs[0]; delete tgt.srcOrig; commit(); select([tgt.id]); rerender(); toast('그림을 바꿨습니다 (자리·크기·자르기는 그대로)'); return; }
   const ids = [];
@@ -3750,7 +3794,7 @@ async function runRacha() {
 }
 
 // 점검용 (주소에 ?qa 가 있을 때만): 자동 시험에서 문서 상태를 읽음
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { renderPageCanvas, videoLayers, fontCSSFor, get doc() { return doc; }, get sel() { return sel; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML };
 
 /* ---- 패널 너비 조절 ---- */
 (function () {
