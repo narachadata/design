@@ -59,7 +59,7 @@ NC.lib = (function () {
     await pool(metas, 8, async h => {
       try {
         const m = JSON.parse(await (await h.getFile()).text());
-        const file = `${MINE}/${m.id}.png`, thumb = `${MINE}/${m.id}.thumb.jpg`;
+        const file = `${MINE}/${m.id}.${m.ext || 'png'}`, thumb = `${MINE}/${m.id}.thumb.jpg`;
         st.urls[file] = st.urls[file] || URL.createObjectURL(await blob(file));
         try { st.urls[thumb] = st.urls[thumb] || URL.createObjectURL(await blob(thumb)); } catch (e) {}
         st.mine.push(Object.assign({ kind: 'element', group: 'mine', cat: 'aiimg', file, thumb: st.urls[thumb] ? thumb : file }, m));
@@ -80,24 +80,24 @@ NC.lib = (function () {
     if (!st.dir) { if (!(await NC.store.folderReady())) throw new Error('동기화 폴더가 연결되어 있지 않습니다 (저장 ▾ → 저장·동기화 설정)'); st.dir = await NC.store.state.dir.getDirectoryHandle(DIR, { create: true }); }
     const d = await mineDir(true);
     const id = 'ai-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    const png = await (await fetch(dataURL)).blob(); const t = await thumbBlob(dataURL);
-    await writeBlob(d, id + '.png', png); await writeBlob(d, id + '.thumb.jpg', t.blob);
-    const m = { id, name: meta.name || 'AI 그림', kw: meta.kw || '', prompt: meta.prompt || '', style: meta.style || '', created: Date.now(), by: NC.store.pcName(), ratio: Math.round(t.ratio * 10000) / 10000 }; if (meta.cat) m.cat = meta.cat; if (meta.tag) m.tag = meta.tag;
+    const png = await (await fetch(dataURL)).blob(); const t = await thumbBlob(dataURL); const ext = /svg/.test(png.type) ? 'svg' : /jpe?g/.test(png.type) ? 'jpg' : /webp/.test(png.type) ? 'webp' : 'png';
+    await writeBlob(d, id + '.' + ext, png); await writeBlob(d, id + '.thumb.jpg', t.blob);
+    const m = { id, name: meta.name || 'AI 그림', kw: meta.kw || '', prompt: meta.prompt || '', style: meta.style || '', created: Date.now(), by: NC.store.pcName(), ratio: Math.round(t.ratio * 10000) / 10000 }; if (meta.cat) m.cat = meta.cat; if (meta.tag) m.tag = meta.tag; if (ext !== 'png') m.ext = ext;
     await writeBlob(d, id + '.json', new Blob([JSON.stringify(m, null, 1)], { type: 'application/json' }));
-    const file = `${MINE}/${id}.png`, thumb = `${MINE}/${id}.thumb.jpg`;
+    const file = `${MINE}/${id}.${ext}`, thumb = `${MINE}/${id}.thumb.jpg`;
     st.urls[file] = URL.createObjectURL(png); st.urls[thumb] = URL.createObjectURL(t.blob);
     const it = Object.assign({ kind: 'element', group: 'mine', cat: 'aiimg', file, thumb }, m); st.mine.unshift(it);
     return it;
   }
   async function removeMine(id) {
     const d = await mineDir();
-    for (const n of [id + '.png', id + '.thumb.jpg', id + '.json']) { try { await d.removeEntry(n); } catch (e) {} }
+    for (const n of [id + '.png', id + '.svg', id + '.jpg', id + '.webp', id + '.thumb.jpg', id + '.json']) { try { await d.removeEntry(n); } catch (e) {} }
     st.mine = st.mine.filter(x => x.id !== id);
   }
   async function renameMine(id, name) {
     const it = st.mine.find(x => x.id === id); if (!it) return;
     it.name = name; const d = await mineDir(true);
-    const m = { id: it.id, name, kw: it.kw, prompt: it.prompt, style: it.style, created: it.created, by: it.by, ratio: it.ratio }; if (it.cat && it.cat !== 'aiimg') m.cat = it.cat; if (it.tag) m.tag = it.tag;
+    const m = { id: it.id, name, kw: it.kw, prompt: it.prompt, style: it.style, created: it.created, by: it.by, ratio: it.ratio }; if (it.cat && it.cat !== 'aiimg') m.cat = it.cat; if (it.tag) m.tag = it.tag; if (it.ext) m.ext = it.ext;
     await writeBlob(d, id + '.json', new Blob([JSON.stringify(m, null, 1)], { type: 'application/json' }));
   }
 
