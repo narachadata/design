@@ -168,14 +168,15 @@ NC.live = (function () {
     seen.set(msg.id, 1); if (seen.size > 3000) { const k = seen.keys().next().value; seen.delete(k); }
     if (msg.kind === 'ops') { receiveOps(msg.ops); touch(msg, null, via); }
     else if (msg.kind === 'presence') { touch(msg, msg.p, via); }
-    else if (msg.kind === 'bye') { room.peers.delete(msg.from); emit(); paint(); checkSaver(); }
+    else if (msg.kind === 'cur') { touch(msg, null, via); const x = room.peers.get(msg.from); if (x) { x.c = msg.c || null; x.ct = Date.now(); } paintCursors(); }
+    else if (msg.kind === 'bye') { const x = room.peers.get(msg.from); room.peers.delete(msg.from); if (x) note(`${x.pc || '다른 PC'}에서 이 문서를 닫았습니다`); emit(); paint(); checkSaver(); }
     else if (msg.kind === 'hello') { touch(msg, null, via); if (oldest() === me.id && api) { const d = api.doc(); send({ kind: 'state', pages: d.pages, doc: docFields(d) }, msg.from); } }
     else if (msg.kind === 'state') { if (!api) return; const d = api.doc(); const sd = Object.assign({}, msg.doc, { pages: msg.pages }); const ops = diff(scan(d), scan(sd), sd); if (ops.length) receiveOps(ops); }
   }
   function docFields(d) { const o = {}; for (const k in d) if (k !== 'pages' && !SKIP.includes(k)) o[k] = d[k]; return o; }
   // 접속자 기록. via: 'bc'(같은 브라우저) | 'fb'(Firebase) — 어느 통로로 마지막에 봤는지 남겨 끊김 판정에 씀
-  function touch(msg, p, via) { let x = room.peers.get(msg.from); if (!x) { x = { id: msg.from, pc: msg.pc, joined: msg.joined || Date.now(), color: COLORS[room.peers.size % COLORS.length], bc: 0, fb: 0 }; room.peers.set(msg.from, x); emit(); checkSaver(); } x[via === 'fb' ? 'fb' : 'bc'] = Date.now(); x.pc = msg.pc || x.pc; const fs0 = x.fs; if (typeof msg.fs === 'boolean') x.fs = msg.fs; if (p) { x.cur = p.cur; x.sel = p.sel || []; x.email = p.email || x.email; if (typeof p.fs === 'boolean') x.fs = p.fs; } if (fs0 !== x.fs) { emit(); checkSaver(); } paint(); }
-  function prune() { if (!room) return; let ch = false; for (const [id, p] of room.peers) { const bcLive = p.bc && Date.now() - p.bc < 15000, fbLive = p.fb && (room.fb && fb.connected ? p.fbHere : Date.now() - p.fb < 60000); if (!bcLive && !fbLive) { room.peers.delete(id); ch = true; } } if (ch) { emit(); paint(); checkSaver(); } }
+  function touch(msg, p, via) { let x = room.peers.get(msg.from); if (!x) { x = { id: msg.from, pc: msg.pc, joined: msg.joined || Date.now(), color: COLORS[room.peers.size % COLORS.length], bc: 0, fb: 0 }; room.peers.set(msg.from, x); note(`${x.pc || '다른 PC'}에서 이 문서를 함께 열었습니다 — 상대 커서와 고르는 요소가 색으로 보입니다. 같은 요소를 동시에 고치면 나중에 고친 쪽만 남습니다`); emit(); checkSaver(); } x[via === 'fb' ? 'fb' : 'bc'] = Date.now(); x.pc = msg.pc || x.pc; const fs0 = x.fs; if (typeof msg.fs === 'boolean') x.fs = msg.fs; if (p) { x.cur = p.cur; x.sel = p.sel || []; x.email = p.email || x.email; if (typeof p.fs === 'boolean') x.fs = p.fs; } if (fs0 !== x.fs) { emit(); checkSaver(); } paint(); }
+  function prune() { if (!room) return; let ch = false; for (const [id, p] of room.peers) { const bcLive = p.bc && Date.now() - p.bc < 15000, fbLive = p.fb && (room.fb && fb.connected ? p.fbHere : Date.now() - p.fb < 60000); if (!bcLive && !fbLive) { room.peers.delete(id); ch = true; note(`${p.pc || '다른 PC'}와 연결이 끊겼습니다`); } } if (ch) { emit(); paint(); checkSaver(); } }
   // 가장 먼저 들어온 PC(파일 저장 담당·상태 보내기 담당)
   function oldest() { const all = [Object.assign({}, me, { fs: canSave() }), ...room.peers.values()], ok = all.filter(p => p.fs !== false), list = ok.length ? ok : all; let best = list[0]; for (const p of list) if (p.joined < best.joined || (p.joined === best.joined && p.id < best.id)) best = p; return best.id; }  /* 파일에 쓸 수 있는 PC 중 가장 먼저 들어온 PC가 저장 담당 */
   let wasSaver = true;
@@ -233,16 +234,18 @@ NC.live = (function () {
   function fbJoin(r) {
     const D = fb.D, db = fb.db, docId = r.docId, offs = [], timers = [];
     const P = `live/${docId}`;
-    const myPres = D.ref(db, `${P}/presence/${me.id}`);
+    const myPres = D.ref(db, `${P}/presence/${me.id}`), myCurRef = D.ref(db, `${P}/cursor/${me.id}`);
     const t = { send(msg, to) {
         const m = slim(Object.assign({}, msg, { t: D.serverTimestamp() }));
         const dest = to ? D.ref(db, `${P}/inbox/${to}`) : D.ref(db, `${P}/ops`);
         const ref = D.push(dest); D.set(ref, m).then(() => { timers.push(setTimeout(() => D.remove(ref).catch(() => {}), to ? 60000 : 25000)); }).catch(e => { fb.err = '보내기 실패: ' + (e.code || e.message); emit(); });
       },
       pres(p) { D.set(myPres, { pc: pcName(), joined: me.joined, p, t: D.serverTimestamp() }).catch(e => { fb.err = '접속 표시 실패: ' + (e.code || e.message); emit(); }); },
-      close() { offs.forEach(f => { try { f(); } catch (e) {} }); timers.forEach(clearTimeout); D.remove(myPres).catch(() => {}); D.remove(D.ref(db, `${P}/inbox/${me.id}`)).catch(() => {}); } };
+      cur(c) { D.set(myCurRef, c ? Object.assign({}, c, { t: D.serverTimestamp() }) : null).catch(() => {}); },
+      close() { offs.forEach(f => { try { f(); } catch (e) {} }); timers.forEach(clearTimeout); D.remove(myPres).catch(() => {}); D.remove(myCurRef).catch(() => {}); D.remove(D.ref(db, `${P}/inbox/${me.id}`)).catch(() => {}); } };
     r.fb = t;
-    D.onDisconnect(myPres).remove();
+    D.onDisconnect(myPres).remove(); D.onDisconnect(myCurRef).remove();
+    offs.push(D.onValue(D.ref(db, `${P}/cursor`), s => { const v = s.val() || {}; for (const [id, c] of Object.entries(v)) { if (id === me.id) continue; const x = r.peers.get(id); if (x && J(x.c) !== J({ x: c.x, y: c.y, pg: c.pg })) { x.c = { x: c.x, y: c.y, pg: c.pg }; x.ct = Date.now(); } } for (const x of r.peers.values()) if (x.c && !v[x.id] && x.fbHere) x.c = null; paintCursors(); }, () => {}));
     t.pres(presence());
     const from = now() - 3000;
     offs.push(D.onChildAdded(D.query(D.ref(db, `${P}/ops`), D.orderByChild('t'), D.startAt(from)), s => onMessage(s.val(), 'fb'), e => { fb.err = '읽기 실패(규칙·로그인 확인): ' + (e.code || e.message); emit(); }));
@@ -268,6 +271,7 @@ NC.live = (function () {
     prune();
     const p = presence(); const ps = J(p); const chg = ps !== lastPres; tick++;
     if (chg) checkSaver();
+    clashCheck();
     if (chg || tick % 10 === 0) { lastPres = ps; if (room.bc) { const m = { id: rid(), from: me.id, pc: pcName(), joined: me.joined, kind: 'presence', p }; try { room.bc.postMessage(m); } catch (e) {} } }
     if (room.fb && (chg || tick % 40 === 0)) room.fb.pres(p);
     if (queue.length) flush();
@@ -294,6 +298,7 @@ NC.live = (function () {
   /* ---------- 화면 표시: 상단 접속 목록 + 다른 PC가 고르는 요소 ---------- */
   const css = `.livebar{display:inline-flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap}.livebar .lv{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--ui-field,#f3f4f7);border:1px solid var(--ui-line,#dde1ea);cursor:pointer;color:var(--ui-fg,#222)}.livebar .lv i{width:8px;height:8px;border-radius:50%;background:var(--c,#2f9e6b);display:inline-block}.livebar .lv.off i{background:#bbb}.livebar .lv.err i{background:#e0564b}
 .live-box{position:absolute;pointer-events:none;border:2px solid var(--c);border-radius:2px;box-sizing:border-box}.live-box b{position:absolute;left:-2px;top:-20px;font:600 11px/1 Pretendard,sans-serif;color:#fff;background:var(--c);padding:3px 6px;border-radius:4px;white-space:nowrap}
+.live-cur{position:absolute;left:0;top:0;transition:transform .12s linear,opacity .4s;will-change:transform}.live-cur svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}.live-cur b{position:absolute;left:15px;top:15px;font:600 11px/1 Pretendard,sans-serif;color:#fff;background:var(--c);padding:3px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.25)}.live-box.clash{border-style:dashed;animation:lvClash 1s ease-in-out infinite}@keyframes lvClash{50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 35%,transparent)}}
 .live-rules{font:12px/1.5 ui-monospace,Menlo,monospace;background:#f6f7fa;border:1px solid #dde1ea;border-radius:6px;padding:8px;max-height:180px;overflow:auto;white-space:pre;user-select:all}`;
   function ensureUI() { if (document.getElementById('liveCss')) return; const s = document.createElement('style'); s.id = 'liveCss'; s.textContent = css; document.head.appendChild(s); const st = document.getElementById('status'); if (st && !document.getElementById('livebar')) { const b = document.createElement('span'); b.id = 'livebar'; b.className = 'livebar'; st.insertAdjacentElement('afterend', b); b.onclick = () => api && api.openSettings(); } }
   function statusText() {
@@ -307,18 +312,54 @@ NC.live = (function () {
     const s = statusText();
     const ps = room ? Array.from(room.peers.values()) : [];
     const show = ps.length || (cfg().fb && cfg().on);
-    b.innerHTML = show ? `<span class="lv ${s.cls}" title="${esc(s.tip || s.t)}"><i></i>${esc(s.t)}${ps.length ? ` · 함께 ${ps.length}` : ''}</span>` + ps.map(p => `<span class="lv" style="--c:${p.color}" title="${esc(p.email || '')}"><i></i>${esc(p.pc)}${p.id === oldest() && p.id !== me.id ? ' (저장 담당)' : ''}</span>`).join('') : '';
+    b.innerHTML = show ? `<span class="lv ${s.cls}" title="${esc(s.tip || s.t)}"><i></i>${esc(s.t)}${ps.length ? ` · 함께 ${ps.length}` : ''}</span>` + ps.map(p => `<span class="lv" style="--c:${p.color}" title="${esc(p.email || '')}"><i></i>${esc(p.pc)}${pageNo(p.cur)}${p.id === oldest() && p.id !== me.id ? ' (저장 담당)' : ''}</span>`).join('') : '';
   }
   listeners.add(renderBar);
+  function pageNo(pid) { const d = api && api.doc(); if (!d || !pid) return ''; const i = d.pages.findIndex(p => p.id === pid); return i >= 0 ? ` · ${i + 1}쪽` : ''; }
+  // 알림 (같은 내용은 5초 안에 한 번만)
+  const noted = new Map();
+  function note(m, err) { const t = noted.get(m) || 0; if (Date.now() - t < 5000) return; noted.set(m, Date.now()); if (api && api.toast) api.toast(m, err); }
+  // 같은 요소를 상대도 고르고 있으면 한 번 경고 (겹침이 풀렸다가 다시 겹치면 다시 경고)
+  const warned = new Set();
+  function clashCheck() {
+    if (!room || !api) return; const d = api.doc(), s = api.state(), curId = d.pages[s.cur] && d.pages[s.cur].id, now2 = new Set();
+    for (const p of room.peers.values()) { if (p.cur !== curId || !p.sel || !p.sel.length) continue; for (const id of s.sel) if (p.sel.includes(id)) { const k = p.id + '/' + id; now2.add(k); if (!warned.has(k)) { warned.add(k); note(`⚠ ${p.pc || '다른 PC'}에서도 지금 이 요소를 고르고 있습니다. 동시에 고치면 나중에 고친 쪽만 남으니, 한 사람이 먼저 마치고 고쳐 주세요`, true); } } }
+    for (const k of Array.from(warned)) if (!now2.has(k)) warned.delete(k);
+  }
+  /* ---------- 상대 마우스 커서: 쪽 크기 대비 위치(0~1)를 0.1초마다 보내고, 같은 쪽을 보고 있으면 그림 ---------- */
+  let myCur = null, curSentAt = 0, curTimer = 0;
+  function sendCur(c) {
+    if (!room || !room.peers.size || !api) return;
+    const d = api.doc(), s = api.state(), pg = c && d.pages[s.cur] ? d.pages[s.cur].id : null, v = c ? { x: c.x, y: c.y, pg } : null;
+    if (J(v) === J(myCur)) return; myCur = v; clearTimeout(curTimer);
+    const wait = 100 - (Date.now() - curSentAt); if (v && wait > 0) { curTimer = setTimeout(flushCur, wait); return; } flushCur();
+  }
+  function flushCur() { curSentAt = Date.now(); if (!room) return; if (room.bc) { try { room.bc.postMessage({ id: rid(), from: me.id, pc: pcName(), joined: me.joined, kind: 'cur', c: myCur }); } catch (e) {} } if (room.fb && room.fb.cur) room.fb.cur(myCur); }
+  document.addEventListener('pointermove', e => { if (!room || !room.peers.size) return; const cv = document.getElementById('canvas'); if (!cv) return; const r = cv.getBoundingClientRect(); if (!r.width || !r.height) return; const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height; sendCur(x > -0.08 && x < 1.08 && y > -0.08 && y < 1.08 ? { x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 } : null); }, { passive: true });
+  document.addEventListener('pointerleave', () => sendCur(null)); addEventListener('blur', () => sendCur(null));
+  function paintCursors() {
+    const wrap = document.getElementById('canvasWrap'), cv = document.getElementById('canvas'); if (!wrap || !cv) return;
+    let L = document.getElementById('liveCur'); if (!L) { L = document.createElement('div'); L.id = 'liveCur'; L.style.cssText = 'position:absolute;inset:0;pointer-events:none;overflow:visible;z-index:30'; wrap.appendChild(L); }
+    const d = api && api.doc(), s = api && api.state(), curId = room && d && s && d.pages[s.cur] ? d.pages[s.cur].id : null, wr = wrap.getBoundingClientRect(), r = cv.getBoundingClientRect(), keep = new Set();
+    if (room && curId) for (const p of room.peers.values()) {
+      if (!p.c || p.c.pg !== curId || Date.now() - (p.ct || 0) > 30000) continue; keep.add(p.id);
+      let n = L.querySelector(`[data-cid="${CSS.escape(p.id)}"]`);
+      if (!n) { n = document.createElement('div'); n.className = 'live-cur'; n.dataset.cid = p.id; n.innerHTML = '<svg viewBox="0 0 16 16" width="18" height="18"><path d="M1.5 1.5l5 12.5 1.9-5.1 5.1-1.9z" fill="var(--c)" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"/></svg><b></b>'; L.appendChild(n); }
+      n.style.setProperty('--c', p.color); const b = n.querySelector('b'); if (b.textContent !== p.pc) b.textContent = p.pc || '다른 PC';
+      n.style.transform = `translate(${(r.left - wr.left + p.c.x * r.width).toFixed(1)}px,${(r.top - wr.top + p.c.y * r.height).toFixed(1)}px)`; n.style.opacity = Date.now() - p.ct > 10000 ? '0.35' : '1';
+    }
+    L.querySelectorAll('[data-cid]').forEach(n => { if (!keep.has(n.dataset.cid)) n.remove(); });
+  }
+  document.addEventListener('scroll', () => { if (room && room.peers.size) paintCursors(); }, true);
   function paint() {
     const wrap = document.getElementById('canvasWrap'); if (!wrap) return;
     let layer = document.getElementById('liveLayer'); if (!layer) { layer = document.createElement('div'); layer.id = 'liveLayer'; layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;overflow:visible'; wrap.appendChild(layer); }
     const d = api && api.doc(); const s = api && api.state(); if (!room || !d || !s) { layer.innerHTML = ''; return; }
     const curId = d.pages[s.cur] && d.pages[s.cur].id; const canvas = document.getElementById('canvas'); const wr = wrap.getBoundingClientRect();
     let html = '';
-    for (const p of room.peers.values()) { if (p.cur !== curId || !p.sel || !p.sel.length) continue; for (const id of p.sel) { const n = canvas && canvas.querySelector(`[data-id="${CSS.escape(id)}"]`); if (!n) continue; const r = n.getBoundingClientRect(); html += `<div class="live-box" style="--c:${p.color};left:${r.left - wr.left}px;top:${r.top - wr.top}px;width:${r.width}px;height:${r.height}px"><b>${String(p.pc).replace(/[&<>]/g, '')}</b></div>`; } }
+    for (const p of room.peers.values()) { if (p.cur !== curId || !p.sel || !p.sel.length) continue; for (const id of p.sel) { const n = canvas && canvas.querySelector(`[data-id="${CSS.escape(id)}"]`); if (!n) continue; const r = n.getBoundingClientRect(); html += `<div class="live-box${s.sel.includes(id) ? ' clash' : ''}" style="--c:${p.color};left:${r.left - wr.left}px;top:${r.top - wr.top}px;width:${r.width}px;height:${r.height}px"><b>${String(p.pc).replace(/[&<>]/g, '')}</b></div>`; } }
     if (layer.innerHTML !== html) layer.innerHTML = html;
-    renderBar();
+    paintCursors(); renderBar();
   }
   setInterval(() => { if (room && room.peers.size) paint(); }, 400);
 
