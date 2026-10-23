@@ -1219,12 +1219,13 @@ const tlOn = () => !!tl.open;
 const fmtTC = (t, fps) => { fps = fps || Number(vset().fps || 30); t = Math.max(0, t); const f = Math.floor((t % 1) * fps + 1e-6), S = Math.floor(t) % 60, M = Math.floor(t / 60) % 60, H = Math.floor(t / 3600), p2 = n => String(n).padStart(2, '0'); return `${p2(H)}:${p2(M)}:${p2(S)}:${p2(f)}`; };
 const TLI = { undo: '<path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-2"/>', redo: '<path d="m15 7 5 5-5 5M20 12H9a5 5 0 0 0 0 10h2"/>', del: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>', cut: '<circle cx="6" cy="7" r="3"/><circle cx="6" cy="17" r="3"/><path d="M8.5 8.5 20 18M8.5 15.5 20 6"/>', text: '<path d="M5 6h14M12 6v13"/>', mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>', first: '<path d="M6 5v14M19 5 9 12l10 7z"/>', prevf: '<path d="M15 5 8 12l7 7"/>', nextf: '<path d="m9 5 7 7-7 7"/>', play: '<path d="M7 5v14l11-7z"/>', pause: '<path d="M8 5v14M16 5v14"/>', stop: '<rect x="6" y="6" width="12" height="12" rx="1"/>', full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>', vol: '<path d="M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 0 1 0 6"/>', mute: '<path d="M4 9v6h4l5 4V5L8 9zM16 9l5 6M21 9l-5 6"/>', film: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4"/>', note: '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>', fx: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>', bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4"/>' };
 const tli = (k, sz) => `<svg class="ic" viewBox="0 0 24 24" style="${sz ? `width:${sz}px;height:${sz}px` : ''}">${TLI[k]}</svg>`;
-const TL_VIEWS = [['stage', '기본', '작업 영역 아래에 타임라인'], ['wide', '넓은 타임라인', '화면 아래 전체 폭으로 펼침'], ['focus', '영상 집중', '넓은 타임라인 + 양쪽 패널 접기'], ['tall', '큰 타임라인', '넓고 높게 (트랙이 많을 때)']];
-let tlView = (() => { try { return localStorage.getItem('naracal-tlview') || 'stage'; } catch (e) { return 'stage'; } })();
+const TL_VIEWS = [['wide', '넓은 타임라인 (기본)', '화면 아래 왼쪽 끝~오른쪽 끝, 위 창들은 위로'], ['stage', '작업 영역 아래', '가운데 작업 영역 안에만'], ['focus', '영상 집중', '넓은 타임라인 + 양쪽 패널 접기'], ['tall', '큰 타임라인', '넓고 높게 (트랙이 많을 때)']];
+let tlView = (() => { try { return localStorage.getItem('naracal-tlview') || 'wide'; } catch (e) { return 'wide'; } })();
 function applyTlView() {
   const v = tl.open ? tlView : 'stage', wide = v !== 'stage', b = document.body, el = $('#vtl');
   b.classList.toggle('tl-wide', wide); b.classList.toggle('tl-focus', v === 'focus'); b.classList.toggle('tl-tall', v === 'tall');
   if (el) { const home = wide ? document.body : $('#stage'); if (el.parentElement !== home) home.appendChild(el); }
+  try { const hgt = Number(localStorage.getItem('naracal-tlh-' + (v === 'tall' ? 'tall' : 'wide'))); document.body.style.setProperty('--tlh', (hgt >= 180 ? hgt : (v === 'tall' ? 440 : 300)) + 'px'); } catch (e) {}
   requestAnimationFrame(() => { fitCanvas(); renderTimeline(); });
 }
 function tlShow(on) {
@@ -1243,6 +1244,11 @@ function tlShow(on) {
         <div class="tl-scroll" id="tlScroll"><div class="tl-inner" id="tlInner"></div></div>
         <div class="tl-meter"><div class="mt"><i id="mtL"></i></div><div class="mt"><i id="mtR"></i></div><span>L</span><span>R</span></div></div>`;
     $('#stage').appendChild(d); tlWire();
+    const gr = document.createElement('div'); gr.className = 'tl-grip'; gr.title = '끌어서 타임라인 높이 조절'; d.prepend(gr);
+    gr.addEventListener('pointerdown', e => { if (!document.body.classList.contains('tl-wide')) return; e.preventDefault(); const y0 = e.clientY, h0 = d.offsetHeight; gr.setPointerCapture(e.pointerId);
+      const mv = ev => { const h = Math.max(180, Math.min(innerHeight * 0.75, h0 - (ev.clientY - y0))); document.body.style.setProperty('--tlh', h + 'px'); fitCanvas(); };
+      const up = () => { gr.removeEventListener('pointermove', mv); gr.removeEventListener('pointerup', up); try { localStorage.setItem('naracal-tlh-' + (tlView === 'tall' ? 'tall' : 'wide'), parseInt(getComputedStyle(document.body).getPropertyValue('--tlh'))); } catch (err) {} renderTimeline(); };
+      gr.addEventListener('pointermove', mv); gr.addEventListener('pointerup', up); });
     const pc = document.createElement('canvas'); pc.id = 'vprev'; pc.className = 'vprev'; pc.hidden = true; $('#canvasWrap').appendChild(pc);
   }
   if (!tl.open) { tlPause(); tlHidePrev(); }
