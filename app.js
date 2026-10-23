@@ -1029,15 +1029,26 @@ async function videoBuild(q, onProgress, cancelled) {
   const { W, H } = VIDEO.outSize(doc.w, doc.h, q || vset().q);
   await ensureLibFonts(ps.map(x => x.pg)).catch(() => {});
   const V = await VIDEO.build({ doc, pages: ps, W, H, renderLayers: videoLayers, onProgress, cancelled, videoEl: openVideoEl });
-  if (V) { V.sfx = await videoSfx(); await videoClipAudio(V, ps); await videoOverlays(V); }
+  if (V) { V.voices = await videoVoices(ps, V.total); await videoOverlays(V); }
   return V;
 }
 // 소리 참조 풀기: 'b:' 기본 소리 · 'm:' 내 PC 원본 · 'shared:' 공유 자료 · 'a:' 예전 방식(문서 안)
 const mediaAudio = (ref, ask) => NC.media.audio(ref, ask, r => src(r), VIDEO.ctx());
-async function videoAudio(ask) {
-  const a = doc.audio; if (!a || !a.src || a.mute) return null;
-  try { return Object.assign({ buf: await mediaAudio(a.src, ask !== false) }, a); }
-  catch (e) { if (e.code) toast(`배경 음악: ${e.message}`, true); else toast('배경 음악을 읽지 못했습니다', true); return null; }
+// 소리 목록: 배경 음악 · 오디오 트랙 클립 · 동영상 속 소리. 기본 소리는 버퍼, 파일은 원본을 가리키기만(긴 파일은 조금씩 읽음)
+async function voiceSrc(ref) {
+  if (ref.startsWith('b:')) return { buf: await NC.media.render(ref.slice(2)) };
+  if (ref.startsWith('a:') || ref.startsWith('asset:')) { const u = src(ref); return { blob: await (await fetch(u)).blob(), url: u }; }
+  const blob = await NC.media.blobOf(ref, true), url = await NC.media.urlOf(ref, true, r => src(r)); return { blob, url };
+}
+async function videoVoices(ps, total) {
+  const out = [], miss = [];
+  const add = async (ref, o, label) => { try { out.push(Object.assign(await voiceSrc(ref), o)); } catch (e) { miss.push(label + (e.code === 'perm' ? ' (허락 필요)' : '')); } };
+  const A = doc.audio; if (A && A.src && !A.mute) await add(A.src, { at: Number(A.start || 0), off: Number(A.from || 0), vol: A.vol == null ? 0.8 : A.vol, fin: Number(A.fin || 0), fout: A.fout != null ? Number(A.fout) : (A.fade === false ? 0 : 2.5), loop: true }, '배경 음악');
+  for (const t of tracks()) { if (t.type !== 'audio' || t.mute) continue; for (const it of t.items || []) await add(it.ref, { at: Number(it.at || 0), off: Number(it.off || 0), len: it.dur ? Number(it.dur) : null, vol: it.vol == null ? 1 : it.vol, fin: Number(it.fin || 0), fout: Number(it.fout || 0) }, it.name || '소리'); }
+  const { list } = VIDEO.timing(doc, ps);
+  for (const x of list) for (const el of x.pg.els) { if (el.type !== 'video' || el.hidden || el.mute) continue; if (NC.media.isLocal(el.src) && mediaMissing.has(el.src.slice(2))) continue; const d0 = el.anim ? Number(el.anim.d || 0) : 0, tin = Number(el.tin || 0), tout = Number(el.tout || el.dur || 0); try { const v = await voiceSrc(el.src); const info = v.blob ? await NC.astream.probe(v.blob).catch(() => null) : null; if (info && info.noAudio) continue; out.push(Object.assign(v, { at: x.t0 + d0, off: tin, len: Math.max(0.05, Math.min(tout - tin, x.dur - d0)), vol: el.vol == null ? 1 : el.vol })); } catch (e) {} }
+  if (miss.length) toast(`소리를 읽지 못한 것: ${miss.join(', ')} — 원본이 이 PC에 있는지 확인하세요`, true);
+  return out;
 }
 // 동영상 원본을 열어 <video>로 (이 PC에 원본이 없으면 검은 화면 + 안내)
 const vEls = new Map();
@@ -1048,12 +1059,6 @@ async function openVideoEl(el) {
   } catch (e) { toast(`동영상 '${el.name || ''}': ${e.message}`, true); return null; }
 }
 // 동영상 속 소리: 장면 시작 시각에 사용 구간만큼 (소리 끄기면 빼기)
-async function videoClipAudio(V, ps) {
-  const { list } = VIDEO.timing(doc, ps); const ac = VIDEO.ctx();
-  for (const x of list) for (const el of x.pg.els) { if (el.type !== 'video' || el.hidden || el.mute) continue; try { const buf = await mediaAudio(el.src, true); const d0 = el.anim ? Number(el.anim.d || 0) : 0, tin = Number(el.tin || 0), tout = Number(el.tout || el.dur || buf.duration); V.sfx.push({ buf, at: x.t0 + d0, off: tin, dur: Math.max(0.05, Math.min(tout - tin, x.dur - d0)), vol: el.vol == null ? 1 : el.vol }); } catch (e) {} }
-  void ac;
-}
-async function videoSfx() { const out = []; for (const t of tracks()) { if (t.type !== 'audio' || t.mute) continue; for (const x of t.items || []) { try { out.push({ buf: await mediaAudio(x.ref, true), at: Number(x.at || 0), vol: x.vol, off: x.off, dur: x.dur }); } catch (e) {} } } return out; }
 async function videoOverlays(V) {
   V.captions = []; V.overlays = [];
   for (const t of tracks()) { if (t.mute) continue;
@@ -1065,7 +1070,11 @@ const soundName = ref => { if (!ref) return ''; if (ref.startsWith('b:')) { cons
 let sndPrev = null; // 효과음·음악 들어 보기
 async function previewSound(ref, btn) {
   if (sndPrev) { try { sndPrev.stop(); } catch (e) {} const was = sndPrev.ref; sndPrev = null; $$('.snd-play.on').forEach(b => b.classList.remove('on')); if (was === ref) return; }
-  try { const ac = VIDEO.ctx(); ac.resume && ac.resume(); const buf = await mediaAudio(ref, true), s2 = ac.createBufferSource(); s2.buffer = buf; s2.connect(ac.destination); s2.start(); sndPrev = { stop: () => s2.stop(), ref }; if (btn) btn.classList.add('on'); s2.onended = () => { if (sndPrev && sndPrev.ref === ref) { sndPrev = null; if (btn) btn.classList.remove('on'); } }; } catch (e) { toast(e.message, true); }
+  try {
+    if (ref.startsWith('b:')) { const ac = VIDEO.ctx(); ac.resume && ac.resume(); const buf = await NC.media.render(ref.slice(2)), s2 = ac.createBufferSource(); s2.buffer = buf; s2.connect(ac.destination); s2.start(); sndPrev = { stop: () => s2.stop(), ref }; s2.onended = () => { if (sndPrev && sndPrev.ref === ref) { sndPrev = null; if (btn) btn.classList.remove('on'); } }; }
+    else { const el = new Audio(await NC.media.urlOf(ref, true, r => src(r))); el.play(); sndPrev = { stop: () => el.pause(), ref }; el.onended = () => { if (sndPrev && sndPrev.ref === ref) { sndPrev = null; if (btn) btn.classList.remove('on'); } }; }
+    if (btn) btn.classList.add('on');
+  } catch (e) { toast(e.message, true); }
 }
 let sharedList = null;
 let vTab = 'audio';
@@ -1184,8 +1193,9 @@ async function placeVideo(m, at) {
 async function placeAudio(m) {
   doc.media = Object.assign(doc.media || {}, { [m.id]: m }); mediaMissing.delete(m.id);
   const TR = tracks(); let t = TR.find(x => x.id === tl.selTr && x.type === 'audio') || TR.find(x => x.type === 'audio'); if (!t) { t = { id: uid(), type: 'audio', name: '오디오 2', items: [] }; TR.push(t); }
-  let dur = 0; try { dur = (await mediaAudio('m:' + m.id, true)).duration; } catch (e) {}
-  t.items.push({ id: uid(), ref: 'm:' + m.id, name: m.name.replace(/\.[^.]+$/, ''), at: Math.round((tl.T || 0) * 10) / 10, vol: 1, dur: dur || undefined }); commit(); renderTimeline();
+  let dur = 0; try { const f = await NC.media.blobOf('m:' + m.id, true); dur = (await NC.astream.probe(f)).dur || 0; if (!dur) { const el = new Audio(); el.src = (await NC.media.file(m.id, true)).url; dur = await new Promise(r => { el.onloadedmetadata = () => r(el.duration || 0); el.onerror = () => r(0); }); } } catch (e) {}
+  t.items.push({ id: uid(), ref: 'm:' + m.id, name: m.name.replace(/\.[^.]+$/, ''), at: Math.round((tl.T || 0) * 10) / 10, vol: 1, dur: dur ? Math.round(dur * 100) / 100 : undefined, full: dur || undefined }); commit(); if (tlOn()) { tl.fit = true; renderTimeline(); } else { sideTab = 'video'; renderRail(); renderSide(); tlShow(true); }
+  toast(`'${m.name}' (${fmtTC(dur || 0).slice(0, 8)})을 ${t.name} 트랙에 넣었습니다 — 원본은 이 PC에만 있고, 필요한 부분만 읽습니다. ✂(Ctrl+B)로 자르세요.`);
 }
 // 동영상 크기·길이·첫 장면(편집 화면·썸네일용 작은 그림)
 function videoInfo(url) { return new Promise((res, rej) => { const v = document.createElement('video'); v.muted = true; v.preload = 'auto'; v.src = url; v.onerror = () => rej(new Error('이 동영상 형식은 브라우저에서 열 수 없습니다 (MP4·H.264로 바꿔 넣어 주세요)')); v.onloadedmetadata = () => { v.currentTime = Math.min(0.5, v.duration / 3 || 0); }; v.onseeked = () => { const W = v.videoWidth, H = v.videoHeight, k = Math.min(1, 640 / Math.max(W, H)), c = document.createElement('canvas'); c.width = Math.round(W * k); c.height = Math.round(H * k); let poster = ''; try { c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); poster = c.toDataURL('image/jpeg', 0.8); } catch (e) {} res({ w: W, h: H, dur: v.duration || 0, poster }); }; }); }
@@ -1373,7 +1383,7 @@ function renderTimeline() {
   if (doc.audio) { const A = doc.audio, st = Number(A.start || 0), fin = Number(A.fin || 0), fout = A.fout != null ? Number(A.fout) : (A.fade === false ? 0 : 2.5); audio = `<div class="tl-au${tl.selAu ? ' sel' : ''}${A.mute ? ' muted' : ''}" id="tlAu" style="left:${st * px}px;width:${Math.max(10, (total - st) * px)}px" title="끌어서 시작 위치 옮기기"><canvas id="tlWave"></canvas><span>${tli('note', 11)} ${esc(A.name || soundName(A.src) || '음악')}</span>${fin ? `<i class="fi" style="width:${fin * px}px"></i>` : ''}${fout ? `<i class="fo" style="width:${fout * px}px"></i>` : ''}</div>`; }
   // 행 순서: 오버레이·자막 트랙(위) → 비디오 1 → 효과 → 오디오 1(배경 음악) → 오디오 트랙들
   const upper = TR.filter(t => t.type !== 'audio'), lower = TR.filter(t => t.type === 'audio');
-  const rowOf = t => { const items = (t.items || []).map(it => { const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), cls = t.type === 'audio' ? 'tl-fx' : t.type === 'caption' ? 'tl-cap' : 'tl-ov', sel2 = tl.selIt === it.id ? ' sel' : '', lab = t.type === 'audio' ? esc(it.name || '소리') : t.type === 'caption' ? esc(String(it.text || '').replace(/\n/g, ' ')) : esc(it.name || '오버레이'); return `<div class="${cls}${sel2}${t.mute ? ' muted' : ''}" data-it="${it.id}" data-tid="${t.id}" style="left:${it.at * px}px;width:${Math.max(18, d * px)}px" title="${lab} · ${fmtTC(it.at, fps)} — 끌어 옮기기${t.type === 'audio' ? '(위아래로 다른 트랙)' : ', 두 번 눌러 고치기'}"><span>${t.type === 'overlay' && it.src ? `<img src="${src(it.src)}" alt="">` : ''}${lab}</span><em class="tl-ir" data-ir="1"></em></div>`; }).join(''); return `<div class="tl-track tl-${t.type}" data-row="${t.id}">${items}</div>`; };
+  const rowOf = t => { const items = (t.items || []).map(it => { const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), cls = t.type === 'audio' ? 'tl-fx' : t.type === 'caption' ? 'tl-cap' : 'tl-ov', sel2 = tl.selIt === it.id ? ' sel' : '', lab = t.type === 'audio' ? esc(it.name || '소리') : t.type === 'caption' ? esc(String(it.text || '').replace(/\n/g, ' ')) : esc(it.name || '오버레이'); return `<div class="${cls}${sel2}${t.mute ? ' muted' : ''}" data-it="${it.id}" data-tid="${t.id}" style="left:${it.at * px}px;width:${Math.max(18, d * px)}px" title="${lab} · ${fmtTC(it.at, fps)} — 끌어 옮기기${t.type === 'audio' ? '(위아래로 다른 트랙)' : ', 두 번 눌러 고치기'}"><span>${t.type === 'overlay' && it.src ? `<img src="${src(it.src)}" alt="">` : ''}${lab}</span><em class="tl-il" data-il="1"></em><em class="tl-ir" data-ir="1"></em></div>`; }).join(''); return `<div class="tl-track tl-${t.type}" data-row="${t.id}">${items}</div>`; };
   const heads = `<div class="th rl"><button class="tadd" id="tlAddTrack" title="트랙 추가">＋ 트랙</button></div>` + upper.map(t => headHTML(t)).join('') + `<div class="th h-scn">${tli('film', 14)}<span>비디오 1<small>장면</small></span></div><div class="th h-ans">${tli('fx', 14)}<span>효과<small>움직임</small></span></div><div class="th h-aud">${tli('note', 14)}<span>오디오 1<small>배경 음악</small></span><button class="tm" data-mute="audio" title="소리 끄기/켜기"></button></div>` + lower.map(t => headHTML(t)).join('');
   $('#tlHeads').innerHTML = heads;
   $('#tlInner').style.width = Wd + 'px';
@@ -1399,7 +1409,16 @@ function tlStrips() {
   }, 300);
 }
 const tlKey = () => hptr + '|' + (hist[hptr] || '').length + '|' + doc.w + 'x' + doc.h;
-async function tlWave() { const c = $('#tlWave'); if (!c || !doc.audio) return; try { const buf = await mediaAudio(doc.audio.src, false); const A = doc.audio, w = c.parentElement.clientWidth, h = 30; c.width = w; c.height = h; const x = c.getContext('2d'), from = Number(A.from || 0), px = tl.pxs, pk = VIDEO.peaks(buf, Math.max(50, Math.round(buf.duration * px))); x.fillStyle = 'rgba(255,255,255,.75)'; for (let i = 0; i < w; i++) { const t = from + i / px, k = Math.floor((t % buf.duration) / buf.duration * pk.length), v = pk[k] || 0, hh = Math.max(1, v * h * 0.9); x.fillRect(i, (h - hh) / 2, 1, hh); } } catch (e) { const p = c.parentElement; if (p && e.code) { p.classList.add('miss'); p.title = e.message + ' — 눌러서 연결'; } } }
+async function tlWave() {
+  const c = $('#tlWave'); if (!c || !doc.audio) return; const A = doc.audio, p0 = c.parentElement;
+  try {
+    let pk, dur;
+    if (A.src.startsWith('b:')) { const buf = await NC.media.render(A.src.slice(2)); dur = buf.duration; pk = VIDEO.peaks(buf, Math.max(200, Math.round(dur * 8))); }
+    else { const f = await NC.media.blobOf(A.src, false); dur = (await NC.astream.probe(f)).dur; if (!dur) return; const N = Math.min(20000, Math.max(200, Math.round(dur * 4))); if (!tlWave.busy) { tlWave.busy = true; const msg = $('#tlMsg'); NC.astream.peaks(f, A.src, N, pr => { if (msg && dur > 120) msg.textContent = `음악 파형 계산 ${Math.round(pr * 100)}%`; }).then(() => { tlWave.busy = false; if (msg) msg.textContent = ''; tlWave(); }).catch(() => { tlWave.busy = false; }); } pk = await Promise.race([NC.astream.peaks(f, A.src, N), new Promise(r => setTimeout(() => r(null), 50))]); if (!pk) return; }
+    const w = p0.clientWidth, h = 34; c.width = w; c.height = h; const x = c.getContext('2d'), from = Number(A.from || 0), px = tl.pxs; x.fillStyle = 'rgba(255,255,255,.75)';
+    for (let i = 0; i < w; i++) { const t = from + i / px, k = Math.floor(((t % dur) / dur) * pk.length), v = pk[k] || 0, hh = Math.max(1, v * h * 0.9); x.fillRect(i, (h - hh) / 2, 1, hh); }
+  } catch (e) { if (p0 && e.code) { p0.classList.add('miss'); p0.title = e.message + ' — 눌러서 연결'; } }
+}
 function tlTimeLabel() { const { total } = tlScenes(), fps = Number(vset().fps || 30); const el = $('#tlTime'); if (el) el.textContent = fmtTC(Math.min(tl.T, total), fps); const tt = $('#tlTot'); if (tt) tt.textContent = '/ ' + fmtTC(total, fps); const h = $('#tlHead'); if (h) h.style.left = tl.T * tl.pxs + 'px'; }
 // 미리보기(가벼운 720p): 문서가 바뀌면 다시 만듦(바뀐 층만 다시 그림)
 async function tlEnsureV() {
@@ -1416,10 +1435,10 @@ async function tlPlay() {
   if (tl.playing) return; let V; try { V = await tlEnsureV(); } catch (e) { return; }
   if (tl.T >= V.total - 0.05) tl.T = 0;
   tl.playing = true; $('#tlPlay').innerHTML = tli('pause', 20); tlMeter(true);
-  const ac = VIDEO.ctx(); ac.resume && ac.resume(); const audio = await videoAudio(true).catch(() => null);
+  const ac = VIDEO.ctx(); ac.resume && ac.resume();
   if (!tl.playing) return;
   const T0 = tl.T, when = ac.currentTime + 0.05; tl.t0 = when - T0;
-  tl.snd = tlSchedule(ac, audio, V, T0, when);
+  tl.snd = VIDEO.playVoices(ac, tlBus(ac), V.voices, T0, when, V.total);
   const loop = () => { if (!tl.playing) return; tl.T = Math.max(T0, ac.currentTime - tl.t0); if (tl.T >= V.total) { tl.T = V.total; tlPause(); tlDraw(); return; } tlDraw(); tlTimeLabel(); tlFollow(); tl.raf = requestAnimationFrame(loop); };
   loop();
 }
@@ -1435,15 +1454,12 @@ function tlMeter(on) {
   const buf = new Float32Array(512), lvl = a => { a.getFloatTimeDomainData(buf); let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i])); const db = 20 * Math.log10(m || 1e-6); return Math.max(0, Math.min(100, (db + 48) / 48 * 100)); };
   const step = () => { L.style.height = lvl(tl.an[0]) + '%'; R.style.height = lvl(tl.an[1]) + '%'; tl.mraf = requestAnimationFrame(step); }; step();
 }
-function tlSchedule(ac, audio, V, T0, when) {
-  const bus = tlBus(ac), m = audio && audio.buf && !audio.mute ? VIDEO.schedule(ac, bus, audio.buf, audio, T0, when, V.total) : null, fx = VIDEO.scheduleSfx(ac, bus, V.sfx, T0, when);
-  return { stop: () => { if (m) m.stop(); fx.stop(); } };
-}
 function tlPause() { if (!tl.playing) return; tl.playing = false; cancelAnimationFrame(tl.raf); if (tl.snd) { tl.snd.stop(); tl.snd = null; } if (tl.V && tl.V.videos) tl.V.videos.forEach(v => v.pause()); const b = $('#tlPlay'); if (b) b.innerHTML = tli('play', 20); tlMeter(false); tlTimeLabel(); }
 function tlFollow() { const sc = $('#tlScroll'), x = tl.T * tl.pxs; if (!sc) return; if (x < sc.scrollLeft + 40 || x > sc.scrollLeft + sc.clientWidth - 60) sc.scrollLeft = Math.max(0, x - sc.clientWidth * 0.3); }
 function tlSeek(T, show) { const { total } = tlScenes(); tl.T = Math.max(0, Math.min(total, T)); tlTimeLabel(); if (tl.playing) { tlPause(); tlPlay(); } else if (show !== false) tlDraw().catch(() => {}); }
 // 장면 나누기: 재생 위치에서 지금 장면을 둘로 (뒤쪽은 복제본, 움직임 시작을 그만큼 당김)
 function tlSplit() {
+  if (tl.selIt) { for (const t of tracks()) { const it = (t.items || []).find(q => q.id === tl.selIt); if (!it) continue; const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), q = Math.round((tl.T - it.at) * 100) / 100; if (q > 0.1 && q < d - 0.1) { const it2 = Object.assign(clone(it), { id: uid(), at: Math.round((it.at + q) * 100) / 100, dur: Math.round((d - q) * 100) / 100 }); if (t.type === 'audio') it2.off = Math.round((Number(it.off || 0) + q) * 100) / 100; it.dur = q; t.items.splice(t.items.indexOf(it) + 1, 0, it2); tl.selIt = it2.id; commit(); renderTimeline(); toastUndo(`'${it.name || '클립'}'을 ${fmtTC(tl.T).slice(3)}에서 잘랐습니다 — 필요 없는 조각을 골라 Delete`); return; } } }
   const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { toast('장면 안에 재생 위치를 두고 나누세요', true); return; }
   const q = Math.round((tl.T - x.t0) * 10) / 10; if (q < 0.3 || x.dur - q < 0.3) { toast('장면 끝에 너무 가깝습니다', true); return; }
   const a = x.pg, b = clone(a); b.id = uid(); const gm = {}; b.els.forEach(e => { e.id = uid(); if (e.group) { gm[e.group] = gm[e.group] || uid(); e.group = gm[e.group]; } if (e.anim) { const d = Number(e.anim.d || 0) - q; if (d + Number(e.anim.s || 0.8) <= 0) delete e.anim; else e.anim.d = Math.max(0, d); } });
@@ -1492,8 +1508,8 @@ function tlWire() {
     else if (an) { const pg = doc.pages[Number(an.dataset.ap)], el = pg.els.find(q => q.id === an.dataset.ael), edge = t.closest('[data-ah]'); const a0 = el.anim ? Object.assign({}, el.anim) : null; move = ev => { if (!a0) return; const dt = (ev.clientX - sx) / tl.pxs; if (edge) el.anim.s = Math.max(0.2, Math.round((Number(a0.s || 0.8) + dt) * 10) / 10); else el.anim.d = Math.max(0, Math.round((Number(a0.d || 0) + dt) * 10) / 10); renderTimeline(); }; up = () => { if (moved) { commit(); renderInspector(); } else { const i = doc.pages.indexOf(pg); if (i !== cur) goto(i); select([el.id]); renderTimeline(); } }; }
     else if (au) { if (au.classList.contains('miss')) { relinkMedia(doc.audio.src); return; } tl.selAu = true; const s0 = Number(doc.audio.start || 0); move = ev => { doc.audio.start = Math.max(0, Math.round((s0 + (ev.clientX - sx) / tl.pxs) * 10) / 10); renderTimeline(); }; up = () => { if (moved) commit(); }; }
     else if (itEl) { // 트랙 클립: 끌어 옮기기(오디오는 위아래 트랙으로도), 오른쪽 끝은 길이
-      const tr0 = tracks().find(q => q.id === itEl.dataset.tid), it = tr0.items.find(q => q.id === itEl.dataset.it), a0 = it.at, d0 = tr0.type === 'audio' ? itemDur(it) : Number(it.dur || 3), edge = t.closest('[data-ir]');
-      move = ev => { const dt = (ev.clientX - sx) / tl.pxs; if (edge) { it.dur = Math.max(0.2, Math.round((d0 + dt) * 10) / 10); } else { it.at = Math.max(0, Math.round((a0 + dt) * 10) / 10); if (tr0.type === 'audio') { const row = document.elementsFromPoint(ev.clientX, ev.clientY).map(n => n.closest && n.closest('[data-row]')).find(Boolean), dst = row && tracks().find(q => q.id === row.dataset.row); if (dst && dst !== tr0 && dst.type === 'audio') { tr0.items = tr0.items.filter(q => q !== it); dst.items.push(it); itEl.dataset.tid = dst.id; } } } renderTimeline(); };
+      const tr0 = tracks().find(q => q.id === itEl.dataset.tid), it = tr0.items.find(q => q.id === itEl.dataset.it), a0 = it.at, d0 = tr0.type === 'audio' ? itemDur(it) : Number(it.dur || 3), edge = t.closest('[data-ir]'), ledge = t.closest('[data-il]'), o0 = Number(it.off || 0), full = Number(it.full || 0);
+      move = ev => { const dt = (ev.clientX - sx) / tl.pxs; if (ledge) { let d = Math.max(-a0, Math.min(d0 - 0.2, dt)); if (tr0.type === 'audio') d = Math.max(-o0, d); it.at = Math.round((a0 + d) * 100) / 100; it.dur = Math.round((d0 - d) * 100) / 100; if (tr0.type === 'audio') it.off = Math.round((o0 + d) * 100) / 100; } else if (edge) { it.dur = Math.max(0.2, Math.round((d0 + dt) * 10) / 10); if (tr0.type === 'audio' && full) it.dur = Math.min(it.dur, Math.round((full - o0) * 100) / 100); } else { it.at = Math.max(0, Math.round((a0 + dt) * 10) / 10); if (tr0.type === 'audio') { const row = document.elementsFromPoint(ev.clientX, ev.clientY).map(n => n.closest && n.closest('[data-row]')).find(Boolean), dst = row && tracks().find(q => q.id === row.dataset.row); if (dst && dst !== tr0 && dst.type === 'audio') { tr0.items = tr0.items.filter(q => q !== it); dst.items.push(it); itEl.dataset.tid = dst.id; } } } renderTimeline(); };
       up = () => { tl.selIt = it.id; tl.selTr = itEl.dataset.tid; if (moved) commit(); else { tlSeek(it.at, false); if (tr0.type === 'audio') previewSound(it.ref); } renderTimeline(); }; }
     else if (clip) { const k0 = Number(clip.dataset.k); move = ev => { if (Math.abs(ev.clientX - sx) > 6) clip.style.transform = `translateX(${ev.clientX - sx}px)`; }; up = ev => { const { list } = tlScenes(), x = tAt(ev); if (moved && Math.abs(ev.clientX - sx) > 12) { let k1 = list.findIndex(s2 => x < s2.t0 + (s2.dur + s2.turn) / 2); if (k1 < 0) k1 = list.length - 1; if (k1 > k0) k1 = Math.max(k0, k1 - 0); const from = list[k0].i, to = list[k1].i; if (from !== to) { const [pg] = doc.pages.splice(from, 1); doc.pages.splice(to, 0, pg); commit(); goto(to); } renderTimeline(); } else { const i = Number(clip.dataset.ci); if (i !== cur) goto(i); tlSeek(Math.max(tl.T, list[k0].t0) < list[k0].t0 + list[k0].dur && tl.T >= list[k0].t0 ? tl.T : list[k0].t0, false); renderTimeline(); } }; }
     else { tlSeek(tAt(e)); move = ev => tlSeek(tAt(ev)); }
@@ -1580,8 +1596,7 @@ async function openVideoPlayer(fromCur) {
   d.querySelector('[data-close]').onclick = () => d.close(); d.addEventListener('close', () => { stop = true; if (P) P.destroy(); d.remove(); }); d.showModal();
   try {
     const V = await videoBuild(null, (k, n) => { const l = $('#vpLoad'); if (l) l.textContent = `장면을 준비하는 중… ${Math.round(k / Math.max(1, n) * 100)}%`; }, () => stop); if (!V || stop) return;
-    const audio = await videoAudio().catch(() => null);
-    const cv = $('#vpCv'); $('#vpLoad').remove(); P = VIDEO.player(cv, V, audio);
+    const cv = $('#vpCv'); $('#vpLoad').remove(); P = VIDEO.player(cv, V);
     const seek = $('#vpSeek'); seek.max = V.total;
     const ic = () => { $('#vpPlay use').setAttribute('href', P.isPlaying() ? '#i-pause' : '#i-play'); };
     P.onTime = t => { seek.value = t; $('#vpTime').textContent = `${fmtT(t)} / ${fmtT(V.total)}`; ic(); };
@@ -1611,11 +1626,10 @@ function openVideoMaker() {
     busy = true; stop = false; go.lastChild.textContent = '중지'; const pr = $('#vidProg');
     try {
       const Vb = await videoBuild(null, (k, nn) => { pr.textContent = `장면을 준비하는 중… ${Math.round(k / Math.max(1, nn) * 100)}%`; }, () => stop); if (!Vb) throw new Error('중지했습니다');
-      const audio = await videoAudio().catch(() => null);
       // 빠른 방식(WebCodecs + mp4-muxer) 먼저, 안 되면 실제 시간 녹화로
       let res = null, fastErr = null;
-      if (VIDEO.canFast()) { try { res = await VIDEO.encode({ V: Vb, fps: Number(vset().fps || 30), canvas: $('#vidCv'), audio, cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `영상 만드는 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; } }); if (!res && stop) { pr.textContent = '중지했습니다'; return; } } catch (e) { fastErr = e; console.warn('빠른 내보내기 실패, 녹화 방식으로', e); } }
-      if (!res) { if (fastErr) pr.textContent = '빠른 방식을 쓸 수 없어 실제 시간 녹화로 만듭니다 — 이 창을 가리지 마세요'; res = await VIDEO.record({ V: Vb, canvas: $('#vidCv'), audio, cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `녹화 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; } }); }
+      if (VIDEO.canFast()) { try { res = await VIDEO.encode({ V: Vb, fps: Number(vset().fps || 30), canvas: $('#vidCv'), cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `영상 만드는 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; } }); if (!res && stop) { pr.textContent = '중지했습니다'; return; } } catch (e) { fastErr = e; console.warn('빠른 내보내기 실패, 녹화 방식으로', e); } }
+      if (!res) { if (fastErr) pr.textContent = '빠른 방식을 쓸 수 없어 실제 시간 녹화로 만듭니다 — 이 창을 가리지 마세요'; res = await VIDEO.record({ V: Vb, canvas: $('#vidCv'), cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `녹화 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; } }); }
       if (!res) { pr.textContent = '중지했습니다'; return; }
       const a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = `${(doc.name || '영상').replace(/[\\/:*?"<>|]/g, '_')}.${res.ext}`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
       let shared = ''; if ($('#vidShare') && $('#vidShare').checked) { try { if (!(await store.folderReady())) throw new Error('동기화 폴더가 연결되어 있지 않습니다'); shared = await NC.media.saveResult(res.blob, a.download); } catch (err) { toast('결과물 폴더에 저장하지 못했습니다: ' + err.message, true); } }
@@ -1717,8 +1731,8 @@ function renderSide() {
     body.onclick = e => { const b = e.target.closest('[data-pj]'); if (!b) return; const k = b.dataset.pj; if (k === 'save') openSaveDialog(); if (k === 'open') $('#btnOpen').click(); if (k === 'new') $('#btnNew').click(); if (k === 'down') { gcAssets(); store.download(doc); } if (k === 'pdf') openDownload('pdfhq'); if (k === 'png') openDownload('png'); if (k === 'hol') openHoliday(); if (k === 'rules') openRules(); };
     body.oninput = e => { const t = e.target, k = t.dataset.k; if (!k) return; const v = t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) : t.value; doc[k.slice(4)] = v; if (k === 'doc.name') $('#pname').value = v; markDirty(); };
   } else if (sideTab === 'ai') {
-    body.innerHTML = `<p class="hint">Claude가 문구와 이미지 프롬프트를 만들고, Gemini가 삽화를 그립니다. API 키는 "API 설정"에 넣습니다.</p>
-    <div class="tile"><button data-ai="content"><svg class="ic" style="width:22px;height:22px"><use href="#i-ai"/></svg>인성 문구 제안</button><button data-ai="image"><svg class="ic" style="width:22px;height:22px"><use href="#i-img"/></svg>AI 이미지 생성</button><button data-ai="keys"><svg class="ic" style="width:22px;height:22px"><use href="#i-help"/></svg>API 설정</button><button data-racha><span style="font-size:20px">🐧</span>라차 동작 만들기</button><button data-ai="edit"><svg class="ic" style="width:22px;height:22px"><use href="#i-elems"/></svg>이미지 편집기</button></div>
+    body.innerHTML = `<p class="hint">${chatMode() ? '지금 쓰는 채팅 요금제(Claude·Gemini·ChatGPT)로 씁니다 — 지시문을 복사해 채팅에 붙여 넣고, 받은 답·그림을 공방에 붙여 넣습니다. 방식은 "AI 설정"에서 바꿉니다.' : 'Claude가 문구와 이미지 프롬프트를 만들고, Gemini가 삽화를 그립니다. API 키는 "AI 설정"에 넣습니다.'}</p>
+    <div class="tile"><button data-ai="content"><svg class="ic" style="width:22px;height:22px"><use href="#i-ai"/></svg>인성 문구 제안</button><button data-ai="image"><svg class="ic" style="width:22px;height:22px"><use href="#i-img"/></svg>AI 이미지 생성</button><button data-ai="keys"><svg class="ic" style="width:22px;height:22px"><use href="#i-help"/></svg>AI 설정</button><button data-racha><span style="font-size:20px">🐧</span>라차 동작 만들기</button><button data-ai="edit"><svg class="ic" style="width:22px;height:22px"><use href="#i-elems"/></svg>이미지 편집기</button></div>
     <h3>이미지 편집기</h3><p class="hint">선택한 이미지의 배경을 색으로 지정해 지우고(스포이트·허용 범위·부드러운 가장자리), 지우개·복원 브러시로 세밀하게 다듬고, 자를 수 있습니다.</p>`;
     body.onclick = e => { if (e.target.closest('[data-racha]')) { openRachaMaker(); return; } const b = e.target.closest('[data-ai]'); if (!b) return; if (b.dataset.ai === 'edit') { const el = selEls()[0]; if (el && el.type === 'image' && src(el.src)) openImgEditor(el); else toast('먼저 이미지 요소를 선택하세요', true); } else openAI(b.dataset.ai); };
   } else if (sideTab === 'bg') {
@@ -2813,7 +2827,7 @@ function openRules() {
 /* ---- AI 도우미 ---- */
 let aiCtx = { tab: 'content', monthIdx: 0 };
 $('#btnAI').onclick = () => openAI(selEls()[0] && selEls()[0].type === 'image' ? 'image' : 'content');
-function openAI(tab) { aiCtx.tab = tab; const el = selEls()[0]; if (el && el.month) aiCtx.monthIdx = el.month - 1; if (!AI.cfg.anthropicKey && !AI.cfg.geminiKey && tab !== 'keys') aiCtx.tab = 'keys'; renderAI(); $('#dlgAI').showModal(); }
+function openAI(tab) { aiCtx.tab = tab; const el = selEls()[0]; if (el && el.month) aiCtx.monthIdx = el.month - 1; if (!chatMode() && !AI.cfg.anthropicKey && !AI.cfg.geminiKey && tab !== 'keys') aiCtx.tab = 'keys'; renderAI(); $('#dlgAI').showModal(); }
 $$('#dlgAI [role=tab]').forEach(b => b.onclick = () => { aiCtx.tab = b.dataset.tab; renderAI(); });
 function applyMonthContent(mi, r) {
   Object.assign(doc.calendar.months[mi], { virtue: r.virtue, en: r.en, quote: r.quote, practice: r.practice.slice(0, 2), idiom: r.idiom, hanja: r.hanja, meaning: r.meaning });
@@ -2825,24 +2839,47 @@ function renderAI() {
   $$('#dlgAI [role=tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === aiCtx.tab));
   const body = $('#aiBody'); const months = doc.calendar.months; const year = doc.calendar.year || 2027;
   if (aiCtx.tab === 'keys') {
-    body.innerHTML = `<p class="hint">키는 이 브라우저와, 동기화 폴더가 연결돼 있으면 그 폴더의 설정 파일(설정.naracha.json)에 저장되어 다른 PC에서도 바로 쓰입니다. 키는 Anthropic·Google 서버로만 보내집니다. Claude 키는 console.anthropic.com, Gemini 키는 aistudio.google.com에서 만듭니다.</p>
+    const chat = chatMode(), sel = (k, list) => `<select data-ai="${k}">${list.map(x => `<option value="${x}" ${AI.cfg[k] === x ? 'selected' : ''}>${CHAT_SITES[x][0]}</option>`).join('')}</select>`;
+    const modes = `<div class="aimode"><label class="${chat ? 'on' : ''}"><input type="radio" name="aimode" value="chat" ${chat ? 'checked' : ''}><b>내 채팅 요금제로</b><span>키·추가 요금 없음. 지시문을 복사해 쓰던 채팅(Claude·Gemini·ChatGPT)에 붙여 넣고, 받은 답·그림을 공방에 붙여 넣습니다.</span></label>
+      <label class="${chat ? '' : 'on'}"><input type="radio" name="aimode" value="api" ${chat ? '' : 'checked'}><b>API 키로 자동</b><span>버튼 한 번에 끝나지만, 구독과 별도로 쓴 만큼 요금이 듭니다.</span></label></div>`;
+    if (chat) {
+      body.innerHTML = `${modes}<div class="grid2"><label class="f"><span>문구·프롬프트 다듬기에 쓸 채팅</span>${sel('chatText', ['claude', 'gemini', 'chatgpt'])}</label><label class="f"><span>그림 그리기에 쓸 채팅</span>${sel('chatImage', ['gemini', 'chatgpt'])}</label></div>
+      <p class="hint">채팅은 이 브라우저에 로그인된 계정(지금 쓰는 요금제)을 그대로 씁니다. 처음 한 번은 열린 새 탭에서 로그인해 두세요. 채팅 사이트에 자동으로 입력하지는 않고, 관장님이 붙여 넣고 보내는 방식입니다.</p>`;
+      body.querySelectorAll('[name=aimode]').forEach(r => r.onchange = () => { AI.cfg.mode = r.value; AI.saveCfg(); renderAI(); });
+      return;
+    }
+    body.innerHTML = `${modes}<p class="hint">키는 이 브라우저와, 동기화 폴더가 연결돼 있으면 그 폴더의 설정 파일(설정.naracha.json)에 저장되어 다른 PC에서도 바로 쓰입니다. 키는 Anthropic·Google 서버로만 보내집니다. Claude 키는 console.anthropic.com, Gemini 키는 aistudio.google.com에서 만듭니다.</p>
     <div class="grid2">${aiF('Claude API 키', 'anthropicKey', 'password')}${aiF('Claude 모델', 'claudeModel')}${aiF('Gemini API 키', 'geminiKey', 'password')}${aiF('Gemini 이미지 모델', 'geminiModel')}
     <label class="f"><span>이미지 비율</span><select data-ai="aspect">${['1:1', '3:4', '4:3', '2:3', '3:2', '9:16', '16:9'].map(a => `<option ${AI.cfg.aspect === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
     <label class="f"><span>이미지 크기</span><select data-ai="size">${['1K', '2K', '4K'].map(a => `<option ${AI.cfg.size === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label></div>
     <div class="keysaved" id="keySaved">${keySavedText()}</div>
     <p class="hint">모델 이름: Gemini는 gemini-nano-banana-2.1(기본), gemini-3.1-flash-image, gemini-3-pro-image, gemini-2.5-flash-image(구형). Claude는 claude-opus-5-5(기본), claude-sonnet-5-5. Claude 요청에는 안전 거절 시 다른 모델로 자동 전환되는 fallbacks 설정이 켜져 있습니다.</p>`;
+    body.querySelectorAll('[name=aimode]').forEach(r => r.onchange = () => { AI.cfg.mode = r.value; AI.saveCfg(); renderAI(); });
     return;
   }
   const mi = aiCtx.monthIdx, mo = months[mi];
   if (aiCtx.tab === 'content') {
+    const chat = chatMode(), site = CHAT_SITES[AI.cfg.chatText][0];
     body.innerHTML = `<div class="row" style="margin-bottom:10px"><label class="f" style="margin:0;flex:1"><span>대상 달</span><select id="aiMonth">${months.map((x, k) => `<option value="${k}" ${k === mi ? 'selected' : ''}>${k + 1}월 · ${esc(x.virtue)}</option>`).join('')}</select></label>
-      <label class="f" style="margin:0;flex:2"><span>덕목 (비우면 Claude가 정함)</span><input type="text" id="aiVirtue" value="${esc(mo.virtue)}"></label></div>
+      <label class="f" style="margin:0;flex:2"><span>덕목 (비우면 AI가 정함)</span><input type="text" id="aiVirtue" value="${esc(mo.virtue)}"></label></div>
     <label class="f"><span>참고 요청 (선택)</span><input type="text" id="aiHint" placeholder="예: 새 학기 분위기, 겨루기 장면을 넣어줘"></label>
-    <div class="row"><button class="btn ai" id="aiGoMonth">이 달 문구 제안받기</button><button class="btn" id="aiGoYear">12개월 전체 덕목 구성하기</button><span id="aiBusy"></span></div>
+    ${chat ? `<p class="hint" style="margin:0 0 6px">① 단추를 누르면 지시문이 복사되고 <b>${site}</b> 채팅이 새 탭에 열립니다. 채팅 칸에 붙여 넣어(⌘V·Ctrl+V) 보내세요. <button class="lnk" data-gokeys>다른 채팅으로 바꾸기</button></p>` : ''}
+    <div class="row"><button class="btn ai" id="aiGoMonth">${chat ? '① 이 달 문구 — 지시문 복사·채팅 열기' : '이 달 문구 제안받기'}</button><button class="btn" id="aiGoYear">${chat ? '① 12개월 전체 — 지시문 복사·채팅 열기' : '12개월 전체 덕목 구성하기'}</button><span id="aiBusy"></span></div>
+    ${chat ? `<label class="f" style="margin-top:10px"><span>② 채팅의 답을 복사해 여기에 붙여 넣기 (답 아래 복사 단추 → 여기서 ⌘V·Ctrl+V, 붙여 넣으면 바로 읽음)</span><textarea id="aiAnswer" rows="4" placeholder='{"virtue": "…", "quote": "…"} 처럼 생긴 답'></textarea></label>` : ''}
     <p class="hint">결과를 확인한 뒤 "적용"을 눌러야 들어갑니다. 적용하면 캘린더 데이터와, 해당 달의 역할이 지정된 글 상자가 함께 바뀝니다.</p><div id="aiResult"></div>`;
     $('#aiMonth').onchange = e => { aiCtx.monthIdx = Number(e.target.value); renderAI(); };
-    $('#aiGoMonth').onclick = () => runAI(async () => { const r = await AI.suggestMonth({ year, month: mi + 1, virtue: $('#aiVirtue').value.trim(), hint: $('#aiHint').value.trim() }); $('#aiResult').innerHTML = `<div class="aiout">${esc(JSON.stringify(r, null, 2))}</div><div class="row" style="margin-top:8px"><button class="btn primary" id="aiApply">${mi + 1}월에 적용</button></div>`; $('#aiApply').onclick = () => { const n = applyMonthContent(mi, r); commit(); rerender(); $('#dlgAI').close(); toast(`${mi + 1}월 문구를 적용했습니다 (글 상자 ${n}개 갱신)`); }; });
-    $('#aiGoYear').onclick = () => runAI(async () => { const r = await AI.suggestYear({ year, previous: months.map(x => x.virtue), hint: $('#aiHint').value.trim() }); $('#aiResult').innerHTML = `<div class="aiout">${r.map((x, k) => `${k + 1}월 ${x.virtue} (${x.en}) · ${x.idiom}(${x.hanja})\n  ${x.quote.replace(/\n/g, ' ')}\n  1) ${x.practice[0]}\n  2) ${x.practice[1]}`).join('\n\n')}</div><div class="row" style="margin-top:8px"><button class="btn primary" id="aiApplyY">12개월 모두 적용</button></div>`; $('#aiApplyY').onclick = () => { let n = 0; r.forEach((x, k) => n += applyMonthContent(k, x)); commit(); rerender(); $('#dlgAI').close(); toast(`12개월 문구를 적용했습니다 (글 상자 ${n}개 갱신)`); }; });
+    const showMonth = r => { $('#aiResult').innerHTML = `<div class="aiout">${esc(JSON.stringify(r, null, 2))}</div><div class="row" style="margin-top:8px"><button class="btn primary" id="aiApply">${mi + 1}월에 적용</button></div>`; $('#aiApply').onclick = () => { const n = applyMonthContent(mi, r); commit(); rerender(); $('#dlgAI').close(); toast(`${mi + 1}월 문구를 적용했습니다 (글 상자 ${n}개 갱신)`); }; };
+    const showYear = r => { $('#aiResult').innerHTML = `<div class="aiout">${r.map((x, k) => `${k + 1}월 ${x.virtue} (${x.en}) · ${x.idiom}(${x.hanja})\n  ${x.quote.replace(/\n/g, ' ')}\n  1) ${x.practice[0]}\n  2) ${x.practice[1]}`).join('\n\n')}</div><div class="row" style="margin-top:8px"><button class="btn primary" id="aiApplyY">12개월 모두 적용</button></div>`; $('#aiApplyY').onclick = () => { let n = 0; r.forEach((x, k) => n += applyMonthContent(k, x)); commit(); rerender(); $('#dlgAI').close(); toast(`12개월 문구를 적용했습니다 (글 상자 ${n}개 갱신)`); }; };
+    const mArgs = () => ({ year, month: mi + 1, virtue: $('#aiVirtue').value.trim(), hint: $('#aiHint').value.trim() }), yArgs = () => ({ year, previous: months.map(x => x.virtue), hint: $('#aiHint').value.trim() });
+    if (chat) {
+      $('#aiGoMonth').onclick = () => { aiCtx.ask = 'month'; sendToChat(AI.chat.month(mArgs()), 'text'); };
+      $('#aiGoYear').onclick = () => { aiCtx.ask = 'year'; sendToChat(AI.chat.year(yArgs()), 'text'); };
+      const read = () => { const t = $('#aiAnswer').value; if (!t.trim()) return; try { let y = null; try { y = AI.readYear(t); } catch (e) {} if (y) showYear(y); else showMonth(AI.readMonth(t)); } catch (err) { $('#aiResult').innerHTML = `<p class="hint" style="color:var(--ui-danger)">${esc(err instanceof SyntaxError ? '답에서 JSON을 읽지 못했습니다. 채팅 답 아래의 복사 단추로 답 전체를 복사해 붙여 넣어 주세요.' : err.message)}</p>`; } };
+      $('#aiAnswer').oninput = read; body.querySelector('[data-gokeys]').onclick = () => { aiCtx.tab = 'keys'; renderAI(); };
+    } else {
+      $('#aiGoMonth').onclick = () => runAI(async () => showMonth(await AI.suggestMonth(mArgs())));
+      $('#aiGoYear').onclick = () => runAI(async () => showYear(await AI.suggestYear(yArgs())));
+    }
     return;
   }
   // ---- AI 그림 스튜디오: 스타일 프리셋 + 인물·동작·띠 조합 + 여러 동작 한 번에(같은 그림체) + 내 그림 보관함 ----
@@ -2858,25 +2895,25 @@ function renderAI() {
   </div>
   <div class="f"><span style="font-size:12px;color:var(--ui-muted)">동작 (여러 개 고르면 같은 그림체로 한 장씩 만듭니다)</span><div class="tcats" id="aiMoves">${AI_MOVES.map(([k, t]) => `<button data-mv="${k}" class="${S.moves.includes(k) ? 'on' : ''}">${t}</button>`).join('')}</div></div>
   <label class="f"><span>추가 요청 (선택, 한국어 가능)</span><input type="text" id="aiExtra" value="${esc(S.extra)}" placeholder="예: 벚꽃 배경, 금메달을 목에 걸고, 친구와 하이파이브"></label>
-  <details ${S.showPrompt ? 'open' : ''} id="aiPD"><summary class="hint" style="cursor:pointer">프롬프트 보기·고치기</summary><textarea id="aiPromptText" rows="5" style="width:100%">${esc(S.prompt || aiComposePrompt(S.moves[0] || 'ready'))}</textarea><div class="row"><button class="btn sm ai" id="aiPrompt">Claude로 다듬기</button><button class="btn sm" id="aiReset">조합대로 다시 쓰기</button></div></details>
+  <details ${S.showPrompt ? 'open' : ''} id="aiPD"><summary class="hint" style="cursor:pointer">프롬프트 보기·고치기</summary><textarea id="aiPromptText" rows="5" style="width:100%">${esc(S.prompt || aiComposePrompt(S.moves[0] || 'ready'))}</textarea><div class="row"><button class="btn sm ai" id="aiPrompt">${chatMode() ? CHAT_SITES[AI.cfg.chatText][0] + ' 채팅으로 다듬기' : 'Claude로 다듬기'}</button><button class="btn sm" id="aiReset">조합대로 다시 쓰기</button></div></details>
   <div class="row" style="flex-wrap:wrap">
     <label class="chk"><input type="checkbox" id="aiWhite" ${S.white ? 'checked' : ''}> 흰 배경 지우기 (요소용)</label>
     <label class="chk"><input type="checkbox" id="aiAuto" ${S.autoSave && canSave ? 'checked' : ''} ${canSave ? '' : 'disabled'}> 만든 그림 자동 보관</label>
     <label class="f" style="margin:0"><span>동작마다</span><select id="aiN">${opt([['1', '1장'], ['2', '2장'], ['3', '3장']], String(S.n))}</select></label>
   </div>
-  <div class="row"><button class="btn primary" id="aiGen">✨ 그림 만들기</button><span id="aiBusy"></span><span class="hint" style="margin:0" id="aiCount"></span></div>
+  ${chatMode() ? aiChatFlow() : '<div class="row"><button class="btn primary" id="aiGen">✨ 그림 만들기</button><span id="aiBusy"></span><span class="hint" style="margin:0" id="aiCount"></span></div>'}
   <div class="aiimgs" id="aiImgs"></div>`;
   const sync = () => { S.who = $('#aiWho').value; S.belt = $('#aiBelt').value; S.mood = $('#aiMood').value; S.extra = $('#aiExtra').value; S.white = $('#aiWhite').checked; S.autoSave = $('#aiAuto').checked; S.n = Number($('#aiN').value); S.showPrompt = $('#aiPD').open; };
   const recompose = () => { sync(); S.prompt = ''; $('#aiPromptText').value = aiComposePrompt(S.moves[0] || 'ready'); updCount(); };
-  const updCount = () => { const n = Math.max(1, S.moves.length) * S.n; $('#aiCount').textContent = `${n}장을 만듭니다${n > 3 ? ' (한 장에 10~30초)' : ''}`; };
+  const updCount = () => { if (!$('#aiCount')) return; const n = Math.max(1, S.moves.length) * S.n; $('#aiCount').textContent = `${n}장을 만듭니다${n > 3 ? ' (한 장에 10~30초)' : ''}`; };
   updCount();
   $('#aiStyles').onclick = e => { const b = e.target.closest('[data-st]'); if (!b) return; sync(); S.style = b.dataset.st; const d = AI_STYLE[S.style]; S.white = d.white; if (d.who) S.who = d.who; S.prompt = ''; renderAI(); };
-  $('#aiMoves').onclick = e => { const b = e.target.closest('[data-mv]'); if (!b) return; const k = b.dataset.mv; S.moves = S.moves.includes(k) ? S.moves.filter(x => x !== k) : S.moves.concat(k); b.classList.toggle('on'); recompose(); };
+  $('#aiMoves').onclick = e => { const b = e.target.closest('[data-mv]'); if (!b) return; const k = b.dataset.mv; S.moves = S.moves.includes(k) ? S.moves.filter(x => x !== k) : S.moves.concat(k); if (chatMode()) { sync(); S.prompt = ''; renderAI(); return; } b.classList.toggle('on'); recompose(); };  // 채팅 방식은 동작별 복사 단추도 다시 그림
   ['aiWho', 'aiBelt', 'aiMood'].forEach(id => $('#' + id).onchange = recompose);
   $('#aiExtra').onchange = recompose; $('#aiN').onchange = () => { sync(); updCount(); };
   $('#aiReset').onclick = recompose;
   $('#aiPromptText').oninput = e => { S.prompt = e.target.value; };
-  $('#aiPrompt').onclick = () => runAI(async () => { sync(); const t = await AI.refinePrompt($('#aiPromptText').value); $('#aiPromptText').value = t; S.prompt = t; });
+  $('#aiPrompt').onclick = chatMode() ? () => { sync(); sendToChat(AI.chat.refine($('#aiPromptText').value), 'text', { note: '다듬은 글이 나오면 복사해 위 프롬프트 칸에 붙여 넣으세요' }); } : () => runAI(async () => { sync(); const t = await AI.refinePrompt($('#aiPromptText').value); $('#aiPromptText').value = t; S.prompt = t; });
   const card = (s, meta) => {
     const fig = document.createElement('figure');
     fig.innerHTML = `<img src="${s}" alt=""><figcaption><button class="btn sm primary">넣기</button>${canSave ? `<button class="btn sm" data-save>${meta.saved ? '보관됨 ✓' : '내 그림에 보관'}</button>` : ''}<button class="btn sm">내려받기</button></figcaption>`;
@@ -2886,6 +2923,9 @@ function renderAI() {
     bDown.onclick = () => { const a = document.createElement('a'); a.href = s; a.download = `${(meta.name || 'ai-image').replace(/[\\/:*?"<>|]/g, '_')}.png`; a.click(); };
     $('#aiImgs').prepend(fig);
   };
+  // 받은 그림 처리 (API·채팅 공통): 흰 배경 지우기 → 자동 보관 → 카드
+  const take = async (s, mv, prompt) => { if (S.white) { try { s = await NC.imgedit.removeColorFromSrc(s, '#ffffff'); } catch (e) {} } const meta = { name: aiName(mv), kw: aiKw(mv), prompt, style: S.style }; if (S.autoSave && canSave) { try { await NC.lib.saveMine(s, meta); meta.saved = true; } catch (e) { toast(e.message, true); } } card(s, meta); return s; };
+  if (chatMode()) { aiChatWire(take, sync); return; }
   $('#aiGen').onclick = () => runAI(async () => {
     sync(); const moves = S.moves.length ? S.moves : [null]; const total = moves.length * S.n; let k = 0;
     const custom = S.prompt && S.prompt.trim();
@@ -2895,13 +2935,7 @@ function renderAI() {
       for (let r = 0; r < S.n; r++) {
         $('#aiBusy').innerHTML = `<span class="spin"></span>${++k}/${total} 만드는 중…`;
         const imgs = await AI.geminiImage({ prompt, refImage: styleRef, aspect: AI_STYLE[S.style].aspect || '1:1' });
-        for (let s of imgs) {
-          if (S.white) { try { s = await NC.imgedit.removeColorFromSrc(s, '#ffffff'); } catch (e) {} }
-          if (!styleRef && S.style !== 'scene' && S.style !== 'photo') styleRef = s;
-          const meta = { name: aiName(mv), kw: aiKw(mv), prompt, style: S.style };
-          if (S.autoSave && canSave) { try { await NC.lib.saveMine(s, meta); meta.saved = true; } catch (e) { toast(e.message, true); } }
-          card(s, meta);
-        }
+        for (const s0 of imgs) { const s = await take(s0, mv, prompt); if (!styleRef && S.style !== 'scene' && S.style !== 'photo') styleRef = s; }
       }
     }
     if (S.autoSave && canSave) toast('만든 그림을 내 그림에 보관했습니다');
@@ -2935,6 +2969,46 @@ function aiComposePrompt(mv, withRef) {
 }
 function aiName(mv) { const t = k => (AI_MOVES.find(x => x[0] === k) || [])[1] || ''; const w = (AI_WHO.find(x => x[0] === aiStudio.who) || [])[1]; return `${t(mv) || 'AI 그림'} · ${aiStudio.style === 'mascot' ? '라차' : w} (${(AI_STYLES.find(x => x[0] === aiStudio.style) || [])[1]})`; }
 function aiKw(mv) { const S = aiStudio; return ['AI', (AI_STYLES.find(x => x[0] === S.style) || [])[1], (AI_WHO.find(x => x[0] === S.who) || [])[1], (AI_BELT.find(x => x[0] === S.belt) || [])[1], (AI_MOVES.find(x => x[0] === mv) || [])[1], S.extra].filter(Boolean).join(' '); }
+// ---- 채팅창 방식: API 키 없이 내 요금제(Claude·Gemini·ChatGPT 채팅)로 — 지시문을 복사해 채팅에 붙여 넣고, 받은 답·그림을 공방에 붙여 넣음 ----
+// 채팅 사이트를 대신 조작하지 않음: 로그인·요금제는 관장님 브라우저의 그 사이트 그대로
+const CHAT_SITES = { claude: ['Claude', 'https://claude.ai/new'], gemini: ['Gemini', 'https://gemini.google.com/app'], chatgpt: ['ChatGPT', 'https://chatgpt.com/'] };
+const chatMode = () => AI.cfg.mode !== 'api';
+async function copyText(t) { try { await navigator.clipboard.writeText(t); } catch (e) { const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;left:-9999px'; (document.querySelector('dialog[open]') || document.body).appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } }
+async function copyImg(src) { const img = await AI.loadImg(src); const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0); const b = await new Promise(r => c.toBlob(r, 'image/png')); await navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]); }
+// 참고 그림 여러 장을 한 장으로 나란히 (채팅에는 한 번에 한 장씩 붙여 넣기 편하게)
+async function refSheet(list) { const ims = await Promise.all(list.map(AI.loadImg)); const H = 640, ws = ims.map(i => Math.round(i.naturalWidth * H / i.naturalHeight)); const c = document.createElement('canvas'); c.width = ws.reduce((a, b) => a + b, 0) + 40 * (ims.length - 1); c.height = H; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, H); let o = 0; ims.forEach((im, k) => { x.drawImage(im, o, 0, ws[k], H); o += ws[k] + 40; }); return c.toDataURL('image/png'); }
+function openChatSite(k) { window.open(CHAT_SITES[k][1], 'nc-chat-' + k); }
+// 복사가 먼저(창이 바뀌면 복사가 막힘), 그다음 채팅 탭 열기
+async function sendToChat(text, kind, o = {}) { const k = kind === 'image' ? AI.cfg.chatImage : AI.cfg.chatText; await copyText(text); if (o.open !== false) openChatSite(k); toast(`지시문을 복사했습니다 — ${o.open === false ? '같은' : '열린'} ${CHAT_SITES[k][0]} 채팅 칸에 ⌘V·Ctrl+V로 붙여 넣고 보내세요${o.note ? '. ' + o.note : ''}`); }
+// 받은 그림 받는 칸: 붙여 넣기(그림 복사 → ⌘V) · 끌어다 놓기 · 눌러서 파일 고르기
+function chatImgZone(zone, onImg) {
+  const take = async files => { for (const f of files) if (/^image\//.test(f.type)) { try { await onImg(await fileToDataURL(f)); } catch (err) { toast(err.message, true); } } };
+  zone._take = take;
+  zone.onclick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true; i.onchange = () => take([...i.files]); i.click(); };
+  zone.ondragover = e => { e.preventDefault(); zone.classList.add('on'); }; zone.ondragleave = () => zone.classList.remove('on');
+  zone.ondrop = async e => { e.preventDefault(); e.stopPropagation(); zone.classList.remove('on'); const fs = [...e.dataTransfer.files]; if (fs.length) return take(fs); const u = (e.dataTransfer.getData('text/uri-list') || '').split('\n')[0].trim(); if (!u) return; try { const b = await (await fetch(u)).blob(); if (!/^image\//.test(b.type)) throw 0; take([b]); } catch (err) { toast('그 그림은 바로 가져올 수 없습니다 — 채팅의 그림을 오른쪽 클릭 → 이미지 복사 후, 이 칸을 보고 ⌘V·Ctrl+V 하세요', true); } };
+}
+document.addEventListener('paste', e => { const z = document.querySelector('dialog[open] .chatzone'); if (!z || !z._take) return; const fs = [...((e.clipboardData && e.clipboardData.files) || [])].filter(f => /^image\//.test(f.type)); if (!fs.length) return; e.preventDefault(); z._take(fs); });
+const aiMoveName = mv => aiStudio.style === 'scene' ? '장면' : (AI_MOVES.find(x => x[0] === mv) || [])[1] || '그림';
+function aiChatFlow() {
+  const S = aiStudio, mvs = S.moves.length ? S.moves : ['ready'], needRef = S.style === 'mascot', site = CHAT_SITES[AI.cfg.chatImage][0], n = needRef ? 1 : 0;
+  return `<div class="chatflow"><p class="hint" style="margin:0 0 6px">${site} 채팅(내 요금제)에서 그립니다. 동작마다 지시문을 복사해 같은 대화에 이어 붙이면 그림체가 맞춰집니다. <button class="lnk" data-gokeys>다른 채팅으로 바꾸기</button> · <button class="lnk" id="aiNewChat">새 대화로 시작</button></p>
+  <div class="row" style="flex-wrap:wrap;gap:6px">${needRef ? `<button class="btn sm" id="aiRefCp">① 라차 참고 그림 복사·${site} 열기</button>` : ''}${mvs.map(mv => `<button class="btn sm ${S.cur === mv ? 'ai' : ''}" data-cp="${mv}">${n ? '②' : '①'} ${esc(aiMoveName(mv))} 지시문 복사</button>`).join('')}</div>
+  <div class="chatzone" id="aiZone"><b>${n ? '③' : '②'} 받은 그림을 여기에 넣기</b><span>채팅의 그림을 오른쪽 클릭 → 이미지 복사 → 여기서 ⌘V·Ctrl+V · 내려받은 파일을 끌어다 놓기 · 눌러서 파일 고르기</span><small id="aiZoneFor">${S.cur ? `받을 그림: ${esc(aiMoveName(S.cur))}` : ''}</small></div></div>`;
+}
+function aiChatWire(take, sync) {
+  const S = aiStudio, mvs = S.moves.length ? S.moves : ['ready'], needRef = S.style === 'mascot', body = $('#aiBody');
+  body.querySelector('[data-gokeys]').onclick = () => { aiCtx.tab = 'keys'; renderAI(); };
+  $('#aiNewChat').onclick = () => { S.chatOn = false; S.imgN = 0; toast('다음 지시문을 복사하면 채팅을 새로 엽니다'); };
+  if ($('#aiRefCp')) $('#aiRefCp').onclick = async () => { S.chatOn = true; S.imgN = 0; try { await copyImg(await refSheet([ASSETS['mascot-03'], ASSETS['mascot-01']].filter(Boolean))); openChatSite(AI.cfg.chatImage); toast('라차 참고 그림을 복사했습니다 — 열린 채팅 칸에 ⌘V·Ctrl+V로 붙여 넣은 뒤 ② 지시문 복사를 누르세요'); } catch (err) { toast('참고 그림을 복사하지 못했습니다: ' + err.message, true); } };
+  body.querySelectorAll('[data-cp]').forEach(b => b.onclick = async () => {
+    const mv = b.dataset.cp; sync(); const custom = S.prompt && S.prompt.trim() && mvs.length === 1; const prompt = custom ? S.prompt : aiComposePrompt(mv, false); const first = !S.imgN;
+    await sendToChat(AI.chat.image(prompt, { aspect: AI_STYLE[S.style].aspect || '1:1', refs: first && needRef ? 1 : 0, next: !first }), 'image', { open: !S.chatOn, note: '그림이 나오면 오른쪽 클릭 → 이미지 복사 후 아래 칸에 붙여 넣으세요' });
+    S.chatOn = true; S.imgN = (S.imgN || 0) + 1; S.cur = mv; S.curPrompt = prompt;
+    body.querySelectorAll('[data-cp]').forEach(x => x.classList.toggle('ai', x === b)); $('#aiZoneFor').textContent = `받을 그림: ${aiMoveName(mv)}`;
+  });
+  chatImgZone($('#aiZone'), async s => { sync(); const mv = S.cur || mvs[0]; await take(s, mv, S.curPrompt || aiComposePrompt(mv, false)); toast(`'${aiMoveName(mv)}' 그림을 받았습니다 — 아래에서 넣기를 누르세요`); });
+}
 function aiF(label, key, type) { return `<label class="f"><span>${label}</span><input type="${type || 'text'}" data-ai="${key}" value="${esc(AI.cfg[key])}" autocomplete="off"></label>`; }
 // 키 저장 표시: 이 브라우저에 바로 저장되고, 동기화 폴더가 있으면 몇 초 안에 설정 파일로 올라가 다른 PC에도 적용됨
 function keySavedText() { const has = [AI.cfg.geminiKey && 'Gemini', AI.cfg.anthropicKey && 'Claude'].filter(Boolean); if (!has.length) return '아직 저장된 키가 없습니다. 칸에 붙여 넣으면 바로 저장됩니다.'; return `✓ ${has.join('·')} 키 저장됨 — ${store.state.dir ? '동기화 폴더(구글 드라이브)에도 저장되어 같은 폴더를 연결한 다른 PC에서도 그대로 쓰입니다' : '이 브라우저에 저장됨 · 다른 PC에서도 쓰려면 저장 ▾ → 동기화 폴더를 연결하세요'}`; }
@@ -3415,9 +3489,10 @@ $('#scroller').addEventListener('dragover', e => {
 $('#scroller').addEventListener('dragleave', e => { if (!e.relatedTarget || !$('#scroller').contains(e.relatedTarget)) $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon')); });
 // 동영상·소리 파일 끌어다 놓기: 원본은 이 PC에 그대로 두고 위치(손잡이)만 기억 — 길이와 상관없이 편집 가능
 function mediaDrop(e) {
-  const items = [...(e.dataTransfer.items || [])].filter(it => it.kind === 'file' && /^(video|audio)\//.test(it.type)); if (!items.length) return false;
+  const kindOf = it => { if (/^(video|audio)\//.test(it.type)) return it.type; const f = it.getAsFile(), n = (f && f.name) || ''; return /\.(m4a|mp3|wav|aac|flac|ogg|opus|wma)$/i.test(n) ? 'audio/x' : /\.(mp4|mov|m4v|webm|mkv)$/i.test(n) ? 'video/x' : ''; };
+  const items = [...(e.dataTransfer.items || [])].filter(it => it.kind === 'file').map(it => ({ it, t: kindOf(it) })).filter(x => x.t).map(x => Object.assign(x.it, { _t: x.t })); if (!items.length) return false;
   e.preventDefault(); e.stopPropagation();
-  const got = items.map(it => ({ type: it.type, file: it.getAsFile(), hp: it.getAsFileSystemHandle ? it.getAsFileSystemHandle().catch(() => null) : Promise.resolve(null) })); // 이벤트 안에서 바로 받아 둬야 함
+  const got = items.map(it => ({ type: it._t, file: it.getAsFile(), hp: it.getAsFileSystemHandle ? it.getAsFileSystemHandle().catch(() => null) : Promise.resolve(null) })); // 이벤트 안에서 바로 받아 둬야 함
   (async () => { for (const g of got) { try { const h = await g.hp; const m = h && h.kind === 'file' ? await NC.media.addHandle(h) : await NC.media.addFile(g.file); if (/^video/.test(g.type)) await placeVideo(m); else await placeAudio(m); } catch (err) { toast('넣지 못했습니다: ' + err.message, true); } } })();
   return true;
 }
@@ -3754,22 +3829,52 @@ function openRachaMaker() {
   renderRacha(); d.showModal();
 }
 function renderRacha() {
-  const B = $('#rachaBody'); const keyOK = !!AI.cfg.geminiKey, libOK = NC.lib.ready || !!store.state.dir;
+  const B = $('#rachaBody'); const keyOK = chatMode() || !!AI.cfg.geminiKey, libOK = NC.lib.ready || !!store.state.dir;
   B.innerHTML = `${keyOK ? '' : `<div class="lockbar">Gemini API 키가 필요합니다 — AI 도우미 → API 설정에 넣어 주세요<button class="btn sm" id="rkKey">키 넣기</button></div>`}
   ${libOK ? '' : '<div class="lockbar">동기화 폴더가 연결되어 있지 않아 만든 그림은 이 창에서만 쓸 수 있습니다 (저장 ▾ → 동기화 폴더 연결)</div>'}
-  <p class="hint" style="margin-top:0">지금 있는 라차 그림 2장(준비 자세·앞차기)을 참고 그림으로 보내 같은 캐릭터로 그립니다. 흰 배경은 자동으로 지우고, 요소 → 나라차 → <b>마스코트 라차</b>에 보관되어 모든 PC에서 씁니다. 한 장에 수십 초, Gemini 요금이 장마다 듭니다.</p>
+  <p class="hint" style="margin-top:0">지금 있는 라차 그림 2장(준비 자세·앞차기)을 참고 그림으로 보내 같은 캐릭터로 그립니다. 흰 배경은 자동으로 지우고, 요소 → 나라차 → <b>마스코트 라차</b>에 보관되어 모든 PC에서 씁니다. ${chatMode() ? `<b>${CHAT_SITES[AI.cfg.chatImage][0]} 채팅(내 요금제)</b>에 지시문을 붙여 넣어 한 장씩 받습니다.` : '한 장에 수십 초, Gemini 요금이 장마다 듭니다.'}</p>
   ${RACHA.map(([gid, gname, list]) => `<h3 class="phead"><span>${gname} <small>${list.length}가지</small></span><span><button class="lnk" data-rall="${gid}">모두 고르기</button> · <button class="lnk" data-rnone="${gid}">모두 빼기</button></span></h3><div class="rgrid">${list.map(([id, name]) => `<label class="rchk ${rachaDone(id) ? 'done' : ''}"><input type="checkbox" data-rid="${id}" ${rachaDone(id) ? '' : 'checked'}> ${name}${rachaDone(id) ? ' <small>✓ 있음</small>' : ''}</label>`).join('')}</div>`).join('')}
   <div class="row" style="margin-top:12px;justify-content:flex-end"><span class="hint" id="rStat" style="margin:0;flex:1"></span><button class="btn" id="rStop" hidden>멈추기</button><button class="btn primary" id="rGo" ${keyOK ? '' : 'disabled'}>고른 동작 만들기</button></div>
-  <div class="rres" id="rRes"></div>`;
-  const cnt = () => { const n = B.querySelectorAll('[data-rid]:checked').length; $('#rGo').textContent = `고른 ${n}가지 만들기`; return n; }; cnt();
+  <div id="rChat"></div><div class="rres" id="rRes"></div>`;
+  const cnt = () => { const n = B.querySelectorAll('[data-rid]:checked').length; $('#rGo').textContent = chatMode() ? `고른 ${n}가지 — 채팅으로 만들기` : `고른 ${n}가지 만들기`; return n; }; cnt();
   B.onchange = cnt;
   B.onclick = async e => {
     const a = e.target.closest('[data-rall],[data-rnone]'); if (a) { const g = a.dataset.rall || a.dataset.rnone, on = !!a.dataset.rall; RACHA.find(x => x[0] === g)[2].forEach(([id]) => { const c = B.querySelector(`[data-rid="${id}"]`); if (c) c.checked = on; }); cnt(); return; }
     if (e.target.id === 'rkKey') { $('#dlgRacha').close(); openAI('keys'); return; }
     if (e.target.id === 'rStop') { rachaStop = true; e.target.disabled = true; return; }
     const ins = e.target.closest('[data-rins]'); if (ins) { addImage(addAsset(ins.dataset.rins.startsWith('data:') ? ins.dataset.rins : ins.querySelector('img').src)); return; }
-    if (e.target.id === 'rGo') runRacha();
+    if (e.target.id === 'rGo') { if (chatMode()) runRachaChat(); else runRacha(); }
   };
+}
+// 채팅 방식: 참고 그림 한 장(라차 두 자세) → 동작마다 지시문 복사 → 받은 그림 붙여 넣기 → 다음 동작
+function runRachaChat() {
+  const B = $('#rachaBody'), ids = [...B.querySelectorAll('[data-rid]:checked')].map(c => c.dataset.rid); if (!ids.length) return;
+  const all = RACHA.flatMap(g => g[2]), refs = [ASSETS['mascot-03'], ASSETS['mascot-01']].filter(Boolean), box = $('#rChat'), res = $('#rRes'), site = CHAT_SITES[AI.cfg.chatImage][0];
+  let i = 0, sent = 0;
+  const cur = () => all.find(x => x[0] === ids[i]);
+  const draw = () => {
+    if (i >= ids.length) { box.innerHTML = `<p class="hint">고른 ${ids.length}가지를 모두 받았습니다. 아래 그림을 누르면 페이지에 넣습니다.</p>`; $('#rStat').textContent = ''; return; }
+    const [, name] = cur();
+    box.innerHTML = `<div class="chatflow"><div class="row" style="flex-wrap:wrap;gap:6px"><button class="btn sm" data-rc="ref">① 라차 참고 그림 복사·${site} 열기</button><button class="btn sm ai" data-rc="cp">② ${i + 1}/${ids.length} '${esc(name)}' 지시문 복사</button><button class="btn sm" data-rc="skip">이 동작 건너뛰기</button></div>
+      <div class="chatzone" id="rZone"><b>③ 받은 '${esc(name)}' 그림을 여기에 넣기</b><span>채팅의 그림을 오른쪽 클릭 → 이미지 복사 → 여기서 ⌘V·Ctrl+V · 내려받은 파일을 끌어다 놓기 · 눌러서 파일 고르기</span></div></div>`;
+    $('#rStat').textContent = `${i + 1}/${ids.length} · ${name}`;
+    chatImgZone($('#rZone'), got);
+  };
+  box.onclick = async e => {
+    const k = e.target.dataset && e.target.dataset.rc; if (!k) return;
+    if (k === 'ref') { sent = 0; try { await copyImg(await refSheet(refs)); openChatSite(AI.cfg.chatImage); toast('라차 참고 그림을 복사했습니다 — 열린 채팅 칸에 ⌘V·Ctrl+V로 붙여 넣은 뒤 ② 지시문 복사를 누르세요'); } catch (err) { toast('참고 그림을 복사하지 못했습니다: ' + err.message, true); } }
+    if (k === 'cp') { const [, , pose] = cur(); await sendToChat(AI.chat.image(`The penguin mascot is ${pose}. ${RACHA_STYLE}`, { aspect: '1:1', refs: sent ? 0 : 1, next: !!sent }), 'image', { open: false, note: '그림이 나오면 오른쪽 클릭 → 이미지 복사 후 ③ 칸에 붙여 넣으세요' }); sent++; }
+    if (k === 'skip') { i++; draw(); }
+  };
+  const got = async s => {
+    const [id, name, pose] = cur(); try { s = await NC.imgedit.removeColorFromSrc(s, '#ffffff'); } catch (err) {}
+    const meta = { name: `라차 · ${name}`, kw: `라차 마스코트 펭귄 캐릭터 ${name} ${id}`, prompt: pose, style: 'racha', cat: 'mascot', tag: 'racha:' + id };
+    try { if (NC.lib.ready || store.state.dir) await NC.lib.saveMine(s, meta); } catch (err) { toast('보관하지 못했습니다: ' + err.message, true); }
+    res.insertAdjacentHTML('beforeend', `<button class="rcard" data-rins="" title="눌러서 페이지에 넣기"><img src="${s}" alt=""><span>${esc(name)}</span></button>`);
+    const lbl = B.querySelector(`[data-rid="${id}"]`); if (lbl) { lbl.checked = false; lbl.closest('.rchk').classList.add('done'); }
+    toast(`'${name}'을 받았습니다`); i++; draw(); if (sideTab === 'elems') renderSide();
+  };
+  draw();
 }
 async function runRacha() {
   if (rachaBusy) return; const B = $('#rachaBody'); const ids = [...B.querySelectorAll('[data-rid]:checked')].map(c => c.dataset.rid); if (!ids.length) return;

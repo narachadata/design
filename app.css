@@ -959,3 +959,16 @@ body.tl-wide .tl-grip{display:block}
 .miss-it{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--ui-line2);border-radius:8px}
 .miss-it span{flex:1;min-width:0;display:flex;flex-direction:column}.miss-it small{color:var(--ui-muted);font-size:11.5px}
 .miss-it.ok{background:#effaf4;border-color:#bfe6cf}
+.tl-il{position:absolute;left:0;top:0;bottom:0;width:7px;cursor:ew-resize;z-index:1}.tl-il:hover{background:rgba(255,255,255,.35)}
+
+/* AI 채팅창 방식 */
+.aimode{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 12px}
+.aimode label{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:center;border:1px solid var(--ui-line);border-radius:10px;padding:10px 12px;cursor:pointer}
+.aimode label.on{border-color:var(--ui-accent);background:var(--ui-accent-soft)}
+.aimode label span{grid-column:2;font-size:12px;color:var(--ui-muted);line-height:1.45}
+.chatflow{margin:6px 0 4px}
+.chatzone{display:flex;flex-direction:column;gap:3px;align-items:center;justify-content:center;text-align:center;margin-top:8px;padding:16px 12px;border:2px dashed var(--ui-line);border-radius:12px;cursor:pointer;background:var(--ui-field);transition:border-color .15s,background .15s}
+.chatzone:hover,.chatzone.on{border-color:var(--ui-accent);background:var(--ui-accent-soft)}
+.chatzone span{font-size:12px;color:var(--ui-muted)}
+.chatzone small{font-size:12px;color:var(--ui-accent);font-weight:600}
+@media (max-width:700px){.aimode{grid-template-columns:1fr}}

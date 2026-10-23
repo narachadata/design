@@ -1,4 +1,4 @@
-// AI 연동: Claude(문구·프롬프트 설계) + Gemini(이미지 생성). 키는 localStorage와, 동기화 폴더가 있으면 그 설정 파일에 저장됩니다.
+// AI 연동: Claude(문구·프롬프트 설계) + Gemini(이미지 생성). 기본은 채팅창 방식(키 없이 내 요금제 채팅에 붙여 넣기), API 방식은 키로 자동. 키는 localStorage와, 동기화 폴더가 있으면 그 설정 파일에 저장됩니다.
 window.AI = (function () {
   const KEY = 'naracal-ai-v1';
   const cfg = Object.assign({
@@ -6,6 +6,7 @@ window.AI = (function () {
     claudeModel: 'claude-opus-5-5',
     geminiModel: 'gemini-nano-banana-2.1',
     aspect: '3:4', size: '1K',
+    mode: 'chat', chatText: 'claude', chatImage: 'gemini',  // chat: 내 요금제 채팅창에 붙여 넣는 방식 / api: 키로 자동
   }, (() => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } })());
   function saveCfg() { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} }
 
@@ -75,21 +76,20 @@ window.AI = (function () {
 
   const EXAMPLE = `참고 예시(2026년 1월): {"virtue":"긍지·자부심","en":"PRIDE, SELF-ESTEEM","quote":"\\"땀과 노력은, 나를 자랑스럽게\\n만들어 줍니다. 자신을 믿으세요!\\"","practice":["매일 실천할 수 있는 목표 정하고, 1년간 실천하기.","도전한 일에 성공했을 때, 자신에게 칭찬 해주기."],"idiom":"우공이산","hanja":"愚公移山","meaning":"꾸준한 의지로 나아가면 큰 산도 옮길 수 있습니다."}`;
 
-  async function suggestMonth({ year, month, virtue, hint }) {
-    const user = `${year}년 ${month}월의 인성 덕목${virtue ? `은 "${virtue}"입니다` : '을 하나 정해 주세요'}.${hint ? ' 참고: ' + hint : ''}
+  function monthMsg({ year, month, virtue, hint }) {
+    return `${year}년 ${month}월의 인성 덕목${virtue ? `은 "${virtue}"입니다` : '을 하나 정해 주세요'}.${hint ? ' 참고: ' + hint : ''}
 ${month}월의 계절감이나 학사 일정(새 학기, 방학, 명절 등)이 어울리면 가볍게 반영해 주세요.
 ${EXAMPLE}
 위 형식의 JSON 객체 하나를 만들어 주세요.`;
-    return claudeJSON({ system: SYSTEM_COPY, user, schema: VIRTUE_SCHEMA });
   }
-  async function suggestYear({ year, previous, hint }) {
-    const user = `${year}년 1월부터 12월까지 12개의 인성 덕목을 구성해 주세요. 서로 겹치지 않고, 한 해의 흐름(새해 다짐 → 봄 새 학기 → 여름 → 가을 → 연말 감사)에 맞게 배치합니다.
+  async function suggestMonth(a) { return claudeJSON({ system: SYSTEM_COPY, user: monthMsg(a), schema: VIRTUE_SCHEMA }); }
+  function yearMsg({ year, previous, hint }) {
+    return `${year}년 1월부터 12월까지 12개의 인성 덕목을 구성해 주세요. 서로 겹치지 않고, 한 해의 흐름(새해 다짐 → 봄 새 학기 → 여름 → 가을 → 연말 감사)에 맞게 배치합니다.
 작년(${year - 1}년) 덕목: ${previous.join(', ')}. 같은 덕목을 다시 써도 되지만 문구는 새로 씁니다.${hint ? ' 참고: ' + hint : ''}
 ${EXAMPLE}
 {"months":[...12개...]} 형식의 JSON을 만들어 주세요. 배열 순서가 1월부터 12월입니다.`;
-    const j = await claudeJSON({ system: SYSTEM_COPY, user, schema: YEAR_SCHEMA });
-    return j.months;
   }
+  async function suggestYear(a) { const j = await claudeJSON({ system: SYSTEM_COPY, user: yearMsg(a), schema: YEAR_SCHEMA }); return j.months; }
 
   const STYLE_GUIDE = `Style: flat vector children's-book illustration, bold clean black outlines, soft cel shading, bright and cheerful, no gradients, no text, no letters, no watermark, no logo. Subject centered, full body visible, generous margin around the subject. PURE WHITE background (#FFFFFF), nothing else in the background.
 Characters available: (1) the dojang mascot: a cute round penguin (dark gray head and back, white face and belly, orange beak and feet, small gray mitten hands) wearing a white taekwondo dobok with a black belt and a small red-and-blue emblem on the chest; (2) Korean elementary-school children in white doboks with colored belts (yellow, green, blue, red, black), neat black hair, friendly faces.`;
@@ -106,8 +106,28 @@ Output the prompt text only.`;
   }
 
   // 사용자가 고른 조합으로 만든 프롬프트를 다듬음 (스타일 문장은 유지)
-  async function refinePrompt(prompt) {
-    return claudeText({ system: 'You are an art director improving prompts for an image-generation model. Output only the improved prompt, in English, one paragraph, 60-120 words.', user: `Improve this image prompt for a Korean taekwondo school's design asset. Keep the subject, action, belt color, expression and the style sentence, make the pose anatomically clear and appealing, keep "isolated on a plain pure white background" if present, and never add text or logos to the image.\n\n${prompt}` });
+  const REFINE_SYS = 'You are an art director improving prompts for an image-generation model. Output only the improved prompt, in English, one paragraph, 60-120 words.';
+  const refineMsg = prompt => `Improve this image prompt for a Korean taekwondo school's design asset. Keep the subject, action, belt color, expression and the style sentence, make the pose anatomically clear and appealing, keep "isolated on a plain pure white background" if present, and never add text or logos to the image.\n\n${prompt}`;
+  async function refinePrompt(prompt) { return claudeText({ system: REFINE_SYS, user: refineMsg(prompt) }); }
+
+  /* ---------- 채팅창 방식: 같은 지시문을 한 덩어리 글로 만들어 내 요금제 채팅(Claude·Gemini·ChatGPT)에 붙여 넣음 ---------- */
+  const JSON_TAIL = '\n\n설명 없이 JSON 코드 블록 하나로만 답해 주세요.';
+  const chat = {
+    month: a => `${SYSTEM_COPY}\n\n${monthMsg(a)}${JSON_TAIL}`,
+    year: a => `${SYSTEM_COPY}\n\n${yearMsg(a)}${JSON_TAIL}`,
+    refine: p => `${REFINE_SYS}\n\n${refineMsg(p)}`,
+    // 그림: 비율·참고 그림 안내를 붙임 (채팅에는 참고 그림을 직접 첨부)
+    image: (prompt, { aspect, refs, next } = {}) => next
+      ? `Same character, same art style, same colors and the same plain white background as the previous image. Now: ${prompt}\nAspect ratio ${aspect || cfg.aspect}. Image only, no text.`
+      : `Generate an image. Aspect ratio ${aspect || cfg.aspect}.${refs ? ` Use the attached image${refs > 1 ? 's' : ''} as the exact character reference (same design, colors and proportions).` : ''}\n\n${prompt}\n\nImage only, no text in the image.`,
+  };
+  // 붙여 넣은 답에서 덕목 JSON을 꺼냄 (12개월은 {"months":[...]} 또는 배열)
+  function readMonth(t) { const j = parseJSON(t); const r = Array.isArray(j) ? j[0] : j.months ? j.months[0] : j; return checkMonth(r); }
+  function readYear(t) { const j = parseJSON(t); const a = Array.isArray(j) ? j : j.months; if (!Array.isArray(a) || a.length < 12) throw new Error('12개월이 다 들어 있지 않습니다. 채팅 답 전체를 붙여 넣었는지 확인하세요.'); return a.slice(0, 12).map(checkMonth); }
+  function checkMonth(r) {
+    if (!r || !r.virtue) throw new Error('답에서 덕목(virtue)을 찾지 못했습니다. JSON 부분이 다 들어갔는지 확인하세요.');
+    const pr = Array.isArray(r.practice) ? r.practice : String(r.practice || '').split(/\n+/);
+    return { virtue: String(r.virtue), en: String(r.en || ''), quote: String(r.quote || ''), practice: [pr[0] || '', pr[1] || ''], idiom: String(r.idiom || ''), hanja: String(r.hanja || ''), meaning: String(r.meaning || '') };
   }
 
   /* ---------- Gemini ---------- */
@@ -188,5 +208,5 @@ Output the prompt text only.`;
     return c.toDataURL('image/png');
   }
 
-  return { cfg, saveCfg, suggestMonth, suggestYear, imagePrompt, refinePrompt, geminiImage, removeWhite, loadImg };
+  return { cfg, saveCfg, chat, readMonth, readYear, suggestMonth, suggestYear, imagePrompt, refinePrompt, geminiImage, removeWhite, loadImg };
 })();
