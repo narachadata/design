@@ -838,7 +838,7 @@ let sideTab = 'pages', tplCat = 'all', tplQ = '', elCat = 'all', elQ = '', tplF 
    내용(데이터 불러오기·일정·명단·사진첩·보관·클라우드)은 지금 쓰는 소식지 엔진(../naracha/news.html)을 그대로 쓰고
    (같은 주소라 접속키·보관한 호·사진이 그대로 보임), 화면은 공방과 같은 모양으로 입혀 가운데 작업 영역에 띄움.
    [공방 디자인으로 가져오기]는 엔진이 그리는 명령을 기록해 글 상자·사진·도형·벡터 모양으로 바꾼 새 문서를 엶. */
-let newsMode = false, newsReady = null, newsWin = null, newsObs = null;
+let newsMode = false, newsReady = null, newsWin = null, newsObs = null, newsDirty = false, newsSyncing = false;
 let animTab = 'in';
 const NEWS_NAV = [['pgCover', '표지'], ['pgToc', '목차'], ['pgVirtue', '인성덕목'], ['pgSchedule', '주요 일정'], ['pgCal', '수련계획표'], ['pgTrain', '수련 안내'], ['pgExamInfo', '승급심사 안내'], ['pgRec', '승급심사 추천자'], ['pgKkw', '국기원 응시예정자'], ['pgBday', '생일자'], ['pgAlbum', '사진첩 · 행사 보고'], ['pgCheck', '실천 체크리스트']];
 function newsEngine() {
@@ -889,12 +889,15 @@ function newsSkin(w) {
   const watch = ['heroYm', 'heroSeason', 'hdrStatus', 'editBadge'].map(id => d.getElementById(id)).filter(Boolean);
   newsObs = new MutationObserver(() => { if (sideTab === 'news') newsHeroUpdate(); });
   watch.forEach(n => newsObs.observe(n, { childList: true, characterData: true, subtree: true, attributes: true }));
+  ['input', 'change', 'click'].forEach(t => d.addEventListener(t, e => { if (t !== 'click' || (e.target.closest && e.target.closest('button,label,.chip,.cell'))) newsDirty = true; }, true));  /* 소식지 내용이 바뀌었을 수 있음 → 디자인 다듬기로 돌아올 때 반영 */
   d.addEventListener('change', e => { if (e.target && /^pg[A-Z]/.test(e.target.id || '') && sideTab === 'news') renderSide(); if (e.target && /^in(Year|Month|Ratio)$/.test(e.target.id || '')) setTimeout(newsHeroUpdate, 50); });
 }
 function setNewsMode(on) {
+  const was = newsMode;
   newsMode = !!on; $('#stage').classList.toggle('newsmode', newsMode);
   if (newsMode) { endEdit(); sel = []; renderOverlay(); newsEngine(); }
   renderInspector(); if (sideTab === 'news') renderSide();
+  if (was && !newsMode && doc.news && newsDirty && newsWin) newsSync(true);
 }
 function newsInfo() {
   const w = newsWin; if (!w || !w.S) return null;
@@ -927,7 +930,7 @@ function renderNewsSide(body) {
   <button class="btn primary full" id="nwImport"><svg class="ic"><use href="#i-news"/></svg>공방 디자인으로 가져오기</button>
   <p class="hint">채운 내용으로 소식지를 그려 <b>글 상자 · 사진 · 도형 · 벡터 장식</b>으로 바꾼 새 문서를 엽니다. 글꼴·색·배치·사진을 자유롭게 다듬으세요.</p>
   <button class="btn full" id="nwTvDoc"><svg class="ic"><use href="#i-tv"/></svg>TV 화면(16:9) 디자인으로 가져오기</button>
-  ${isNews ? `<button class="btn full" id="nwRe" style="margin-top:6px"><svg class="ic"><use href="#i-refresh"/></svg>바뀐 쪽 다시 가져오기…</button><p class="hint">명단·일정이 바뀌면 그 쪽만 새로 가져와 바꿉니다. 다른 쪽에서 다듬은 것은 그대로입니다.</p>` : ''}
+  ${isNews ? `<div class="nw-sync"><button class="btn primary full" id="nwSync"><svg class="ic"><use href="#i-refresh"/></svg>소식지 내용 반영하기</button><p class="hint" style="margin:6px 0 0"><b>연동 중</b> — 내용 채우기에서 고친 뒤 <b>디자인 다듬기</b>로 돌아오면 자동으로 반영됩니다. 바뀐 글·사진·새로 늘어난 명단만 들어오고, <b>관장님이 다듬은 글꼴·색·위치·글자는 그대로</b> 둡니다.${doc.news.at ? ` <span class="nw-at">마지막 반영 ${new Date(doc.news.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>` : ''}</p></div><button class="btn sm full" id="nwRe" style="margin-top:6px">쪽 통째로 다시 가져오기…</button>` : ''}
   <h3>내보내기${isNews ? '' : ' <small style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--ui-muted)">(지금 문서)</small>'}</h3>
   <div class="tile nw-out"><button id="nwPng"><svg class="ic"><use href="#i-img"/></svg>밴드용 PNG</button><button id="nwPdf"><svg class="ic"><use href="#i-pdf"/></svg>PDF</button><button id="nwVideo" style="grid-column:1/-1;flex-direction:row;justify-content:center"><svg class="ic"><use href="#i-tv"/></svg>TV 영상 MP4</button></div>
   <p class="hint">최종 결과물은 모두 공방에서 만듭니다 — 다듬은 그대로 PNG·PDF로, TV 영상은 <b>TV 화면(16:9) 디자인</b>을 다듬은 뒤 넘김 효과·움직임·배경 음악을 넣어 TV에서 재생되는 MP4로 저장합니다.</p>`;
@@ -937,7 +940,7 @@ function renderNewsSide(body) {
     if (e.target.closest('.nw-sw')) return;
     const go = e.target.closest('[data-go]'); if (go) { newsGo(go.dataset.go); return; }
     const id = (e.target.closest('button') || {}).id;
-    if (id === 'nwImport') newsImport(false); else if (id === 'nwTvDoc') newsImport(true); else if (id === 'nwRe') newsReimport();
+    if (id === 'nwImport') newsImport(false); else if (id === 'nwTvDoc') newsImport(true); else if (id === 'nwRe') newsReimport(); else if (id === 'nwSync') newsSync(false);
     else if (id === 'nwPng' || id === 'nwPdf') { if (!doc.news && !window.confirm('지금 문서는 소식지가 아닙니다. 지금 문서를 그대로 내보낼까요? (소식지는 먼저 [공방 디자인으로 가져오기])')) return; setNewsMode(false); openDownload(id === 'nwPng' ? 'png' : 'pdfhq'); }
     else if (id === 'nwVideo') newsVideo();
   };
@@ -958,7 +961,7 @@ function newsFmt(wpx, hpx) { if (wpx === 1080 && hpx === 1350) return 'ig45'; if
 // 엔진이 그린 쪽들 → 공방 페이지 (그림은 지금 doc.assets 가 아니라 따로 모아 돌려줌)
 function newsPages(cap, into) {
   const keep = doc.assets; doc.assets = into || {};
-  try { const pages = NC.news.convert(cap, { addAsset, uid }); pages.forEach((p, i) => { p.news = cap[i].name; p.label = cap[i].label; }); return { pages, assets: doc.assets }; } finally { doc.assets = keep; }
+  try { const pages = NC.news.convert(cap, { addAsset, uid }); pages.forEach((p, i) => { p.news = cap[i].name; p.label = cap[i].label; p.newsBase = { bg: p.bg, els: clone(p.els) }; }); return { pages, assets: doc.assets }; } finally { doc.assets = keep; }
 }
 async function newsCapture(tv) {
   const w = await newsEngine(); setStatus(tv ? 'TV 화면을 그리는 중…' : '소식지를 그리는 중…');
@@ -979,6 +982,46 @@ async function newsImport(tv, asked) {
   setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)');
   zoom = 0; newsMode = false; $('#stage').classList.remove('newsmode'); renderAll(); fitCanvas(); updateSaveBadge();
   toast(`${doc.name} ${pages.length}쪽을 가져왔습니다 — 글자·사진·장식을 눌러 다듬으세요`);
+}
+// 소식지 ↔ 디자인 연동: 엔진이 새로 그린 쪽을 요소 단위로 합침 (다듬은 것은 지키고 바뀐 내용만) — 합치는 규칙은 news.js 7절
+async function newsSync(auto) {
+  if (!doc.news || newsSyncing) return;
+  let w = newsWin; if (!w && !auto) { try { w = await newsEngine(); } catch (e) { return; } } if (!w || !w.S) return;
+  const S = w.S, ym = `${S.year}-${String(S.month).padStart(2, '0')}`, tv = !!doc.news.tv;
+  const R = { '45': '4:5', '11': '1:1', '916': '9:16' };
+  if (doc.news.ym !== ym || (!tv && doc.news.ratio !== S.ratio)) {
+    const msg = `소식지 엔진에 열린 호(${S.year}년 ${S.month}월호 · ${R[S.ratio] || S.ratio})가 이 디자인(${doc.news.ym.replace('-', '년 ')}월호 · ${tv ? 'TV' : R[doc.news.ratio] || doc.news.ratio})과 달라`;
+    if (auto) { setStatus(msg + ' 자동 반영하지 않았습니다'); return; }
+    if (!window.confirm(msg + '요. 그래도 이 디자인에 반영할까요?\n(다른 호의 내용이 들어갑니다)')) return;
+  }
+  newsSyncing = true; setStatus('소식지 내용 변경을 디자인에 반영하는 중…');
+  try {
+    const cap = await NC.news.capture(w, { tv }); if (!cap.length) { toast('소식지에 켜진 쪽이 없습니다', true); return; }
+    const { pages: next, assets } = newsPages(cap, Object.assign({}, doc.assets));
+    const SY = NC.news.sync, tot = { changed: 0, added: 0, removed: 0, kept: 0 }, newPages = [], capNames = new Set(cap.map(c => c.name));
+    let baselined = 0, visible = false;
+    next.forEach((np, ci) => {
+      const at = doc.pages.findIndex(p => p.news === np.news);
+      if (at < 0) { let pos = doc.pages.length; for (let j = ci - 1; j >= 0; j--) { const q = doc.pages.findIndex(p => p.news === cap[j].name); if (q >= 0) { pos = q + 1; break; } } doc.pages.splice(pos, 0, np); newPages.push(np.label); visible = true; return; }
+      const pg = doc.pages[at];
+      if (!pg.newsBase) { pg.newsBase = SY.baseFor(pg, np, doc.w); baselined++; return; }
+      const r = SY.mergePage(pg.newsBase, pg, np, uid, doc.w);
+      pg.els = r.els; pg.bg = r.bg; pg.newsBase = r.base;
+      Object.keys(tot).forEach(k => { tot[k] += r.st[k]; }); if (r.st.changed + r.st.added + r.st.removed) visible = true;
+    });
+    for (const k in assets) if (!doc.assets[k]) doc.assets[k] = assets[k];
+    const gone = doc.pages.filter(p => p.news && !capNames.has(p.news)).map(p => p.label || NC.news.labelOf(p.news));
+    doc.news.at = Date.now(); newsDirty = false;
+    if (visible) commit(); else amendCommit();   /* 기준만 바뀐 경우는 되돌리기 단계를 늘리지 않음 */
+    renderAll(); if (sideTab === 'news') renderSide();
+    const parts = [];
+    if (tot.changed) parts.push(`바뀐 요소 ${tot.changed}`); if (tot.added) parts.push(`새 요소 ${tot.added}`); if (tot.removed) parts.push(`빠진 요소 ${tot.removed}`); if (newPages.length) parts.push(`새 쪽 ${newPages.join(', ')}`);
+    let msg = parts.length ? `소식지 변경을 디자인에 반영했습니다 — ${parts.join(' · ')}` : (auto ? '' : '소식지 내용과 디자인이 이미 같습니다');
+    if (tot.kept) msg += `${msg ? '. ' : ''}직접 다듬은 ${tot.kept}곳은 소식지 쪽 변경을 받지 않고 그대로 두었습니다`;
+    if (baselined) msg += `${msg ? '. ' : ''}예전에 가져온 쪽 ${baselined}개는 이번에 기준만 잡았습니다(다음 변경부터 반영)`;
+    if (gone.length) msg += `${msg ? '. ' : ''}소식지에서 꺼진 쪽(${gone.join(', ')})은 디자인에 남겨 두었습니다`;
+    if (visible) toastUndo(msg); else if (msg) toast(msg); else setStatus('소식지 내용과 디자인이 같습니다');
+  } catch (e) { toast('소식지 반영 실패: ' + e.message, true); } finally { newsSyncing = false; if (/반영하는 중/.test(($('#status') || {}).textContent || '')) setStatus(''); }
 }
 // 바뀐 쪽만 다시: 엔진이 새로 그린 쪽 중 고른 것만 이 문서의 같은 쪽과 바꿈(없던 쪽은 제자리에 끼워 넣음)
 async function newsReimport() {
