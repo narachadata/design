@@ -2741,6 +2741,9 @@ async function renderSaveDialog() {
 const PX = v => Math.round(v * 25.4 / 96 * 100) / 100;
 // [id, 이름, 묶음, 가로, 세로, 단위('mm'|'px'), 검색어]
 const FORMATS = [
+  /* 도장 소식지: 소식지 엔진(naracha/news.html)의 비율 선택과 같은 크기 — 4:5가 엔진 기본, TV는 영상 송출용 */
+  ['nl-45', '도장 소식지 4:5 (기본)', 'news', 1080, 1350, 'px', '소식지 나라차 월간 밴드 세로 기본'], ['nl-sq', '도장 소식지 정사각 1:1', 'news', 1080, 1080, 'px', '소식지 나라차 정사각'],
+  ['nl-916', '도장 소식지 세로 9:16', 'news', 1080, 1920, 'px', '소식지 나라차 세로 긴'], ['nl-tv', '도장 소식지 TV 화면 16:9', 'news', 1920, 1080, 'px', '소식지 나라차 TV 빔프로젝터 송출 가로'],
   ['pres169', '프레젠테이션 16:9', 'pres', 1920, 1080, 'px', '발표 PPT 슬라이드 설명회'], ['pres43', '프레젠테이션 4:3', 'pres', 1024, 768, 'px', '발표 PPT 슬라이드'],
   ['info-h', '인포그래픽 가로형', 'pres', 1920, 1080, 'px', '인포그래픽 도표'], ['info-v', '인포그래픽 세로형', 'pres', 800, 2000, 'px', '인포그래픽 세로'],
   ['ig-sq', '인스타그램 정사각', 'sns', 1080, 1080, 'px', 'SNS 인스타 피드 게시물'], ['ig-45', '인스타그램 세로 4:5', 'sns', 1080, 1350, 'px', 'SNS 인스타 피드 세로'],
@@ -2759,12 +2762,12 @@ const FORMATS = [
   ['xbanner', 'X배너 60×180cm', 'sign', 600, 1800, 'mm', 'X배너 입간판 배너'], ['sign-a1', '입간판 A1', 'sign', 594, 841, 'mm', '입간판 포스터'],
   ['desk-cal', '탁상 캘린더', 'cal', 224, 154, 'mm', '캘린더 달력 탁상'], ['wall-cal', '벽걸이 캘린더 A3', 'cal', 297, 420, 'mm', '캘린더 달력 벽걸이'], ['a4-cal', 'A4 달력 한 장', 'cal', 297, 210, 'mm', '달력 월간 가로'],
 ];
-const ND_GROUPS = [['rec', '추천', '<path d="m12 3 2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>'], ['pres', '프레젠테이션', '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="m10 9 5 2.5-5 2.5z"/>'],
+const ND_GROUPS = [['rec', '추천', '<path d="m12 3 2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>'], ['news', '도장 소식지', '<path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 12.5h7M7 16h4"/>'], ['pres', '프레젠테이션', '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="m10 9 5 2.5-5 2.5z"/>'],
   ['sns', '소셜 미디어', '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="m8.2 10.8 7.6-3.6M8.2 13.2l7.6 3.6"/>'], ['video', '유튜브 · 영상', '<rect x="3" y="6" width="18" height="12" rx="3"/><path d="m10 9.5 5 2.5-5 2.5z"/>'],
   ['web', '웹사이트', '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/>'], ['print', '인쇄', '<path d="M7 8V3h10v5M7 17H4v-7h16v7h-3M7 14h10v7H7z"/>'],
   ['doc', '문서', '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>'], ['sign', '현수막 · 배너', '<path d="M3 5h18v8H3zM6 13v8M18 13v8"/>'], ['cal', '캘린더', '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>']];
-const ND_COLOR = { pres: '#2f5bea', sns: '#d6408b', video: '#e0302e', web: '#6b3fd1', print: '#1e2b5a', doc: '#2f8d9e', sign: '#c9831a', cal: '#3a8a3a' };
-const ND_REC = ['ig-sq', 'cardnews', 'kakao', 'a4p', 'letter', 'cert', 'flyer', 'xbanner', 'banner3', 'pres169', 'yt-thumb', 'desk-cal'];
+const ND_COLOR = { news: '#e2731e', pres: '#2f5bea', sns: '#d6408b', video: '#e0302e', web: '#6b3fd1', print: '#1e2b5a', doc: '#2f8d9e', sign: '#c9831a', cal: '#3a8a3a' };
+const ND_REC = ['nl-45', 'ig-sq', 'cardnews', 'kakao', 'a4p', 'letter', 'cert', 'flyer', 'xbanner', 'banner3', 'pres169', 'yt-thumb', 'desk-cal'];
 let ndState = { nav: 'rec', q: '' };
 function recentFormats() { try { return JSON.parse(localStorage.getItem('naracal-recent-formats') || '[]'); } catch (e) { return []; } }
 function fmtMM(f) { return f[5] === 'px' ? [PX(f[3]), PX(f[4])] : [f[3], f[4]]; }
@@ -2788,7 +2791,7 @@ function renderNewDesign() {
   else if (ndState.nav === 'custom') h = custom;
   else if (ndState.nav === 'rec') {
     const rec = recentFormats().map(id => FORMATS.find(f => f[0] === id)).filter(Boolean);
-    h = `<div class="chips">${[['rec', '전체'], ['sns', '소셜 미디어'], ['print', '인쇄'], ['sign', '현수막 · 배너'], ['doc', '문서'], ['pres', '프레젠테이션'], ['cal', '캘린더']].map(([k, t]) => `<button data-ndnav="${k}" class="${k === 'rec' ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+    h = `<div class="chips">${[['rec', '전체'], ['news', '도장 소식지'], ['sns', '소셜 미디어'], ['print', '인쇄'], ['sign', '현수막 · 배너'], ['doc', '문서'], ['pres', '프레젠테이션'], ['cal', '캘린더']].map(([k, t]) => `<button data-ndnav="${k}" class="${k === 'rec' ? 'on' : ''}">${t}</button>`).join('')}</div>`;
     if (rec.length) h += `<h3>최근 사용</h3><div class="fgrid">${rec.map(fcard).join('')}</div>`;
     h += `<h3>도장에서 자주 쓰는 크기</h3><div class="fgrid">${ND_REC.map(id => fcard(FORMATS.find(f => f[0] === id))).join('')}</div>`;
     ND_GROUPS.slice(1).forEach(([k, t]) => { h += `<h3>${t}</h3><div class="fgrid">${FORMATS.filter(f => f[2] === k).map(fcard).join('')}</div>`; });
