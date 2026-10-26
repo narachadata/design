@@ -605,5 +605,89 @@ NC.news = (function () {
     var prof=(ai>0)?sd[ai+5]:0, lvl=(ai>0)?sd[ai+7]:0;
     return { parts:parts, frames:N, seconds:total/mdTs, codec:codec, profile:prof, level:lvl, keys:sync.length };
   }
-  return { PX, attach, convert, capture, prepare, labelOf, ENGINE, parseColor, parseFont, tvMime, tvEase, mp4Defrag, _textBlocks: textBlocks };
+
+  /* ======================= 7. 소식지 ↔ 공방 디자인 연동 (요소 단위 3자 합치기) =======================
+     가져올 때 쪽마다 '그때 엔진이 그린 모양'(newsBase)을 함께 저장해 두고, 소식지 내용이 바뀌면
+     기준(B) · 지금 디자인(D) · 새로 그린 것(N)을 요소마다 맞춰 봄:
+       - 관장님이 손대지 않은 속성(D == B) → 새 내용(N)으로 바뀜
+       - 관장님이 다듬은 속성(D != B)       → 다듬은 그대로 둠 (새 내용도 바뀌었으면 '충돌'로 셈)
+       - 새로 생긴 요소(명단이 늘어남 등)   → 디자인에 추가
+       - 엔진에서 사라진 요소               → 손대지 않았으면 지우고, 다듬었으면 남김
+       - 관장님이 지운 요소                 → 다시 살리지 않음
+       - 관장님이 새로 넣은 요소            → 그대로 */
+  const SKIPK = { id: 1, group: 1 };
+  const CONTENT = ['text', 'html'];
+  const GRAD = ['gdef', 'gid', 'fill', 'stroke'];   // 그라데이션 정의와 그것을 쓰는 칠·선은 한 묶음으로 (이름이 짝이 맞아야 그려짐)
+  const J2 = v => JSON.stringify(v === undefined ? null : v);
+  const normG = s => s.replace(/(id=\\?"|url\(#|^"|\\?")G[a-z0-9]{6}(?=\\?"|\))/g, '$1G');          // 그라데이션 이름(gid)은 그릴 때마다 무작위
+  function sigOf(e) { const o = {}; Object.keys(e).sort().forEach(k => { if (!SKIPK[k]) o[k] = e[k]; }); return normG(JSON.stringify(o)); }
+  const val = (e, k) => normG(J2(e[k]));
+  // 기준 요소(B) ↔ 새 요소(N) 짝 찾기: 똑같은 것 먼저, 그다음 같은 종류 중 가까운 것
+  function matchEls(B, N, pageW) {
+    const m = new Map(), used = new Set(), bySig = new Map();
+    N.forEach((n, j) => { const k = sigOf(n); if (!bySig.has(k)) bySig.set(k, []); bySig.get(k).push(j); });
+    B.forEach(b => { const q = bySig.get(sigOf(b)); while (q && q.length) { const j = q.shift(); if (!used.has(j)) { m.set(b.id, j); used.add(j); break; } } });
+    const lim = Math.max(8, (pageW || 285) * 0.07), pairs = [];
+    const cx = e => (Number(e.x) || 0) + (Number(e.w) || 0) / 2, cy = e => (Number(e.y) || 0) + (Number(e.h) || 0) / 2;
+    B.forEach(b => { if (m.has(b.id)) return; N.forEach((n, j) => {
+      if (used.has(j) || n.type !== b.type) return;
+      let d = Math.hypot(cx(b) - cx(n), cy(b) - cy(n)) + 0.3 * Math.abs((b.w || 0) - (n.w || 0)) + 0.3 * Math.abs((b.h || 0) - (n.h || 0));
+      if (b.type === 'text' && b.text === n.text) d *= 0.2; else if (b.type === 'image' && b.src === n.src) d *= 0.3;
+      if (d <= lim) pairs.push([d, b.id, j]); }); });
+    pairs.sort((a, b) => a[0] - b[0]).forEach(([, bid, j]) => { if (m.has(bid) || used.has(j)) return; m.set(bid, j); used.add(j); });
+    return m;   // B.id → N 의 순번
+  }
+  function mergeEl(b, d, n, st) {
+    const out = { id: d.id }, keys = new Set([...Object.keys(b), ...Object.keys(d), ...Object.keys(n)]);
+    let changed = false, kept = false;
+    const userC = CONTENT.some(k => val(d, k) !== val(b, k)), newC = CONTENT.some(k => val(n, k) !== val(b, k));
+    const userG = GRAD.some(k => val(d, k) !== val(b, k));
+    keys.forEach(k => {
+      if (k === 'id') return;
+      if (k === 'group') { if (d.group != null) out.group = d.group; return; }
+      let take;
+      if (CONTENT.includes(k)) take = userC ? d : n;
+      else if (d.gid || n.gid || b.gid ? GRAD.includes(k) : false) take = userG ? d : n;
+      else take = val(d, k) === val(b, k) ? n : d;
+      if (take === d && val(n, k) !== val(b, k)) kept = true;
+      if (take === n && val(n, k) !== val(d, k)) changed = true;
+      if (take[k] !== undefined) out[k] = take[k];
+    });
+    if (userC && newC) kept = true;
+    if (changed) st.changed++; if (kept) st.kept++;
+    return out;
+  }
+  // 쪽 하나 합치기. base={bg,els} · page(지금 디자인 쪽) · next={bg,els}(새로 그린 쪽) → { els, bg, base, st }
+  function mergePage(base, page, next, uid, pageW) {
+    const st = { changed: 0, added: 0, removed: 0, kept: 0 };
+    const B = base.els || [], D = page.els || [], N = next.els || [];
+    const bBy = new Map(B.map(e => [e.id, e])), dBy = new Map(D.map(e => [e.id, e]));
+    const m = matchEls(B, N, pageW), nToId = new Map(); m.forEach((j, bid) => nToId.set(j, bid));
+    const res = [];
+    D.forEach(d => {
+      const b = bBy.get(d.id); if (!b) { res.push(d); return; }                 // 관장님이 넣은 요소
+      const j = m.get(d.id);
+      if (j == null) { if (sigOf(d) === sigOf(b)) { st.removed++; return; } st.kept++; res.push(d); return; }  // 엔진에서 사라짐
+      res.push(mergeEl(b, d, N[j], st));
+    });
+    // 새로 생긴 요소: 새 그림에서 바로 앞 요소 뒤에 끼움
+    const newIds = new Map();
+    N.forEach((n, j) => {
+      if (nToId.has(j)) return;
+      const e = Object.assign({}, n, { id: uid() }); newIds.set(j, e.id);
+      let at = 0; for (let k = j - 1; k >= 0; k--) { const id = nToId.get(k) || newIds.get(k); const q = id ? res.findIndex(x => x.id === id) : -1; if (q >= 0) { at = q + 1; break; } }
+      res.splice(at, 0, e); st.added++;
+    });
+    // 다음 기준: 새 그림을 디자인 쪽 이름(id)에 맞춰 둠 (관장님이 지운 요소도 기준에는 남아 다시 살아나지 않음)
+    const nb = N.map((n, j) => Object.assign({}, n, { id: nToId.get(j) || newIds.get(j) }));
+    let bg = page.bg; if (J2(page.bg) === J2(base.bg)) { if (J2(next.bg) !== J2(page.bg)) st.changed++; bg = next.bg; } else if (J2(next.bg) !== J2(base.bg)) st.kept++;
+    return { els: res, bg, base: { bg: next.bg, els: nb }, st };
+  }
+  // 예전에 가져온 문서(기준이 없음): 지금 디자인을 새 그림에 맞춰 기준만 잡음 (내용은 바꾸지 않음)
+  function baseFor(page, next, pageW) {
+    const D = page.els || [], N = next.els || [], m = matchEls(D, N, pageW), nToId = new Map(); m.forEach((j, id) => nToId.set(j, id));
+    return { bg: next.bg, els: N.map((n, j) => Object.assign({}, n, { id: nToId.get(j) || ('x' + j + Math.random().toString(36).slice(2, 6)) })) };
+  }
+  const sync = { matchEls, mergePage, baseFor, sigOf };
+  return { PX, attach, convert, capture, prepare, labelOf, ENGINE, sync, parseColor, parseFont, tvMime, tvEase, mp4Defrag, _textBlocks: textBlocks };
 })();
