@@ -1991,7 +1991,7 @@ function renderSide() {
     if (doc.video && doc.video.isCopy) body.insertAdjacentHTML('afterbegin', `<div class="vg-badge">영상용 사본 · 원본: <b>${esc(doc.video.fromName || '')}</b> (원본 디자인은 바뀌지 않습니다) <button class="btn sm" id="vgReimport">원본 장면 다시 가져오기</button></div>`), ($('#vgReimport').onclick = reimportFromSource);
   } else if (sideTab === 'tpl') {
     const filt = tplFiltered();
-    body.innerHTML = `${filt ? tplNavHTML() : ''}<div class="wz-card" ${filt ? 'hidden' : ''}><div class="wz-year">${yearNow}<small>년</small></div><p class="hint" style="margin:0 0 8px">연도별 달력 모양과 테마를 미리 보며 표지·인성·달력 26쪽을 한 번에 만듭니다.</p><button class="btn primary full" id="wzOpen"><svg class="ic"><use href="#i-cal"/></svg>캘린더 마법사 열기</button></div>
+    body.innerHTML = `${filt ? tplNavHTML() : ''}<div class="wz-card" ${filt ? 'hidden' : ''}><div class="wz-year">${yearNow}<small>년</small></div><p class="hint" style="margin:0 0 8px">연도별 달력 모양과 테마를 미리 보며 표지·인성·달력 26쪽을 한 번에 만듭니다.</p><button class="btn primary full" id="wzOpen"><svg class="ic"><use href="#i-cal"/></svg>캘린더 마법사 열기</button>${window.NARACAL_VPLAN ? `<button class="btn full" id="wzVirtue" style="margin-top:6px" title="나라차 인성덕목 2년 계획(메인 프로그램과 같은 내용)의 덕목·명언·실천·사자성어를 12달에 넣습니다. 그림은 그대로 둡니다.">📖 ${yearNow}년 인성 문구 넣기 · ${window.NARACAL_VTRACK(yearNow) === '극기' ? '1년차 극기' : '2년차 홍익'}</button>` : ''}</div>
     <h3 ${filt ? 'hidden' : ''}>템플릿 갤러리 <small id="tcount"></small></h3>
     <label class="f"><input type="text" id="tplSearch" placeholder="템플릿 검색 (예: 가을 모집 포스터, 유아, 카페 오픈)" value="${esc(tplQ)}"></label>
     <div class="facets">${[['format', '제작 형태'], ['season', '계절'], ['age', '연령'], ['occasion', '상황'], ['biz', '직종']].map(([k, t]) => `<select data-facet="${k}"><option value="">${t}: 전체</option>${NC.tpl.facets[k].map(v => `<option value="${esc(v)}" ${tplF[k] === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>`).join('')}</div><div class="tcats" id="tplcats">${NC.tpl.cats.map(([k, t]) => `<button data-tcat="${k}" class="${tplCat === k ? 'on' : ''}">${t}</button>`).join('')}<button data-tcat="holiday" class="${tplCat === 'holiday' ? 'on' : ''}">명절·휴일 휴관</button></div>
@@ -2001,6 +2001,12 @@ function renderSide() {
     <div class="grid2"><label class="f"><span>가로(mm)</span><input type="number" id="docW" value="${doc.w}" step="0.5"></label><label class="f"><span>세로(mm)</span><input type="number" id="docH" value="${doc.h}" step="0.5"></label></div>
     <button class="btn full" id="docSizeApply">크기 적용 (모든 페이지)</button><button class="btn full" id="docResize" style="margin-top:6px">크기 조정… (내용 맞춰 배치 · 다른 크기로 사본)</button>`;
     $('#wzOpen').onclick = () => openWizard(yearNow);
+    if ($('#wzVirtue')) $('#wzVirtue').onclick = () => {   /* [나라차 R4.505] 인성덕목 2년 계획 문구를 연도에 맞게 */
+      const tr = window.NARACAL_VTRACK(yearNow), P = (window.NARACAL_VPLAN || {})[tr]; if (!P || !doc.calendar.months) return;
+      if (!confirm(`${yearNow}년은 ${tr === '극기' ? '1년차 극기(나의 가치)' : '2년차 홍익(우리·모두의 가치)'}입니다.\n12달의 덕목·영문·명언·실천 2가지·사자성어를 나라차 인성덕목 2년 계획으로 바꿉니다.\n(그림·일정·디자인은 그대로 — 덕목이 바뀐 달은 그림을 새로 넣어 주세요)`)) return;
+      let n = 0; P.forEach((x, k) => { if (doc.calendar.months[k]) n += applyMonthContent(k, x); });
+      commit(); rerender(); alert(`인성 문구를 넣었습니다 (글 상자 ${n}곳 갱신).`);
+    };
     renderGallery();
     body.querySelectorAll('[data-facet]').forEach(sl => sl.onchange = () => tplGo(() => { tplF[sl.dataset.facet] = sl.value; }));
     $('#tplcats').onclick = e => { const b = e.target.closest('[data-tcat]'); if (!b || b.dataset.tcat === tplCat) return; tplGo(() => { tplCat = b.dataset.tcat; }); };
