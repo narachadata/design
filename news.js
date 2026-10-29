@@ -380,6 +380,15 @@ NC.news = (function () {
     return apply(o.m, lx, o.y + o.shift).concat([k]);
   }
   function colorOf(p) { if (p.c) return parseColor(p.c) || { hex: '#000000', a: 1 }; const s = p.g && p.g.stops[0]; return s ? parseColor(s[1]) : { hex: '#000000', a: 1 }; }
+  const mCtx = document.createElement('canvas').getContext('2d');
+  function designWidth(B, f, sizePx) {
+    try {
+      const fam = String(f.family || 'Pretendard').replace(/["']/g, ''), spec = `${f.italic ? 'italic ' : ''}${f.weight || 400} ${sizePx}px "${fam}"`;
+      if (document.fonts && !document.fonts.check(spec)) { document.fonts.load(spec).catch(() => {}); return 0; }   // 아직 안 불러온 글꼴은 재지 않음(대신 기본 여유값)
+      mCtx.font = spec;
+      return Math.max(...B.lines.map(L => L.segs.map(sg => String(sg.o.t || '')).join('')).map(t => mCtx.measureText(t).width));
+    } catch (e) { return 0; }
+  }
   function textEl(B, uid) {
     const L0 = B.lines[0], o = L0.segs[0].o, f = L0.segs[0].f, mm = mat(o.m), k = mm.sx;
     let size = f.size * k;
@@ -389,7 +398,10 @@ NC.news = (function () {
     const n = B.lines.length, step = B.step || size * 1.25, lhPx = n > 1 ? step : Math.max(size * 1.15, A + D);
     const widths = B.lines.map(L => L.x1 - L.x0), wMax = Math.max(...widths);
     const slack = Math.max(6, wMax * 0.06 + size * 0.15);
-    const boxW = wMax + slack;
+    // 공방 화면(글 상자)은 엔진 캔버스와 글꼴 파일이 달라 글자 폭이 조금 넓을 수 있음 → 공방 글꼴로 다시 재서 넓으면 상자를 키움
+    // (여러 줄은 줄마다 이미 줄바꿈이 들어 있으므로, 상자가 좁아 한 줄이 또 접히는 일만 막으면 됨)
+    const wDesign = designWidth(B, f, size);
+    const boxW = Math.max(wMax, wDesign * 1.03) + slack;
     const align = o.align === 'center' ? 'center' : (o.align === 'right' || o.align === 'end') ? 'right' : 'left';
     // 첫 줄 기준선에서 상자 위쪽까지: (줄높이 − (어센트+디센트))/2 + 어센트
     const topOff = (lhPx - (A + D)) / 2 + A;
@@ -443,7 +455,13 @@ NC.news = (function () {
     let list;
     try { list = opt.tv ? win.buildTvPages() : win.buildPages(win.selectedBday(), win.selectedKkw(), win.selectedRec()); }
     finally { win.newCanvas = orig; }
-    return list.filter(p => p.canvas && p.canvas.__rec).map(p => ({ name: p.name, label: labelOf(p.name), rec: p.canvas.__rec, w: p.canvas.width, h: p.canvas.height, canvas: p.canvas }));
+    const out = list.filter(p => p.canvas && p.canvas.__rec).map(p => ({ name: p.name, label: labelOf(p.name), rec: p.canvas.__rec, w: p.canvas.width, h: p.canvas.height, canvas: p.canvas }));
+    // 글 상자 폭을 공방 글꼴로 재기 위해, 쓰인 글꼴을 공방 화면에도 미리 불러 둠 (최대 4초)
+    try {
+      const specs = new Set(); out.forEach(p => p.rec.ops.forEach(o => { if (o.k === 'text' && o.font) { const f = parseFont(o.font); specs.add(`${f.italic ? 'italic ' : ''}${f.weight} 20px "${String(f.family).replace(/["']/g, '')}"`); } }));
+      if (document.fonts && specs.size) await Promise.race([Promise.all([...specs].map(sp => document.fonts.load(sp).catch(() => {}))), new Promise(r => setTimeout(r, 4000))]);
+    } catch (e) {}
+    return out;
   }
   function labelOf(nm) { nm = String(nm || ''); const m = nm.match(/_(\d+)$/); const part = m ? ' ' + m[1] : ''; if (m) nm = nm.slice(0, -m[0].length); if (nm.indexOf('보고_') === 0) nm = nm.slice(3); nm = nm.replace(/^수련안내_/, '수련 안내 ').replace('승급심사추천', '승급심사 추천자').replace('국기원심사', '국기원 응시예정자').replace('실천체크리스트', '실천 체크리스트'); return nm + part; }
   // 엔진의 makeAll()을 그대로 불러 글꼴·사진을 준비시키고 끝날 때까지 기다림
