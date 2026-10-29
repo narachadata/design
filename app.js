@@ -846,7 +846,7 @@ function newsEngine() {
   newsReady = new Promise((res, rej) => {
     const f = document.createElement('iframe'); f.id = 'newsFrame'; f.className = 'newsframe'; f.title = '소식지 내용 편집'; f.src = NC.news.ENGINE;
     const to = setTimeout(() => rej(new Error('소식지 엔진을 열지 못했습니다 (인터넷 연결을 확인하세요)')), 40000);
-    f.onload = () => { clearTimeout(to); try { const w = f.contentWindow; if (typeof w.buildPages !== 'function') throw new Error('소식지 엔진이 아닙니다'); newsSkin(w); newsWin = w; res(w); if (sideTab === 'news') renderSide(); } catch (e) { rej(e); } };
+    f.onload = () => { clearTimeout(to); try { const w = f.contentWindow; if (typeof w.buildPages !== 'function') throw new Error('소식지 엔진이 아닙니다'); newsSkin(w); newsWin = w; res(w); if (sideTab === 'news') renderSide(); if (newsMode) renderInspector(); } catch (e) { rej(e); } };
     $('#stage').appendChild(f);
   });
   newsReady.catch(e => { newsReady = null; const f = $('#newsFrame'); if (f) f.remove(); toast(e.message, true); });
@@ -857,6 +857,7 @@ const NEWS_SKIN = `
 :root{--bg:#eef0f4;--panel:#fff;--line:#e2e5eb;--line2:#eef0f4;--ink:#1b2130;--ink2:#3f4756;--muted:#707887;--faint:#9aa1ad;--acc:#2f5bea;--acc-h:#254dd1;--acc-soft:#e9eefc;--ring:rgba(47,91,234,.14)}
 body{background:var(--bg);font-family:Pretendard,'Noto Sans KR',-apple-system,sans-serif;font-size:13.5px;line-height:1.45}
 header,.subbar,.rail,#secMake{display:none!important}
+body.nc-make section#secMake{display:block!important}body.nc-make main>section.card:not(#secMake){display:none!important}body.nc-make #secMake>.row:first-of-type,body.nc-make #secMake>.row:first-of-type+.hint{display:none!important}
 .shell{display:block}main{max-width:780px;margin:0 auto;padding:22px 26px 140px}
 section.card{border-radius:12px;border:1px solid var(--line);box-shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);padding:0 0 18px;margin:0 0 16px;scroll-margin-top:18px}
 section.card h2{background:#fff;font-size:15px;font-weight:700;letter-spacing:-.01em;padding:16px 20px 13px;margin:0 0 6px;border-bottom:1px solid var(--line2);border-radius:12px 12px 0 0}
@@ -894,7 +895,7 @@ function newsSkin(w) {
 }
 function setNewsMode(on) {
   const was = newsMode;
-  newsMode = !!on; $('#stage').classList.toggle('newsmode', newsMode);
+  newsMode = !!on; if (!newsMode) newsMakeView(false); $('#stage').classList.toggle('newsmode', newsMode);
   if (newsMode) { endEdit(); sel = []; renderOverlay(); newsEngine(); }
   renderInspector(); if (sideTab === 'news') renderSide();
   if (was && !newsMode && doc.news && newsDirty && newsWin) newsSync(true);
@@ -911,7 +912,7 @@ function newsHeroUpdate() {
   h.innerHTML = `<div class="nw-top"><span class="nw-kicker">NARACHA NEWS LETTER</span>${i.season ? `<span class="nw-season">${esc(i.season)}</span>` : ''}</div><div class="nw-ym">${i.y}<small>년</small> ${i.m}<small>월호</small></div><div class="nw-meta">${esc(R)}</div>${i.stat ? `<div class="nw-stat">${esc(i.stat)}</div>` : ''}`;
 }
 function newsGo(id) {
-  setNewsMode(true);
+  newsMakeView(false); setNewsMode(true);
   newsEngine().then(w => { const d = w.document; if (id === 'settingsCard' && w.showSettings) w.showSettings(true); const el = d.getElementById(id); if (!el) return; const tg = el.closest('.pgToggle') || el; tg.scrollIntoView({ behavior: 'smooth', block: 'start' }); tg.animate([{ background: '#e9eefc' }, { background: getComputedStyle(tg).backgroundColor }], { duration: 1200 }); });
 }
 function renderNewsSide(body) {
@@ -933,7 +934,7 @@ function renderNewsSide(body) {
   ${isNews ? `<div class="nw-sync"><button class="btn primary full" id="nwSync"><svg class="ic"><use href="#i-refresh"/></svg>소식지 내용 반영하기</button><p class="hint" style="margin:6px 0 0"><b>연동 중</b> — 내용 채우기에서 고친 뒤 <b>디자인 다듬기</b>로 돌아오면 자동으로 반영됩니다. 바뀐 글·사진·새로 늘어난 명단만 들어오고, <b>관장님이 다듬은 글꼴·색·위치·글자는 그대로</b> 둡니다.${doc.news.at ? ` <span class="nw-at">마지막 반영 ${new Date(doc.news.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>` : ''}</p></div><button class="btn sm full" id="nwRe" style="margin-top:6px">쪽 통째로 다시 가져오기…</button>` : ''}
   <h3>내보내기${isNews ? '' : ' <small style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--ui-muted)">(지금 문서)</small>'}</h3>
   <div class="tile nw-out"><button id="nwPng"><svg class="ic"><use href="#i-img"/></svg>밴드용 PNG</button><button id="nwPdf"><svg class="ic"><use href="#i-pdf"/></svg>PDF</button><button id="nwVideo" style="grid-column:1/-1;flex-direction:row;justify-content:center"><svg class="ic"><use href="#i-tv"/></svg>TV 영상 MP4</button></div>
-  <p class="hint">최종 결과물은 모두 공방에서 만듭니다 — 다듬은 그대로 PNG·PDF로, TV 영상은 <b>TV 화면(16:9) 디자인</b>을 다듬은 뒤 넘김 효과·움직임·배경 음악을 넣어 TV에서 재생되는 MP4로 저장합니다.</p>`;
+  <p class="hint"><b>가져오지 않고 바로 저장</b>하려면 <b>내용 채우기</b>에서 오른쪽 미리보기 아래 <b>바로 저장</b>(PNG · PDF · TV 영상)을 누르세요. 아래 단추는 공방에서 다듬은 문서를 저장합니다 — 다듬은 그대로 PNG·PDF로, TV 영상은 <b>TV 화면(16:9) 디자인</b>을 다듬은 뒤 넘김 효과·움직임·배경 음악을 넣어 TV에서 재생되는 MP4로 저장합니다.</p>`;
   newsHeroUpdate();
   body.onclick = e => {
     const nm = e.target.closest('[data-nm]'); if (nm) { setNewsMode(nm.dataset.nm === 'edit'); return; }
@@ -948,13 +949,46 @@ function renderNewsSide(body) {
   if (!newsReady && newsMode) newsEngine();
 }
 function renderNewsInspector() {
-  const ins = $('#inspector'); const w = newsWin, made = w && w.MADE || [];
+  const ins = $('#inspector'); const w = newsWin, made = w && w.MADE || [], ed = w && w.document;
+  const make = !!(ed && ed.body.classList.contains('nc-make'));
+  const sel = id => { const x = ed && ed.getElementById(id); return x ? `<select id="nw_${id}">${x.innerHTML}</select>` : ''; };
   ins.innerHTML = `<h2 class="phead"><span>미리보기</span></h2><button class="btn full" id="nwPrev"><svg class="ic"><use href="#i-refresh"/></svg>${made.length ? '미리보기 새로 그리기' : '미리보기 그리기'}</button>
-  <p class="hint">내용을 고친 뒤 눌러 보세요. 쪽을 누르면 크게 봅니다.</p><div class="nw-pv" id="nwPv">${made.map((p, i) => `<button class="nw-pvi" data-i="${i}"><img alt="" src="${p.__thumb || (p.__thumb = thumbOf(p.canvas))}"><span>${i + 1}. ${esc(NC.news.labelOf(p.name))}</span></button>`).join('') || '<p class="hint" style="text-align:center;padding:24px 0">아직 미리보기가 없습니다</p>'}</div>`;
+  <p class="hint">내용을 고친 뒤 눌러 보세요. 쪽을 누르면 크게 봅니다.</p>
+  <div class="nw-direct"><h3>바로 저장 <small>공방으로 가져오지 않고</small></h3>
+  <div class="tile nw-out"><button id="nwDPng"><svg class="ic"><use href="#i-img"/></svg>PNG 전체</button><button id="nwDPdf"><svg class="ic"><use href="#i-pdf"/></svg>PDF 한 개</button></div>
+  <div class="grid3 nw-tvset"><label class="f"><span>한 장 시간</span>${sel('inTvSec')}</label><label class="f"><span>넘김</span>${sel('inTvTurn')}</label><label class="f"><span>전환</span>${sel('inTvStyle')}</label></div>
+  <div class="row" style="gap:6px"><button class="btn sm" id="nwDTvPick" style="flex:1">${make ? 'TV 장 고르기 닫기' : 'TV 화면 미리보기 · 장 고르기'}</button></div>
+  <button class="btn primary full" id="nwDTv" style="margin-top:6px"><svg class="ic"><use href="#i-tv"/></svg>TV 영상 저장 (16:9 MP4)</button>
+  <p class="hint">PNG는 밴드용 한 장씩, PDF는 보관·인쇄용입니다. TV 영상은 1920×1080 가로 화면으로 다시 배치해 실제 시간만큼 녹화합니다(그동안 이 창을 가리지 마세요). 글꼴·색을 다듬어서 만들려면 왼쪽 <b>공방 디자인으로 가져오기</b>를 쓰세요.</p></div>
+  <div class="nw-pv" id="nwPv">${made.map((p, i) => `<button class="nw-pvi" data-i="${i}"><img alt="" src="${p.__thumb || (p.__thumb = thumbOf(p.canvas))}"><span>${i + 1}. ${esc(NC.news.labelOf(p.name))}</span></button>`).join('') || '<p class="hint" style="text-align:center;padding:24px 0">아직 미리보기가 없습니다</p>'}</div>`;
   ins.onclick = e => {
     if (e.target.closest('#nwPrev')) { const b = $('#nwPrev'); b.disabled = true; b.lastChild.textContent = '그리는 중…'; newsEngine().then(w2 => NC.news.prepare(w2)).then(() => renderNewsInspector()).catch(err => { toast('미리보기 실패: ' + err.message, true); renderNewsInspector(); }); return; }
+    const id = (e.target.closest('button') || {}).id;
+    if (id === 'nwDPng') return newsDirect('png'); if (id === 'nwDPdf') return newsDirect('pdf'); if (id === 'nwDTv') return newsDirect('tv');
+    if (id === 'nwDTvPick') { if (make) { newsMakeView(false); renderNewsInspector(); } else newsDirect('tvpick'); return; }
     const it = e.target.closest('.nw-pvi'); if (it && w && w.openViewer) w.openViewer(Number(it.dataset.i));
   };
+  ins.onchange = e => { const m = (e.target.id || '').match(/^nw_(inTv\w+)$/); if (!m || !ed) return; const x = ed.getElementById(m[1]); if (!x) return; x.value = e.target.value; x.dispatchEvent(new w.Event('change', { bubbles: true })); };
+  ['inTvSec', 'inTvTurn', 'inTvStyle'].forEach(k => { const x = ed && ed.getElementById(k), y = $('#nw_' + k); if (x && y) y.value = x.value; });
+}
+// 소식지 엔진 화면에서 '만들기' 구역(TV 장 고르기)만 보이기 / 되돌리기
+function newsMakeView(on) { const w = newsWin; if (w && w.document && w.document.body) w.document.body.classList.toggle('nc-make', !!on); }
+// 미리보기 그대로 바로 저장: 엔진의 저장 기능(PNG·PDF·TV 영상)을 그대로 부름 — 공방 문서는 건드리지 않음
+async function newsDirect(kind) {
+  let w; try { w = await newsEngine(); } catch (e) { return; }
+  if (!(w.MADE && w.MADE.length)) {
+    setStatus('미리보기를 그리는 중…');
+    try { await NC.news.prepare(w); } catch (e) { toast('미리보기 실패: ' + e.message, true); return; } finally { setStatus(''); }
+    renderNewsInspector();
+  }
+  if (!(w.MADE && w.MADE.length)) { toast('만들 쪽이 없습니다. 왼쪽에서 넣을 쪽을 켜 주세요.', true); return; }
+  if (kind === 'png') { w.saveAllPng(); toast(`PNG ${w.MADE.length}장을 차례로 저장합니다 — 브라우저가 «여러 파일 다운로드»를 물으면 허용을 눌러 주세요`); return; }
+  if (kind === 'pdf') { w.savePdf(); toast('PDF를 만들어 저장합니다'); return; }
+  if (!newsMode) setNewsMode(true);
+  newsMakeView(true); w.tvPreview();
+  const ar = w.document.getElementById('tvPreviewArea'); if (ar) ar.scrollIntoView({ block: 'start' });
+  renderNewsInspector();
+  if (kind === 'tv') w.makeTvVideo();
 }
 function thumbOf(c) { const k = 240 / c.width, t = document.createElement('canvas'); t.width = 240; t.height = Math.round(c.height * k); t.getContext('2d').drawImage(c, 0, 0, t.width, t.height); return t.toDataURL('image/jpeg', 0.82); }
 function newsFmt(wpx, hpx) { if (wpx === 1080 && hpx === 1350) return 'ig45'; if (wpx === 1080 && hpx === 1080) return 'ig'; if (wpx === 1080 && hpx === 1920) return 'story'; return ''; }
