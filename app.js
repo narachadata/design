@@ -922,11 +922,15 @@ function renderNewsSide(body) {
   <div class="seg nw-mode"><button data-nm="edit" aria-pressed="${newsMode}">내용 채우기</button><button data-nm="design" aria-pressed="${!newsMode}">디자인 다듬기</button></div>
   <h3>내용</h3>
   <div class="nw-nav">
-    <button class="nw-it" data-go="secBasic"><span class="nw-ic"><svg class="ic"><use href="#i-settings"/></svg></span><span class="nw-t">기본 설정<small>호 · 비율 · 로고 · 표지 · 배경</small></span></button>
+    <button class="nw-it" data-go="secBasic"><span class="nw-ic"><svg class="ic"><use href="#i-settings"/></svg></span><span class="nw-t">기본 설정<small>호 · 비율 · 템플릿 · 표지 문구</small></span></button>
     ${NEWS_NAV.map(([id, t]) => `<div class="nw-it pg${on(id) ? '' : ' off'}" data-go="${id}"><label class="nw-sw" title="이 쪽 넣기/빼기"><input type="checkbox" data-pg="${id}" ${on(id) ? 'checked' : ''}><i></i></label><span class="nw-t">${t}</span></div>`).join('')}
     <button class="nw-it" data-go="secArchive"><span class="nw-ic"><svg class="ic"><use href="#i-folder"/></svg></span><span class="nw-t">지난 호 보관함<small>보관 · 클라우드 · 다른 PC에서 이어서</small></span></button>
     <button class="nw-it" data-go="settingsCard"><span class="nw-ic"><svg class="ic"><use href="#i-link"/></svg></span><span class="nw-t">데이터 연결<small>나라차 프로그램 접속키</small></span></button>
   </div>
+  <h3>소식지 템플릿</h3>
+  <button class="btn full" id="nwTplPick"><svg class="ic"><use href="#i-tpl"/></svg>템플릿 고르기</button>
+  <div class="row" style="gap:6px;margin-top:6px"><button class="btn sm" id="nwTplFrame" style="flex:1">템플릿 틀 만들기</button><button class="btn sm" id="nwTplSend" style="flex:1">템플릿으로 보내기</button></div>
+  <p class="hint">공방에서 표지·본문 바탕을 직접 꾸며 소식지 템플릿으로 쓸 수 있습니다. <b>템플릿 틀 만들기</b> → 파란 안내 칸(내용이 들어가는 자리) 바깥을 꾸미기 → <b>템플릿으로 보내기</b>. 안내 칸은 보낼 때 빠집니다.</p>
   <h3>디자인</h3>
   <button class="btn primary full" id="nwImport"><svg class="ic"><use href="#i-news"/></svg>공방 디자인으로 가져오기</button>
   <p class="hint">채운 내용으로 소식지를 그려 <b>글 상자 · 사진 · 도형 · 벡터 장식</b>으로 바꾼 새 문서를 엽니다. 글꼴·색·배치·사진을 자유롭게 다듬으세요.</p>
@@ -942,6 +946,7 @@ function renderNewsSide(body) {
     const go = e.target.closest('[data-go]'); if (go) { newsGo(go.dataset.go); return; }
     const id = (e.target.closest('button') || {}).id;
     if (id === 'nwImport') newsImport(false); else if (id === 'nwTvDoc') newsImport(true); else if (id === 'nwRe') newsReimport(); else if (id === 'nwSync') newsSync(false);
+    else if (id === 'nwTplPick') newsGo('tplGrid'); else if (id === 'nwTplFrame') newsTplFrame(); else if (id === 'nwTplSend') newsTplSend();
     else if (id === 'nwPng' || id === 'nwPdf') { if (!doc.news && !window.confirm('지금 문서는 소식지가 아닙니다. 지금 문서를 그대로 내보낼까요? (소식지는 먼저 [공방 디자인으로 가져오기])')) return; setNewsMode(false); openDownload(id === 'nwPng' ? 'png' : 'pdfhq'); }
     else if (id === 'nwVideo') newsVideo();
   };
@@ -1016,6 +1021,51 @@ async function newsImport(tv, asked) {
   setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)');
   zoom = 0; newsMode = false; $('#stage').classList.remove('newsmode'); renderAll(); fitCanvas(); updateSaveBadge();
   toast(`${doc.name} ${pages.length}쪽을 가져왔습니다 — 글자·사진·장식을 눌러 다듬으세요`);
+}
+// ---- 소식지 템플릿 연동: 공방에서 꾸민 표지·본문 바탕을 소식지 엔진 템플릿으로 ----
+// 엔진의 내용 자리(px, 가로 1080 기준) — news.html drawCover 카드 · panelRect 와 같은 값
+function newsGeom(ratio) {
+  const H = ratio === '11' ? 1080 : ratio === '916' ? 1920 : 1350, pb = ratio === '11' ? 900 : ratio === '916' ? 1640 : 1180;
+  const body = ratio === '11' ? [48, 44, 1080 - 96, H - 180] : ratio === '45' ? [48, 56, 1080 - 96, H - 196] : [62, 100, 1080 - 124, H - 290];
+  const cy0 = Math.round(H * 0.055); return { H, cover: [60, cy0, 960, pb - cy0], body, foot: [280, H - 90, 520, 52] };
+}
+async function newsTplFrame() {
+  let w; try { w = await newsEngine(); } catch (e) { return; }
+  const ratio = (w.S && w.S.ratio) || '45', G = newsGeom(ratio), mm = v => Math.round(v * 25.4 / 96 * 100) / 100;
+  if (doc.pages.some(p => p.els.length) && !window.confirm(`소식지 템플릿 틀(${{ '45': '4:5', '11': '1:1', '916': '9:16' }[ratio] || ratio} · 1080×${G.H})을 새 문서로 엽니다. 지금 문서를 닫을까요? (${keepNote()})`)) return;
+  await keepCurrentDoc(); await store.disconnect();
+  const guide = (r, label) => {
+    const box = { id: uid(), type: 'shape', kind: 'rect', x: mm(r[0]), y: mm(r[1]), w: mm(r[2]), h: mm(r[3]), rot: 0, fill: '#DCE6FF', stroke: '#2F5BEA', strokeW: 0.8, radius: 6, opacity: 0.55, locked: true, role: 'nlguide', name: '내용 자리 안내 (보낼 때 빠짐)' };
+    const t = Object.assign({}, TEXT_DEF, { id: uid(), text: label, x: mm(r[0] + 40), y: mm(r[1] + r[3] / 2 - 50), w: mm(r[2] - 80), h: mm(100), size: 22, weight: 700, color: '#2F5BEA', align: 'center', locked: true, role: 'nlguide', name: '안내 글 (보낼 때 빠짐)' });
+    return [box, t];
+  };
+  const nd = newDoc(['custom', '소식지 템플릿', mm(1080), mm(G.H)]);
+  nd.name = '소식지 템플릿 ' + new Date().toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }); nd.fmt = ratio === '11' ? 'nl-sq' : ratio === '916' ? 'nl-916' : 'nl-45';
+  const p1 = newPage('#FFF8EE'), p2 = newPage('#FFF8EE'); p1.label = '표지 바탕'; p2.label = '본문 바탕';
+  p1.els = guide(G.cover, '표지 글자(로고 · 10월 · 소식지)가 들어가는 자리\n이 칸 바깥(가장자리)을 꾸미세요').concat(guide(G.foot, '도장 이름'));
+  p2.els = guide(G.body, '소식지 내용(제목 · 명단 · 일정)이 들어가는 자리\n이 칸 바깥(가장자리)을 꾸미세요').concat(guide(G.foot, '도장 이름'));
+  nd.pages = [p1, p2]; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.rules = doc.rules;
+  doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer);
+  newsMode = false; $('#stage').classList.remove('newsmode'); zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); sideTab = 'news'; renderRail(); renderSide();
+  toast('소식지 템플릿 틀을 만들었습니다 — 1쪽은 표지 바탕, 2쪽은 본문 바탕입니다. 배경·사진·요소로 파란 칸 바깥을 꾸민 뒤 [템플릿으로 보내기]를 누르세요');
+}
+async function newsTplSend() {
+  if (!doc.pages.length) return;
+  let w; try { w = await newsEngine(); } catch (e) { return; }
+  if (typeof w.nlAddTemplate !== 'function') { toast('소식지 프로그램이 예전 판입니다. 새로 고친 뒤 다시 해 주세요', true); return; }
+  const ratio = (w.S && w.S.ratio) || '45', G = newsGeom(ratio), want = 1080 / G.H, have = doc.w / doc.h;
+  if (Math.abs(want - have) > 0.03 && !window.confirm(`이 디자인 비율(${doc.w.toFixed(0)}×${doc.h.toFixed(0)}mm)이 소식지 비율(1080×${G.H})과 달라 가장자리가 잘릴 수 있습니다. 그래도 보낼까요?`)) return;
+  const name = window.prompt('소식지 템플릿 이름', (doc.name || '공방 템플릿').replace(/^소식지 템플릿\s*/, '') || '공방 템플릿'); if (name == null) return;
+  const panel = window.confirm('본문 바탕 위에 흰 판을 깔아 글씨가 잘 보이게 할까요?\n(확인 = 흰 판 깔기 · 취소 = 바탕 그림 위에 바로 글씨)');
+  setStatus('소식지 템플릿 그림을 만드는 중…');
+  try {
+    const strip = pg => Object.assign({}, pg, { els: pg.els.filter(e => e.role !== 'nlguide') });
+    const dpi = 1080 * 25.4 / doc.w, toURL = async pg => { const c = await renderPageCanvas(strip(pg), dpi, 'thumb', '#ffffff'); const u = c.toDataURL('image/jpeg', 0.9); c.width = c.height = 0; return u; };
+    const cover = await toURL(doc.pages[0]), bg = await toURL(doc.pages[1] || doc.pages[0]);
+    await w.nlAddTemplate({ name, cover, bg, panel, coverText: true, desc: '공방에서 만든 디자인 · ' + new Date().toLocaleDateString('ko-KR') });
+    toast(`소식지 템플릿 「${name}」을 넣고 골랐습니다 — 내용 채우기에서 미리보기를 다시 만들면 적용됩니다`);
+    newsGo('tplGrid');
+  } catch (e) { toast('템플릿을 보내지 못했습니다: ' + e.message, true); } finally { setStatus(''); }
 }
 // 소식지 ↔ 디자인 연동: 엔진이 새로 그린 쪽을 요소 단위로 합침 (다듬은 것은 지키고 바뀐 내용만) — 합치는 규칙은 news.js 7절
 async function newsSync(auto) {
