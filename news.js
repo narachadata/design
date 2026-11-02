@@ -638,7 +638,7 @@ NC.news = (function () {
   const GRAD = ['gdef', 'gid', 'fill', 'stroke'];   // 그라데이션 정의와 그것을 쓰는 칠·선은 한 묶음으로 (이름이 짝이 맞아야 그려짐)
   const J2 = v => JSON.stringify(v === undefined ? null : v);
   const normG = s => s.replace(/(id=\\?"|url\(#|^"|\\?")G[a-z0-9]{6}(?=\\?"|\))/g, '$1G');          // 그라데이션 이름(gid)은 그릴 때마다 무작위
-  function sigOf(e) { const o = {}; Object.keys(e).sort().forEach(k => { if (!SKIPK[k]) o[k] = e[k]; }); return normG(JSON.stringify(o)); }
+  function sigOf(e) { const o = {}; Object.keys(e).sort().forEach(k => { if (!SKIPK[k] && !(e.type === 'text' && k === 'h')) o[k] = e[k]; }); return normG(JSON.stringify(o)); }   // 글 상자 높이는 공방이 저절로 맞추므로 비교에서 뺌
   const val = (e, k) => normG(J2(e[k]));
   // 기준 요소(B) ↔ 새 요소(N) 짝 찾기: 똑같은 것 먼저, 그다음 같은 종류 중 가까운 것
   function matchEls(B, N, pageW) {
@@ -653,6 +653,15 @@ NC.news = (function () {
       if (b.type === 'text' && b.text === n.text) d *= 0.2; else if (b.type === 'image' && b.src === n.src) d *= 0.3;
       if (d <= lim) pairs.push([d, b.id, j]); }); });
     pairs.sort((a, b) => a[0] - b[0]).forEach(([, bid, j]) => { if (m.has(bid) || used.has(j)) return; m.set(bid, j); used.add(j); });
+    // 그래도 남은 글 상자: ① 엔진이 같은 모양(글꼴·굵기·크기·색·정렬)으로 그린 글끼리 위→아래 순서로 짝
+    //   (덕목 설명처럼 줄 수가 바뀌어 자리가 크게 밀려도 '설명 칸'은 '설명 칸'끼리) ② 남은 수가 같으면 순서대로
+    const skey = e => [e.font, e.weight, Math.round(Number(e.size) || 0), e.color, e.align].join('|');
+    const left = () => [B.filter(b => b.type === 'text' && !m.has(b.id)).sort((a, b) => cy(a) - cy(b) || cx(a) - cx(b)), N.map((n, j) => [n, j]).filter(([n, j]) => n.type === 'text' && !used.has(j)).sort((a, b) => cy(a[0]) - cy(b[0]) || cx(a[0]) - cx(b[0]))];
+    let [bl, nl] = left();
+    const groups = new Map(); nl.forEach(x => { const k = skey(x[0]); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); });
+    bl.forEach(b => { const q = groups.get(skey(b)); if (q && q.length) { const x = q.shift(); m.set(b.id, x[1]); used.add(x[1]); } });
+    [bl, nl] = left();
+    if (bl.length && bl.length === nl.length) bl.forEach((b, k) => { m.set(b.id, nl[k][1]); used.add(nl[k][1]); });
     return m;   // B.id → N 의 순번
   }
   function mergeEl(b, d, n, st) {
@@ -664,20 +673,22 @@ NC.news = (function () {
       if (k === 'id') return;
       if (k === 'group') { if (d.group != null) out.group = d.group; return; }
       let take;
-      if (CONTENT.includes(k)) take = userC ? d : n;
+      if (d.type === 'text' && k === 'h') take = n;   // 높이는 공방이 화면에서 다시 맞춤
+      else if (CONTENT.includes(k)) take = newC ? n : d;   // [11/2] 내용은 소식지가 정본: 소식지에서 바뀌었으면 공방에서 고친 글보다 새 내용
+      else if (k === 'w' && newC && d.type === 'text' && val(d, k) !== val(b, k)) take = Number(n.w) > Number(d.w) ? n : d;   // 새 글이 길어졌으면 넓은 쪽
       else if (d.gid || n.gid || b.gid ? GRAD.includes(k) : false) take = userG ? d : n;
       else take = val(d, k) === val(b, k) ? n : d;
       if (take === d && val(n, k) !== val(b, k)) kept = true;
       if (take === n && val(n, k) !== val(d, k)) changed = true;
       if (take[k] !== undefined) out[k] = take[k];
     });
-    if (userC && newC) kept = true;
+    if (userC && newC) { st.replaced = (st.replaced || 0) + 1; }
     if (changed) st.changed++; if (kept) st.kept++;
     return out;
   }
   // 쪽 하나 합치기. base={bg,els} · page(지금 디자인 쪽) · next={bg,els}(새로 그린 쪽) → { els, bg, base, st }
   function mergePage(base, page, next, uid, pageW) {
-    const st = { changed: 0, added: 0, removed: 0, kept: 0 };
+    const st = { changed: 0, added: 0, removed: 0, kept: 0, replaced: 0 };
     const B = base.els || [], D = page.els || [], N = next.els || [];
     const bBy = new Map(B.map(e => [e.id, e])), dBy = new Map(D.map(e => [e.id, e]));
     const m = matchEls(B, N, pageW), nToId = new Map(); m.forEach((j, bid) => nToId.set(j, bid));
@@ -685,7 +696,10 @@ NC.news = (function () {
     D.forEach(d => {
       const b = bBy.get(d.id); if (!b) { res.push(d); return; }                 // 관장님이 넣은 요소
       const j = m.get(d.id);
-      if (j == null) { if (sigOf(d) === sigOf(b)) { st.removed++; return; } st.kept++; res.push(d); return; }  // 엔진에서 사라짐
+      if (j == null) {   // 엔진에서 사라졌거나 자리가 크게 바뀜
+        if (sigOf(d) === sigOf(b) || d.type === 'text') { st.removed++; if (d.type === 'text' && CONTENT.some(k => val(d, k) !== val(b, k))) st.replaced++; return; }   // 소식지에서 사라진 글은(공방에서 고쳤어도) 지움 — 옛 덕목·명단이 새 내용과 겹쳐 남지 않게. 내용은 소식지가 정본(되돌리기 가능)
+        st.kept++; res.push(d); return;
+      }
       res.push(mergeEl(b, d, N[j], st));
     });
     // 새로 생긴 요소: 새 그림에서 바로 앞 요소 뒤에 끼움
