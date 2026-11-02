@@ -1082,7 +1082,7 @@ async function newsSync(auto) {
   try {
     const cap = await NC.news.capture(w, { tv }); if (!cap.length) { toast('소식지에 켜진 쪽이 없습니다', true); return; }
     const { pages: next, assets } = newsPages(cap, Object.assign({}, doc.assets));
-    const SY = NC.news.sync, tot = { changed: 0, added: 0, removed: 0, kept: 0 }, newPages = [], capNames = new Set(cap.map(c => c.name));
+    const SY = NC.news.sync, tot = { changed: 0, added: 0, removed: 0, kept: 0, replaced: 0 }, newPages = [], capNames = new Set(cap.map(c => c.name));
     let baselined = 0, visible = false;
     next.forEach((np, ci) => {
       const at = doc.pages.findIndex(p => p.news === np.news);
@@ -1091,7 +1091,7 @@ async function newsSync(auto) {
       if (!pg.newsBase) { pg.newsBase = SY.baseFor(pg, np, doc.w); baselined++; return; }
       const r = SY.mergePage(pg.newsBase, pg, np, uid, doc.w);
       pg.els = r.els; pg.bg = r.bg; pg.newsBase = r.base;
-      Object.keys(tot).forEach(k => { tot[k] += r.st[k]; }); if (r.st.changed + r.st.added + r.st.removed) visible = true;
+      Object.keys(tot).forEach(k => { tot[k] += r.st[k] || 0; }); if (r.st.changed + r.st.added + r.st.removed) visible = true;
     });
     for (const k in assets) if (!doc.assets[k]) doc.assets[k] = assets[k];
     const gone = doc.pages.filter(p => p.news && !capNames.has(p.news)).map(p => p.label || NC.news.labelOf(p.news));
@@ -1101,7 +1101,8 @@ async function newsSync(auto) {
     const parts = [];
     if (tot.changed) parts.push(`바뀐 요소 ${tot.changed}`); if (tot.added) parts.push(`새 요소 ${tot.added}`); if (tot.removed) parts.push(`빠진 요소 ${tot.removed}`); if (newPages.length) parts.push(`새 쪽 ${newPages.join(', ')}`);
     let msg = parts.length ? `소식지 변경을 디자인에 반영했습니다 — ${parts.join(' · ')}` : (auto ? '' : '소식지 내용과 디자인이 이미 같습니다');
-    if (tot.kept) msg += `${msg ? '. ' : ''}직접 다듬은 ${tot.kept}곳은 소식지 쪽 변경을 받지 않고 그대로 두었습니다`;
+    if (tot.replaced) msg += `${msg ? '. ' : ''}공방에서 고친 글 ${tot.replaced}곳은 소식지의 새 내용으로 바꿨습니다(모양은 그대로)`;
+    if (tot.kept) msg += `${msg ? '. ' : ''}직접 다듬은 ${tot.kept}곳은 그대로 두었습니다`;
     if (baselined) msg += `${msg ? '. ' : ''}예전에 가져온 쪽 ${baselined}개는 이번에 기준만 잡았습니다(다음 변경부터 반영)`;
     if (gone.length) msg += `${msg ? '. ' : ''}소식지에서 꺼진 쪽(${gone.join(', ')})은 디자인에 남겨 두었습니다`;
     if (visible) toastUndo(msg); else if (msg) toast(msg); else setStatus('소식지 내용과 디자인이 같습니다');
