@@ -641,6 +641,13 @@ NC.news = (function () {
   function sigOf(e) { const o = {}; Object.keys(e).sort().forEach(k => { if (!SKIPK[k] && !(e.type === 'text' && k === 'h')) o[k] = e[k]; }); return normG(JSON.stringify(o)); }   // 글 상자 높이는 공방이 저절로 맞추므로 비교에서 뺌
   const val = (e, k) => normG(J2(e[k]));
   // 기준 요소(B) ↔ 새 요소(N) 짝 찾기: 똑같은 것 먼저, 그다음 같은 종류 중 가까운 것
+  const skey = e => [e.font, e.weight, Math.round(Number(e.size) || 0), e.color, e.align].join('|');   // 엔진이 그린 글의 '모양 열쇠'(글꼴·굵기·크기·색·정렬)
+  // 두 상자가 겹치는 정도(작은 쪽 넓이 기준 0~1)
+  function overlapOf(a, b) {
+    const ax = Number(a.x) || 0, ay = Number(a.y) || 0, aw = Number(a.w) || 0, ah = Number(a.h) || 0, bx = Number(b.x) || 0, by = Number(b.y) || 0, bw = Number(b.w) || 0, bh = Number(b.h) || 0;
+    const ix = Math.max(0, Math.min(ax + aw, bx + bw) - Math.max(ax, bx)), iy = Math.max(0, Math.min(ay + ah, by + bh) - Math.max(ay, by));
+    return (ix * iy) / (Math.min(aw * ah, bw * bh) || 1);
+  }
   function matchEls(B, N, pageW) {
     const m = new Map(), used = new Set(), bySig = new Map();
     N.forEach((n, j) => { const k = sigOf(n); if (!bySig.has(k)) bySig.set(k, []); bySig.get(k).push(j); });
@@ -655,7 +662,6 @@ NC.news = (function () {
     pairs.sort((a, b) => a[0] - b[0]).forEach(([, bid, j]) => { if (m.has(bid) || used.has(j)) return; m.set(bid, j); used.add(j); });
     // 그래도 남은 글 상자: ① 엔진이 같은 모양(글꼴·굵기·크기·색·정렬)으로 그린 글끼리 위→아래 순서로 짝
     //   (덕목 설명처럼 줄 수가 바뀌어 자리가 크게 밀려도 '설명 칸'은 '설명 칸'끼리) ② 남은 수가 같으면 순서대로
-    const skey = e => [e.font, e.weight, Math.round(Number(e.size) || 0), e.color, e.align].join('|');
     const left = () => [B.filter(b => b.type === 'text' && !m.has(b.id)).sort((a, b) => cy(a) - cy(b) || cx(a) - cx(b)), N.map((n, j) => [n, j]).filter(([n, j]) => n.type === 'text' && !used.has(j)).sort((a, b) => cy(a[0]) - cy(b[0]) || cx(a[0]) - cx(b[0]))];
     let [bl, nl] = left();
     const groups = new Map(); nl.forEach(x => { const k = skey(x[0]); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); });
@@ -688,13 +694,17 @@ NC.news = (function () {
   }
   // 쪽 하나 합치기. base={bg,els} · page(지금 디자인 쪽) · next={bg,els}(새로 그린 쪽) → { els, bg, base, st }
   function mergePage(base, page, next, uid, pageW) {
-    const st = { changed: 0, added: 0, removed: 0, kept: 0, replaced: 0 };
+    const st = { changed: 0, added: 0, removed: 0, kept: 0, replaced: 0, ghost: 0 };
     const B = base.els || [], D = page.els || [], N = next.els || [];
     const bBy = new Map(B.map(e => [e.id, e])), dBy = new Map(D.map(e => [e.id, e]));
     const m = matchEls(B, N, pageW), nToId = new Map(); m.forEach((j, bid) => nToId.set(j, bid));
     const res = [];
     D.forEach(d => {
-      const b = bBy.get(d.id); if (!b) { res.push(d); return; }                 // 관장님이 넣은 요소
+      const b = bBy.get(d.id);
+      if (!b) {   // 기준에 없는 요소 = 관장님이 넣은 요소 … 다만 [11/2] 예전 합치기 오류로 «옛 글이 새 글 위에 겹쳐 남은 것»(엔진 글과 같은 모양·같은 자리·다른 내용)은 지운다
+        if (d.type === 'text' && N.some(n => n.type === 'text' && skey(n) === skey(d) && J2(n.text) !== J2(d.text) && overlapOf(d, n) >= 0.5)) { st.removed++; st.ghost = (st.ghost || 0) + 1; return; }
+        res.push(d); return;
+      }
       const j = m.get(d.id);
       if (j == null) {   // 엔진에서 사라졌거나 자리가 크게 바뀜
         if (sigOf(d) === sigOf(b) || d.type === 'text') { st.removed++; if (d.type === 'text' && CONTENT.some(k => val(d, k) !== val(b, k))) st.replaced++; return; }   // 소식지에서 사라진 글은(공방에서 고쳤어도) 지움 — 옛 덕목·명단이 새 내용과 겹쳐 남지 않게. 내용은 소식지가 정본(되돌리기 가능)
