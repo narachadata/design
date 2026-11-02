@@ -468,6 +468,9 @@ NC.news = (function () {
   function prepare(win) {
     return new Promise((res, rej) => {
       const btn = win.document.getElementById('btnMake');
+      // [11/2] 엔진을 새로 열어 쓰므로, 클라우드 명단·사진을 다 받을 때까지(최대 40초) 기다린 뒤 그린다 — 안 기다리면 생일·추천자 쪽이 빠질 수 있다
+      const ready = (win.dataReady && typeof win.dataReady.then === 'function') ? Promise.race([win.dataReady, new Promise(r => setTimeout(r, 40000))]) : Promise.resolve();
+      ready.then(() => {
       const t0 = Date.now(); let started = false;
       try { win.makeAll(); } catch (e) { rej(e); return; }
       const tick = () => {
@@ -477,6 +480,7 @@ NC.news = (function () {
         setTimeout(tick, 80);
       };
       setTimeout(tick, 60);
+      });
     });
   }
 
