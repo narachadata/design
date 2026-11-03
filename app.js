@@ -838,11 +838,12 @@ let sideTab = 'pages', tplCat = 'all', tplQ = '', elCat = 'all', elQ = '', tplF 
    내용(데이터 불러오기·일정·명단·사진첩·보관·클라우드)은 지금 쓰는 소식지 엔진(../naracha/news.html)을 그대로 쓰고
    (같은 주소라 접속키·보관한 호·사진이 그대로 보임), 화면은 공방과 같은 모양으로 입혀 가운데 작업 영역에 띄움.
    [공방 디자인으로 가져오기]는 엔진이 그리는 명령을 기록해 글 상자·사진·도형·벡터 모양으로 바꾼 새 문서를 엶. */
-let newsMode = false, newsReady = null, newsWin = null, newsObs = null, newsDirty = false, newsSyncing = false;
+let newsMode = false, newsReady = null, newsWin = null, newsObs = null, newsDirty = false, newsSyncing = false, newsEdited = false;
 let animTab = 'in';
 const NEWS_NAV = [['pgCover', '표지'], ['pgToc', '목차'], ['pgVirtue', '인성덕목'], ['pgSchedule', '주요 일정'], ['pgCal', '수련계획표'], ['pgTrain', '수련 안내'], ['pgExamInfo', '승급심사 안내'], ['pgRec', '승급심사 추천자'], ['pgKkw', '국기원 응시예정자'], ['pgBday', '생일자'], ['pgAlbum', '사진첩 · 행사 보고'], ['pgCheck', '실천 체크리스트']];
 /* [11/2] 한쪽 방향 연동: 가져오기·반영 때마다 소식지 엔진을 새로 열어, 소식지 프로그램에서 방금 저장한 내용(같은 브라우저 저장소)을 그대로 읽는다 */
-function newsEngineReset() { const f = $('#newsFrame'); if (f) f.remove(); newsReady = null; newsWin = null; newsMode = false; $('#stage').classList.remove('newsmode'); }
+/* [11/3] 공방 안 '내용 채우기'에서 고친 것이 있으면 엔진을 닫기 전에 소식지 저장소에 먼저 저장(소식지 프로그램의 [디자인 공방으로 보내기]와 같은 저장) — 다시 열린 엔진이 같은 내용을 읽음. 소식지 프로그램에서 넘어올 때(fromProg)는 저장하지 않음(그쪽이 방금 저장한 내용이 정본) */
+function newsEngineReset(fromProg) { const w0 = newsWin; if (w0 && newsEdited && !fromProg) { try { if (w0.readInputs) w0.readInputs(); if (w0.saveS) w0.saveS(); if (w0.albumsSave) w0.albumsSave(); } catch (e) {} } newsEdited = false; const f = $('#newsFrame'); if (f) f.remove(); newsReady = null; newsWin = null; newsMode = false; $('#stage').classList.remove('newsmode'); }
 function newsEngine() {
   if (newsReady) return newsReady;
   newsReady = new Promise((res, rej) => {
@@ -892,7 +893,7 @@ function newsSkin(w) {
   const watch = ['heroYm', 'heroSeason', 'hdrStatus', 'editBadge'].map(id => d.getElementById(id)).filter(Boolean);
   newsObs = new MutationObserver(() => { if (sideTab === 'news') newsHeroUpdate(); });
   watch.forEach(n => newsObs.observe(n, { childList: true, characterData: true, subtree: true, attributes: true }));
-  ['input', 'change', 'click'].forEach(t => d.addEventListener(t, e => { if (t !== 'click' || (e.target.closest && e.target.closest('button,label,.chip,.cell'))) newsDirty = true; }, true));  /* 소식지 내용이 바뀌었을 수 있음 → 디자인 다듬기로 돌아올 때 반영 */
+  ['input', 'change', 'click'].forEach(t => d.addEventListener(t, e => { if (t !== 'click' || (e.target.closest && e.target.closest('button,label,.chip,.cell'))) { newsDirty = true; newsEdited = true; } }, true));  /* 소식지 내용이 바뀌었을 수 있음 → 디자인 다듬기로 돌아올 때 반영 */
   d.addEventListener('change', e => { if (e.target && /^pg[A-Z]/.test(e.target.id || '') && sideTab === 'news') renderSide(); if (e.target && /^in(Year|Month|Ratio)$/.test(e.target.id || '')) setTimeout(newsHeroUpdate, 50); });
 }
 function setNewsMode(on) {
@@ -921,9 +922,16 @@ function renderNewsSide(body) {
   const w = newsWin, d = w && w.document, on = id => { const c = d && d.getElementById(id); return c ? c.checked : true; };
   const isNews = !!doc.news;
   body.innerHTML = `<div class="nw-hero" id="nwHero"></div>
+  <div class="seg nw-mode"><button data-nm="edit" aria-pressed="${newsMode}">내용 채우기</button><button data-nm="design" aria-pressed="${!newsMode}">디자인 다듬기</button></div>
   <h3>내용</h3>
-  <button class="btn full" id="nwOpenProg"><svg class="ic"><use href="#i-news"/></svg>소식지 프로그램 열기 ↗</button>
-  <p class="hint">[11/2 관장님 결정] 소식지 <b>내용</b>(일정 · 명단 · 사진 · 덕목 · 템플릿)은 <b>소식지 프로그램에서만</b> 고칩니다. 거기서 미리보기를 만들고 <b>[🎨 디자인 공방으로 보내기]</b>를 누르면 그 미리보기 내용이 이 공방으로 넘어옵니다. <b>공방에서 다듬은 것은 소식지 프로그램으로 돌아가지 않습니다</b>(한쪽 방향).</p>
+  <div class="nw-nav">
+    <button class="nw-it" data-go="secBasic"><span class="nw-ic"><svg class="ic"><use href="#i-settings"/></svg></span><span class="nw-t">기본 설정<small>호 · 비율 · 템플릿 · 표지 문구</small></span></button>
+    ${NEWS_NAV.map(([id, t]) => `<div class="nw-it pg${on(id) ? '' : ' off'}" data-go="${id}"><label class="nw-sw" title="이 쪽 넣기/빼기"><input type="checkbox" data-pg="${id}" ${on(id) ? 'checked' : ''}><i></i></label><span class="nw-t">${t}</span></div>`).join('')}
+    <button class="nw-it" data-go="secArchive"><span class="nw-ic"><svg class="ic"><use href="#i-folder"/></svg></span><span class="nw-t">지난 호 보관함<small>보관 · 클라우드 · 다른 PC에서 이어서</small></span></button>
+    <button class="nw-it" data-go="settingsCard"><span class="nw-ic"><svg class="ic"><use href="#i-link"/></svg></span><span class="nw-t">데이터 연결<small>나라차 프로그램 접속키</small></span></button>
+  </div>
+  <p class="hint">[11/3 관장님 결정] 소식지 <b>내용</b>(일정 · 명단 · 사진 · 덕목)은 이 공방의 <b>내용 채우기</b>에서 고칩니다. 화면 안에 들어 있는 것이 소식지 프로그램 그 자체라 고친 내용은 소식지에 그대로 저장됩니다. → <b>공방 디자인으로 가져오기</b>로 모든 쪽을 가져와 다듬으세요. <b>공방에서 다듬은 글꼴·색·위치는 소식지 프로그램으로 돌아가지 않습니다</b>(한쪽 방향).</p>
+  <button class="btn sm full" id="nwOpenProg">소식지 프로그램 따로 열기 ↗</button>
   <h3>소식지 템플릿</h3>
   <button class="btn full" id="nwTplPick"><svg class="ic"><use href="#i-tpl"/></svg>템플릿 고르기</button>
   <div class="row" style="gap:6px;margin-top:6px"><button class="btn sm" id="nwTplFrame" style="flex:1">템플릿 틀 만들기</button><button class="btn sm" id="nwTplSend" style="flex:1">템플릿으로 보내기</button></div>
@@ -935,9 +943,12 @@ function renderNewsSide(body) {
   ${isNews ? `<div class="nw-sync"><button class="btn primary full" id="nwSync"><svg class="ic"><use href="#i-refresh"/></svg>소식지 내용 반영하기</button><p class="hint" style="margin:6px 0 0"><b>연동 중</b> — 소식지 프로그램에서 고친 뒤 <b>[디자인 공방으로 보내기]</b>를 누르거나 이 단추를 누르면 소식지의 새 내용이 들어옵니다(글은 소식지가 정본). <b>관장님이 다듬은 글꼴·색·위치는 그대로</b> 둡니다.${doc.news.at ? ` <span class="nw-at">마지막 반영 ${new Date(doc.news.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>` : ''}</p></div><button class="btn sm full" id="nwRe" style="margin-top:6px">쪽 통째로 다시 가져오기…</button>` : ''}
   <h3>내보내기${isNews ? '' : ' <small style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--ui-muted)">(지금 문서)</small>'}</h3>
   <div class="tile nw-out"><button id="nwPng"><svg class="ic"><use href="#i-img"/></svg>밴드용 PNG</button><button id="nwPdf"><svg class="ic"><use href="#i-pdf"/></svg>PDF</button><button id="nwVideo" style="grid-column:1/-1;flex-direction:row;justify-content:center"><svg class="ic"><use href="#i-tv"/></svg>TV 영상 MP4</button></div>
-  <p class="hint">소식지를 <b>다듬지 않고 그대로</b> 저장할 때는 소식지 프로그램의 저장 단추를 쓰세요. 아래 단추는 공방에서 다듬은 문서를 저장합니다 — 다듬은 그대로 PNG·PDF로, TV 영상은 <b>TV 화면(16:9) 디자인</b>을 다듬은 뒤 넘김 효과·움직임·배경 음악을 넣어 TV에서 재생되는 MP4로 저장합니다.</p>`;
+  <p class="hint"><b>가져오지 않고 바로 저장</b>하려면 <b>내용 채우기</b>에서 오른쪽 미리보기 아래 <b>바로 저장</b>(PNG · PDF · TV 영상)을 누르세요. 아래 단추는 공방에서 다듬은 문서를 저장합니다 — 다듬은 그대로 PNG·PDF로, TV 영상은 <b>TV 화면(16:9) 디자인</b>을 다듬은 뒤 넘김 효과·움직임·배경 음악을 넣어 TV에서 재생되는 MP4로 저장합니다.</p>`;
   newsHeroUpdate();
   body.onclick = e => {
+    const nm = e.target.closest('[data-nm]'); if (nm) { setNewsMode(nm.dataset.nm === 'edit'); return; }
+    if (e.target.closest('.nw-sw')) return;
+    const go = e.target.closest('[data-go]'); if (go) { newsGo(go.dataset.go); return; }
     const id = (e.target.closest('button') || {}).id;
     if (id === 'nwOpenProg') { window.open(NC.news.ENGINE, 'naracha_news'); return; }
     if (id === 'nwImport') newsImport(false); else if (id === 'nwTvDoc') newsImport(true); else if (id === 'nwRe') newsReimport(); else if (id === 'nwSync') newsSync(false);
@@ -945,6 +956,7 @@ function renderNewsSide(body) {
     else if (id === 'nwPng' || id === 'nwPdf') { if (!doc.news && !window.confirm('지금 문서는 소식지가 아닙니다. 지금 문서를 그대로 내보낼까요? (소식지는 먼저 [공방 디자인으로 가져오기])')) return; setNewsMode(false); openDownload(id === 'nwPng' ? 'png' : 'pdfhq'); }
     else if (id === 'nwVideo') newsVideo();
   };
+  body.onchange = e => { const c = e.target.closest('[data-pg]'); if (!c) return; newsEngine().then(w2 => { const x = w2.document.getElementById(c.dataset.pg); if (x && x.checked !== c.checked) { x.checked = c.checked; x.dispatchEvent(new w2.Event('change', { bubbles: true })); x.dispatchEvent(new w2.Event('input', { bubbles: true })); } c.closest('.nw-it').classList.toggle('off', !c.checked); }); };
   if (!newsReady && newsMode) newsEngine();
 }
 function renderNewsInspector() {
