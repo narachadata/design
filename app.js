@@ -993,8 +993,9 @@ async function newsDirect(kind) {
     renderNewsInspector();
   }
   if (!(w.MADE && w.MADE.length)) { toast('만들 쪽이 없습니다. 왼쪽에서 넣을 쪽을 켜 주세요.', true); return; }
-  if (kind === 'png') { w.saveAllPng(); toast(`PNG ${w.MADE.length}장을 차례로 저장합니다 — 브라우저가 «여러 파일 다운로드»를 물으면 허용을 눌러 주세요`); return; }
-  if (kind === 'pdf') { w.savePdf(); toast('PDF를 만들어 저장합니다'); return; }
+  const nSave = (w.saveIncluded ? w.saveIncluded() : w.MADE).length; if ((kind === 'png' || kind === 'pdf') && !nSave) { w.saveAllPng(); return; } /* 소식지 프로그램에서 고른 쪽만 저장(엔진 v7.16) — 아무 쪽도 안 골랐으면 엔진 안내창 */
+  if (kind === 'png') { w.saveAllPng(); toast(`PNG ${nSave}장을 차례로 저장합니다 — 브라우저가 «여러 파일 다운로드»를 물으면 허용을 눌러 주세요`); return; }
+  if (kind === 'pdf') { w.savePdf(); toast(`PDF ${nSave}쪽을 만들어 저장합니다`); return; }
   if (!newsMode) setNewsMode(true);
   newsMakeView(true); w.tvPreview();
   const ar = w.document.getElementById('tvPreviewArea'); if (ar) ar.scrollIntoView({ block: 'start' });
