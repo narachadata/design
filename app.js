@@ -144,7 +144,7 @@ async function checkMedia(warn) {
   mediaMissing.clear(); const refs = mediaRefs(); if (!refs.length) return;
   for (const r of refs) { if (!(await NC.media.has(r.id))) mediaMissing.add(r.id); }
   if (!mediaMissing.size) return;
-  renderCanvas(); if (tlOn()) { tl.Vkey = ''; renderTimeline(); }
+  renderCanvas(); if (tlOn()) { tl.Vkey = ''; tl.Vscene = ''; renderTimeline(); }
   if (warn) missingDialog();
 }
 function missingDialog() {
@@ -154,7 +154,7 @@ function missingDialog() {
   <div class="miss-list">${list.map(x => `<div class="miss-it" data-mid="${esc(x.id)}"><span><b>${esc(x.m.name || '이름 없는 파일')}</b><small>${esc(x.where)}${x.m.size ? ' · ' + (x.m.size / 1048576).toFixed(1) + 'MB' : ''}</small></span><button class="btn sm primary" data-relink="${esc(x.id)}">원본 연결</button></div>`).join('')}</div>
   <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" data-close>그대로 열기</button></div></div>`;
   document.body.appendChild(d); d.querySelectorAll('[data-close]').forEach(b => b.onclick = () => d.close()); d.addEventListener('close', () => d.remove()); d.showModal();
-  d.onclick = async e => { const b = e.target.closest('[data-relink]'); if (!b) return; const id = b.dataset.relink; try { const m0 = (doc.media || {})[id] || {}; await NC.media.relink(id, '', nm => !m0.name || nm === m0.name || window.confirm(`고른 파일 이름(${nm})이 원래 이름(${m0.name})과 다릅니다. 이 파일로 연결할까요?`)); mediaMissing.delete(id); b.closest('.miss-it').classList.add('ok'); b.textContent = '연결됨'; b.disabled = true; vEls.clear(); renderCanvas(); if (tlOn()) { tl.Vkey = ''; renderTimeline(); } if (!mediaMissing.size) { d.close(); toast('원본을 모두 연결했습니다'); } } catch (err) { if (err.name !== 'AbortError') toast(err.message, true); } };
+  d.onclick = async e => { const b = e.target.closest('[data-relink]'); if (!b) return; const id = b.dataset.relink; try { const m0 = (doc.media || {})[id] || {}; await NC.media.relink(id, '', nm => !m0.name || nm === m0.name || window.confirm(`고른 파일 이름(${nm})이 원래 이름(${m0.name})과 다릅니다. 이 파일로 연결할까요?`)); mediaMissing.delete(id); b.closest('.miss-it').classList.add('ok'); b.textContent = '연결됨'; b.disabled = true; vEls.clear(); renderCanvas(); if (tlOn()) { tl.Vkey = ''; tl.Vscene = ''; renderTimeline(); } if (!mediaMissing.size) { d.close(); toast('원본을 모두 연결했습니다'); } } catch (err) { if (err.name !== 'AbortError') toast(err.message, true); } };
 }
 // 문서 파일 정리: 남이 준 문서·채팅 답·버전 기록을 열어도 스크립트가 실행되지 않게 (글 상자 html은 서식만 남기고, 화면에 들어가는 값에서 따옴표·꺾쇠를 막음)
 const DOC_BAD = /[<>"`]|javascript:|expression\(/i, DOC_ID = /^[\w-]{1,60}$/, DOC_TEXTISH = ['text', 'html', 'name', 'title', 'label', 'note', 'caption', 'alt', 'rows', 'data', 'labels', 'cells', 'series', 'values', 'kw', 'prompt'];  // 글 내용(화면에 넣을 때 esc 처리됨)은 그대로
@@ -1387,7 +1387,7 @@ async function renderMediaLib() {
 async function removeFromLib(id) {
   const m = libCache.get(id), used = libUsedRefs()(id);
   if (!window.confirm(`"${m ? m.name : id}"을(를) 보관함에서 뺄까요?${used ? '\n\n이 문서에서 쓰고 있는 파일입니다. 빼면 다음에 열 때 원본을 다시 연결해야 합니다.' : ''}\n(PC의 원본 파일은 지워지지 않습니다)`)) return;
-  try { await NC.media.remove(id); mediaMissing.add(id); vEls.clear(); tl.Vkey = ''; toast('보관함에서 뺐습니다'); renderMediaLib(); if (used) { renderCanvas(); renderTimeline(); } } catch (e) { toast('빼지 못했습니다: ' + e.message, true); }
+  try { await NC.media.remove(id); mediaMissing.add(id); vEls.clear(); tl.Vkey = ''; tl.Vscene = ''; toast('보관함에서 뺐습니다'); renderMediaLib(); if (used) { renderCanvas(); renderTimeline(); } } catch (e) { toast('빼지 못했습니다: ' + e.message, true); }
 }
 async function previewVideoLib(id) {
   $('#dlgLibV') && $('#dlgLibV').remove();
@@ -1430,6 +1430,21 @@ function duckSpans(voices, total) {
   iv.forEach(([s, e]) => { const L = out[out.length - 1]; if (L && s <= L[1] + 0.6) L[1] = Math.max(L[1], e); else out.push([s, e]); }); return out;
 }
 // 타임라인 표시용: 지금 문서에서 음악이 줄어드는 구간 (소리 조각 + 소리 나는 동영상)
+// 소리 크기 고르게(파이널컷·프리미어의 라우드니스 맞추기): 소리마다 평균 크기를 재서 말소리·효과음은 또렷하게(−20dB쯤), 배경 음악은 조금 작게(−26dB쯤)
+async function tlLevelAudio() {
+  if (tlLevelAudio.busy) return; const jobs = [], A = doc.audio; if (A && A.src && !A.mute) jobs.push({ o: A, ref: A.src, off: Number(A.from || 0), len: 30, target: 0.04, def: 0.8 });
+  tracks().forEach(t => { if (t.type !== 'audio' || t.mute) return; (t.items || []).forEach(it => { if (!it.dis && it.ref) jobs.push({ o: it, ref: it.ref, off: Number(it.off || 0), len: Math.min(30, itemDur(it) || 30), target: 0.07, def: 1 }); }); });
+  if (!jobs.length) { toast('크기를 맞출 소리가 없습니다 — 배경 음악이나 소리 조각을 먼저 넣으세요', true); return; }
+  tlLevelAudio.busy = true; toast('소리 크기를 재는 중…'); let n = 0; const SR = 48000;
+  try { for (const j of jobs) { try { const v = await voiceSrc(j.ref); let len = j.len; if (v.buf) len = Math.min(len, Math.max(0.05, v.buf.duration - j.off)); const r = v.buf ? NC.astream.bufferReader(v.buf, j.off, false, j.off) : await NC.astream.reader(v.blob, j.off, { loop: false }); let sum = 0, cnt = 0, peak = 0;
+      for (let got = 0; got < len * SR; got += SR) { const m = Math.min(SR, Math.ceil(len * SR - got)), [a, b] = await r.read(m); let bs = 0, bc = 0, bp = 0; for (let i = 0; i < a.length; i += 4) { const x = (a[i] + b[i]) / 2; bs += x * x; bc++; const p = Math.abs(x); if (p > bp) bp = p; } if (bp > 1e-4) { sum += bs; cnt += bc; if (bp > peak) peak = bp; } }  /* 소리가 없는(끝난) 구간은 평균에서 뺌 */
+      try { r.close(); } catch (e) {} const rms = Math.sqrt(sum / Math.max(1, cnt)); if (!(rms > 0.0005)) continue;
+      const cur = j.o.vol == null ? j.def : Number(j.o.vol), nv = Math.max(0.05, Math.min(1.6, Math.round(Math.min(j.target / rms, 0.9 / Math.max(0.01, peak)) * 100) / 100));  /* 최대 160%(+4dB)까지만 키움 */
+      if (j.o.vk && j.o.vk.length && cur > 0) j.o.vk = j.o.vk.map(k => [k[0], Math.round(Math.min(2, k[1] * nv / cur) * 1000) / 1000]); j.o.vol = nv; n++; } catch (e) { console.warn('소리 크기 재기 실패', e); } } } finally { tlLevelAudio.busy = false; }
+  if (!n) { toast('소리를 읽지 못했습니다 — 원본이 이 PC에 있는지 확인하세요', true); return; }
+  commit(); renderTimeline(); if (sideTab === 'video') renderSide(); toastUndo(`소리 ${n}개의 크기를 고르게 맞췄습니다 — 말소리·효과음은 또렷하게, 배경 음악은 조금 작게`); if (tl.playing) { tlPause(); tlPlay(); }
+}
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#vdLevel')) tlLevelAudio(); });
 function duckSpansNow() { const A = doc.audio; if (!A || !A.duck) return []; const { list, total } = tlScenes(), vs = []; tracks().forEach(t => { if (t.type !== 'audio' || t.mute) return; (t.items || []).forEach(it => { if (!it.dis) vs.push({ at: Number(it.at || 0), len: itemDur(it), _sfx: /^b:(?!m-)/.test(it.ref || '') }); }); }); list.forEach(x => x.pg.els.forEach(el => { if (el.type !== 'video' || el.hidden || el.mute || Number(el.speed || 1) !== 1) return; const d0 = el.anim ? Number(el.anim.d || 0) : 0; vs.push({ at: x.t0 + d0, len: Math.max(0.05, Math.min(Number(el.tout || el.dur || 0) - Number(el.tin || 0), x.dur - d0)) }); })); return duckSpans(vs, total); }
 async function videoVoices(ps, total) {
   const out = [], miss = [];
@@ -1494,6 +1509,7 @@ function renderVideoSide(body) {
     <div class="grid2"><label class="f"><span>서서히 크게 (초)</span><input type="number" id="vdFin" min="0" max="10" step="0.5" value="${A.fin || 0}"></label><label class="f"><span>끝에서 서서히 작게 (초)</span><input type="number" id="vdFout" min="0" max="10" step="0.5" value="${A.fout != null ? A.fout : (A.fade === false ? 0 : 2.5)}"></label></div>
     <label class="chk" style="margin-top:6px" title="녹음한 목소리·음악 클립·동영상 속 소리가 나오는 동안 배경 음악을 저절로 작게 했다가 끝나면 다시 키웁니다 (짧은 효과음은 빼고)"><input type="checkbox" id="vdDuck" ${A.duck ? 'checked' : ''}> 말소리가 나올 때 음악 자동으로 줄이기</label>
     ${A.duck ? `<label class="f"><span>그동안 음악 크기 <small id="vdDuckV">${Math.round((A.duckK == null ? 0.3 : A.duckK) * 100)}%</small></span><input type="range" id="vdDuckK" min="0.05" max="0.8" step="0.05" value="${A.duckK == null ? 0.3 : A.duckK}"></label>` : ''}` : '<p class="hint">보관함이나 기본 음악에서 골라 <b>배경음악</b>을 누르세요. 타임라인 음악 줄을 끌면 시작 위치가 바뀝니다.</p>'}
+    <div class="row" style="margin:10px 0 2px"><button class="btn sm" id="vdLevel" title="소리마다 평균 크기를 재서 말소리·효과음은 또렷하게, 배경 음악은 조금 작게 맞춥니다 (되돌리기 가능)">🎚 소리 크기 고르게</button></div>
     <h3>보관함 <small class="vd-sm">이 PC에서 쓴 음악·효과음·동영상</small></h3>
     <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm" id="vdMusicLocal"><svg class="ic"><use href="#i-music"/></svg>내 PC 음악</button><button class="btn sm" id="vdSfxLocal">내 PC 효과음</button><button class="btn sm" id="vdLibVideo"><svg class="ic"><use href="#i-video"/></svg>내 PC 동영상</button><button class="btn sm" id="vdShared">공유 자료</button></div><div id="vdSharedBox"></div>
     <div class="lib-filt">${[['all', '전체'], ['audio', '소리'], ['video', '동영상']].map(([v, t]) => `<button class="btn sm ${libFilt === v ? 'on' : ''}" data-libf="${v}">${t}</button>`).join('')}</div>
@@ -2112,7 +2128,13 @@ function tlStrips() {
     tl.strips = out; tl.stripKey = tl.Vkey; if (!same) renderTimeline();
   }, 300);
 }
-const tlKey = () => hptr + '|' + (hist[hptr] || '').length + '|' + doc.w + 'x' + doc.h;
+/* 미리보기 키를 둘로: 장면 키(쪽·영상 설정 — 바뀌면 장면을 다시 그림, 무거움) + 트랙 키(자막·소리 — 바뀌면 그것만 다시 읽음, 가벼움).
+   전에는 되돌리기 번호만 봐서 자막 한 글자만 고쳐도 모든 장면을 다시 그렸음 */
+const hashStr = str => { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return str.length + ':' + h; };
+let tlKeyMemo = { h: -2, s: null, k: '' };
+function tlSceneKey() { const s = hist[hptr]; if (tlKeyMemo.h === hptr && tlKeyMemo.s === s) return tlKeyMemo.k; const k = hashStr(JSON.stringify([doc.pages, doc.video || null, doc.w, doc.h, Object.keys(doc.media || {}), Object.keys(doc.assets || {}).length])); tlKeyMemo = { h: hptr, s, k }; return k; }
+const tlTrackKey = () => hashStr(JSON.stringify([doc.tracks || null, doc.audio || null]));
+const tlKey = () => tlSceneKey() + '|' + tlTrackKey();
 async function tlWave() {
   const c = $('#tlWave'); if (!c || !doc.audio) return; const A = doc.audio, p0 = c.parentElement;
   try {
@@ -2128,11 +2150,12 @@ async function tlWave() {
 function tlTimeLabel() { const { total } = tlScenes(), fps = Number(vset().fps || 30); const el = $('#tlTime'); if (el) el.textContent = fmtTC(Math.min(tl.T, total), fps); const tt = $('#tlTot'); if (tt) tt.textContent = '/ ' + fmtTC(total, fps); const h = $('#tlHead'); if (h) h.style.left = tl.T * tl.pxs + 'px'; }
 // 미리보기(가벼운 720p): 문서가 바뀌면 다시 만듦(바뀐 층만 다시 그림)
 async function tlEnsureV() {
-  const key = tlKey();
+  const key = tlKey(), sk = tlSceneKey();
   if (tl.V && tl.Vkey === key) return tl.V;
   if (tl.building && tl.building.key === key) return tl.building.p;
+  if (tl.V && tl.Vscene === sk && !tl.building) { /* 장면은 그대로 — 자막·소리만 다시 */ const V0 = tl.V, p0 = (async () => { V0.voices = await videoVoices(videoPages(), V0.total); await videoOverlays(V0); tl.Vkey = key; tl.building = null; return V0; })(); tl.building = { key, p: p0 }; try { return await p0; } catch (e) { tl.building = null; throw e; } }
   const msg = $('#tlMsg');
-  const p = (async () => { const V = await videoBuild('720', (k, n) => { if (msg) msg.textContent = `미리보기 준비 ${Math.round(k / Math.max(1, n) * 100)}%`; }); if (msg) msg.textContent = ''; tl.V = V; tl.Vkey = key; tl.building = null; tlStrips(); return V; })();
+  const p = (async () => { const V = await videoBuild('720', (k, n) => { if (msg) msg.textContent = `미리보기 준비 ${Math.round(k / Math.max(1, n) * 100)}%`; }); if (msg) msg.textContent = ''; tl.V = V; tl.Vkey = key; tl.Vscene = sk; tl.building = null; tlStrips(); return V; })();
   tl.building = { key, p }; try { return await p; } catch (e) { tl.building = null; if (msg) msg.textContent = '미리보기 실패: ' + e.message; throw e; }
 }
 /* Tx: 훑어보기(스키밍)처럼 재생 헤드가 아닌 시각을 잠깐 보여 줄 때 */
@@ -2394,7 +2417,7 @@ function openTransPop(i, anchor) {
     if (e.target.id === 'trClose') close();
   };
 }
-async function relinkMedia(ref) { if (!NC.media.isLocal(ref)) return; const id = ref.slice(2), m = (doc.media || {})[id]; try { const r = await NC.media.file(id, true); if (r.url) { mediaMissing.delete(id); toast('원본을 읽을 수 있게 됐습니다'); renderCanvas(); renderTimeline(); return; } if (!window.confirm(`이 PC에 원본 "${m ? m.name : ''}"이(가) 연결되어 있지 않습니다. 이 PC의 파일을 골라 다시 연결할까요?`)) return; await NC.media.relink(id, '', nm => !(m && m.name) || nm === m.name || window.confirm(`고른 파일 이름(${nm})이 원래 이름(${m.name})과 다릅니다. 이 파일로 연결할까요?`)); mediaMissing.delete(id); vEls.clear(); tl.Vkey = ''; toast('원본을 다시 연결했습니다'); renderCanvas(); renderTimeline(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } }
+async function relinkMedia(ref) { if (!NC.media.isLocal(ref)) return; const id = ref.slice(2), m = (doc.media || {})[id]; try { const r = await NC.media.file(id, true); if (r.url) { mediaMissing.delete(id); toast('원본을 읽을 수 있게 됐습니다'); renderCanvas(); renderTimeline(); return; } if (!window.confirm(`이 PC에 원본 "${m ? m.name : ''}"이(가) 연결되어 있지 않습니다. 이 PC의 파일을 골라 다시 연결할까요?`)) return; await NC.media.relink(id, '', nm => !(m && m.name) || nm === m.name || window.confirm(`고른 파일 이름(${nm})이 원래 이름(${m.name})과 다릅니다. 이 파일로 연결할까요?`)); mediaMissing.delete(id); vEls.clear(); tl.Vkey = ''; tl.Vscene = ''; toast('원본을 다시 연결했습니다'); renderCanvas(); renderTimeline(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } }
 // 미리보기 재생 (첫 장면부터, 또는 지금 쪽부터)
 async function openVideoPlayer(fromCur) {
   let d = $('#dlgVplay'); if (d) d.remove();
@@ -2429,6 +2452,7 @@ function openVideoMaker() {
   <div class="vd-stage"><canvas id="vidCv"></canvas><div class="vd-load" id="vidProg">장면을 준비하는 중…</div></div>
   <div class="vd-ctl"><button class="btn icon" id="vidPlay" title="재생 / 멈춤 (Space)"><svg class="ic"><use href="#i-play"/></svg></button><input type="range" id="vidSeek" min="0" max="${tot}" step="0.01" value="0"><span id="vidTime">0:00 / ${fmtT(tot)}</span><span class="vd-meta">${n}장면${doc.audio ? ' · 음악 «' + esc(doc.audio.name || '') + '»' : ''}</span></div>
   <p class="hint" style="margin:0">위에서 편집한 내용을 끝까지 확인한 뒤 화질을 고르고 <b>영상 만들기</b>를 누르세요. 미리보기는 가볍게 보여 주고, 저장은 고른 화질로 만듭니다. 장면 길이·넘김·음악은 왼쪽 <b>영상</b> 메뉴와 타임라인에서 고칩니다.</p>
+  <div class="vd-use" id="vidUse"><span>어디에 쓰나요?</span>${[['yt', '유튜브·TV'], ['shorts', '숏츠·릴스'], ['msg', '카톡·문자'], ['keep', '보관(4K)']].map(([k, t]) => `<button type="button" class="btn sm" data-use="${k}">${t}</button>`).join('')}</div><p class="hint" id="vidUseNote" style="margin:0" hidden></p>
   <div class="vd-q" id="vidQ">${QS.map(qBtn).join('')}</div>
   <div class="row" style="align-items:center;gap:12px;flex-wrap:wrap"><label class="f" style="margin:0;flex-direction:row;align-items:center;gap:6px"><span>초당 장면 수</span><select id="vidFps">${[[24, '24fps (영화 느낌)'], [30, '30fps (기본)'], [60, '60fps (부드럽게)']].map(([v, t]) => `<option value="${v}" ${Number(vset().fps || 30) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label><span class="hint" id="vidEst"></span></div>
   <p class="hint" style="margin:0">저장 형식은 <b>MP4 (H.264 영상 + AAC 소리)</b>입니다. 윈도우·맥의 기본 플레이어, TV, 휴대폰, 유튜브·카톡에서 별도 프로그램 없이 소리까지 재생됩니다.</p>
@@ -2442,6 +2466,13 @@ function openVideoMaker() {
   const setV = (k, v) => { doc.video = Object.assign(vset(), doc.video || {}, { [k]: v }); markDirty(); est(); };
   $('#vidQ').onclick = e => { const b = e.target.closest('[data-q]'); if (!b || busy) return; $$('#vidQ [data-q]').forEach(x => x.setAttribute('aria-pressed', x === b)); setV('q', b.dataset.q); };
   $('#vidFps').onchange = e => setV('fps', Number(e.target.value));
+  $('#vidUse').onclick = e => { const b = e.target.closest('[data-use]'); if (!b || busy) return; const use = b.dataset.use, q = use === 'msg' ? '720' : use === 'keep' ? '2160' : '1080', ar = doc.w / doc.h, tall = ar < 0.7, wide = ar > 1.5, notes = [];
+    setV('q', q); setV('fps', 30); $('#vidFps').value = '30'; $$('#vidQ [data-q]').forEach(x => x.setAttribute('aria-pressed', x.dataset.q === q)); $$('#vidUse [data-use]').forEach(x => x.classList.toggle('on', x === b));
+    if (use === 'yt') { notes.push('Full HD 1080p · 30fps로 맞췄습니다.'); if (!wide) notes.push(`지금 문서는 ${tall ? '세로' : '가로 16:9가 아닌'} 화면입니다 — 유튜브 일반 영상·TV는 가로 16:9(1920×1080)가 화면을 꽉 채웁니다.`); }
+    if (use === 'shorts') { notes.push('1080p · 30fps로 맞췄습니다.'); if (!tall) notes.push('지금 문서는 세로 9:16이 아닙니다 — 숏츠·릴스는 세로 1080×1920이어야 화면을 꽉 채웁니다(위 막대 크기 조정 → 유튜브 숏츠).'); if (tot > 180) notes.push(`길이가 ${fmtT(tot)}입니다 — 유튜브 숏츠는 3분, 인스타 릴스는 90초까지입니다.`); else if (tot > 90) notes.push(`길이가 ${fmtT(tot)}입니다 — 인스타 릴스는 90초까지입니다(유튜브 숏츠는 3분까지).`); }
+    if (use === 'msg') { const mb = estMB('720', 30); notes.push(`HD 720p로 맞췄습니다 — 파일 약 ${Math.max(1, Math.round(mb))}MB.`); if (mb > 300) notes.push('카카오톡은 한 번에 300MB까지 보낼 수 있습니다 — 영상을 줄이거나 나눠 보내세요.'); }
+    if (use === 'keep') notes.push('4K 2160p로 맞췄습니다 — 파일이 크고 만드는 데 오래 걸립니다. 원본 보관·대형 TV용입니다.');
+    const nt = $('#vidUseNote'); nt.hidden = false; nt.innerHTML = notes.map(esc).join('<br>'); };
   est();
   // 미리보기 플레이어 (가벼운 720p로 준비 — 편집 내용·소리를 그대로 확인)
   const seek = $('#vidSeek'), ic = () => { const u = $('#vidPlay use'); if (u) u.setAttribute('href', P && P.isPlaying() ? '#i-pause' : '#i-play'); };
