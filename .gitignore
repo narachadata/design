@@ -20,3 +20,12 @@ _testlib
 *.pdf
 *.heic
 .claude/
+# 상장 틀(직인)·학생 이름이 든 그림을 저장소 폴더에 실수로 두어도 공개되지 않게 (보안 점검 2026-11-17)
+/*.png
+/*.jpg
+/*.jpeg
+!/icon-192.png
+!/icon-512.png
+!/og.png
+상장*
+_certtest*
