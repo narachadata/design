@@ -59,12 +59,12 @@ function gcAssets() { const used = new Set(); const walk = v => { if (typeof v =
 const HIST_LIVE = ['assets', 'fonts', 'name', 'docId', 'updatedAt'];
 function snapshot() { const keep = {}; HIST_LIVE.forEach(k => { keep[k] = doc[k]; delete doc[k]; }); const s = JSON.stringify(doc); Object.assign(doc, keep); return s; }
 let histMeta = [];  // 기록마다 그때 보던 쪽·선택
-function commit() { tlTimingSnap = null; const s_ = snapshot(); if (hist[hptr] === s_) return; hist = hist.slice(0, hptr + 1); histMeta = histMeta.slice(0, hptr + 1); hist.push(s_); histMeta.push({ cur, sel: sel.slice(), rn: NC.live.rn }); if (hist.length > 120) { hist.shift(); histMeta.shift(); } hptr = hist.length - 1; markDirty(); }
+function commit() { tlTimingSnap = null; const s_ = snapshot(); if (hist[hptr] === s_) return; hist = hist.slice(0, hptr + 1); histMeta = histMeta.slice(0, hptr + 1); hist.push(s_); histMeta.push({ cur, sel: sel.slice(), rn: NC.live.rn }); if (hist.length > 120) { hist.shift(); histMeta.shift(); } hptr = hist.length - 1; markDirty(); if (tl.open && !tl.playing) pgmSoon(); }
 // 바로 앞 기록을 고쳐 씀 (그림 비율 맞춤처럼 한 동작의 뒷처리)
 function amendCommit() { if (hptr < 0) return commit(); hist[hptr] = snapshot(); histMeta[hptr].rn = NC.live.rn; markDirty(); }
 let nudgeTimer = null; function commitSoon() { clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { nudgeTimer = null; commit(); }, 450); }
 function flushNudge() { if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; commit(); } }
-function restore(s, meta) { const live = {}; HIST_LIVE.forEach(k => { live[k] = doc[k]; }); doc = Object.assign(JSON.parse(s), live); if (meta) { cur = meta.cur; sel = meta.sel.slice(); } cur = clamp(cur, 0, doc.pages.length - 1); sel = sel.filter(id => find(id)); cellSel = null; renderAll(); markDirty(); }
+function restore(s, meta) { const live = {}; HIST_LIVE.forEach(k => { live[k] = doc[k]; }); doc = Object.assign(JSON.parse(s), live); if (meta) { cur = meta.cur; sel = meta.sel.slice(); } cur = clamp(cur, 0, doc.pages.length - 1); sel = sel.filter(id => find(id)); cellSel = null; renderAll(); markDirty(); if (tl.open && !tl.playing) pgmSoon(); }
 function undo() { flushNudge(); if (hptr > 0) { const m = histMeta[hptr]; hptr--; if (NC.live.peers()) liveStep(hptr + 1, hptr, m); else restore(hist[hptr], m); } }
 function redo() { flushNudge(); if (hptr < hist.length - 1) { hptr++; if (NC.live.peers()) liveStep(hptr - 1, hptr, histMeta[hptr]); else restore(hist[hptr], histMeta[hptr]); } }
 // 실시간 연결 중의 되돌리기: 기록 a→b 사이의 내 변경만 지금 문서에 적용 (그 사이 받은 상대 변경은 건드리지 않음)
@@ -154,7 +154,7 @@ function missingDialog() {
   <div class="miss-list">${list.map(x => `<div class="miss-it" data-mid="${esc(x.id)}"><span><b>${esc(x.m.name || '이름 없는 파일')}</b><small>${esc(x.where)}${x.m.size ? ' · ' + (x.m.size / 1048576).toFixed(1) + 'MB' : ''}</small></span><button class="btn sm primary" data-relink="${esc(x.id)}">원본 연결</button></div>`).join('')}</div>
   <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" data-close>그대로 열기</button></div></div>`;
   document.body.appendChild(d); d.querySelectorAll('[data-close]').forEach(b => b.onclick = () => d.close()); d.addEventListener('close', () => d.remove()); d.showModal();
-  d.onclick = async e => { const b = e.target.closest('[data-relink]'); if (!b) return; const id = b.dataset.relink; try { const m0 = (doc.media || {})[id] || {}; const m = await NC.media.relink(id); if (m0.name && m.name !== m0.name && !window.confirm(`고른 파일 이름(${m.name})이 원래 이름(${m0.name})과 다릅니다. 이 파일로 연결할까요?`)) return; mediaMissing.delete(id); b.closest('.miss-it').classList.add('ok'); b.textContent = '연결됨'; b.disabled = true; vEls.clear(); renderCanvas(); if (tlOn()) { tl.Vkey = ''; renderTimeline(); } if (!mediaMissing.size) { d.close(); toast('원본을 모두 연결했습니다'); } } catch (err) { if (err.name !== 'AbortError') toast(err.message, true); } };
+  d.onclick = async e => { const b = e.target.closest('[data-relink]'); if (!b) return; const id = b.dataset.relink; try { const m0 = (doc.media || {})[id] || {}; await NC.media.relink(id, '', nm => !m0.name || nm === m0.name || window.confirm(`고른 파일 이름(${nm})이 원래 이름(${m0.name})과 다릅니다. 이 파일로 연결할까요?`)); mediaMissing.delete(id); b.closest('.miss-it').classList.add('ok'); b.textContent = '연결됨'; b.disabled = true; vEls.clear(); renderCanvas(); if (tlOn()) { tl.Vkey = ''; renderTimeline(); } if (!mediaMissing.size) { d.close(); toast('원본을 모두 연결했습니다'); } } catch (err) { if (err.name !== 'AbortError') toast(err.message, true); } };
 }
 // 문서 파일 정리: 남이 준 문서·채팅 답·버전 기록을 열어도 스크립트가 실행되지 않게 (글 상자 html은 서식만 남기고, 화면에 들어가는 값에서 따옴표·꺾쇠를 막음)
 const DOC_BAD = /[<>"`]|javascript:|expression\(/i, DOC_ID = /^[\w-]{1,60}$/, DOC_TEXTISH = ['text', 'html', 'name', 'title', 'label', 'note', 'caption', 'alt', 'rows', 'data', 'labels', 'cells', 'series', 'values', 'kw', 'prompt'];  // 글 내용(화면에 넣을 때 esc 처리됨)은 그대로
@@ -297,7 +297,7 @@ function elHTML(el, mode, ext) {
     return `<div class="el el-image${lock}" data-id="${el.id}" style="${base}${blend}${sh}"><div class="imgclip" style="border-radius:${el.radius || 0}mm;${clip ? `clip-path:${clip};` : ''}${el.border ? `border:${el.borderW || 0.5}mm solid ${el.border};` : ''}${s ? '' : 'outline:0.4mm dashed rgba(0,0,0,.3);'}">${inner}</div></div>`;
   }
   if (el.type === 'video' && NC.media.isLocal(el.src) && mediaMissing.has(el.src.slice(2))) return `<div class="el el-video vmiss${lock}" data-id="${el.id}" style="${base}">${mode === 'edit' ? `<div class="vmiss-in"><b>원본 영상 없음</b><span>${esc(el.name || '')}</span><small>속성에서 '원본 다시 연결'</small></div>` : ''}</div>`;
-  if (el.type === 'video') { const ps = el.poster ? src(el.poster) : ''; const len = Math.max(0, Number(el.tout || el.dur || 0) - Number(el.tin || 0)); return `<div class="el el-video${lock}" data-id="${el.id}" style="${base}${blend}"><div class="imgclip" style="border-radius:${el.radius || 0}mm;background:#1b1f2a">${ps ? `<img src="${ps}" alt="" draggable="false" style="object-fit:${el.fit === 'contain' ? 'contain' : 'cover'}">` : ''}${mode === 'edit' ? `<span class="vbadge">▶ ${len.toFixed(1)}초</span>` : ''}</div></div>`; }
+  if (el.type === 'video') { const ps = el.poster ? src(el.poster) : ''; const len = Math.max(0, Number(el.tout || el.dur || 0) - Number(el.tin || 0)); return `<div class="el el-video${lock}" data-id="${el.id}" style="${base}${blend}"><div class="imgclip" style="border-radius:${el.radius || 0}mm;background:#1b1f2a">${ps && el.fit === 'blur' ? `<img src="${ps}" alt="" draggable="false" style="object-fit:cover;filter:blur(2mm) brightness(.72)">` : ''}${ps ? `<img src="${ps}" alt="" draggable="false" style="object-fit:${el.fit === 'contain' || el.fit === 'blur' ? 'contain' : 'cover'};${el.fit === 'blur' ? 'position:absolute;inset:0;' : ''}${FX.imageFilter(el).replace(/^filter:/, 'filter:')}">` : ''}${mode === 'edit' ? `<span class="vbadge">▶ ${(len / Math.max(0.1, Number(el.speed || 1))).toFixed(1)}초${Number(el.speed || 1) !== 1 ? ` · ${el.speed}배` : ''}</span>` : ''}</div></div>`; }
   if (el.type === 'shape') return `<div class="el el-shape${lock}" data-id="${el.id}" style="${base}${blend}">${FX.shapeSVG(el)}</div>`;
   if (el.type === 'path') return `<div class="el el-path${lock}" data-id="${el.id}" style="${base}${blend}">${FX.pathSVG(el)}</div>`;
   if (el.type === 'chart') return `<div class="el el-chart${lock}" data-id="${el.id}" style="${base}">${chartSVG(el)}</div>`;
@@ -388,6 +388,7 @@ function renderCanvas() {
   c.innerHTML = bookTokens(pg, `<div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, 'edit')).join('')}${masterHTML(pg)}</div>`);
   textOver.clear();
   pg.els.forEach(el => { if (el.type === 'text' && !isWarp(el)) { let d = c.querySelector(`[data-id="${el.id}"]`); if (!d) return; if (el.sizing === 'autow') autoWidth(d, el); if (el.fitText && el.sizing === 'fixed') d = autoFitText(d, el) || d; const hh = fitTextH(d, el, true); if (hh != null) el.h = hh; if (el.sizing === 'fixed' && textOverflows(d, el)) textOver.add(el.id); } });
+  c.querySelectorAll('.el-cal .cell[data-day]').forEach(x => { const n = x.dataset.day && x.scrollHeight > x.clientHeight + 1; x.classList.toggle('ovf', !!n); if (n) x.title = '일정이 칸을 넘쳐 아래가 잘립니다 — 글자를 줄이거나 칸 높이를 늘리세요'; });  /* 달력 칸 넘침 표시(편집 화면에만) */
   renderGhost(); fitCanvas(); renderOverlay(); NC.live.paint();
   $('#pageLabel').textContent = `${cur + 1} / ${doc.pages.length}${pg.label ? ' · ' + pg.label : ''}`;
   $('#stage').classList.toggle('pen', tool === 'pen');
@@ -428,7 +429,8 @@ function fitCanvas() {
   // 위에 떠 있는 도구 막대와 아래 쪽 이동 막대에 페이지가 가리지 않게 그 높이만큼 비워 두고 맞춤
   const st = $('#stage'); { const was = st.classList.contains('compact'); st.classList.toggle('compact', st.clientHeight < 470); if (was !== st.classList.contains('compact')) tbMaxH = 0; } /* 낮은 작업 화면(노트북 + 큰 타임라인): 도구 막대를 아이콘 한 줄로 */
   const tb = st.querySelector('.toolbar'); if (tb) tbMaxH = Math.max(tbMaxH, tb.offsetHeight); const top = tb ? tb.offsetTop + tbMaxH + (st.classList.contains('compact') ? 6 : 14) : 24, bot = st.classList.contains('tlon') && $('#vtl') && !document.body.classList.contains('tl-wide') ? $('#vtl').offsetHeight + 18 : 64;
-  const w = st.clientWidth - 80, h = st.clientHeight - top - bot - 4;
+  st.style.setProperty('--pgm-top', Math.max(0, top - 6) + 'px');  /* 나란히 보기: 결과 화면도 도구 막대 아래에서 시작 */
+  const w = st.classList.contains('pgm-on') ? st.clientWidth / 2 - 36 : st.clientWidth - 80, h = st.clientHeight - top - bot - 4;
   const k = zoom || Math.max(0.03, Math.min(Math.max(w, 60) / (doc.w * MM), Math.max(h, 60) / (doc.h * MM)));
   // 문서 밖으로 나간 요소가 있으면 그만큼 작업 화면을 넓혀 스크롤로 닿게 함 (좌우·위아래 같은 폭이라 페이지가 가운데에 그대로)
   const ov = pageOverflow(page()), px = Math.ceil(Math.max(ov.l, ov.r) * MM * k), py = Math.ceil(Math.max(ov.t, ov.b) * MM * k);
@@ -454,6 +456,7 @@ function formatGuides() {
   if (doc.fmt === 'yt-thumb') { const w = PX(150), hh = PX(60), m = PX(12); h += `<div class="pg-zone" style="left:${doc.w - w - m}mm;top:${doc.h - hh - m}mm;width:${w}mm;height:${hh}mm"><span>재생 시간</span></div>`; }
   return h;
 }
+function bleedFor(f) { if (!f || !['print', 'doc', 'cal'].includes(f[2]) || f[5] !== 'mm') return 0; return ['namecard', 'coupon'].includes(f[0]) || Math.max(f[3], f[4]) <= 100 ? 1 : 3; }
 function safeMM() { return SAFE_BY[doc.fmt] || (Math.max(doc.w, doc.h) >= 2000 ? 30 : SAFE); }
 function showGuides() { try { return localStorage.getItem('naracal-guides') !== '0'; } catch (e) { return true; } }
 document.addEventListener('change', e => { if (e.target.id === 'guideToggle') { try { localStorage.setItem('naracal-guides', e.target.checked ? '1' : '0'); } catch (err) {} renderOverlay(); } });
@@ -596,7 +599,8 @@ function toMM(e) { const r = $('#canvas').getBoundingClientRect(); const k = kSc
 let drag = null, lastClick = null, pen = null;
 wrap.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
-  if (tlOn() && $('#vprev') && !$('#vprev').hidden) { tlPause(); tlHidePrev(); const { list } = tlScenes(), x = list.find(q => tl.T >= q.t0 && tl.T < q.t0 + q.dur + q.turn); if (x && x.i !== cur) goto(x.i); }
+  if (tlOn() && $('#vprev') && !$('#vprev').hidden && capOpenAt(e, $('#vprev'))) { e.preventDefault(); return; }
+  if (tlOn() && $('#vprev') && !$('#vprev').hidden) { tlPause(); tlHidePrev(); const x = tlSceneAt(tl.T); if (x && x.i !== cur) goto(x.i); }  /* 같은 장면이면 다시 그리지 않아 이 클릭으로 바로 요소를 고름 */
   if ($('#cellEd') && !e.target.closest('#cellEd')) closeCellEditor(true);
   if (e.target.closest('#cellEd')) return;
   if (editing) { if (e.target.closest('.el-text.editing')) return; endEdit(); }
@@ -1373,13 +1377,19 @@ async function voiceSrc(ref) {
   if (ref.startsWith('a:') || ref.startsWith('asset:')) { const u = src(ref); return { blob: await (await fetch(u)).blob(), url: u }; }
   const blob = await NC.media.blobOf(ref, true), url = await NC.media.urlOf(ref, true, r => src(r)); return { blob, url };
 }
+// 더킹 구간: 배경 음악 말고 소리(녹음·음악 클립·영상 속 소리) 중 1초 넘는 것 — 짧은 효과음(휙·딩동)은 빼고, 0.6초 안으로 붙은 구간은 합침
+function duckSpans(voices, total) {
+  const iv = voices.filter(v => !v._sfx).map(v => [v.at, Math.min(total, v.len != null ? v.at + v.len : total)]).filter(([s, e]) => e - s >= 1).sort((a, b) => a[0] - b[0]), out = [];
+  iv.forEach(([s, e]) => { const L = out[out.length - 1]; if (L && s <= L[1] + 0.6) L[1] = Math.max(L[1], e); else out.push([s, e]); }); return out;
+}
 async function videoVoices(ps, total) {
   const out = [], miss = [];
   const add = async (ref, o, label) => { try { out.push(Object.assign(await voiceSrc(ref), o)); } catch (e) { miss.push(label + (e.code === 'perm' ? ' (허락 필요)' : '')); } };
-  const A = doc.audio; if (A && A.src && !A.mute) await add(A.src, { at: Number(A.start || 0), off: Number(A.from || 0), vol: A.vol == null ? 0.8 : A.vol, vk: A.vk, fin: Number(A.fin || 0), fout: A.fout != null ? Number(A.fout) : (A.fade === false ? 0 : 2.5), loop: true }, '배경 음악');
-  for (const t of tracks()) { if (t.type !== 'audio' || t.mute) continue; for (const it of t.items || []) if (!it.dis) await add(it.ref, { at: Number(it.at || 0), off: Number(it.off || 0), len: it.dur ? Number(it.dur) : null, vol: it.vol == null ? 1 : it.vol, vk: it.vk, fin: Math.max(0.01, Number(it.fin || 0)), fout: Math.max(0.01, Number(it.fout || 0)) }, it.name || '소리'); }
+  const A = doc.audio; if (A && A.src && !A.mute) await add(A.src, { at: Number(A.start || 0), off: Number(A.from || 0), vol: A.vol == null ? 0.8 : A.vol, vk: A.vk, fin: Number(A.fin || 0), fout: A.fout != null ? Number(A.fout) : (A.fade === false ? 0 : 2.5), loop: true, _bg: true }, '배경 음악');
+  for (const t of tracks()) { if (t.type !== 'audio' || t.mute) continue; for (const it of t.items || []) if (!it.dis) await add(it.ref, { at: Number(it.at || 0), off: Number(it.off || 0), len: it.dur ? Number(it.dur) : null, vol: it.vol == null ? 1 : it.vol, vk: it.vk, fin: Math.max(0.01, Number(it.fin || 0)), fout: Math.max(0.01, Number(it.fout || 0)), _sfx: /^b:(?!m-)/.test(it.ref || '') }, it.name || '소리'); }
   const { list } = VIDEO.timing(doc, ps);
-  for (const x of list) for (const el of x.pg.els) { if (el.type !== 'video' || el.hidden || el.mute) continue; if (NC.media.isLocal(el.src) && mediaMissing.has(el.src.slice(2))) continue; const d0 = el.anim ? Number(el.anim.d || 0) : 0, tin = Number(el.tin || 0), tout = Number(el.tout || el.dur || 0); try { const v = await voiceSrc(el.src); const info = v.blob ? await NC.astream.probe(v.blob).catch(() => null) : null; if (info && info.noAudio) continue; out.push(Object.assign(v, { at: x.t0 + d0, off: tin, len: Math.max(0.05, Math.min(tout - tin, x.dur - d0)), vol: el.vol == null ? 1 : el.vol, fin: 0.01, fout: 0.01 })); } catch (e) {} }
+  for (const x of list) for (const el of x.pg.els) { if (el.type !== 'video' || el.hidden || el.mute || Number(el.speed || 1) !== 1) continue; if (NC.media.isLocal(el.src) && mediaMissing.has(el.src.slice(2))) continue; const d0 = el.anim ? Number(el.anim.d || 0) : 0, tin = Number(el.tin || 0), tout = Number(el.tout || el.dur || 0); try { const v = await voiceSrc(el.src); const info = v.blob ? await NC.astream.probe(v.blob).catch(() => null) : null; if (info && info.noAudio) continue; out.push(Object.assign(v, { at: x.t0 + d0, off: tin, len: Math.max(0.05, Math.min(tout - tin, x.dur - d0)), vol: el.vol == null ? 1 : el.vol, fin: 0.01, fout: 0.01 })); } catch (e) {} }
+  if (A && A.duck && out.length && out[0]._bg) out[0].duck = { iv: duckSpans(out.slice(1), total), k: A.duckK == null ? 0.3 : Number(A.duckK), r: 0.35 };  /* 말소리 나올 때 음악 줄이기 */
   if (miss.length) toast(`소리를 읽지 못한 것: ${miss.join(', ')} — 원본이 이 PC에 있는지 확인하세요`, true);
   out.miss = miss;  // 영상 저장 결과 줄에도 남김(알림은 곧 덮이므로)
   return out;
@@ -1432,7 +1442,9 @@ function renderVideoSide(body) {
     h = `<h3>배경 음악</h3>
     ${A ? `<div class="vd-music"><button class="btn icon sm snd-play" data-snd="${esc(A.src)}" title="들어 보기"><svg class="ic"><use href="#i-play"/></svg></button><b>${esc(aName)}</b><small>${NC.media.isLocal(A.src) ? '내 PC 원본' : A.src.startsWith('shared:') ? '공유 자료' : A.src.startsWith('b:') ? '기본 음악' : '문서 안'}</small><button class="btn sm" id="vdMusicDel">빼기</button></div>
     <div class="grid2"><label class="f"><span>소리 크기 <small id="vdVolV">${Math.round((A.vol == null ? 0.8 : A.vol) * 100)}%</small></span><input type="range" id="vdVol" min="0" max="2" step="0.05" value="${A.vol == null ? 0.8 : A.vol}"></label><label class="f"><span>곡의 몇 초부터</span><input type="number" id="vdFrom" min="0" step="0.5" value="${A.from || 0}"></label></div>
-    <div class="grid2"><label class="f"><span>서서히 크게 (초)</span><input type="number" id="vdFin" min="0" max="10" step="0.5" value="${A.fin || 0}"></label><label class="f"><span>끝에서 서서히 작게 (초)</span><input type="number" id="vdFout" min="0" max="10" step="0.5" value="${A.fout != null ? A.fout : (A.fade === false ? 0 : 2.5)}"></label></div>` : '<p class="hint">보관함이나 기본 음악에서 골라 <b>배경음악</b>을 누르세요. 타임라인 음악 줄을 끌면 시작 위치가 바뀝니다.</p>'}
+    <div class="grid2"><label class="f"><span>서서히 크게 (초)</span><input type="number" id="vdFin" min="0" max="10" step="0.5" value="${A.fin || 0}"></label><label class="f"><span>끝에서 서서히 작게 (초)</span><input type="number" id="vdFout" min="0" max="10" step="0.5" value="${A.fout != null ? A.fout : (A.fade === false ? 0 : 2.5)}"></label></div>
+    <label class="chk" style="margin-top:6px" title="녹음한 목소리·음악 클립·동영상 속 소리가 나오는 동안 배경 음악을 저절로 작게 했다가 끝나면 다시 키웁니다 (짧은 효과음은 빼고)"><input type="checkbox" id="vdDuck" ${A.duck ? 'checked' : ''}> 말소리가 나올 때 음악 자동으로 줄이기</label>
+    ${A.duck ? `<label class="f"><span>그동안 음악 크기 <small id="vdDuckV">${Math.round((A.duckK == null ? 0.3 : A.duckK) * 100)}%</small></span><input type="range" id="vdDuckK" min="0.05" max="0.8" step="0.05" value="${A.duckK == null ? 0.3 : A.duckK}"></label>` : ''}` : '<p class="hint">보관함이나 기본 음악에서 골라 <b>배경음악</b>을 누르세요. 타임라인 음악 줄을 끌면 시작 위치가 바뀝니다.</p>'}
     <h3>보관함 <small class="vd-sm">이 PC에서 쓴 음악·효과음·동영상</small></h3>
     <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm" id="vdMusicLocal"><svg class="ic"><use href="#i-music"/></svg>내 PC 음악</button><button class="btn sm" id="vdSfxLocal">내 PC 효과음</button><button class="btn sm" id="vdLibVideo"><svg class="ic"><use href="#i-video"/></svg>내 PC 동영상</button><button class="btn sm" id="vdShared">공유 자료</button></div><div id="vdSharedBox"></div>
     <div class="lib-filt">${[['all', '전체'], ['audio', '소리'], ['video', '동영상']].map(([v, t]) => `<button class="btn sm ${libFilt === v ? 'on' : ''}" data-libf="${v}">${t}</button>`).join('')}</div>
@@ -1510,8 +1522,10 @@ function renderVideoSide(body) {
     if (t.id === 'vdDur') setV('dur', Number(t.value)); else if (t.id === 'vdTrans') setV('trans', t.value); else if (t.id === 'vdTurn') setV('turn', Number(t.value)); else if (t.id === 'vdQ') setV('q', t.value); else if (t.id === 'vdFps') setV('fps', Number(t.value)); else if (t.id === 'vdLoop') setV('loop', t.checked);
     else if (['vdFrom', 'vdFin', 'vdFout'].includes(t.id)) { doc.audio[{ vdFrom: 'from', vdFin: 'fin', vdFout: 'fout' }[t.id]] = Math.max(0, Number(t.value) || 0); delete doc.audio.fade; commit(); renderTimeline(); }
     else if (t.id === 'vdVol' || t.id === 'vdPgTurn') { commit(); renderTimeline(); }
+    else if (t.id === 'vdDuck') { doc.audio.duck = t.checked || undefined; commit(); renderSide(); renderTimeline(); toast(t.checked ? '말소리·녹음·영상 소리가 나오는 동안 배경 음악을 줄입니다 (짧은 효과음은 빼고) — ▶ 재생으로 들어 보세요' : '음악 자동 줄이기를 껐습니다'); }
+    else if (t.id === 'vdDuckK') { doc.audio.duckK = Number(t.value); commit(); renderTimeline(); }
   };
-  body.oninput = e => { if (e.target.id === 'vdVol') { const A = doc.audio, nv = Number(e.target.value), ov = A.vol == null ? 0.8 : Number(A.vol); if (A.vk && A.vk.length && ov > 0) A.vk = A.vk.map(k => [k[0], Math.round(k[1] * nv / ov * 1000) / 1000]); A.vol = nv; $('#vdVolV').textContent = Math.round(nv * 100) + '%'; }  /* 음량 점이 있으면 점 전체를 같은 비율로 */ if (e.target.id === 'vdPgTurn') { tlTiming(() => { page().vturn = Number(e.target.value); }); $('#vdTurnV').textContent = page().vturn + '초'; } };
+  body.oninput = e => { if (e.target.id === 'vdDuckK') { const v = $('#vdDuckV'); if (v) v.textContent = Math.round(Number(e.target.value) * 100) + '%'; } if (e.target.id === 'vdVol') { const A = doc.audio, nv = Number(e.target.value), ov = A.vol == null ? 0.8 : Number(A.vol); if (A.vk && A.vk.length && ov > 0) A.vk = A.vk.map(k => [k[0], Math.round(k[1] * nv / ov * 1000) / 1000]); A.vol = nv; $('#vdVolV').textContent = Math.round(nv * 100) + '%'; }  /* 음량 점이 있으면 점 전체를 같은 비율로 */ if (e.target.id === 'vdPgTurn') { tlTiming(() => { page().vturn = Number(e.target.value); }); $('#vdTurnV').textContent = page().vturn + '초'; } };
 }
 async function addVideoRef(ref, name) {
   try { const u = await NC.media.urlOf(ref, true), info = await videoInfo(u); const k = Math.min(doc.w * 0.8 / info.w, doc.h * 0.8 / info.h); addEl({ type: 'video', src: ref, poster: info.poster ? addAsset(info.poster) : '', name, w: Math.round(info.w * k * 10) / 10, h: Math.round(info.h * k * 10) / 10, x: 0, y: 0, rot: 0, opacity: 1, fit: 'cover', radius: 0, tin: 0, tout: Math.round(info.dur * 10) / 10, dur: info.dur, vol: 1, mute: false }); renderAll(); }
@@ -1631,7 +1645,7 @@ function addSfx(ref, name, quiet) {
 
 // 영상 편집 단축키 (프리미어·캡컷·필모라와 같은 키). 타임라인이 열려 있을 때만, 글자 입력 중에는 동작하지 않음
 const TL_KEYS = [['Space', '재생 / 멈춤'], ['K', '멈춤'], ['L', '재생'], ['J', '1초 뒤로'], ['← →', '한 프레임 뒤로 / 앞으로'], ['Shift + ← →', '1초 뒤로 / 앞으로'], ['↑ ↓', '앞 장면 / 다음 장면으로'], ['Home / End', '처음 / 끝으로'],
-  ['Ctrl + B', '재생 헤드에서 자르기 (Ctrl + K도 됨)'], ['Shift + Ctrl + B', '모두 자르기: 재생 헤드를 지나는 장면·자막·소리를 한 번에'], ['Q', '장면 앞부분을 재생 헤드까지 잘라내기'], ['W', '장면 뒷부분을 재생 헤드부터 잘라내기'], [';  /  \'', '앞 · 다음 편집점으로 (장면 경계와 클립 시작·끝)'], ['Alt + [  /  Alt + ]', '재생 헤드 앞 · 뒤 잘라내기 (Q · W와 같음, 파이널컷 방식)'], ['Delete', '고른 클립 지우기 · 장면을 고르면 리플 삭제(뒤 장면이 당겨지고, 그 장면에 붙은 자막·소리도 함께)'], ['Shift + Delete', '장면을 빈 틈으로 바꾸기 (길이·뒤 위치는 그대로)'], ['N', '스냅 켜기 / 끄기 (끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙기)'], ['M', '마커 넣기 (재생 중에도 · 두 번 눌러 이름 바꾸기·지우기)'], ['Ctrl + ;  /  Ctrl + \'', '앞 · 다음 마커로'], ['V', '고른 클립 끄기 / 켜기 (지우지 않고 미리보기·저장에서 빼기)'], ['Ctrl + Z', '되돌리기'], ['Ctrl + Shift + Z', '다시'],
+  ['B  /  S  /  Ctrl + B', '재생 헤드에서 자르기 (Ctrl + K도 됨)'], ['Shift + Ctrl + B', '모두 자르기: 재생 헤드를 지나는 장면·자막·소리를 한 번에'], ['Q', '장면 앞부분을 재생 헤드까지 잘라내기'], ['W', '장면 뒷부분을 재생 헤드부터 잘라내기'], [';  /  \'', '앞 · 다음 편집점으로 (장면 경계와 클립 시작·끝)'], ['Alt + [  /  Alt + ]', '재생 헤드 앞 · 뒤 잘라내기 (Q · W와 같음, 파이널컷 방식)'], ['Delete', '고른 클립 지우기 · 장면을 고르면 리플 삭제(뒤 장면이 당겨지고, 그 장면에 붙은 자막·소리도 함께)'], ['Shift + Delete', '장면을 빈 틈으로 바꾸기 (길이·뒤 위치는 그대로)'], ['N', '스냅 켜기 / 끄기 (끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙기)'], ['M', '마커 넣기 (재생 중에도 · 두 번 눌러 이름 바꾸기·지우기)'], ['Ctrl + ;  /  Ctrl + \'', '앞 · 다음 마커로'], ['V', '고른 클립 끄기 / 켜기 (지우지 않고 미리보기·저장에서 빼기)'], ['Ctrl + Z', '되돌리기'], ['Ctrl + Shift + Z', '다시'],
   ['T', '재생 위치에 글자 넣기'], ['C', '재생 위치에 자막 넣기'], ['R', '음성 녹음 시작 / 멈춤'], ['Ctrl + =  /  Ctrl + −', '타임라인 늘리기 / 줄이기'], ['Shift + Z', '타임라인 전체 보기'], ['F', '크게 미리보기'], ['Ctrl + E', '내보내기 (MP4)'], ['Esc', '미리보기 닫고 편집으로'], ['?', '단축키 목록']];
 document.addEventListener('keydown', e => {
   if (!tlOn() || editing || $('#cellEd') || $('#tlMenu') || $('#trPop') || document.querySelector('.fmenu, [role=menu]') || e.isComposing || e.keyCode === 229 || document.querySelector('dialog[open]') || (e.target.matches && e.target.matches('input,textarea,select,[contenteditable="true"]'))) return;
@@ -1663,6 +1677,7 @@ document.addEventListener('keydown', e => {
   if (c === 'KeyL') { stop(); if (!tl.playing) tlPlay(); return; }
   if (c === 'KeyJ') { stop(); const was = tl.playing; tlPause(); tlSeek(tl.T - 1, !was); if (was) tlPlay(); return; }
   if (c === 'KeyQ' || c === 'KeyW') { stop(); tlTrim(c === 'KeyQ' ? 'head' : 'tail'); return; }
+  if (c === 'KeyB' || c === 'KeyS') { stop(); tlSplit(); return; }  /* 파이널컷 B(블레이드)·S: 재생 헤드에서 자르기 */
   if (c === 'KeyN') { stop(); tlToggleSnap(); return; }
   if (c === 'KeyM') { stop(); tlAddMarker(); return; }
   if (c === 'KeyV') { stop(); tlToggleClip(); return; }
@@ -1731,6 +1746,7 @@ function splitItem(t, it, q) {
   if (videoNeedsGate()) { openVideoGate(); return null; }
   const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), it2 = Object.assign(clone(it), { id: uid(), at: Math.round((it.at + q) * 100) / 100, dur: Math.round((d - q) * 100) / 100 });
   if (t.type === 'audio') { it2.off = Math.round((Number(it.off || 0) + q) * 100) / 100; if (it.vk && it.vk.length) { const vq = Math.round(VIDEO.vkAt(it.vk, q) * 1000) / 1000; it2.vk = [[0, vq]].concat(it.vk.filter(k => k[0] > q).map(k => [Math.round((k[0] - q) * 100) / 100, k[1]])); it.vk = it.vk.filter(k => k[0] < q).concat([[q, vq]]); } }
+  if (t.type === 'audio') { it.fout = 0; it2.fin = 0; } else { it.fo = 0; it2.fi = 0; }  /* 자른 자리는 이어지게 (서서히 없음) */
   it.dur = q; t.items.splice(t.items.indexOf(it) + 1, 0, it2); return it2;
 }
 function tlBladeAll() {
@@ -1745,9 +1761,10 @@ function tlTrim(which) {
   const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { toast('장면 안에 재생 헤드를 두세요', true); return; }
   const q = tlFrame(tl.T - x.t0), pg = x.pg;
   if (which === 'tail' ? q < 0.3 : x.dur - q < 0.3) { toast('남는 길이가 너무 짧습니다', true); return; }  // 검사를 먼저: 실패하면 동영상 구간도 그대로
-  pg.els.forEach(e => { if (e.type !== 'video') return; const d0 = e.anim ? Number(e.anim.d || 0) : 0, used = Math.max(0, q - d0), tin = Number(e.tin || 0), tout = Number(e.tout || e.dur || 0); if (which === 'tail') e.tout = Math.round(Math.min(tout, tin + used) * 100) / 100; else if (used) e.tin = Math.round(Math.min(tout - 0.1, tin + used) * 100) / 100; });
-  if (which === 'tail') { tlRipple(x.t0 + x.dur, q - x.dur); pg.vdur = q; }
-  else { const rest = tlFrame(x.dur - q); tlRipple(x.t0 + q, -q); pg.vdur = rest; pg.els.forEach(el => { if (el.anim) { const d = Number(el.anim.d || 0) - q; if (d + Number(el.anim.s || 0.8) <= 0) delete el.anim; else el.anim.d = Math.max(0, Math.round(d * 10) / 10); } }); tl.T = x.t0; }
+  pg.els.forEach(e => { if (e.type !== 'video') return; const d0 = e.anim ? Number(e.anim.d || 0) : 0, used = Math.max(0, q - d0) * Math.max(0.1, Number(e.speed || 1)), tin = Number(e.tin || 0), tout = Number(e.tout || e.dur || 0); if (which === 'tail') e.tout = Math.round(Math.min(tout, tin + used) * 100) / 100; else if (used) e.tin = Math.round(Math.min(tout - 0.1, tin + used) * 100) / 100; });
+  if (which === 'tail') { const f = q / Math.max(0.1, x.dur), mid = (P0, P1) => Math.round((P0 + (P1 - P0) * f) * 1000) / 1000; tlRipple(x.t0 + x.dur, q - x.dur); pg.vdur = q; pg.els.forEach(e => { if (e.kb) { const P0 = e.kb.p0 != null ? Number(e.kb.p0) : 0, P1 = e.kb.p1 != null ? Number(e.kb.p1) : 1; e.kb.p0 = P0; e.kb.p1 = mid(P0, P1); } }); if (pg.vcam && pg.vcam !== 'none') { const CP = Array.isArray(pg.vcamP) ? pg.vcamP : [0, 1]; pg.vcamP = [CP[0], mid(CP[0], CP[1])]; } }  /* 뒷부분 자르기(W): 움직임도 자른 곳까지만 */
+  else { const rest = tlFrame(x.dur - q), f = q / Math.max(0.1, x.dur), mid = (P0, P1) => Math.round((P0 + (P1 - P0) * f) * 1000) / 1000; tracks().forEach(tr => (tr.items || []).forEach(it => { const a = Number(it.at || 0); if (a >= x.t0 - 1e-6 && a < x.t0 + q) it.at = x.t0 + q; })); tlRipple(x.t0 + q, -q); pg.vdur = rest;
+    pg.els.forEach(e => { if (e.kb) { const P0 = e.kb.p0 != null ? Number(e.kb.p0) : 0, P1 = e.kb.p1 != null ? Number(e.kb.p1) : 1; e.kb.p0 = mid(P0, P1); e.kb.p1 = P1; } }); if (pg.vcam && pg.vcam !== 'none') { const CP = Array.isArray(pg.vcamP) ? pg.vcamP : [0, 1]; pg.vcamP = [mid(CP[0], CP[1]), CP[1]]; } pg.els.forEach(el => { if (el.anim) { const d = Number(el.anim.d || 0) - q; if (d + Number(el.anim.s || 0.8) <= 0) delete el.anim; else el.anim.d = Math.max(0, Math.round(d * 10) / 10); } }); tl.T = x.t0; }
   commit(); renderTimeline(); tlTimeLabel(); toastUndo(which === 'tail' ? `${x.i + 1}쪽 뒷부분을 잘라냈습니다 (${q}초 남음)` : `${x.i + 1}쪽 앞부분 ${q}초를 잘라냈습니다`);
 }
 function tlAddCaption() {
@@ -1773,12 +1790,15 @@ let tlView = (() => { try { return localStorage.getItem('naracal-tlview') || 'wi
 let tlOnlyVideo = (() => { try { return localStorage.getItem('naracal-tlonly') !== '0'; } catch (e) { return true; } })();
 /* 영상 집중 보기 풀기: 숨은 양쪽 패널로 가는 길 (왼쪽 메뉴·'패널 보이기' 단추) */
 function focusOut() { if (!document.body.classList.contains('tl-focus')) return; tlView = 'wide'; try { localStorage.setItem('naracal-tlview', tlView); } catch (e) {} applyTlView(); toast('영상 집중 보기를 풀고 패널을 보였습니다 — 타임라인 "보기"에서 다시 고를 수 있어요'); }
+// 타임라인 높이 범위: 최소 150px, 위 작업 화면은 220px 이상 남김
+function tlClampH(h) { return Math.round(Math.max(150, Math.min(Math.max(150, innerHeight - 220), h))); }
+addEventListener('resize', () => { if (!document.body.classList.contains('tl-wide')) return; const h = parseInt(getComputedStyle(document.body).getPropertyValue('--tlh')); if (h && tlClampH(h) !== h) { document.body.style.setProperty('--tlh', tlClampH(h) + 'px'); fitCanvas(); } });
 function applyTlView() {
   if (!$('#focusOut') && $('#stage')) { const fb = document.createElement('button'); fb.id = 'focusOut'; fb.className = 'btn sm'; fb.type = 'button'; fb.title = '영상 집중 보기를 풀고 왼쪽·오른쪽 패널을 보입니다'; fb.textContent = '◧ 패널 보이기'; fb.onclick = focusOut; $('#stage').appendChild(fb); }
   const v = tl.open ? tlView : 'stage', wide = v !== 'stage', b = document.body, el = $('#vtl');
   b.classList.toggle('tl-wide', wide); b.classList.toggle('tl-focus', v === 'focus'); b.classList.toggle('tl-tall', v === 'tall');
   if (el) { const home = wide ? document.body : $('#stage'); if (el.parentElement !== home) home.appendChild(el); }
-  try { const hgt = Number(localStorage.getItem('naracal-tlh-' + (v === 'tall' ? 'tall' : 'wide'))); document.body.style.setProperty('--tlh', Math.min(hgt >= 180 ? hgt : (v === 'tall' ? 440 : 300), Math.round(innerHeight * (v === 'tall' ? 0.5 : 0.4))) + 'px'); /* 노트북(높이 768)에서 디자인 화면이 너무 작아지지 않게 화면 높이의 50%(큰)·40%(넓은)까지 */ } catch (e) {}
+  try { const hgt = Number(localStorage.getItem('naracal-tlh-' + (v === 'tall' ? 'tall' : 'wide'))); document.body.style.setProperty('--tlh', (hgt >= 150 ? tlClampH(hgt) : Math.min(v === 'tall' ? 440 : 300, Math.round(innerHeight * (v === 'tall' ? 0.5 : 0.4)))) + 'px');  /* 직접 맞춘 높이는 그대로(화면 범위 안), 처음엔 화면의 40·50%까지 */ /* 노트북(높이 768)에서 디자인 화면이 너무 작아지지 않게 화면 높이의 50%(큰)·40%(넓은)까지 */ } catch (e) {}
   requestAnimationFrame(() => { fitCanvas(); renderTimeline(); });
 }
 function tlShow(on) {
@@ -1794,21 +1814,30 @@ function tlShow(on) {
       <span class="grow"></span>
       <button class="tb${tlSnapOn ? ' on' : ''}" id="tlSnapBtn" title="스냅 — 장면 경계·재생 헤드·클립 끝에 붙기 (N)"><svg class="ic" viewBox="0 0 24 24"><path d="M6 3v8a6 6 0 0 0 12 0V3M6 3h4v8a2 2 0 0 0 4 0V3h4M6 7h4M14 7h4"/></svg></button>
       <button class="tb" id="tlZo" title="타임라인 줄이기 (Ctrl+−)">−</button><input type="range" id="tlZoom" min="0" max="100" value="40" title="타임라인 확대"><button class="tb" id="tlZi" title="타임라인 늘리기 (Ctrl+=)">+</button><button class="tb" id="tlZf" title="전체 보기 (Shift+Z)"><svg class="ic"><use href="#i-fit"/></svg></button>
-      <button class="tb" id="tlKeys" title="단축키 목록 (?)"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button><span class="tsep"></span><button class="btn sm tview" id="tlView" title="창 배치 바꾸기"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 14h18M9 4v10"/></svg>보기 방식</button><button class="tb" id="tlBig" title="크게 미리보기 (F)">${tli('full')}</button><button class="btn sm primary" id="tlSave" title="내보내기 (Ctrl+E)"><svg class="ic"><use href="#i-video"/></svg>내보내기</button><button class="tb" id="tlClose" title="타임라인 닫기">✕</button></div>
+      <button class="tb" id="tlKeys" title="단축키 목록 (?)"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button><span class="tsep"></span><button class="btn sm tview" id="tlView" title="창 배치 바꾸기"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 14h18M9 4v10"/></svg>보기 방식</button><button class="btn sm tview" id="tlPgm" title="나란히 보기: 왼쪽은 편집, 오른쪽은 내보낼 결과 (프리미어 프로그램 모니터·파이널컷 뷰어처럼)"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M12 5v14"/></svg>나란히</button><button class="tb" id="tlBig" title="크게 미리보기 (F)">${tli('full')}</button><button class="btn sm primary" id="tlSave" title="내보내기 (Ctrl+E)"><svg class="ic"><use href="#i-video"/></svg>내보내기</button><button class="tb" id="tlClose" title="타임라인 닫기">✕</button></div>
       <div class="vtl-body"><div class="tl-heads" id="tlHeads"></div>
         <div class="tl-scroll" id="tlScroll"><div class="tl-inner" id="tlInner"></div></div>
         <div class="tl-meter"><div class="mt"><i id="mtL"></i></div><div class="mt"><i id="mtR"></i></div><span>L</span><span>R</span></div></div>`;
     $('#stage').appendChild(d); tlWire();
-    const gr = document.createElement('div'); gr.className = 'tl-grip'; gr.title = '끌어서 타임라인 높이 조절'; d.prepend(gr);
-    gr.addEventListener('pointerdown', e => { if (!document.body.classList.contains('tl-wide')) return; e.preventDefault(); const y0 = e.clientY, h0 = d.offsetHeight; gr.setPointerCapture(e.pointerId);
-      const mv = ev => { const h = Math.max(180, Math.min(Math.max(220, innerHeight - 380), h0 - (ev.clientY - y0))); document.body.style.setProperty('--tlh', h + 'px'); fitCanvas(); };
-      const up = () => { gr.removeEventListener('pointermove', mv); gr.removeEventListener('pointerup', up); try { localStorage.setItem('naracal-tlh-' + (tlView === 'tall' ? 'tall' : 'wide'), parseInt(getComputedStyle(document.body).getPropertyValue('--tlh'))); } catch (err) {} renderTimeline(); };
-      gr.addEventListener('pointermove', mv); gr.addEventListener('pointerup', up); });
+    const gr = document.createElement('div'); gr.className = 'tl-grip'; gr.title = '끌어서 타임라인 높이 조절 · 두 번 누르면 처음 높이'; gr.innerHTML = '<i></i>'; d.prepend(gr);
+    const startGrip = (e, tgt) => { if (!document.body.classList.contains('tl-wide') || e.button) return; e.preventDefault(); e.stopPropagation(); const y0 = e.clientY, h0 = d.offsetHeight; let raf = 0, last = h0; document.body.classList.add('tl-resizing');
+      const mv = ev => { last = tlClampH(h0 - (ev.clientY - y0)); document.body.style.setProperty('--tlh', last + 'px'); if (!raf) raf = requestAnimationFrame(() => { raf = 0; fitCanvas(); }); };
+      const up = () => { window.removeEventListener('pointermove', mv, true); window.removeEventListener('pointerup', up, true); window.removeEventListener('pointercancel', up, true); window.removeEventListener('blur', up); cancelAnimationFrame(raf); document.body.classList.remove('tl-resizing'); if (last !== h0) { try { localStorage.setItem('naracal-tlh-' + (tlView === 'tall' ? 'tall' : 'wide'), last); } catch (err) {} } fitCanvas(); renderTimeline(); };
+      window.addEventListener('pointermove', mv, true); window.addEventListener('pointerup', up, true); window.addEventListener('pointercancel', up, true); window.addEventListener('blur', up); };
+    gr.addEventListener('pointerdown', e => startGrip(e, gr));
+    gr.addEventListener('dblclick', () => { try { localStorage.removeItem('naracal-tlh-' + (tlView === 'tall' ? 'tall' : 'wide')); } catch (err) {} applyTlView(); });
+    /* 도구 줄의 빈 곳(단추·입력칸이 아닌 곳)을 끌어도 높이 조절 — 프리미어처럼 넓게 잡기 */
+    const bar = d.querySelector('.vtl-bar'); if (bar) bar.addEventListener('pointerdown', e => { if (e.target.closest('button, input, select, label, a, [contenteditable]')) return; startGrip(e, bar); });
     const pc = document.createElement('canvas'); pc.id = 'vprev'; pc.className = 'vprev'; pc.hidden = true; $('#canvasWrap').appendChild(pc);
+    { const tg = document.createElement('div'); tg.className = 'vprev-tag'; tg.textContent = '결과 미리보기 — 화면을 누르면 편집 · 자막을 누르면 자막 고치기'; $('#canvasWrap').appendChild(tg); }
+    const pm = document.createElement('div'); pm.id = 'pgm'; pm.className = 'pgm'; pm.innerHTML = `<div class="pgm-h"><b>결과 화면</b><span>내보낼 영상 그대로</span><small id="pgmT"></small><button class="tb" id="pgmX" title="결과 화면 닫기 (편집 화면만 크게)">✕</button></div><div class="pgm-box"><canvas id="pgmCv" width="16" height="9" title="자막을 누르면 자막 고치기 · 다른 곳을 누르면 재생/멈춤"></canvas><div class="pgm-wait" id="pgmWait">결과를 준비하는 중…</div></div>`; $('#stage').appendChild(pm);
+    pm.querySelector('#pgmX').onclick = () => pgmToggle(false);
+    pm.querySelector('#pgmCv').onclick = e => { if (!capOpenAt(e, e.currentTarget)) { if (tl.playing) tlPause(); else tlPlay(); } };
+    pm.querySelector('#pgmCv').ondblclick = () => { for (const t of tracks()) { if (t.type !== 'caption' || t.mute) continue; const it = (t.items || []).find(c => !c.dis && tl.T >= c.at && tl.T < c.at + Number(c.dur || 3)); if (it) { tl.selIt = it.id; tl.selTr = t.id; renderTimeline(); openItemPop(t, it); return; } } toast('이 시각에는 자막이 없습니다 — 타임라인의 \'자막\' 단추(C)로 넣으세요'); };
   }
   if (!tl.open) { tlPause(); tlHidePrev(); }
   if ($('#pnTl')) $('#pnTl').classList.toggle('on', tl.open);
-  renderTimeline(); applyTlView();
+  renderTimeline(); applyTlView(); applyPgm(); if (!tl.open) $('#stage').classList.remove('pgm-on');
 }
 function tlScenes() { return VIDEO.timing(doc, videoPages()); }
 // 트랙: 오디오(효과음·녹음·음악 클립) · 자막 · 오버레이(로고·사진). 예전 문서의 효과음 줄은 첫 오디오 트랙으로 옮김
@@ -1865,7 +1894,7 @@ function fadeDrag(e, host, which) {
     tip.textContent = which === 'in' ? `서서히 커짐 ${Number(o.fin).toFixed(2)}초` : `서서히 작아짐 ${Number(o.fout).toFixed(2)}초`; tip.style.left = ev.clientX + 14 + 'px'; tip.style.top = ev.clientY - 30 + 'px'; tip.hidden = false; renderTimeline(); };
   const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); tip.hidden = true;
     if (!moved) { const now = performance.now(), L = tl._fhLast; if (L && L.o === o && L.w === which && now - L.t < 450) { if (which === 'in') o.fin = 0; else o.fout = 0; tl._fhLast = null; commit(); renderTimeline(); toast(which === 'in' ? '서서히 커짐을 없앴습니다' : '서서히 작아짐을 없앴습니다'); return; } tl._fhLast = { o, w: which, t: now }; renderTimeline(); return; }
-    if (isBg) delete o.fade; commit(); renderTimeline(); if (tl.playing) { tlPause(); tlPlay(); } };
+    if (isBg) delete o.fade; commit(); renderTimeline(); if (isBg && sideTab === 'video') renderSide(); if (tl.playing) { tlPause(); tlPlay(); } };
   window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
 }
 function vkHTML(o, d, px, def) {
@@ -1897,7 +1926,7 @@ function vkDrag(e, host, vp) {
       const s1 = Math.round(s0 * 100) / 100, near = vk0.some(k => Math.abs(k[0] - s1) * px < 7);
       if (!near) { const v = Math.round(vkVal({ vk: vk0, vol: vol0 }, s1, def) * 1000) / 1000; o.vk = vk0.concat([[s1, v]]).sort((p, q) => p[0] - q[0]); commit(); toast('음량 점을 찍었습니다 — 점이나 점 사이 선을 위아래로 끌어 그 구간만 조절하세요'); }
     }
-    renderTimeline(); if (moved && tl.playing) { tlPause(); tlPlay(); } };
+    renderTimeline(); if (isBg && sideTab === 'video') renderSide(); if (moved && tl.playing) { tlPause(); tlPlay(); } };
   window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
 }
 // 검색창 한글 조합 보호: 글자를 조합하는 동안에는 다시 그리지 않고(그리면 입력칸이 새로 생겨 'ㅌㅐ'처럼 낱자로 깨짐), 한 글자가 끝나면 검색
@@ -1941,7 +1970,19 @@ async function tlEnsureV() {
   const p = (async () => { const V = await videoBuild('720', (k, n) => { if (msg) msg.textContent = `미리보기 준비 ${Math.round(k / Math.max(1, n) * 100)}%`; }); if (msg) msg.textContent = ''; tl.V = V; tl.Vkey = key; tl.building = null; tlStrips(); return V; })();
   tl.building = { key, p }; try { return await p; } catch (e) { tl.building = null; if (msg) msg.textContent = '미리보기 실패: ' + e.message; throw e; }
 }
-async function tlDraw() { const V = await tlEnsureV(); const c = $('#vprev'); if (!c) return; if (c.width !== V.W || c.height !== V.H) { c.width = V.W; c.height = V.H; } c.hidden = false; if (V.videos && V.videos.length) { if (tl.playing) VIDEO.syncVideos(V, tl.T, true); else { const tok = tl.drawTok = (tl.drawTok || 0) + 1; V.videos.forEach(v => { if (!v.paused) v.pause(); }); await VIDEO.seekVideos(V, tl.T); if (tok !== tl.drawTok) return; } } VIDEO.drawAt(c.getContext('2d'), V, Math.min(tl.T, V.total - 0.001)); }
+async function tlDraw() { const V = await tlEnsureV(); const P = pgmOn(), c = P ? $('#pgmCv') : $('#vprev'); if (!c) return; if (c.width !== V.W || c.height !== V.H) { c.width = V.W; c.height = V.H; } if (P) { const w = $('#pgmWait'); if (w) w.remove(); const tt = $('#pgmT'); if (tt) tt.textContent = fmtTC(tl.T); } else c.hidden = false; if (V.videos && V.videos.length) { if (tl.playing) VIDEO.syncVideos(V, tl.T, true); else { const tok = tl.drawTok = (tl.drawTok || 0) + 1; V.videos.forEach(v => { if (!v.paused) v.pause(); }); await VIDEO.seekVideos(V, tl.T); if (tok !== tl.drawTok) return; } } VIDEO.drawAt(c.getContext('2d'), V, Math.min(tl.T, V.total - 0.001)); }
+// 나란히 보기 켬/끔 (이 PC에 기억). 작업 화면이 좁으면(700px 미만) 저절로 한 화면
+let pgmPref = (() => { try { return localStorage.getItem('naracal-pgm') !== '0'; } catch (e) { return true; } })();
+function pgmOn() { return !!(tl.open && $('#stage').classList.contains('pgm-on')); }
+function applyPgm() { const st = $('#stage'), on = !!(tl.open && pgmPref && $('#pgm') && st.clientWidth >= 700); const was = st.classList.contains('pgm-on'); st.classList.toggle('pgm-on', on); const b = $('#tlPgm'); if (b) b.classList.toggle('on', on); if (on) { tlHidePrev(); if (!was) tlDraw().catch(() => {}); } if (was !== on) fitCanvas(); }
+function pgmToggle(v) { pgmPref = v == null ? !pgmPref : !!v; try { localStorage.setItem('naracal-pgm', pgmPref ? '1' : '0'); } catch (e) {} applyPgm(); toast(pgmPref && !pgmOn() ? '작업 화면이 좁아 나란히 볼 수 없습니다 — 창을 넓히거나 \'보기 방식 → 영상 집중\'으로 양쪽 패널을 접어 보세요' : pgmPref ? '나란히 보기: 왼쪽은 편집, 오른쪽은 내보낼 결과 화면입니다' : '편집 화면만 크게 봅니다 (재생할 때는 편집 화면 위에 결과가 나옴)', pgmPref && !pgmOn()); }
+let pgmTm = 0; function pgmSoon() { clearTimeout(pgmTm); pgmTm = setTimeout(() => { if (pgmOn() && !tl.playing) tlDraw().catch(() => {}); }, 450); }
+addEventListener('resize', () => { if (tl.open) applyPgm(); });
+// 재생 헤드 시각에 보이는 장면: 넘김 구간은 절반까지 앞 장면, 그 뒤는 다음 장면
+function tlSceneAt(T) { const { list } = tlScenes(); const k = list.findIndex(q => T >= q.t0 && T < q.t0 + q.dur + q.turn); const x = k < 0 ? list[list.length - 1] : list[k]; return x && x.turn && T > x.t0 + x.dur + x.turn / 2 && list[k + 1] ? list[k + 1] : x; }
+// 그 시각 자막의 자리(화면 비율 fx, fy 0~1)에 눌렀으면 { t, it }
+function capHit(fx, fy) { const H = doc.h, W = doc.w; for (const t of tracks()) { if (t.type !== 'caption' || t.mute) continue; for (const it of t.items || []) { if (it.dis || tl.T < it.at || tl.T > it.at + Number(it.dur || 2.5)) continue; const cy = it.pos === 'top' ? 0.14 : it.pos === 'middle' ? 0.5 : (H > W * 1.3 ? 0.70 : 0.84), n = Math.max(1, Math.ceil(String(it.text || '').length / 22)), hh = Math.max(0.07, Number(it.size || 0.065) * Math.min(W, H) / H * 1.25 * (n / 2 + 0.4)); if (Math.abs(fy - cy) <= hh && fx > 0.05 && fx < 0.95) return { t, it }; } } return null; }
+function capOpenAt(e, cv) { const r = cv.getBoundingClientRect(); if (!r.width) return false; const h = capHit((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height); if (!h) return false; tlPause(); tl.selIt = h.it.id; tl.selTr = h.t.id; renderTimeline(); openItemPop(h.t, h.it); return true; }
 function tlHidePrev() { const c = $('#vprev'); if (c) c.hidden = true; }
 async function tlPlay() {
   if (tl.playing || tl.starting) return; let V; tl.starting = true; tl.cancelStart = false; try { V = await tlEnsureV(); } catch (e) { return; } finally { tl.starting = false; }  /* 준비 중 두 번 눌러도 한 번만 */
@@ -1967,21 +2008,21 @@ function tlMeter(on) {
   const buf = new Float32Array(512), lvl = a => { a.getFloatTimeDomainData(buf); let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i])); const db = 20 * Math.log10(m || 1e-6); return Math.max(0, Math.min(100, (db + 48) / 48 * 100)); };
   const step = () => { L.style.height = lvl(tl.an[0]) + '%'; R.style.height = lvl(tl.an[1]) + '%'; tl.mraf = requestAnimationFrame(step); }; step();
 }
-function tlPause() { if (tl.starting) tl.cancelStart = true; if (!tl.playing) return; tl.playing = false; cancelAnimationFrame(tl.raf); if (tl.snd) { tl.snd.stop(); tl.snd = null; } if (tl.V && tl.V.videos) tl.V.videos.forEach(v => v.pause()); const b = $('#tlPlay'); if (b) b.innerHTML = tli('play', 20); tlMeter(false); tlTimeLabel(); }
+function tlPause() { if (tl.starting) tl.cancelStart = true; if (!tl.playing) return; tl.playing = false; cancelAnimationFrame(tl.raf); if (tl.snd) { tl.snd.stop(); tl.snd = null; } if (tl.V && tl.V.videos) tl.V.videos.forEach(v => v.pause()); const b = $('#tlPlay'); if (b) b.innerHTML = tli('play', 20); tlMeter(false); tlTimeLabel(); { const x = tlSceneAt(tl.T); if (x && x.i !== cur && doc.pages[x.i]) { if (editing) endEdit(); cur = x.i; sel = []; renderCanvas(); renderInspector(); if (typeof renderThumbs === 'function') renderThumbs(); renderTimeline(); } }  /* 멈춘 자리의 장면을 편집 대상으로 (전에는 재생 시작 장면이 남아 엉뚱한 장면을 고침) */ }
 function tlFollow() { const sc = $('#tlScroll'), x = tl.T * tl.pxs; if (!sc) return; if (x < sc.scrollLeft + 40 || x > sc.scrollLeft + sc.clientWidth - 60) sc.scrollLeft = Math.max(0, x - sc.clientWidth * 0.3); }
-function tlSeek(T, show) { const { total, list } = tlScenes(); tl.T = Math.max(0, Math.min(total, T)); tlTimeLabel(); if (!tl.playing) { const x = list.find(q => tl.T >= q.t0 && tl.T < q.t0 + q.dur + q.turn) || list[list.length - 1]; if (x && x.i !== cur && doc.pages[x.i]) { cur = x.i; renderInspector(); if (typeof renderThumbs === 'function') renderThumbs(); } } if (tl.playing) { tlPause(); tlPlay(); } else if (show !== false) tlDraw().catch(() => {}); }
+function tlSeek(T, show) { const { total } = tlScenes(); tl.T = Math.max(0, Math.min(total, tl.playing ? T : tlFrame(T))); tlTimeLabel(); if (!tl.playing) { const x = tlSceneAt(tl.T); if (x && x.i !== cur && doc.pages[x.i]) { if (editing) endEdit(); cur = x.i; sel = []; renderCanvas(); renderInspector(); if (typeof renderThumbs === 'function') renderThumbs(); } } if (tl.playing) { tlPause(); tlPlay(); } else if (show !== false || pgmOn()) tlDraw().catch(() => {}); }
 // 장면 나누기: 재생 위치에서 지금 장면을 둘로 (뒤쪽은 복제본, 움직임 시작을 그만큼 당김)
 function tlSplit() {
-  if (tl.selIt) { for (const t of tracks()) { const it = (t.items || []).find(q => q.id === tl.selIt); if (!it) continue; const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), q = Math.round((tl.T - it.at) * 100) / 100; if (q > 0.1 && q < d - 0.1) { const it2 = splitItem(t, it, q); tl.selIt = it2.id; commit(); renderTimeline(); toastUndo(`'${it.name || '클립'}'을 ${fmtTC(tl.T).slice(3)}에서 잘랐습니다 — 필요 없는 조각을 골라 Delete`); return; } } }
+  if (tl.selIt) { for (const t of tracks()) { const it = (t.items || []).find(q => q.id === tl.selIt); if (!it) continue; const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3), q = Math.round((tl.T - it.at) * 100) / 100; if (q > 0.1 && q < d - 0.1) { const it2 = splitItem(t, it, q); tl.selIt = it2.id; commit(); renderTimeline(); toastUndo(`'${it.name || (it.text ? String(it.text).slice(0, 12) : '') || '클립'}'을 ${fmtTC(tl.T).slice(3)}에서 잘랐습니다 — 필요 없는 조각을 골라 Delete`); return; } } }
   tlSplitScene(false);
 }
 function tlSplitScene(quiet) {
   if (videoNeedsGate()) { openVideoGate(); return; }
   const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { if (!quiet) toast('장면 안에 재생 위치를 두고 나누세요', true); return; }
   const q = tlFrame(tl.T - x.t0); if (q < 0.3 || x.dur - q < 0.3) { if (!quiet) toast('장면 끝에 너무 가깝습니다', true); return; }
-  const a = x.pg, b = clone(a); b.id = uid(); const gm = {}; b.els.forEach(e => { e.id = uid(); if (e.group) { gm[e.group] = gm[e.group] || uid(); e.group = gm[e.group]; } if (e.anim) { const d = Number(e.anim.d || 0) - q; if (d < 0) delete e.anim; else e.anim.d = d; } });  /* 이미 시작한 움직임은 끝난 모습으로 이어짐(뒤 조각에서 처음부터 다시 튀지 않게) */
+  const a = x.pg, b = clone(a); b.id = uid(); const gm = {}; b.els.forEach(e => { e.id = uid(); if (e.group) { gm[e.group] = gm[e.group] || uid(); e.group = gm[e.group]; } if (e.anim) { const d = Number(e.anim.d || 0) - q, s0 = Number(e.anim.s || 0.8); if (d + s0 <= 0.05) delete e.anim; else e.anim.d = Math.round(d * 100) / 100;  /* 음수 = 이미 그만큼 진행된 효과(타자기 등)가 이어서 */ } });  /* 이미 시작한 움직임은 끝난 모습으로 이어짐(뒤 조각에서 처음부터 다시 튀지 않게) */
   // 동영상: 앞 조각은 자른 지점에서 끝나고, 뒤 조각은 자른 지점부터 이어서 재생
-  a.els.forEach((e, k) => { if (e.type !== 'video') return; const e2 = b.els[k], d0 = e.anim ? Number(e.anim.d || 0) : 0, used = Math.max(0, q - d0), tin = Number(e.tin || 0), tout = Number(e.tout || e.dur || 0); if (!used) return; const cut = Math.min(tout, tin + used); e.tout = Math.round(cut * 100) / 100; e2.tin = Math.round(cut * 100) / 100; e2.tout = tout; if (e2.anim) e2.anim.d = 0; });
+  a.els.forEach((e, k) => { if (e.type !== 'video') return; const e2 = b.els[k], d0 = e.anim ? Number(e.anim.d || 0) : 0, used = Math.max(0, q - d0) * Math.max(0.1, Number(e.speed || 1)), tin = Number(e.tin || 0), tout = Number(e.tout || e.dur || 0); if (!used) return; const cut = Math.min(tout, tin + used); e.tout = Math.round(cut * 100) / 100; e2.tin = Math.round(cut * 100) / 100; e2.tout = tout; if (e2.anim) e2.anim.d = 0; });
   /* 켄 번즈·카메라: 앞 조각은 움직임의 처음~나눈 곳, 뒤 조각은 나눈 곳~끝 (처음부터 다시 시작하지 않게) */
   const f = q / Math.max(0.1, x.dur), mid = (P0, P1) => Math.round((P0 + (P1 - P0) * f) * 1000) / 1000;
   a.els.forEach((e, k) => { if (!e.kb || !b.els[k] || !b.els[k].kb) return; const P0 = e.kb.p0 != null ? Number(e.kb.p0) : 0, P1 = e.kb.p1 != null ? Number(e.kb.p1) : 1, m = mid(P0, P1); e.kb.p0 = P0; e.kb.p1 = m; b.els[k].kb.p0 = m; b.els[k].kb.p1 = P1; });
@@ -1993,6 +2034,7 @@ function tlWire() {
   const root = $('#vtl');
   $('#tlPlay').onclick = () => tl.playing ? tlPause() : tlPlay();
   $('#tlKeys').onclick = tlKeysHelp; $('#tlSnapBtn').onclick = tlToggleSnap;
+  $('#tlPgm').onclick = () => pgmToggle();
   $('#tlView').onclick = () => popMenu($('#tlView'), TL_VIEWS.map(([k, t, d]) => [k, (tlView === k ? '✓ ' : '') + t, d]).concat([['only', (tlOnlyVideo ? '✓ ' : '　') + '영상 메뉴에서만 타임라인', '다른 메뉴(템플릿·요소·글자 등)로 가면 평소 디자인 공방 화면으로, 영상 메뉴로 돌아오면 다시 나타납니다. 끄면 어느 메뉴에서나 타임라인을 둡니다']]), k => { if (k === 'only') { tlOnlyVideo = !tlOnlyVideo; try { localStorage.setItem('naracal-tlonly', tlOnlyVideo ? '1' : '0'); } catch (e) {} toast(tlOnlyVideo ? '이제 영상 메뉴에서만 타임라인이 보입니다' : '이제 어느 메뉴에서나 타임라인을 둡니다'); if (tlOnlyVideo && sideTab !== 'video') { if (tl.playing) tlPause(); tlShow(false); } return; } tlView = k; try { localStorage.setItem('naracal-tlview', k); } catch (e) {} applyTlView(); });
   $('#tlSplit').onclick = tlSplit; $('#tlBig').onclick = () => { tlPause(); openVideoPlayer(true); }; $('#tlSave').onclick = () => { tlPause(); openVideoMaker(); }; $('#tlClose').onclick = () => tlShow(false);
   $('#tlZi').onclick = () => { tl.pxs = Math.min(400, tl.pxs * 1.4); renderTimeline(); }; $('#tlZo').onclick = () => { tl.pxs = Math.max(3, tl.pxs / 1.4); renderTimeline(); }; $('#tlZf').onclick = () => { tl.fit = true; renderTimeline(); };
@@ -2001,7 +2043,7 @@ function tlWire() {
   $('#tlFirst').onclick = () => tlSeek(0); $('#tlStop').onclick = () => tlPause();
   $('#tlPrevF').onclick = () => tlSeek(tl.T - 1 / Number(vset().fps || 30)); $('#tlNextF').onclick = () => tlSeek(tl.T + 1 / Number(vset().fps || 30));
   $('#tlText').onclick = () => { const { list } = tlScenes(), x = list.find(q => tl.T >= q.t0 && tl.T < q.t0 + q.dur + q.turn); if (x && x.i !== cur) goto(x.i); const el = addText('h', { text: '제목을 입력하세요', noEdit: true }); el.anim = { t: 'type', d: Math.max(0, Math.round((tl.T - (x ? x.t0 : 0)) * 10) / 10), s: 1.4 }; commit(); renderAll(); toast('타자기 효과 글자를 넣었습니다 — 두 번 눌러 글을 고치세요'); };
-  $('#tlRec').onclick = tlRecord; $('#tlCap').onclick = () => tlAddCaption(); $('#tlScene').onclick = () => { doc.pages.splice(cur + 1, 0, newPage(page().bg)); commit(); goto(cur + 1); renderTimeline(); toastUndo(`${cur + 1}번째 장면을 넣었습니다 — 글자·사진을 넣어 꾸미세요`); };
+  $('#tlRec').onclick = tlRecord; $('#tlCap').onclick = () => tlAddCaption(); $('#tlScene').onclick = () => { doc.pages.splice(cur + 1, 0, newPage(page().bg)); commit(); goto(cur + 1); renderTimeline(); { const s9 = tlScenes().list.find(q => q.i === cur); if (s9) { tlSeek(s9.t0, false); renderTimeline(); if (typeof tlFollow === 'function') tlFollow(); } } toastUndo(`${cur + 1}번째 장면을 넣었습니다 — 글자·사진을 넣어 꾸미세요`); };
   $('#tlDel').onclick = () => { if (tl.selIt) { tracks().forEach(t => { t.items = (t.items || []).filter(q => q.id !== tl.selIt); }); tl.selIt = null; commit(); renderTimeline(); toastUndo('고른 클립을 지웠습니다'); return; } if (tl.selAu && doc.audio) { delete doc.audio; tl.selAu = false; commit(); renderTimeline(); renderSide(); toastUndo('배경 음악을 뺐습니다'); return; } tlDeleteScene(false); };
   root.addEventListener('click', e => {
     const t = e.target, trk = id => tracks().find(x => x.id === id);
@@ -2017,7 +2059,7 @@ function tlWire() {
   $('#tlScroll').addEventListener('wheel', e => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); tl.pxs = Math.max(3, Math.min(400, tl.pxs * (e.deltaY < 0 ? 1.15 : 1 / 1.15))); renderTimeline(); } }, { passive: false });
   const inner = () => $('#tlInner'), tAt = e => (e.clientX - inner().getBoundingClientRect().left) / tl.pxs;
   root.addEventListener('pointerdown', e => {
-    const t = e.target; if (t.closest('.vtl-bar') || t.closest('.tl-heads') || t.closest('.tl-meter')) return;
+    const t = e.target; if (t.closest('.tl-grip') || t.closest('.vtl-bar') || t.closest('.tl-heads') || t.closest('.tl-meter')) return;
     if (t.closest('#tlAddMusic')) { e.preventDefault(); pickMusicLocal(); return; }
     if (t.closest('#tlHeadCut')) { tlSplit(); return; }
     if (t.closest('[data-mute]')) return;
@@ -2030,17 +2072,17 @@ function tlWire() {
     tl.selIt = null; tl.selAu = false; tl.selScene = false;
     if (tr) { up = () => openTransPop(Number(tr.dataset.tr), tr); }
     else if (lh) { /* 왼쪽 손잡이 = 앞부분 자르기·늘리기 (Q와 같게): 끈 만큼 동영상 시작(tin)과 글자·요소 등장 시각을 함께 당기고 장면 길이를 줄임. 왼쪽으로 끌면 앞을 늘림(동영상은 원본 앞쪽이 남은 만큼만) */
-      const pg = doc.pages[Number(lh.dataset.lh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(lh.dataset.lh)), its0 = s0 ? tlRippleSnap(s0.t0) : null, rip = d => { if (!its0) return; its0(-dq); if (s0) tracks().forEach(tr => (tr.items || []).forEach(it => { if (Number(it.at) < s0.t0) it.at = s0.t0; })); }; /* 장면 안 클립(자막 등)도 잘라낸 만큼 당김 — 잘린 구간에 있던 것은 장면 시작에 붙임 */
+      const pg = doc.pages[Number(lh.dataset.lh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(lh.dataset.lh)), its0 = s0 ? tlRippleSnap(s0.t0) : null, inSc = new Set(); if (s0) tracks().forEach(tr => (tr.items || []).forEach(it => { if (Number(it.at || 0) >= s0.t0 - 1e-6) inSc.add(it); })); const rip = d => { if (!its0) return; its0(-dq); inSc.forEach(it => { if (Number(it.at) < s0.t0) it.at = s0.t0; }); }; /* 장면 안 클립(자막 등)도 잘라낸 만큼 당김 — 잘린 구간에 있던 것은 장면 시작에 붙임 */
       const base = pg.els.map(e => ({ e, tin: Number(e.tin || 0), tout: Number(e.tout || e.dur || 0), d: e.anim ? Number(e.anim.d || 0) : null })), vids = base.filter(b => b.e.type === 'video'), ext = vids.length ? Math.min(...vids.map(b => b.tin)) : 30;
       let dq = 0; move = ev => { dq = tlFrame(Math.max(-ext, Math.min(d0 - 0.5, (ev.clientX - sx) / tl.pxs))); pg.vdur = tlFrame(d0 - dq);
         base.forEach(b => { const hasD = b.d != null && b.e.anim; if (b.e.type !== 'video') { if (hasD) b.e.anim.d = Math.max(0, Math.round((b.d - dq) * 10) / 10); return; }
           /* 동영상: 등장 지연(anim.d)이 있으면 그것부터 줄이고 남은 만큼만 원본 시작(tin)을 당김 — 예전엔 둘 다 당겨 두 번 잘렸음. 늘릴 때도 지연이 있으면 지연만 늘림 */
           let rest = dq, nd = hasD ? b.d : 0; if (dq > 0 && nd > 0) { const used = Math.min(nd, dq); nd -= used; rest = dq - used; } else if (dq < 0 && nd > 0) { nd -= dq; rest = 0; }
-          let tin = b.tin + rest; if (tin < 0) { if (hasD) nd += -tin; tin = 0; }
+          let tin = b.tin + rest * Math.max(0.1, Number(b.e.speed || 1)); if (tin < 0) { if (hasD) nd += -tin; tin = 0; }
           b.e.tin = Math.round(Math.max(0, Math.min(b.tout - 0.1, tin)) * 100) / 100; if (hasD) b.e.anim.d = Math.max(0, Math.round(nd * 10) / 10); });
         rip(pg.vdur - d0); renderTimeline(); };
       up = () => { if (!moved) return; base.forEach(b => { if (b.e.type !== 'video' && b.d != null && b.e.anim && b.d - dq + Number(b.e.anim.s || 0.8) <= 0) delete b.e.anim; }); commit(); if (dq) toastUndo(dq > 0 ? `${Number(lh.dataset.lh) + 1}쪽 앞부분 ${dq}초를 잘라냈습니다` : `${Number(lh.dataset.lh) + 1}쪽 앞부분을 ${-dq}초 늘렸습니다`); }; }
-    else if (rh) { const pg = doc.pages[Number(rh.dataset.rh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(rh.dataset.rh)), rip = s0 ? tlRippleSnap(s0.t0 + s0.dur) : () => {}, sP = s0 ? tlSnapPts(null, s0.i).filter(v => v > s0.t0 + s0.dur + 0.01 || v < s0.t0 + s0.dur - 0.01) : []; move = ev => { let end = (s0 ? s0.t0 : 0) + d0 + (ev.clientX - sx) / tl.pxs; const v = s0 ? tlSnapTo(end, sP.filter(x => x < s0.t0 + s0.dur || x > s0.t0 + s0.dur)) : null; tl.snapT = v; if (v != null) end = v; pg.vdur = Math.max(0.5, Math.round((end - (s0 ? s0.t0 : 0)) * 100) / 100); rip(pg.vdur - d0); renderTimeline(); }; up = () => { tl.snapT = null; if (moved) commit(); renderTimeline(); }; }
+    else if (rh) { const pg = doc.pages[Number(rh.dataset.rh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(rh.dataset.rh)), rip = s0 ? tlRippleSnap(s0.t0 + s0.dur) : () => {}, sP = s0 ? tlSnapPts(null, s0.i).filter(v => v > s0.t0 + s0.dur + 0.01 || v < s0.t0 + s0.dur - 0.01) : []; move = ev => { let end = (s0 ? s0.t0 : 0) + d0 + (ev.clientX - sx) / tl.pxs; const v = s0 ? tlSnapTo(end, sP.filter(x => x < s0.t0 + s0.dur || x > s0.t0 + s0.dur)) : null; tl.snapT = v; if (v != null) end = v; pg.vdur = Math.max(0.5, tlFrame(end - (s0 ? s0.t0 : 0))); rip(pg.vdur - d0); renderTimeline(); }; up = () => { tl.snapT = null; if (moved) commit(); renderTimeline(); }; }
     else if (an) { const pg = doc.pages[Number(an.dataset.ap)], el = pg.els.find(q => q.id === an.dataset.ael), edge = t.closest('[data-ah]'); const a0 = el.anim ? Object.assign({}, el.anim) : null; move = ev => { if (!a0) return; const dt = (ev.clientX - sx) / tl.pxs; if (edge) el.anim.s = Math.max(0.2, Math.round((Number(a0.s || 0.8) + dt) * 10) / 10); else el.anim.d = Math.max(0, Math.round((Number(a0.d || 0) + dt) * 10) / 10); renderTimeline(); }; up = () => { if (moved) { commit(); renderInspector(); } else { const i = doc.pages.indexOf(pg); if (i !== cur) goto(i); select([el.id]); renderTimeline(); } }; }
     else if (au) { if (au.classList.contains('miss')) { relinkMedia(doc.audio.src); return; } tl.selAu = true; const s0 = Number(doc.audio.start || 0); move = ev => { doc.audio.start = Math.max(0, Math.round((s0 + (ev.clientX - sx) / tl.pxs) * 10) / 10); renderTimeline(); }; up = () => { if (moved) commit(); }; }
     else if (itEl) { // 트랙 클립: 끌어 옮기기(오디오는 위아래 트랙으로도), 오른쪽 끝은 길이
@@ -2049,7 +2091,7 @@ function tlWire() {
       move = ev => { let dt = (ev.clientX - sx) / tl.pxs; tl.snapT = null;
         { const cands = ledge ? [a0] : edge ? [a0 + d0] : [a0, a0 + d0]; let best = null; cands.forEach(c => { const v = tlSnapTo(c + dt, sPts); if (v != null && (best == null || Math.abs(v - c - dt) < Math.abs(best.v - best.c - dt))) best = { v, c }; }); if (best) { dt = best.v - best.c; tl.snapT = best.v; } else if (!ledge && !edge) dt = tlFrame(a0 + dt) - a0; }
         if (ledge) { let d = Math.max(-a0, Math.min(d0 - 0.2, dt)); if (tr0.type === 'audio') d = Math.max(-o0, d); it.at = Math.round((a0 + d) * 100) / 100; it.dur = Math.round((d0 - d) * 100) / 100; if (tr0.type === 'audio') { it.off = Math.round((o0 + d) * 100) / 100; if (vk0) it.vk = vk0.map(k => [Math.round((k[0] - d) * 100) / 100, k[1]]); } } else if (edge) { it.dur = Math.max(0.2, Math.round((d0 + dt) * 100) / 100); if (tr0.type === 'audio' && full) it.dur = Math.min(it.dur, Math.round((full - o0) * 100) / 100); } else { it.at = Math.max(0, Math.round((a0 + dt) * 1000) / 1000); if (tr0.type === 'audio') { const row = document.elementsFromPoint(ev.clientX, ev.clientY).map(n => n.closest && n.closest('[data-row]')).find(Boolean), dst = row && tracks().find(q => q.id === row.dataset.row); if (dst && dst !== owner && dst.type === 'audio') { owner.items = owner.items.filter(q => q !== it); dst.items.push(it); owner = dst; itEl.dataset.tid = dst.id; } } } renderTimeline(); };
-      up = () => { tl.snapT = null; tl.selIt = it.id; tl.selTr = itEl.dataset.tid; if (moved) commit(); else { tlSeek(it.at, false); if (tr0.type === 'audio') previewSound(it.ref, null, Number(it.off || 0), 8); } renderTimeline(); }; }
+      up = () => { tl.snapT = null; tl.selIt = it.id; tl.selTr = itEl.dataset.tid; if (moved) { commit(); tl.lastClk = null; } else { const now = Date.now(), dbl = tl.lastClk && tl.lastClk.id === it.id && now - tl.lastClk.t < 450; tl.lastClk = dbl ? null : { id: it.id, t: now }; /* 한 번 누를 때 타임라인을 다시 그려 브라우저 dblclick이 끊기므로 직접 셈 */ if (dbl && tr0.type !== 'audio') { renderTimeline(); openItemPop(tr0, it); return; } if (tl.T < it.at - 1e-6 || tl.T > it.at + d0 + 1e-6) tlSeek(it.at, false); if (tr0.type === 'audio') previewSound(it.ref, null, Number(it.off || 0), 8); } renderTimeline(); }; }
     else if (clip) { const k0 = Number(clip.dataset.k); move = ev => { if (Math.abs(ev.clientX - sx) > 6) clip.style.transform = `translateX(${ev.clientX - sx}px)`; }; up = ev => { const { list } = tlScenes(), x = tAt(ev); if (moved && Math.abs(ev.clientX - sx) > 12) { let k1 = list.findIndex(s2 => x < s2.t0 + (s2.dur + s2.turn) / 2); if (k1 < 0) k1 = list.length; if (k1 > k0) k1 = Math.max(k0, k1 - 1);  /* 뒤로 옮길 때는 빠진 자리만큼 한 칸 당김 */ const from = list[k0].i, to = list[k1].i; if (from !== to) { const snap = tlConnSnap(); const [pg] = doc.pages.splice(from, 1); doc.pages.splice(to, 0, pg); snap(); commit(); goto(to);  /* 붙은 자막·소리도 장면과 함께 */ } renderTimeline(); } else { const i = Number(clip.dataset.ci); if (i !== cur) goto(i); tl.selScene = true; tlSeek(Math.max(tl.T, list[k0].t0) < list[k0].t0 + list[k0].dur && tl.T >= list[k0].t0 ? tl.T : list[k0].t0, false); renderTimeline(); } }; }
     else { tlSeek(tAt(e)); move = ev => tlSeek(tAt(ev)); }
     const mv = ev => { if (Math.abs(ev.clientX - sx) > 3) moved = true; if (move && moved) move(ev); };
@@ -2094,12 +2136,13 @@ function openItemPop(t, it) {
   m.innerHTML += `<div class="grid2"><label class="f"><span>${t.type === 'caption' ? '글자 크기' : '크기'} <small id="ipSzV"></small></span><input type="range" id="ipSz" min="${t.type === 'caption' ? 0.03 : 0.04}" max="${t.type === 'caption' ? 0.14 : 0.6}" step="0.005" value="${it.size || it.scale || (t.type === 'caption' ? 0.065 : 0.16)}"></label><label class="f"><span>길이 (초)</span><input type="number" id="ipDur" min="0.2" step="0.1" value="${it.dur || 3}"></label></div><div class="row" style="gap:6px;justify-content:space-between"><button class="btn sm danger" id="ipDel">지우기</button><button class="btn sm primary" id="ipOk">완료</button></div>`;
   document.body.appendChild(m); const r = ($('#vtl') || document.body).getBoundingClientRect(); m.style.left = Math.max(8, r.left + r.width / 2 - 160) + 'px'; m.style.top = Math.max(8, r.top - m.offsetHeight - 8) + 'px';
   const live = () => { renderTimeline(); tlSeek(Math.max(tl.T, it.at) <= it.at + (it.dur || 3) ? Math.max(tl.T, it.at) : it.at); };
-  const close = () => { m.remove(); document.removeEventListener('pointerdown', out, true); commit(); renderTimeline(); }, out = e => { if (!m.contains(e.target)) close(); };
-  setTimeout(() => document.addEventListener('pointerdown', out, true));
+  const close = () => { m.remove(); document.removeEventListener('pointerdown', out, true); document.removeEventListener('keydown', escK, true); commit(); renderTimeline(); }, out = e => { if (!m.contains(e.target)) close(); }, escK = e => { if (e.key === 'Escape' && !e.isComposing) { e.preventDefault(); e.stopPropagation(); close(); } };
+  setTimeout(() => { document.addEventListener('pointerdown', out, true); document.addEventListener('keydown', escK, true); });
   m.oninput = e => { const id = e.target.id; if (id === 'ipText') it.text = e.target.value; if (id === 'ipSz') { if (t.type === 'caption') it.size = Number(e.target.value); else it.scale = Number(e.target.value); } if (id === 'ipOp') { it.opacity = Number(e.target.value); $('#ipOpV').textContent = Math.round(it.opacity * 100) + '%'; } if (id === 'ipDur') it.dur = Math.max(0.2, Number(e.target.value) || 1); tl.Vkey = ''; live(); };
   m.onchange = e => { if (e.target.id === 'ipPos') it.pos = e.target.value; if (e.target.id === 'ipFont') it.font = e.target.value; tl.Vkey = ''; live(); };
   m.onclick = e => { const cs = e.target.closest('[data-cs]'); if (cs) { it.style = cs.dataset.cs; m.querySelectorAll('[data-cs]').forEach(x => x.classList.toggle('on', x === cs)); tl.Vkey = ''; live(); } const p9 = e.target.closest('[data-p9]'); if (p9) { it.pos = p9.dataset.p9; m.querySelectorAll('[data-p9]').forEach(x => x.classList.toggle('on', x === p9)); tl.Vkey = ''; live(); } if (e.target.id === 'ipDel') { t.items = t.items.filter(q => q !== it); close(); toastUndo('지웠습니다'); } if (e.target.id === 'ipOk') close(); };
-  tl.T = it.at + 0.4; tlDraw().catch(() => {});
+  tl.T = it.at + 0.4; tlTimeLabel(); tlDraw().catch(() => {});
+  { const ta = m.querySelector('#ipText'); if (ta) setTimeout(() => { ta.focus(); ta.select(); }, 0); }  /* 열자마자 바로 고쳐 쓰기 */
 }
 // 음성 녹음: 마이크로 녹음해 재생 헤드 위치에 넣음 (원본은 이 PC에만)
 let recState = null;
@@ -2121,18 +2164,64 @@ async function tlRecord() {
     b.classList.add('rec'); recState = { rec, iv: setInterval(() => { $('#tlMsg').textContent = `● 녹음 중 ${((Date.now() - t0) / 1000).toFixed(0)}초 — 다시 누르면 멈춤`; }, 300) };
   } catch (e) { toast('마이크를 쓸 수 없습니다: ' + e.message, true); }
 }
-// 넘김 효과 고르기 (◆ 누르면)
-function openTransPop(i, anchor) {
-  $('#trPop') && $('#trPop').remove(); const pg = doc.pages[i], V = vset(), r = anchor.getBoundingClientRect();
-  const m = document.createElement('div'); m.id = 'trPop'; m.className = 'tr-pop';
-  m.innerHTML = `<b>${i + 1}쪽 → 다음 장면 넘김</b><div class="tr-grid">${VIDEO.TRANS.map(([v, t]) => `<button data-tv="${v}" class="${(pg.vtrans || V.trans) === v ? 'on' : ''}">${t}</button>`).join('')}</div><label class="f"><span>넘김 길이 <small id="trTv">${Number(pg.vturn || V.turn)}초</small></span><input type="range" id="trTurn" min="0.2" max="2" step="0.1" value="${Number(pg.vturn || V.turn)}"></label><div class="row" style="gap:6px"><button class="btn sm" id="trAll">모든 장면에 적용</button><button class="btn sm" id="trClose">닫기</button></div>`;
-  document.body.appendChild(m); m.style.left = Math.max(8, Math.min(innerWidth - 330, r.left - 150)) + 'px'; m.style.top = Math.max(8, r.top - m.offsetHeight - 8) + 'px';
-  const close = () => { m.remove(); document.removeEventListener('pointerdown', out, true); document.removeEventListener('keydown', escK, true); }, out = e => { if (!m.contains(e.target)) close(); }, escK = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
-  setTimeout(() => { document.addEventListener('pointerdown', out, true); document.addEventListener('keydown', escK, true); });
-  m.onclick = e => { const b = e.target.closest('[data-tv]'); if (b) { tlTiming(() => { pg.vtrans = b.dataset.tv; }); delete pg.vsplit; commit(); renderTimeline(); m.querySelectorAll('[data-tv]').forEach(x => x.classList.toggle('on', x === b)); const { list } = tlScenes(), x = list.find(s2 => s2.i === i); if (x) { tl.T = x.t0 + Math.max(0, x.dur - 0.3); tlPlay(); setTimeout(() => { if (tl.playing && tl.T > x.t0 + x.dur + x.turn + 0.3) tlPause(); }, (x.turn + 0.9) * 1000); } return; } if (e.target.id === 'trAll') { let skip = 0; tlTiming(() => doc.pages.forEach(p2 => { if (p2.vsplit) { skip++; return; } p2.vtrans = pg.vtrans || V.trans; p2.vturn = pg.vturn; })); commit(); renderTimeline(); toastUndo(`모든 장면에 같은 넘김 효과를 넣었습니다${skip ? ` (장면을 나눈 자리 ${skip}곳은 그대로 이어짐)` : ''}`); close(); } if (e.target.id === 'trClose') close(); };
-  m.querySelector('#trTurn').oninput = e => { tlTiming(() => { pg.vturn = Number(e.target.value); }); $('#trTv').textContent = pg.vturn + '초'; renderTimeline(); }; m.querySelector('#trTurn').onchange = () => commit();
+// 넘김 효과 고르기 (◆ 누르면) — 묶음 탭 · 칸마다 견본(마우스를 올리면 움직임) · 최근 · 방향 · 길이 칩 · 골고루 섞기
+const TR_ARW = { l: '←', r: '→', u: '↑', d: '↓' }, TR_DIRT = { l: '다음 장면이 오른쪽에서 들어옴', r: '다음 장면이 왼쪽에서 들어옴', u: '다음 장면이 아래에서 올라옴', d: '다음 장면이 위에서 내려옴' };
+// 견본 그림: 앞 장면의 끝·다음 장면의 처음 (영상 미리보기가 준비돼 있으면 실제 장면, 아니면 A·B 카드)
+function transSamples(i) {
+  const AR = doc.w / doc.h, TW = AR >= 1 ? 104 : Math.max(30, Math.round(76 * AR)), TH = AR >= 1 ? Math.max(30, Math.min(78, Math.round(104 / AR))) : 76;
+  const mk = () => { const c = document.createElement('canvas'); c.width = TW; c.height = TH; return c; }, a = mk(), b = mk();
+  try { const V = tl.V; if (V && tl.Vkey === tlKey()) { const { list } = tlScenes(), k = list.findIndex(s0 => s0.i === i); if (k >= 0) { const s0 = list[k], s1 = list[k + 1] || list[0], big = document.createElement('canvas'); big.width = V.W; big.height = V.H; const bx = big.getContext('2d');
+    VIDEO.drawAt(bx, V, Math.max(0, s0.t0 + s0.dur - 0.05)); a.getContext('2d').drawImage(big, 0, 0, TW, TH); VIDEO.drawAt(bx, V, Math.min(V.total - 0.01, s1.t0 + 0.05)); b.getContext('2d').drawImage(big, 0, 0, TW, TH); big.width = big.height = 0; return { a, b, TW, TH, real: true }; } } } catch (e) {}
+  const card = (c, col, t) => { const g = c.getContext('2d'); g.fillStyle = col; g.fillRect(0, 0, TW, TH); g.strokeStyle = 'rgba(255,255,255,.16)'; g.lineWidth = 5; for (let k = -TH; k < TW; k += 13) { g.beginPath(); g.moveTo(k, TH); g.lineTo(k + TH, 0); g.stroke(); } g.fillStyle = '#fff'; g.font = `800 ${Math.round(Math.min(TW, TH) * 0.5)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(t, TW / 2, TH / 2 + 1); };
+  card(a, '#24304f', 'A'); card(b, '#d8453a', 'B'); return { a, b, TW, TH };
 }
-async function relinkMedia(ref) { if (!NC.media.isLocal(ref)) return; const id = ref.slice(2), m = (doc.media || {})[id]; try { const r = await NC.media.file(id, true); if (r.url) { mediaMissing.delete(id); toast('원본을 읽을 수 있게 됐습니다'); renderCanvas(); renderTimeline(); return; } if (!window.confirm(`이 PC에 원본 "${m ? m.name : ''}"이(가) 연결되어 있지 않습니다. 이 PC의 파일을 골라 다시 연결할까요?`)) return; await NC.media.relink(id); mediaMissing.delete(id); vEls.clear(); tl.Vkey = ''; toast('원본을 다시 연결했습니다'); renderCanvas(); renderTimeline(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } }
+function openTransPop(i, anchor) {
+  $('#trPop') && $('#trPop').remove(); const pg = doc.pages[i], V = vset(), r = anchor.getBoundingClientRect(), S = transSamples(i);
+  const cur0 = () => pg.vtrans || V.trans, nameOf = v => (VIDEO.TRANS.find(t => t[0] === v) || [0, v])[1], catOf = v => (VIDEO.TRANS_CATS.find(c => c[2].includes(v === 'up' ? 'slide' : v)) || VIDEO.TRANS_CATS[0])[0];
+  const dirOf = () => (pg.vtrans ? pg.vdir : V.tdir) || '', dirFor = v => VIDEO.TRANS_DIRS[v] ? (v === cur0() ? dirOf() : '') || (v === 'up' ? 'u' : 'l') : '';
+  let tab = catOf(cur0()), recent = []; try { recent = JSON.parse(localStorage.getItem('naracal-trans-recent') || '[]').filter(v => VIDEO.TRANS.some(t => t[0] === v)).slice(0, 4); } catch (e) {}
+  const reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const m = document.createElement('div'); m.id = 'trPop'; m.className = 'tr-pop tr-pop2'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', '장면 넘김 효과 고르기');
+  const tile = v => `<button data-tv="${v}" class="tr-tile${cur0() === v ? ' on' : ''}" title="${esc(nameOf(v) + (VIDEO.TRANS_NOTE[v] ? ' — ' + VIDEO.TRANS_NOTE[v] : ''))}"><canvas width="${S.TW}" height="${S.TH}"></canvas><span>${esc(nameOf(v))}${/^(flash|glitch)$/.test(v) ? ' ⚠' : ''}</span></button>`;
+  const still = b => { const c = b.querySelector('canvas'); if (!c) return; const g = c.getContext('2d'); g.save(); g.clearRect(0, 0, S.TW, S.TH); try { VIDEO.trans(g, S.a, S.b, b.dataset.tv === 'none' ? 0.6 : 0.45, b.dataset.tv, S.TW, S.TH, '#ffffff', 7, dirFor(b.dataset.tv)); } catch (e) { g.drawImage(S.a, 0, 0); } g.restore(); };
+  let anim = null; const stopAnim = () => { if (!anim) return; cancelAnimationFrame(anim.raf); const b = anim.b; anim = null; if (b.isConnected) still(b); };
+  const play = b => { if (reduce || (anim && anim.b === b)) return; stopAnim(); const v = b.dataset.tv, g = b.querySelector('canvas').getContext('2d'), T = Math.max(0.5, Math.min(1.2, Number(pg.vturn || V.turn))), h0 = 0.35, h1 = 0.45, L = h0 + T + h1, t0 = performance.now(); anim = { b, raf: 0 };
+    const step = () => { if (!anim || anim.b !== b || !b.isConnected) return; const t = ((performance.now() - t0) / 1000) % L; g.save(); g.clearRect(0, 0, S.TW, S.TH); if (t < h0) g.drawImage(S.a, 0, 0); else if (t > h0 + T) g.drawImage(S.b, 0, 0); else { try { VIDEO.trans(g, S.a, S.b, (t - h0) / T, v, S.TW, S.TH, '#ffffff', Math.floor(t * 30), dirFor(v)); } catch (e) {} } g.restore(); anim.raf = requestAnimationFrame(step); }; step(); };
+  const draw = () => {
+    stopAnim(); const cv = cur0(), dirs = VIDEO.TRANS_DIRS[cv] || '', turn = Number(pg.vturn || V.turn), dur = Number(pg.vdur || V.dur), d0 = dirFor(cv);
+    m.innerHTML = `<div class="trh"><b>${i + 1}쪽 → 다음 장면 넘김</b><small>지금: ${esc(nameOf(cv))}${dirs ? ' ' + TR_ARW[d0] : ''} · ${turn}초</small></div>
+    ${recent.length ? `<div class="tr-recent"><span>최근</span>${recent.map(tile).join('')}</div>` : ''}
+    <div class="tr-tabs" role="tablist">${VIDEO.TRANS_CATS.map(([k, t]) => `<button role="tab" data-tab="${k}" aria-selected="${tab === k}">${t}</button>`).join('')}</div>
+    <div class="tr-grid2">${(VIDEO.TRANS_CATS.find(c => c[0] === tab) || VIDEO.TRANS_CATS[0])[2].map(tile).join('')}</div>
+    ${dirs ? `<div class="tr-dir"><span>방향</span>${dirs.split('').map(d => `<button data-dir="${d}" aria-pressed="${d0 === d}" title="${TR_DIRT[d]}">${TR_ARW[d]}</button>`).join('')}</div>` : ''}
+    <label class="f"><span>넘김 길이 <small id="trTv">${turn}초</small></span></label><div class="tr-len">${[[0.4, '짧게'], [0.8, '보통'], [1.4, '길게']].map(([v, t]) => `<button data-len="${v}" aria-pressed="${Math.abs(turn - v) < 0.05}">${t} ${v}초</button>`).join('')}</div><input type="range" id="trTurn" min="0.2" max="2" step="0.1" value="${turn}" aria-label="넘김 길이">
+    ${cv !== 'none' && turn > dur * 0.4 ? `<p class="tr-warn">넘김(${turn}초)이 장면 길이(${dur}초)의 40%보다 깁니다 — 장면이 짧게 느껴질 수 있어요</p>` : ''}
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px"><button class="btn sm" id="trAll">모든 장면에 적용</button><button class="btn sm" id="trMix" title="무난한 넘김 ${VIDEO.TRANS_MIX.length}가지를 장면마다 골고루 (바로 앞과 겹치지 않게)">골고루 섞기</button><button class="btn sm" id="trClose">닫기</button></div>
+    <small class="tr-tip">마우스를 올리면 견본이 움직이고, 누르면 큰 화면에서 보여 줍니다.${S.real ? '' : ' 영상 미리보기가 준비되면 실제 장면으로 보여요.'} 한 영상에는 1~2가지만 쓰는 것이 깔끔합니다.</small>`;
+    m.querySelectorAll('.tr-tile').forEach(still);
+    m.querySelector('#trTurn').oninput = e => { tlTiming(() => { pg.vturn = Number(e.target.value); }); $('#trTv').textContent = pg.vturn + '초'; renderTimeline(); }; m.querySelector('#trTurn').onchange = () => { commit(); draw(); };
+  };
+  const previewMain = () => { const { list } = tlScenes(), x = list.find(s2 => s2.i === i); if (x) { tl.T = x.t0 + Math.max(0, x.dur - 0.3); tlPlay(); setTimeout(() => { if (tl.playing && tl.T > x.t0 + x.dur + x.turn + 0.3) tlPause(); }, (x.turn + 0.9) * 1000); } };
+  draw(); document.body.appendChild(m);
+  const place = () => { m.style.maxHeight = Math.max(280, r.top - 16) + 'px'; const pr = pgmOn() && $('#pgm') ? $('#pgm').getBoundingClientRect() : null; let lf = Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.left - 200)); if (pr && lf + m.offsetWidth > pr.left - 8 && pr.left - m.offsetWidth - 8 >= 8) lf = pr.left - m.offsetWidth - 8; /* 나란히 보기: 오른쪽 결과 화면을 가리지 않게 왼쪽으로 */ m.style.left = lf + 'px'; m.style.top = Math.max(8, r.top - m.offsetHeight - 8) + 'px'; }; place();
+  const close = () => { stopAnim(); m.remove(); document.removeEventListener('pointerdown', out, true); document.removeEventListener('keydown', escK, true); }, out = e => { if (!m.contains(e.target)) close(); }, escK = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
+  setTimeout(() => { document.addEventListener('pointerdown', out, true); document.addEventListener('keydown', escK, true); });
+  m.addEventListener('pointerover', e => { const b = e.target.closest('.tr-tile'); if (b) play(b); }); m.addEventListener('pointerleave', stopAnim);
+  m.addEventListener('focusin', e => { const b = e.target.closest('.tr-tile'); if (b) play(b); });
+  m.addEventListener('keydown', e => { const b = e.target.closest('.tr-tile'); if (!b || !/^Arrow/.test(e.key)) return; const all = [...b.parentElement.querySelectorAll('.tr-tile')], k = all.indexOf(b), cols = b.parentElement.classList.contains('tr-recent') ? 1 : 4, t = all[k + ({ ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols })[e.key]]; e.preventDefault(); e.stopPropagation(); if (t) t.focus(); });
+  let recentSave = recent.slice(); const keepRecent = v => { recentSave = [v].concat(recentSave.filter(x => x !== v)).slice(0, 4); try { localStorage.setItem('naracal-trans-recent', JSON.stringify(recentSave)); } catch (e) {} };  /* 보이는 '최근' 줄은 창을 열 때 그대로 */
+  m.onclick = e => {
+    const b = e.target.closest('[data-tv]');
+    if (b) { const v = b.dataset.tv, ds = VIDEO.TRANS_DIRS[v] || ''; tlTiming(() => { pg.vtrans = v; if (!ds || (pg.vdir && !ds.includes(pg.vdir))) delete pg.vdir; }); delete pg.vsplit; commit(); keepRecent(v); renderTimeline(); tab = catOf(v); draw(); const nb = m.querySelector(`.tr-grid2 [data-tv="${v}"]`); if (nb) nb.focus({ preventScroll: true }); previewMain(); return; }
+    const tb = e.target.closest('[data-tab]'); if (tb) { tab = tb.dataset.tab; draw(); const f = m.querySelector('.tr-grid2 .tr-tile'); if (f && e.detail === 0) f.focus(); return; }
+    const db = e.target.closest('[data-dir]'); if (db) { tlTiming(() => { if (!pg.vtrans) pg.vtrans = cur0(); pg.vdir = db.dataset.dir; }); commit(); renderTimeline(); draw(); previewMain(); return; }
+    const lb = e.target.closest('[data-len]'); if (lb) { tlTiming(() => { pg.vturn = Number(lb.dataset.len); }); commit(); renderTimeline(); draw(); return; }
+    if (e.target.id === 'trAll') { let skip = 0; tlTiming(() => doc.pages.forEach(p2 => { if (p2.vsplit) { skip++; return; } p2.vtrans = pg.vtrans || V.trans; p2.vturn = pg.vturn; if (pg.vdir) p2.vdir = pg.vdir; else delete p2.vdir; })); commit(); renderTimeline(); toastUndo(`모든 장면에 같은 넘김 효과를 넣었습니다${skip ? ` (장면을 나눈 자리 ${skip}곳은 그대로 이어짐)` : ''}`); close(); return; }
+    if (e.target.id === 'trMix') { let prev = '', n = 0, skip = 0; const vp9 = videoPages(), lastPg = vset().loop ? null : (vp9[vp9.length - 1] || {}).pg; tlTiming(() => vp9.forEach(({ pg: p2 }) => { if (p2 === lastPg) return; if (p2.vsplit) { skip++; return; } const pool = VIDEO.TRANS_MIX.filter(v => v !== prev); const v = pool[Math.floor(Math.random() * pool.length)]; p2.vtrans = v; delete p2.vdir; prev = v; n++; })); commit(); renderTimeline(); draw(); toastUndo(`넘김 ${n}곳을 골고루 넣었습니다 (무난한 ${VIDEO.TRANS_MIX.length}가지에서)${skip ? ` · 나눈 자리 ${skip}곳은 그대로` : ''}`); return; }
+    if (e.target.id === 'trClose') close();
+  };
+}
+async function relinkMedia(ref) { if (!NC.media.isLocal(ref)) return; const id = ref.slice(2), m = (doc.media || {})[id]; try { const r = await NC.media.file(id, true); if (r.url) { mediaMissing.delete(id); toast('원본을 읽을 수 있게 됐습니다'); renderCanvas(); renderTimeline(); return; } if (!window.confirm(`이 PC에 원본 "${m ? m.name : ''}"이(가) 연결되어 있지 않습니다. 이 PC의 파일을 골라 다시 연결할까요?`)) return; await NC.media.relink(id, '', nm => !(m && m.name) || nm === m.name || window.confirm(`고른 파일 이름(${nm})이 원래 이름(${m.name})과 다릅니다. 이 파일로 연결할까요?`)); mediaMissing.delete(id); vEls.clear(); tl.Vkey = ''; toast('원본을 다시 연결했습니다'); renderCanvas(); renderTimeline(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } }
 // 미리보기 재생 (첫 장면부터, 또는 지금 쪽부터)
 async function openVideoPlayer(fromCur) {
   let d = $('#dlgVplay'); if (d) d.remove();
@@ -2617,6 +2706,13 @@ function openWizard(year, themeId) {
 }
 function wizardTheme() { const th = clone(CAL.THEMES.find(x => x.id === wz.themeId) || CAL.THEMES[0]); th.colorA = wz.colorA; th.colorB = wz.colorB; return th; }
 function wizardDoc() { const t = Object.assign({}, doc, { calendar: clone(doc.calendar), w: 224, h: 154, bleed: 0, cropMarks: false }); t.calendar.year = wz.year; t.calendar.theme = wizardTheme(); return t; }
+// 크기를 바꾼 달력 쪽: 달력 칸이 위 요소들 바로 아래부터 아래 요소(로고 등) 바로 위까지 차지 (세로로 긴 A3에서 생기던 큰 빈칸)
+function calFillGap(pg) {
+  const c = pg.els.find(e => e.type === 'cal'); if (!c) return;
+  const above = pg.els.filter(e => e !== c && e.y + e.h <= c.y + 0.5), below = pg.els.filter(e => e !== c && e.y >= c.y + c.h - 0.5);
+  const top = above.length ? Math.max(...above.map(e => e.y + e.h)) + Math.min(10, doc.h * 0.02) : c.y, bot = below.length ? Math.min(...below.map(e => e.y)) - Math.min(8, doc.h * 0.015) : c.y + c.h;
+  if (bot - top > c.h) { c.y = Math.round(top * 10) / 10; c.h = Math.round((bot - top) * 10) / 10; }
+}
 function wizardPages(kind) { const t = wizardDoc(); const saved = doc; doc = t; try { const pages = CAL.buildPages(t, uid, { year: wz.year, kind }); pages.forEach(p => p.els.forEach(el => { if (el.type === 'cal') el.s = Object.assign({}, el.s, { weekStart: wz.weekStart, rows: wz.rows }); if (el.type === 'mini') el.s = Object.assign({}, el.s, { weekStart: wz.weekStart }); })); return pages; } finally { doc = saved; } }
 function wizardSheet(pg) { const t = wizardDoc(); const saved = doc; doc = t; try { return sheetHTML(pg, 'thumb'); } finally { doc = saved; } }
 function themeThumbs() { const saved = doc; const out = []; try { CAL.THEMES.forEach(th => { const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: wz.year }), w: 224, h: 154, bleed: 0, cropMarks: false }); doc = t; const pv = CAL.buildPages(t, uid, { year: wz.year, kind: 'virtue', month: 1 })[0]; out.push({ th, html: sheetHTML(pv, 'thumb') }); }); } finally { doc = saved; } return out; }
@@ -2631,7 +2727,7 @@ function renderWizard() {
     <h3>달력 모양</h3><div class="grid2"><label class="f"><span>주 시작</span><select id="wzWs"><option value="0" ${wz.weekStart === 0 ? 'selected' : ''}>일요일</option><option value="1" ${wz.weekStart === 1 ? 'selected' : ''}>월요일</option></select></label><label class="f"><span>줄 수</span><select id="wzRows"><option value="merge" ${wz.rows === 'merge' ? 'selected' : ''}>5줄 (24/31 합침)</option><option value="6" ${wz.rows === '6' ? 'selected' : ''}>6줄</option><option value="auto" ${wz.rows === 'auto' ? 'selected' : ''}>자동</option></select></label></div>
     <h3>인성 페이지 색</h3><div class="grid2"><label class="f"><span>홀수 달</span><input type="color" id="wzA" value="${wz.colorA}"></label><label class="f"><span>짝수 달</span><input type="color" id="wzB" value="${wz.colorB}"></label></div>
     <h3>넣는 방식</h3><div class="seg"><button data-wzmode="replace" aria-pressed="${wz.mode === 'replace'}">문서 새로 만들기</button><button data-wzmode="append" aria-pressed="${wz.mode === 'append'}">현재 문서 뒤에 추가</button></div>
-    <p class="hint" style="margin-top:10px">${wz.mode === 'replace' ? '지금 문서의 페이지를 모두 지우고 224×154mm 문서로 새로 만듭니다.' : `현재 문서(${doc.w}×${doc.h}mm) 끝에 ${pageCount}쪽을 덧붙입니다.`}</p>
+    <p class="hint" style="margin-top:10px">${wz.mode === 'replace' ? '지금 문서의 페이지를 모두 지우고 224×154mm 문서로 새로 만듭니다.' : `현재 문서(${Math.round(doc.w)}×${Math.round(doc.h)}mm) 끝에 ${pageCount}쪽을 덧붙입니다${Math.abs(doc.w - 224) > 0.5 || Math.abs(doc.h - 154) > 0.5 ? ' — 탁상 달력(224×154) 배치를 이 크기에 맞춰 늘려 넣습니다' : ''}.`}</p>
     <button class="btn primary full" id="wzGo" style="margin-top:6px">${wz.year}년 ${pageCount}쪽 만들기</button>
     ${doc.pages.some(p => p.kind) ? `<button class="btn full" id="wzRetheme" style="margin-top:6px">현재 캘린더에 디자인만 적용</button>` : ''}
     <p class="hint">문구(덕목·명언·실천·사자성어)는 기본 문구로 먼저 채워지며, 만든 뒤 AI 도구나 직접 입력으로 바꿉니다.</p>
@@ -2661,8 +2757,9 @@ function renderWizard() {
       $('#dlgWizard').close(); toast(`새 문서 "${nm}" ${pages.length}쪽을 만들었습니다 — 저장(Ctrl+S)으로 내 드라이브에 저장하세요${kept ? ` · 저장하지 않은 "${kept}"는 직전 문서로 보관` : wasFile ? ` · 앞 문서는 "${wasFile}"에 그대로` : ''}`);
       if (!doc.holidays[wz.year]) setTimeout(() => openHoliday(wz.year), 400); return; }
     doc.calendar.year = wz.year; doc.calendar.theme = theme;
-    const pages = wizardPages(wz.kind); doc.pages.push(...pages); ensureAllHolidays(); commit(); goto(doc.pages.length - pages.length);
-    $('#dlgWizard').close(); { const nm0 = oldName, w0 = oldW, h0 = oldH; toastUndo(`${wz.year}년 ${pages.length}쪽을 만들었습니다`, () => { doc.name = nm0; doc.w = w0; doc.h = h0; $('#pname').value = nm0; zoom = 0; renderAll(); fitCanvas(); }); }
+    let pages = wizardPages(wz.kind); const odd = Math.abs(doc.w - 224) > 0.5 || Math.abs(doc.h - 154) > 0.5; if (odd) { pages = resizedDoc({ w: 224, h: 154, pages }, doc.w, doc.h, 'fit', [0.5, 0.5]).pages; pages.forEach(calFillGap); }  /* 다른 크기 문서에 덧붙일 때 그 크기로 + 달력이 머리 아래 빈칸까지 채움 */
+    doc.pages.push(...pages); ensureAllHolidays(); commit(); goto(doc.pages.length - pages.length);
+    $('#dlgWizard').close(); { const nm0 = oldName, w0 = oldW, h0 = oldH; toastUndo(`${wz.year}년 ${pages.length}쪽을 만들었습니다${odd ? ` — 이 문서 크기(${Math.round(doc.w)}×${Math.round(doc.h)}mm)에 맞췄습니다` : ''}`, () => { doc.name = nm0; doc.w = w0; doc.h = h0; $('#pname').value = nm0; zoom = 0; renderAll(); fitCanvas(); }); }
     if (!doc.holidays[wz.year]) setTimeout(() => openHoliday(wz.year), 400);
   };
   const rt = $('#wzRetheme'); if (rt) rt.onclick = () => { doc.calendar.year = wz.year; doc.calendar.theme = wizardTheme(); const nrep = CAL.retheme(doc, uid, wz.year); ensureAllHolidays(); commit(); renderAll(); $('#dlgWizard').close(); toast(`디자인을 ${nrep}쪽에 적용했습니다 (문구·일정·그림 유지)`); };
@@ -2847,9 +2944,11 @@ function renderInspector() {
     const full = Number(el.dur || el.tout || 0), m = (doc.media || {})[String(el.src).slice(2)];
     h += `<h3>동영상</h3><p class="hint" style="margin-top:0">${esc(m ? m.name : el.name || '')} · 원본 ${full.toFixed(1)}초 · <b>이 PC에만 있는 원본</b>(문서에는 이름만 저장)</p>
     <div class="grid2">${F('쓸 구간 시작', 'tin', el.tin || 0, { type: 'slider', min: 0, max: Math.max(0.1, full), step: 0.1, unit: '초', def: 0 })}${F('쓸 구간 끝', 'tout', el.tout || full, { type: 'slider', min: 0.1, max: Math.max(0.1, full), step: 0.1, unit: '초', def: full })}</div>
-    <div class="grid2">${F('소리 크기', 'vol', el.vol == null ? 1 : el.vol, { type: 'slider', min: 0, max: 2, step: 0.05, pct: true, def: 1 })}${F('채우기', 'fit', el.fit || 'cover', { type: 'select', options: [['cover', '꽉 채우기(잘림)'], ['contain', '전체 보이기']] })}</div>
+    <div class="grid2">${F('소리 크기', 'vol', el.vol == null ? 1 : el.vol, { type: 'slider', min: 0, max: 2, step: 0.05, pct: true, def: 1 })}${F('채우기', 'fit', el.fit || 'cover', { type: 'select', options: [['cover', '꽉 채우기(잘림)'], ['contain', '전체 보이기'], ['blur', '전체 보이기 + 흐린 배경']] })}</div>
+    <div class="grid2">${F('속도', 'speed', String(el.speed || 1), { type: 'select', options: [['0.25', '0.25배 (아주 느리게)'], ['0.5', '0.5배 (슬로모션)'], ['0.75', '0.75배'], ['1', '1배 (보통)'], ['1.5', '1.5배'], ['2', '2배 (빠르게)'], ['4', '4배']] })}<p class="hint" style="margin:18px 0 0">${Number(el.speed || 1) !== 1 ? '속도를 바꾼 동영상은 소리를 빼고 넣습니다' : '느리게 하면 같은 구간이 더 길게 보입니다'}</p></div>
     <div class="grid3">${F('소리 끄기', 'mute', !!el.mute, { type: 'check' })}${F('반복', 'loop', !!el.loop, { type: 'check' })}${F('둥근 모서리', 'radius', el.radius || 0, { type: 'number', step: 0.5 })}</div>
-    <div class="row" style="gap:6px"><button class="btn sm" id="vFitScene">장면 길이를 구간에 맞추기</button><button class="btn sm" id="vRelink">원본 다시 연결</button></div>` + geo;
+    <div class="row" style="gap:6px"><button class="btn sm" id="vFitScene">장면 길이를 구간에 맞추기</button><button class="btn sm" id="vRelink">원본 다시 연결</button></div>
+    <details class="fx" ${el.fx && Object.keys(el.fx).length ? 'open' : ''}><summary><span class="chk">색 보정 (밝기·대비·채도)</span></summary><div class="tstyles sm">${FX.IMG_PRESETS.map(([id, n]) => `<button class="tsb" data-imgpreset="${id}"><span>${n}</span></button>`).join('')}</div><div class="grid2 sls">${F('밝기', 'fx.bri', (el.fx || {}).bri == null ? 100 : el.fx.bri, { type: 'slider', min: 20, max: 200, step: 1, unit: '%', def: 100 })}${F('대비', 'fx.con', (el.fx || {}).con == null ? 100 : el.fx.con, { type: 'slider', min: 20, max: 200, step: 1, unit: '%', def: 100 })}${F('채도', 'fx.sat', (el.fx || {}).sat == null ? 100 : el.fx.sat, { type: 'slider', min: 0, max: 250, step: 1, unit: '%', def: 100 })}${F('색조', 'fx.hue', (el.fx || {}).hue || 0, { type: 'slider', min: 0, max: 360, step: 1, unit: '°', def: 0 })}</div></details>` + geo;
   } else if (el.type === 'path' && el.d) {
     h += `<h3>벡터 모양</h3>${fillBlock}${(el.fillType || 'solid') === 'solid' ? `${F('채우기 색', 'fill', el.fill || '#FFE89A', { type: 'color' })}<button class="btn sm" data-set="fill:">채우기 없음</button>` : el.fillType === 'raw' ? '<p class="hint" style="margin:2px 0 8px">원래 그라데이션을 쓰고 있습니다. 단색·그라데이션을 고르면 바뀝니다.</p>' : ''}
     <div class="grid2">${F('선 색', 'stroke', el.stroke || '#000000', { type: 'color' })}${F('선 두께', 'strokeW', el.strokeW || 0, { type: 'slider', min: 0, max: 8, step: 0.1, unit: 'mm', def: 0 })}</div>
@@ -2912,7 +3011,7 @@ function renderInspector() {
     const at = e.target.closest('[data-atab]'); if (at) { animTab = at.dataset.atab; renderInspector(); return; }
     const ab = e.target.closest('[data-anim]'); if (ab) { const v = ab.dataset.anim, k = ab.dataset.ak || 'anim'; const defs = { anim: { d: 0, s: 0.8 }, animOut: { s: 0.6, at: 0 }, animLoop: { T: 1.2, a: 1 }, kb: { a: 0.12 } }; if (v === 'none') delete el[k]; else { const was = el[k] && el[k].t; el[k] = Object.assign({}, defs[k], el[k] || {}, { t: v }); if (k === 'kb' && was !== v) { delete el.kb.p0; delete el.kb.p1; } /* 다른 움직임을 고르면 나눈 구간 정보는 버리고 처음부터 */ } if (k === 'anim' && v !== 'none' && VIDEO.TEXT_ANIMS.some(x => x[0] === v) && (!el.anim.s || el.anim.s < 1.2)) el.anim.s = Math.max(1.2, Math.min(4, (el.text || '').length * 0.06)); commit(); renderInspector(); if (sideTab === 'video') renderSide(); renderTimeline(); return; }
     if (e.target.closest('#iAnimPlay')) { openVideoPlayer(true); return; }
-    if (e.target.closest('#vFitScene')) { page().vdur = Math.max(0.5, Math.round((Number(el.tout || el.dur || 0) - Number(el.tin || 0)) * 10) / 10); commit(); renderAll(); toast(`장면 길이를 ${page().vdur}초로 맞췄습니다`); return; }
+    if (e.target.closest('#vFitScene')) { page().vdur = Math.max(0.5, Math.round(((Number(el.tout || el.dur || 0) - Number(el.tin || 0)) / Math.max(0.1, Number(el.speed || 1)) + (el.anim ? Number(el.anim.d || 0) : 0)) * 10) / 10); commit(); renderAll(); toast(`장면 길이를 ${page().vdur}초로 맞췄습니다`); return; }
     if (e.target.closest('#vRelink')) { relinkMedia(el.src); return; }
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.tfi) { toggleFmt(b.dataset.tfi); if (!editing) return; b.classList.toggle('on'); return; }
@@ -3168,7 +3267,7 @@ async function createDesign(w, h, name, fmtId) {
   await keepCurrentDoc();
   const inDir = await store.folderReady();
   await store.disconnect();
-  doc = newDoc(['custom', name, w, h]); doc.name = name; doc.fmt = fmtId || ''; doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); { const f = FORMATS.find(x => x[0] === fmtId); if (f && ['print', 'doc', 'cal'].includes(f[2]) && f[5] === 'mm') doc.bleed = 3; } hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer);
+  doc = newDoc(['custom', name, w, h]); doc.name = name; doc.fmt = fmtId || ''; doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); { const f = FORMATS.find(x => x[0] === fmtId); if (f) doc.bleed = bleedFor(f); } if (['video', 'shorts'].includes(fmtId)) setTimeout(() => { if (!tl.open) tlShow(true); }, 300); hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer);
   const into = inDir && $('#dlgDrive') && drv.view === 'drive' ? drv.path : null;
   if (into && into.length) { try { await store.saveIntoFolder(doc, into); rememberLoc(into); setStatus(`${into.length ? into.join(' › ') + ' 폴더' : '동기화 폴더'}에 저장됨 · ${store.state.fileName}`); } catch (e) { toast('폴더에 저장하지 못했습니다: ' + e.message, true); } }
   else if (inDir) setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)');
@@ -3399,7 +3498,7 @@ async function saveAs() {
   try {
     if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
     const prev = doc.name, prevId = doc.docId; doc.name = nm.trim(); doc.docId = ''; $('#pname').value = doc.name; // 새 파일은 버전 기록을 새로 시작
-    if (inDir) { await store.saveIntoFolder(doc, loc.path); rememberLoc(loc.path); }
+    if (inDir) { try { await store.saveIntoFolder(doc, loc.path); } catch (e) { doc.name = prev; doc.docId = prevId; $('#pname').value = prev; throw e; } rememberLoc(loc.path); }
     else if (store.state.supported) { try { await store.connectNew(doc); } catch (e) { doc.name = prev; doc.docId = prevId; $('#pname').value = prev; throw e; } }
     else { store.download(doc); }
     updateSaveBadge(); setStatus(`새 이름으로 저장됨 · ${store.state.fileName || doc.name}`); toast(`"${doc.name}"(으)로 저장했습니다. 이제 이 파일에서 작업합니다.`);
@@ -4085,6 +4184,13 @@ function textWidthMM(el) { _tm.font = `${el.italic ? 'italic ' : ''}${el.weight 
 function outOfGamut(c) { if (!/^#[0-9a-f]{6}$/i.test(c || '')) return false; const n = parseInt(c.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, bl = (n & 255) / 255, mx = Math.max(r, g, bl), mn = Math.min(r, g, bl), sat = mx ? (mx - mn) / mx : 0; if (sat < 0.8 || mx < 0.8) return false; let h = 0; const d = mx - mn; if (mx === r) h = ((g - bl) / d) % 6; else if (mx === g) h = (bl - r) / d + 2; else h = (r - g) / d + 4; h = (h * 60 + 360) % 360; return (h >= 75 && h <= 250) || (h >= 270 && h <= 320); }
 // 검정에 가까운데 순수 검정(#000000)이 아닌 색 (작은 글자는 인쇄 때 CMYK 4색으로 갈라져 번짐)
 function nearBlack(c) { c = String(c || '').trim(); if (/^#[0-9a-f]{3}$/i.test(c)) c = '#' + c.slice(1).split('').map(x => x + x).join(''); if (!/^#[0-9a-f]{6}$/i.test(c)) return false; const n = parseInt(c.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, bl = n & 255; return n !== 0 && Math.max(r, g, bl) <= 72 && Math.max(r, g, bl) - Math.min(r, g, bl) <= 24; }
+// 달력 요소에서 일정이 넘치는 날짜 (보이지 않는 곳에 실제 크기로 그려 잼)
+function calOverflowDays(el) {
+  const box = document.createElement('div'); box.style.cssText = 'position:fixed;left:-99999px;top:0;visibility:hidden;pointer-events:none';
+  box.innerHTML = `<div class="el el-cal" style="position:absolute;left:0;top:0;width:${el.w}mm;height:${el.h}mm">${CAL.calHTML(el, doc)}</div>`; document.body.appendChild(box);
+  const out = []; try { box.querySelectorAll('.cell[data-day]').forEach(c => { if (c.dataset.day && c.scrollHeight > c.clientHeight + 1) out.push(Number(c.dataset.day)); }); } finally { box.remove(); }
+  return out;
+}
 function printIssues(pages) {
   const out = [], b = Number(doc.bleed) || 0, nb = new Map();
   { /* 인쇄물인데 도련 0mm + 가장자리까지 색·그림 → 재단 때 흰 줄 (화면용 px 문서는 도련이 필요 없어 건너뜀) */
@@ -4106,6 +4212,7 @@ function printIssues(pages) {
       const m = Math.min(x0, y0, doc.w - x1, doc.h - y1);
       if (m < SF - 0.05) add(`· 재단선에서 ${Math.max(0, Math.round(m * 10) / 10)}mm — 안전 여백(${SF}mm) 안으로 옮기세요 (잘릴 수 있음)`);
     }
+    if (el.type === 'cal') { const od = calOverflowDays(el); if (od.length) add(`· ${el.month}월 ${od.slice(0, 6).join('·')}일${od.length > 6 ? ' 등' : ''} 칸에 일정이 넘쳐 아래가 잘립니다 — 일정 글자를 줄이거나(칸 서식) 그 줄 높이를 늘리세요`); }
     if (el.type === 'text' && el.size && el.size < 6) add(`· 글자 ${el.size}pt — 6pt보다 작으면 인쇄 때 읽기 어렵습니다`);
     if (el.type === 'text' && el.size && el.size <= 10 && nearBlack(el.color)) { if (!nb.has(pi)) nb.set(pi, []); nb.get(pi).push(el); }
     if (el.type === 'cal' && el.s) { const small = ['evSize', 'daySize'].filter(k => el.s[k] && el.s[k] < 5); if (small.length) add(`· 달력 글자 ${Math.min(...small.map(k => el.s[k]))}pt — 5pt보다 작으면 인쇄 때 읽기 어렵습니다`); }
@@ -4808,8 +4915,17 @@ async function openMeasImport(again) {
    엡손 잉크젯: 배율 100%(실제 크기)·테두리 없음·용지 종류·품질 안내 */
 /* 출력 설정: 이 PC에 기억. paper = 'doc'(문서 크기) | 'A4' | 'A3' | 'B5' | 'Letter', orient = 'auto'|'p'|'l', fit = 'fit'(용지에 맞춤)|'actual'(실제 크기 100%)|'custom'(배율), margin mm, ax·ay 정렬(0·0.5·1), dx·dy 위치 보정 mm */
 const PR_PAPERS = { A4: [210, 297], A3: [297, 420], B5: [182, 257], Letter: [215.9, 279.4] };
-let prState = Object.assign({ pages: 'all', range: '', mode: 'img', dpi: 300, frame: true, paper: 'A4', orient: 'auto', fit: 'fit', pct: 100, margin: 4, ax: 0.5, ay: 0.5, dx: 0, dy: 0, pv: 0 }, (() => { try { const o = JSON.parse(localStorage.getItem('naracal-print') || '{}'); delete o.pages; delete o.range; delete o.pv; return o; } catch (e) { return {}; } })());
-const prSave = () => { const o = Object.assign({}, prState); delete o.pages; delete o.range; delete o.pv; lsSet('naracal-print', o); };
+const PR_DEF = { pages: 'all', range: '', mode: 'img', dpi: 300, frame: true, paper: 'A4', orient: 'auto', fit: 'fit', pct: 100, margin: 4, ax: 0.5, ay: 0.5, dx: 0, dy: 0, pv: 0 };
+const prLoad = k => { try { const o = JSON.parse(localStorage.getItem(k) || 'null'); if (!o) return null; delete o.pages; delete o.range; delete o.pv; return o; } catch (e) { return null; } };
+let prKey = 'naracal-print';  /* 상장은 'naracal-print-cert'에 따로 기억 (이 PC 프린터 값이라 동기화하지 않음) */
+let prState = Object.assign({}, PR_DEF, prLoad(prKey) || {});
+const prSave = () => { const o = Object.assign({}, prState); delete o.pages; delete o.range; delete o.pv; lsSet(prKey, o); };
+function prUse(cert) {
+  const k = cert ? 'naracal-print-cert' : 'naracal-print'; if (k === prKey) return; prSave();
+  const keep = { pages: prState.pages, range: prState.range }; let o = prLoad(k);
+  if (!o && cert) { const g = prLoad('naracal-print') || {}; o = (Number(g.dx) || Number(g.dy)) ? g : { fit: 'actual', margin: 0 }; }  /* 처음: 예전에 맞춰 둔 위치 보정이 있으면 그대로 이어받음, 없으면 실제 크기 */
+  prKey = k; prState = Object.assign({}, PR_DEF, o || {}, keep);
+}
 function prPages() {
   const n = doc.pages.length, S = prState; if (S.pages === 'cur') return [cur]; if (S.pages === 'sel') return [...pgSel].filter(i => i < n).sort((a, b) => a - b);
   if (S.pages === 'cert') return doc.pages.map((p, i) => p.cert ? i : -1).filter(i => i >= 0);
@@ -4828,6 +4944,7 @@ function prLayout() {
 function openPrint(pre) {
   endEdit(); let d = $('#dlgPrint'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgPrint'; d.className = 'wide'; document.body.appendChild(d); }
   const hasCert = doc.pages.some(p => p.cert), isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent), isEdge = /Edg\//.test(navigator.userAgent);
+  prUse(hasCert && (pre === 'cert' || doc.pages.every(p => p.cert || !p.els.length)));
   prState.frame = !(doc.cert && doc.cert.printFrame === false); /* 상장 패널의 '틀도 함께 인쇄'와 같게 시작 */
   if (pre === 'cert' && hasCert) { prState.pages = 'cert'; if (Math.abs(doc.w - 210) < 1 && Math.abs(doc.h - 297) < 1) prState.paper = 'A4'; } else if (prState.pages === 'cert' && !hasCert) prState.pages = 'all';
   if (prState.pages === 'sel' && pgSel.size < 2) prState.pages = 'all'; prState.pv = 0;
@@ -4838,7 +4955,7 @@ function openPrint(pre) {
     const keepVis = []; if (C) doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { keepVis.push(e.id); elVisOv.set(e.id, !!S.frame); } }));
     let sheet = ''; try { if (pvI != null) { const kk = (L.w * mmpx) / (doc.w * MM); sheet = `<div class="prpage" style="left:${L.x * mmpx}px;top:${L.y * mmpx}px;width:${L.w * mmpx}px;height:${L.h * mmpx}px"><div style="transform:scale(${kk});transform-origin:0 0;position:absolute;left:0;top:0">${sheetHTML(doc.pages[pvI], 'thumb')}</div></div>`; } } finally { keepVis.forEach(id => elVisOv.delete(id)); }
     const seg = (key, opts) => `<div class="seg">${opts.map(([v, t, ti]) => `<button data-pk="${key}" data-pv="${v}" aria-pressed="${String(S[key]) === String(v)}" ${ti ? `title="${ti}"` : ''}>${t}</button>`).join('')}</div>`;
-    d.innerHTML = `<div class="dhead"><h2>🖨 출력 <small>${list.length}쪽 · ${esc(S.paper === 'doc' ? '문서 크기' : S.paper)} ${L.pw > L.ph ? '가로' : '세로'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody prdlg2">
+    d.innerHTML = `<div class="dhead"><h2>🖨 출력 <small>${prKey === 'naracal-print-cert' ? '상장용 설정(따로 기억) · ' : ''}${list.length}쪽 · ${esc(S.paper === 'doc' ? '문서 크기' : S.paper)} ${L.pw > L.ph ? '가로' : '세로'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody prdlg2">
       <div class="prpv"><div class="prpaper" style="width:${L.pw * mmpx}px;height:${L.ph * mmpx}px">${S.fit !== 'actual' || S.margin ? `<div class="prmargin" style="inset:${3 * mmpx}px" title="보통 프린터가 못 찍는 가장자리(약 3mm) — 테두리 없음이 아니면 이 밖은 잘릴 수 있음"></div>` : ''}${sheet}</div>
         <div class="prpvnav">${list.length > 1 ? `<button class="btn sm icon" data-prnav="-1" ${S.pv ? '' : 'disabled'}>‹</button>` : ''}<span>${pvI != null ? `${S.pv + 1} / ${list.length}쪽 (문서 ${pvI + 1}쪽)` : '출력할 쪽이 없습니다'}</span>${list.length > 1 ? `<button class="btn sm icon" data-prnav="1" ${S.pv < list.length - 1 ? '' : 'disabled'}>›</button>` : ''}</div>
         <p class="hint prsize">디자인 ${Math.round(doc.w)}×${Math.round(doc.h)}mm → 종이에 <b>${Math.round(L.w * 10) / 10}×${Math.round(L.h * 10) / 10}mm (${Math.round(L.k * 1000) / 10}%)</b>${L.over ? ' · <b style="color:#b3261e">종이 밖으로 나갑니다</b>' : ''}</p></div>
@@ -5385,10 +5502,10 @@ function renderResize() {
   B.querySelectorAll('[name=rsMode]').forEach(r => r.onchange = () => { S.mode = r.value; renderResize(); });
   B.querySelectorAll('[data-rsa]').forEach(b => b.onclick = () => { S.A = b.dataset.rsa.split(',').map(Number); renderResize(); });
   if ($('#rsPrev')) $('#rsPrev').onclick = () => { S.pi--; renderResize(); }; if ($('#rsNext')) $('#rsNext').onclick = () => { S.pi++; renderResize(); };
-  $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode, S.A); doc.pages = nd.pages; doc.w = W; doc.h = H; doc.fmt = S.fmt || ''; { const f = FORMATS.find(x => x[0] === S.fmt); if (f) doc.bleed = ['print', 'doc', 'cal'].includes(f[2]) && f[5] === 'mm' ? (doc.bleed || 3) : 0; } commit();  /* 인쇄물↔SNS로 바꾸면 도련도 맞춤 */ zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toastUndo(`크기를 ${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm로 바꿨습니다`, () => { zoom = 0; fitCanvas(); }); };
+  $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode, S.A); doc.pages = nd.pages; doc.w = W; doc.h = H; doc.fmt = S.fmt || ''; { const f = FORMATS.find(x => x[0] === S.fmt); if (f) doc.bleed = bleedFor(f); } commit();  /* 인쇄물↔SNS로 바꾸면 도련도 맞춤 */ zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toastUndo(`크기를 ${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm로 바꿨습니다`, () => { zoom = 0; fitCanvas(); }); };
   $('#rsCopy').onclick = async () => {
     const f = FORMATS.find(x => x[0] === S.fmt); const nd = resizedDoc(doc, W, H, S.mode, S.A); nd.fmt = S.fmt || ''; nd.name = `${doc.name || '새 디자인'} (${f ? f[1] : `${Math.round(W)}×${Math.round(H)}`})`;
-    if (f) nd.bleed = ['print', 'doc', 'cal'].includes(f[2]) && f[5] === 'mm' ? (doc.bleed || 3) : 0;
+    if (f) nd.bleed = bleedFor(f);
     $('#dlgResize').close(); gcAssets();
     try {
       if (await store.folderReady()) { const h = await store.copyIntoFolder(nd); if (window.confirm(`"${h.name.replace(/\.design\.json$/i, '')}"을(를) 만들었습니다.\n\n확인: 새 크기 디자인을 열어 다듬기\n취소: 지금 문서에서 계속`)) await openFolderDoc(h, '새 크기 디자인을 열었습니다'); else toast('새 크기 사본을 만들었습니다 (열기 목록에 있습니다)'); }
@@ -5708,7 +5825,7 @@ async function runRacha() {
 }
 
 // 점검용 (주소에 ?qa 가 있을 때만): 자동 시험에서 문서 상태를 읽음
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { live: NC.live, confirmBtns, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { tlShow, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML };
 
 /* ---- 패널 너비 조절 ---- */
 (function () {

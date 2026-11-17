@@ -9,7 +9,14 @@ NC.video = (function () {
   const LOOPS = [['none', '없음'], ['pulse', '두근두근'], ['float', '둥실둥실'], ['swing', '흔들흔들'], ['shake', '부르르'], ['blink', '깜빡깜빡'], ['spin', '빙글빙글'], ['beat', '쿵쿵']];
   const KBS = [['none', '없음'], ['in', '천천히 다가가기'], ['out', '천천히 물러나기'], ['left', '왼쪽으로 흐르기'], ['right', '오른쪽으로 흐르기'], ['up', '위로 흐르기'], ['down', '아래로 흐르기']];
   const CAMS = [['none', '없음'], ['in', '천천히 다가가기'], ['out', '천천히 물러나기'], ['left', '왼쪽으로 흐르기'], ['right', '오른쪽으로 흐르기']];
-  const TRANS = [['soft', '부드럽게 넘김'], ['fade', '겹치며 바뀜'], ['slide', '옆으로 밀기'], ['bounce', '밀고 튕기기'], ['up', '위로 밀기'], ['zoom', '다가오며'], ['pullin', '당겨 들어가기'], ['pullout', '물러나기'], ['whip', '휙 넘기기'], ['spin', '빙글 돌며'], ['blur', '흐려지며 바뀜'], ['flash', '번쩍'], ['black', '검게 넘김'], ['iris', '원으로 열기'], ['wipe', '닦아내기'], ['blinds', '블라인드'], ['glitch', '지지직'], ['shake', '흔들며 바뀜'], ['none', '바로 바뀜']];
+  const TRANS = [['soft', '부드럽게 넘김'], ['fade', '겹치며 바뀜'], ['slide', '옆으로 밀기'], ['bounce', '밀고 튕기기'], ['up', '위로 밀기'], ['zoom', '다가오며'], ['pullin', '당겨 들어가기'], ['pullout', '물러나기'], ['whip', '휙 넘기기'], ['spin', '빙글 돌며'], ['blur', '흐려지며 바뀜'], ['flash', '번쩍'], ['black', '검게 넘김'], ['iris', '원으로 열기'], ['wipe', '닦아내기'], ['blinds', '블라인드'], ['glitch', '지지직'], ['shake', '흔들며 바뀜'], ['none', '바로 바뀜'],
+    ['cover', '덮으며 들어오기'], ['split', '가운데 갈라짐'], ['page', '책장 넘기기'], ['peel', '모서리 넘기기'], ['flip', '뒤집기'], ['cube', '상자 돌리기'], ['doors', '문 열기'], ['clock', '시계 닦기'], ['checker', '바둑판'], ['heart', '하트로 열기'], ['star', '별로 열기'], ['leak', '빛 번짐'], ['mosaic', '모자이크'], ['wave', '물결']];
+  // 고르는 창의 묶음 (프리미어·파이널컷 분류를 쉬운 말로). 'up'은 예전 문서용 — 이제 '옆으로 밀기 ↑'
+  const TRANS_CATS = [['basic', '기본', ['soft', 'fade', 'black', 'flash', 'none']], ['push', '밀기', ['slide', 'bounce', 'cover', 'whip', 'split']], ['move', '확대·회전', ['zoom', 'pullin', 'pullout', 'spin', 'blur']], ['shape', '닦기·모양', ['wipe', 'iris', 'clock', 'blinds', 'checker', 'heart', 'star']], ['paper', '종이·입체', ['page', 'peel', 'flip', 'cube', 'doors']], ['fx', '효과', ['leak', 'mosaic', 'wave', 'glitch', 'shake']]];
+  // 방향을 고를 수 있는 넘김: l = 다음 장면이 오른쪽에서(왼쪽으로 감), r = 왼쪽에서, u = 아래에서 위로, d = 위에서 아래로
+  const TRANS_DIRS = { slide: 'lrud', bounce: 'lrud', cover: 'lrud', whip: 'lrud', wipe: 'lrud', page: 'lr', peel: 'lr', cube: 'lr' };
+  const TRANS_NOTE = { flash: '화면이 밝게 번쩍여요 — 자주 쓰지 마세요', glitch: '깜빡임이 있어요 — 자주 쓰지 마세요', heart: '가끔 쓰기 좋아요', star: '가끔 쓰기 좋아요', cube: '가끔 쓰기 좋아요', peel: '가끔 쓰기 좋아요' };
+  const TRANS_MIX = ['soft', 'fade', 'slide', 'cover', 'zoom', 'wipe', 'page', 'iris'];  // 골고루 섞기: 무난한 것만
   const DEF = { dur: 5, trans: 'soft', turn: 0.8, loop: false, q: '1080', fps: 30 };
   const ease = t => 1 - Math.pow(1 - t, 3);
   const back = t => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
@@ -59,12 +66,12 @@ NC.video = (function () {
         const L = { cv, ox: c.x, oy: c.y, box: m.box, cx: m.box.x + m.box.w / 2, cy: m.box.y + m.box.h / 2, anim: has(e.anim) ? e.anim : null, out: has(e.animOut) ? e.animOut : null, loop: has(e.animLoop) ? e.animLoop : null, kb: has(e.kb) ? e.kb : null };
         if (L.kb) { L.kbox = { x: e.x * kx, y: e.y * ky, w: e.w * kx, h: e.h * ky }; }
         if (cv && cv.__units) { L.units = cv.__units.map(u => Object.assign({}, u, { x: u.x - c.x, y: u.y - c.y })); L.lines = linesOf(L.units); }
-        if (e.type === 'video') { L.video = { el: e, box: { x: e.x * kx, y: e.y * ky, w: e.w * kx, h: e.h * ky }, rad: Number(e.radius || 0) * kx, tin: Number(e.tin || 0), tout: Number(e.tout || e.dur || 0), loop: !!e.loop, d0: e.anim ? Number(e.anim.d || 0) : 0 }; L.vEl = o.videoEl ? await o.videoEl(e) : null; }
+        if (e.type === 'video') { L.video = { el: e, kx, sp: Math.max(0.1, Math.min(4, Number(e.speed || 1))), box: { x: e.x * kx, y: e.y * ky, w: e.w * kx, h: e.h * ky }, rad: Number(e.radius || 0) * kx, tin: Number(e.tin || 0), tout: Number(e.tout || e.dur || 0), loop: !!e.loop, d0: e.anim ? Number(e.anim.d || 0) : 0 }; L.vEl = o.videoEl ? await o.videoEl(e) : null; }
         layers.push(L);
       }
       if (P.top.length) layers.push({ cv: cvs[cvs.length - 1], ox: 0, oy: 0 });
       const tr = pg.vtrans || V.trans, turn = tr === 'none' ? 0 : Number(pg.vturn || V.turn);
-      scenes.push({ dur: Number(pg.vdur || V.dur), trans: tr, turn, layers, bg: pg.bg || '#ffffff', cam: typeof pg.vcam === 'string' ? (pg.vcam !== 'none' && pg.vcam ? { t: pg.vcam, a: Number(pg.vcamA || 0.06), p: pg.vcamP } : null) : (has(pg.vcam) ? Object.assign({}, pg.vcam, { p: pg.vcamP }) : null) });
+      scenes.push({ dur: Number(pg.vdur || V.dur), trans: tr, tdir: pg.vtrans ? (pg.vdir || '') : (V.tdir || ''), turn, layers, bg: pg.bg || '#ffffff', cam: typeof pg.vcam === 'string' ? (pg.vcam !== 'none' && pg.vcam ? { t: pg.vcam, a: Number(pg.vcamA || 0.06), p: pg.vcamP } : null) : (has(pg.vcam) ? Object.assign({}, pg.vcam, { p: pg.vcamP }) : null) });
     }
     if (!V.loop && scenes.length) scenes[scenes.length - 1].turn = 0; // 마지막 장면은 넘김 없이 끝
     const videos = []; scenes.forEach(sc => sc.layers.forEach(L => { if (L.vEl) videos.push(L.vEl); }));
@@ -135,18 +142,22 @@ NC.video = (function () {
     x.restore();
   }
   // 동영상 층: 지금 프레임을 상자에 채워(cover/contain) 그림. 둥근 모서리
+  // 색 보정(그림과 같은 el.fx: 밝기·대비·채도·색조·흐림·흑백·세피아) → 캔버스 filter
+  function vFilter(el, kx) { const s = NC.fx && NC.fx.imageFilter ? NC.fx.imageFilter(el) : ''; if (!s) return 'none'; return s.replace(/^filter:/, '').replace(/;$/, '').replace(/blur\(([\d.]+)mm\)/, (m0, q) => `blur(${(Number(q) * (kx || 1)).toFixed(1)}px)`); }
   function drawVideo(x, L) {
     const v = L.vEl, b = L.video.box, el = L.video.el; if (!v || !v.videoWidth) return; // 원본이 없으면 빈 공간
-    const vw = v.videoWidth, vh = v.videoHeight, cover = (el.fit || 'cover') !== 'contain', k = cover ? Math.max(b.w / vw, b.h / vh) : Math.min(b.w / vw, b.h / vh), dw = vw * k, dh = vh * k;
+    const fit = el.fit || 'cover', vw = v.videoWidth, vh = v.videoHeight, cover = fit === 'cover', k = cover ? Math.max(b.w / vw, b.h / vh) : Math.min(b.w / vw, b.h / vh), dw = vw * k, dh = vh * k, fl = vFilter(el, L.video.kx);
     x.save(); x.beginPath(); if (L.video.rad > 0 && x.roundRect) x.roundRect(b.x, b.y, b.w, b.h, L.video.rad); else x.rect(b.x, b.y, b.w, b.h); x.clip();
-    x.drawImage(v, b.x + (b.w - dw) / 2, b.y + (b.h - dh) / 2, dw, dh); x.restore();
+    if (fit === 'blur') { /* 흐린 배경 채우기(가로 영상을 세로 숏츠에): 작게 줄여 흐리게 깐 뒤 원본 전체를 가운데에 */ const c = off('vb', Math.max(8, Math.round(b.w / 8)), Math.max(8, Math.round(b.h / 8))), g = c.getContext('2d'), kc = Math.max(c.width / vw, c.height / vh) * 1.15; g.filter = `blur(3px) brightness(0.72)${fl !== 'none' ? ' ' + fl.replace(/blur\([^)]*\)/, '') : ''}`; g.drawImage(v, (c.width - vw * kc) / 2, (c.height - vh * kc) / 2, vw * kc, vh * kc); g.filter = 'none'; x.drawImage(c, b.x, b.y, b.w, b.h); }
+    if (fl !== 'none') x.filter = fl;
+    x.drawImage(v, b.x + (b.w - dw) / 2, b.y + (b.h - dh) / 2, dw, dh); x.filter = 'none'; x.restore();
   }
   // 동영상의 '원본 시각': 장면 시각 t → 사용 구간(tin~tout) 안의 시각
-  function mediaTime(L, t) { const d = L.video, len = Math.max(0.05, d.tout - d.tin), u = Math.max(0, t - d.d0); if (t < 0 && !d.loop) return Math.max(0, d.tin + t); /* 넘김 동안(장면 시작 전): 사용 구간 앞쪽 원본을 미리 재생 → 멈춘 화면으로 들어오지 않음(파이널컷 '핸들') */ return d.tin + (d.loop ? u % len : Math.min(u, len - 0.04)); }
+  function mediaTime(L, t) { const d = L.video, sp = d.sp || 1, len = Math.max(0.05, d.tout - d.tin), u = Math.max(0, t - d.d0) * sp; if (t < 0 && !d.loop) return Math.max(0, d.tin + t * sp); /* 넘김 동안(장면 시작 전): 사용 구간 앞쪽 원본을 미리 재생 → 멈춘 화면으로 들어오지 않음(파이널컷 '핸들') */ return d.tin + (d.loop ? u % len : Math.min(u, len - 0.04)); }
   // 시각 T에 화면에 나오는 동영상 층들
   function activeVideos(V, T) { const { i, q } = at(V, T), A = V.scenes[i], out = []; A.layers.forEach(L => { if (L.vEl) out.push({ L, t: q }); }); if (q >= A.dur && A.turn) { const B = V.scenes[(i + 1) % V.scenes.length], tb = q - A.dur - A.turn; B.layers.forEach(L => { if (L.vEl) out.push({ L, t: tb }); }); } return out; }
   // 미리보기: 재생 중이면 동영상도 재생(어긋나면 맞춤), 멈췄으면 그 시각으로 감기
-  function syncVideos(V, T, playing) { const act = new Set(); activeVideos(V, T).forEach(({ L, t }) => { const v = L.vEl, mt = mediaTime(L, t); act.add(v); const dv = L.video, hold = !dv.loop && ((t < 0 && dv.tin + t <= 0) || (t >= 0 && t < dv.d0) || (t - dv.d0 >= dv.tout - dv.tin - 0.04)); /* 등장 전·원본 끝: 한 화면에 멈춰 있어야 하는 동안은 재생을 멈춤(예전엔 계속 재생하다 되감겨 떨림) */ if (playing && hold) { if (!v.paused) v.pause(); if (Math.abs(v.currentTime - mt) > 0.04) v.currentTime = mt; return; } if (playing) { const d = v.currentTime - mt; if (Math.abs(d) > 0.25) { v.currentTime = mt; v.playbackRate = 1; } else if (!v.seeking) v.playbackRate = Math.abs(d) > 0.03 ? Math.max(0.95, Math.min(1.05, 1 - d * 0.8)) : 1; if (v.paused) v.play().catch(() => {}); } else { if (!v.paused) v.pause(); if (v.playbackRate !== 1) v.playbackRate = 1; if (Math.abs(v.currentTime - mt) > 0.004) v.currentTime = mt; } }); (V.videos || []).forEach(v => { if (!act.has(v) && !v.paused) v.pause(); }); }
+  function syncVideos(V, T, playing) { const act = new Set(); activeVideos(V, T).forEach(({ L, t }) => { const v = L.vEl, mt = mediaTime(L, t); act.add(v); const dv = L.video, sp = dv.sp || 1, hold = !dv.loop && ((t < 0 && dv.tin + t * sp <= 0) || (t >= 0 && t < dv.d0) || ((t - dv.d0) * sp >= dv.tout - dv.tin - 0.04)); /* 등장 전·원본 끝: 한 화면에 멈춰 있어야 하는 동안은 재생을 멈춤(예전엔 계속 재생하다 되감겨 떨림) */ if (playing && hold) { if (!v.paused) v.pause(); if (Math.abs(v.currentTime - mt) > 0.04) v.currentTime = mt; return; } if (playing) { const d = v.currentTime - mt; if (Math.abs(d) > 0.25 * sp) { v.currentTime = mt; v.playbackRate = sp; } else if (!v.seeking) v.playbackRate = sp * (Math.abs(d) > 0.03 ? Math.max(0.95, Math.min(1.05, 1 - d * 0.8 / sp)) : 1); if (v.paused) v.play().catch(() => {}); } else { if (!v.paused) v.pause(); if (v.playbackRate !== 1) v.playbackRate = 1; if (Math.abs(v.currentTime - mt) > 0.004) v.currentTime = mt; } }); (V.videos || []).forEach(v => { if (!act.has(v) && !v.paused) v.pause(); }); }
   // 저장: 프레임마다 정확한 시각으로 감고 기다림
   async function seekVideos(V, T) { await Promise.all(activeVideos(V, T).map(({ L, t }) => new Promise(res => { const v = L.vEl, mt = mediaTime(L, t); if (Math.abs(v.currentTime - mt) < 0.001 && v.readyState >= 2) { res(); return; } const done = () => { v.removeEventListener('seeked', done); clearTimeout(to); res(); }, to = setTimeout(done, 1500); v.addEventListener('seeked', done); v.currentTime = mt; }))); }
   // 글자 효과: 글자 층을 한 번만 그려 두고 글자·단어·줄 칸만 잘라 보여 줌
@@ -170,7 +181,7 @@ NC.video = (function () {
   }
   // 영상 전체 시각 T(초)의 화면
   const _tmp = {};
-  function off(slot, W, H) { let c = _tmp[slot]; if (!c || c.width !== W || c.height !== H) { c = _tmp[slot] = document.createElement('canvas'); c.width = W; c.height = H; } const x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.filter = 'none'; x.clearRect(0, 0, W, H); return c; }
+  function off(slot, W, H) { slot += W < 400 ? '@s' : ''; let c = _tmp[slot]; if (!c || c.width !== W || c.height !== H) { c = _tmp[slot] = document.createElement('canvas'); c.width = W; c.height = H; } const x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.filter = 'none'; x.clearRect(0, 0, W, H); return c; }
   function at(V, T) { let acc = 0; for (let i = 0; i < V.scenes.length; i++) { const s = V.scenes[i], u = s.dur + s.turn; if (T < acc + u || i === V.scenes.length - 1) return { i, q: Math.min(T - acc, u), t0: acc }; acc += u; } return { i: 0, q: 0, t0: 0 }; }
   function sceneStarts(V) { let a = 0; return V.scenes.map(s => { const r = a; a += s.dur + s.turn; return r; }); }
   function drawAt(x, V, T) {
@@ -181,14 +192,14 @@ NC.video = (function () {
     const ca = off('a', W, H), cb = off('b', W, H); const xa = ca.getContext('2d'), xb = cb.getContext('2d');
     xa.fillStyle = A.bg; xa.fillRect(0, 0, W, H); drawScene(xa, A, q, W, H);
     xb.fillStyle = B.bg; xb.fillRect(0, 0, W, H); drawScene(xb, B, q - A.dur - A.turn, W, H); /* 다음 장면은 시작 전 시각(−넘김~0)으로: 동영상은 앞쪽을 미리 재생 */
-    trans(x, ca, cb, p, A.trans, W, H, B.bg, Math.floor(T * 30)); drawTracks(x, V, T); x.restore();
+    trans(x, ca, cb, p, A.trans, W, H, B.bg, Math.floor(T * 30), A.tdir); drawTracks(x, V, T); x.restore();
   }
   // 자막·오버레이 트랙 (장면 위에 영상 전체 시간 기준으로 겹침)
   const CAP_STYLES = [['outline', '흰 글자 외곽선'], ['box', '검은 상자'], ['pop', '노란 강조'], ['karaoke', '단어씩 강조'], ['plain', '그림자만']];
   function wrapText(x, text, maxW) { const out = []; String(text).split('\n').forEach(par => { let line = ''; par.split(/(\s+)/).forEach(w => { const t = line + w; if (x.measureText(t).width > maxW && line.trim()) { out.push(line.trim()); line = w.trim(); } else line = t; }); out.push(line.trim()); }); return out; }
   function drawCaption(x, c, T, W, H) {
     const u = T - c.at, d = Number(c.dur || 2.5); if (u < 0 || u > d) return;
-    const fade = Math.min(1, u / 0.18, (d - u) / 0.18), sz = Math.round(Math.min(W, H) * Number(c.size || 0.065)), st = c.style || 'outline';
+    const fade = Math.min(1, c.fi === 0 ? 1 : u / 0.18, c.fo === 0 ? 1 : (d - u) / 0.18), sz = Math.round(Math.min(W, H) * Number(c.size || 0.065)), st = c.style || 'outline';
     x.save(); x.globalAlpha = Math.max(0, fade); x.font = `${c.weight || 800} ${sz}px "${c.font || 'Pretendard'}", "Pretendard", sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
     const lines = wrapText(x, c.text || '', W * 0.86), lh = sz * 1.25, y0 = (c.pos === 'top' ? H * 0.14 : c.pos === 'middle' ? H * 0.5 : (H > W * 1.3 ? H * 0.70 : H * 0.84)) - (lines.length - 1) * lh / 2; /* 세로(숏츠·릴스): 아래 앱 단추·설명 글(약 22%) 위로 */
     let wordIx = 0; const words = (c.text || '').split(/\s+/).filter(Boolean), shown = st === 'karaoke' ? Math.min(words.length, Math.floor(u / Math.max(0.15, d * 0.85 / Math.max(1, words.length))) + 1) : 1e9;
@@ -205,33 +216,79 @@ NC.video = (function () {
   // 오버레이(로고·사진): 위치(9곳)·크기(가로 비율)·투명도, 처음·끝 0.3초 서서히
   function drawOverlay(x, o, T, W, H) {
     const u = T - o.at, d = Number(o.dur || 3); if (u < 0 || u > d || !o.img || !o.img.naturalWidth) return;
-    const fade = Math.min(1, u / 0.3, (d - u) / 0.3), w = W * Number(o.scale || 0.18), h = w * o.img.naturalHeight / o.img.naturalWidth, m = Math.min(W, H) * 0.04, p = o.pos || 'tr';
+    const fade = Math.min(1, o.fi === 0 ? 1 : u / 0.3, o.fo === 0 ? 1 : (d - u) / 0.3), w = W * Number(o.scale || 0.18), h = w * o.img.naturalHeight / o.img.naturalWidth, m = Math.min(W, H) * 0.04, p = o.pos || 'tr';
     const px = p[1] === 'l' ? m : p[1] === 'r' ? W - w - m : (W - w) / 2, py = p[0] === 't' ? m : p[0] === 'b' ? H - h - m : (H - h) / 2;
     x.save(); x.globalAlpha = Math.max(0, fade) * (o.opacity == null ? 1 : Number(o.opacity)); x.drawImage(o.img, px, py, w, h); x.restore();
   }
   function drawTracks(x, V, T) { (V.overlays || []).forEach(o => drawOverlay(x, o, T, V.W, V.H)); (V.captions || []).forEach(c => drawCaption(x, c, T, V.W, V.H)); }
   // 넘김 효과 (A 앞 장면, B 다음 장면, p 진행률)
-  function trans(x, A, B, p, st, W, H, bg, f) {
+  // 반평면으로 다각형 자르기 (keep: 점이 남는 쪽이면 참) — 책장 넘기기 접힘선
+  function clipPoly(pts, side) { const out = []; for (let k = 0; k < pts.length; k++) { const a = pts[k], b = pts[(k + 1) % pts.length], sa = side(a), sb = side(b); if (sa >= 0) out.push(a); if ((sa >= 0) !== (sb >= 0)) { const t = sa / (sa - sb); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); } } return out; }
+  const polyPath = (x, pts) => { x.beginPath(); pts.forEach((q, k) => k ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1])); x.closePath(); };
+  // 접어 넘기기: 모서리 C가 P로 옮겨 감 (접힘선 = C·P의 수직이등분선). back = 뒷면 'mirror'(앞 장면을 옅게 비춤) | 종이색
+  function fold(x, A, B, W, H, C, P, back) {
+    const dx = P[0] - C[0], dy = P[1] - C[1], L = Math.hypot(dx, dy); if (L < 1) { x.drawImage(A, 0, 0, W, H); return; }
+    const n = [-dx / L, -dy / L], M = [(C[0] + P[0]) / 2, (C[1] + P[1]) / 2], side = q => (q[0] - M[0]) * n[0] + (q[1] - M[1]) * n[1];
+    const rect = [[0, 0], [W, 0], [W, H], [0, H]], keep = clipPoly(rect, q => -side(q)), lift = clipPoly(rect, side), refl = q => { const d = 2 * side(q); return [q[0] - d * n[0], q[1] - d * n[1]]; };
+    x.drawImage(B, 0, 0, W, H);
+    const sw = Math.max(W, H) * 0.06, g0 = x.createLinearGradient(M[0], M[1], M[0] + n[0] * sw, M[1] + n[1] * sw); g0.addColorStop(0, 'rgba(0,0,0,0.38)'); g0.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g0; x.fillRect(0, 0, W, H);  // 넘어간 자리 그림자
+    if (keep.length > 2) { x.save(); polyPath(x, keep); x.clip(); x.drawImage(A, 0, 0, W, H); x.restore(); }
+    const flap = lift.map(refl).filter(q => isFinite(q[0])); if (flap.length < 3) return;
+    x.save(); x.shadowColor = 'rgba(0,0,0,0.35)'; x.shadowBlur = Math.max(4, W * 0.012); polyPath(x, flap); x.fillStyle = back === 'mirror' ? '#fbfaf7' : '#f4f1ea'; x.fill(); x.restore();
+    x.save(); polyPath(x, flap); x.clip();
+    if (back === 'mirror') { const R = [1 - 2 * n[0] * n[0], -2 * n[0] * n[1], -2 * n[0] * n[1], 1 - 2 * n[1] * n[1]], c0 = 2 * (M[0] * n[0] + M[1] * n[1]); x.save(); x.transform(R[0], R[1], R[2], R[3], c0 * n[0], c0 * n[1]); x.globalAlpha = 0.22; x.drawImage(A, 0, 0, W, H); x.restore(); }
+    const fl = Math.max(W, H) * 0.35, g1 = x.createLinearGradient(M[0], M[1], M[0] - n[0] * fl, M[1] - n[1] * fl); g1.addColorStop(0, 'rgba(255,255,255,0.5)'); g1.addColorStop(0.25, 'rgba(0,0,0,0.04)'); g1.addColorStop(1, 'rgba(0,0,0,0.22)'); x.fillStyle = g1; x.fillRect(0, 0, W, H);  // 말린 종이 음영
+    x.restore();
+  }
+  // 하트·별 모양 (지름 1 기준, 가운데 0,0)
+  function shapePath(kind) { const p = new Path2D(); if (kind === 'heart') { p.moveTo(0, 0.32); p.bezierCurveTo(-0.55, -0.05, -0.38, -0.5, 0, -0.22); p.bezierCurveTo(0.38, -0.5, 0.55, -0.05, 0, 0.32); } else { for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? 0.2 : 0.5; k ? p.lineTo(Math.cos(a) * r, Math.sin(a) * r) : p.moveTo(Math.cos(a) * r, Math.sin(a) * r); } p.closePath(); } return p; }
+  const SHAPES = {};
+  function trans(x, A, B, p, st, W, H, bg, f, dir) {
+    if (dir === 'r' && /^(page|peel|cube)$/.test(st)) { /* 왼쪽에서 넘기기: 좌우를 뒤집어 그린 뒤 다시 뒤집음 */
+      const fa = off('fa', W, H), fb = off('fb', W, H), fo = off('fo', W, H), m = (c, s) => { const g = c.getContext('2d'); g.save(); g.translate(W, 0); g.scale(-1, 1); g.drawImage(s, 0, 0, W, H); g.restore(); };
+      m(fa, A); m(fb, B); trans(fo.getContext('2d'), fa, fb, p, st, W, H, bg, f, 'l'); x.save(); x.translate(W, 0); x.scale(-1, 1); x.drawImage(fo, 0, 0, W, H); x.restore(); return;
+    }
+    const U = { l: [-1, 0], r: [1, 0], u: [0, -1], d: [0, 1] }[dir] || [-1, 0], DL = U[0] ? W : H;
     const e = io(p), full = (c, al) => { if (al != null) { x.save(); x.globalAlpha = al; x.drawImage(c, 0, 0, W, H); x.restore(); } else x.drawImage(c, 0, 0, W, H); };
     const zoomed = (c, s, al, rot, n, spread) => { n = n || 1; for (let k = 0; k < n; k++) { const sk = s * (1 + (spread || 0) * k); x.save(); x.globalAlpha = (al == null ? 1 : al) / (n > 1 ? (k === 0 ? 1 : 2.2 * k) : 1); x.translate(W / 2, H / 2); if (rot) x.rotate(rot); x.scale(sk, sk); x.drawImage(c, -W / 2, -H / 2, W, H); x.restore(); } };
     switch (st) {
-      case 'slide': case 'bounce': { const ee = st === 'bounce' ? back(p) : e, dx = Math.round(W * ee); full(A); x.drawImage(A, -dx, 0, W, H); x.drawImage(B, W - dx, 0, W, H); const sx = W - dx, gr = x.createLinearGradient(sx - 70, 0, sx, 0); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,0.16)'); x.fillStyle = gr; x.fillRect(sx - 70, 0, 70, H); return; }
+      case 'slide': case 'bounce': case 'cover': { const ee = st === 'bounce' ? back(p) : e, d = Math.round(DL * ee), ax = U[0] * d, ay = U[1] * d, bx = ax - U[0] * DL, by = ay - U[1] * DL;
+        if (st === 'cover') { full(A); x.save(); x.fillStyle = 'rgba(0,0,0,' + (0.25 * ee) + ')'; x.fillRect(0, 0, W, H); x.restore(); } else { full(A); x.drawImage(A, ax, ay, W, H); }
+        x.drawImage(B, bx, by, W, H); const sw = Math.round(DL * 0.05), ex = U[0] < 0 ? bx : U[0] > 0 ? bx + W : 0, ey = U[1] < 0 ? by : U[1] > 0 ? by + H : 0;  /* 들어오는 장면 앞 가장자리 그림자 */
+        const gr = U[0] ? x.createLinearGradient(ex + U[0] * sw, 0, ex, 0) : x.createLinearGradient(0, ey + U[1] * sw, 0, ey); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,0.18)'); x.fillStyle = gr; if (U[0]) x.fillRect(Math.min(ex, ex + U[0] * sw), 0, sw, H); else x.fillRect(0, Math.min(ey, ey + U[1] * sw), W, sw); return; }
       case 'up': { const dy = Math.round(H * e); x.drawImage(A, 0, -dy, W, H); x.drawImage(B, 0, H - dy, W, H); return; }
       case 'fade': full(A); full(B, e); return;
       case 'zoom': full(A); zoomed(B, 1.12 - 0.12 * e, e); return;
       case 'pullin': if (p < 0.5) { const q = Math.pow(p * 2, 2); zoomed(A, 1 + 1.2 * q, 1, 0, 5, 0.03 * q); } else { const q = ease(p * 2 - 1); zoomed(B, 1.6 - 0.6 * q, 1, 0, q < 0.95 ? 4 : 1, 0.03 * (1 - q)); } return;
-      case 'pullout': if (p < 0.5) { const q = Math.pow(p * 2, 2); zoomed(A, 1 - 0.4 * q, 1, 0); x.fillStyle = 'rgba(0,0,0,' + (0.3 * q) + ')'; } else { const q = ease(p * 2 - 1); full(B); zoomed(B, 1.5 - 0.5 * q, 1 - q * 0.0, 0); } return;
-      case 'whip': { const q = expoIO(p), dx = W * q, v = Math.abs(expoIO(Math.min(1, p + 0.02)) - expoIO(Math.max(0, p - 0.02))) / 0.04; for (let k = 0; k < 6; k++) { const off2 = -v * W * 0.004 * k; x.save(); x.globalAlpha = k ? 0.18 : 1; x.drawImage(A, -dx + off2, 0, W, H); x.drawImage(B, W - dx + off2, 0, W, H); x.restore(); } return; }
+      case 'pullout': if (p < 0.5) { const q = Math.pow(p * 2, 2); zoomed(A, 1 - 0.4 * q, 1, 0); x.fillStyle = 'rgba(0,0,0,' + (0.3 * q) + ')'; x.fillRect(0, 0, W, H); } else { const q = ease(p * 2 - 1); full(B); zoomed(B, 1.5 - 0.5 * q, 1 - q * 0.0, 0); } return;
+      case 'whip': { const q = expoIO(p), d = DL * q, v = Math.abs(expoIO(Math.min(1, p + 0.02)) - expoIO(Math.max(0, p - 0.02))) / 0.04; for (let k = 0; k < 6; k++) { const o2 = v * DL * 0.004 * k, ax = U[0] * (d + o2), ay = U[1] * (d + o2); x.save(); x.globalAlpha = k ? 0.18 : 1; x.drawImage(A, ax, ay, W, H); x.drawImage(B, ax - U[0] * DL, ay - U[1] * DL, W, H); x.restore(); } return; }
       case 'spin': if (p < 0.5) { const q = ease(p * 2); x.fillStyle = bg || '#fff'; x.fillRect(0, 0, W, H); zoomed(A, 1 + 0.3 * q, 1 - q, Math.PI / 2 * q, 3, 0.02); } else { const q = ease(p * 2 - 1); x.fillStyle = bg || '#fff'; x.fillRect(0, 0, W, H); zoomed(B, 1.3 - 0.3 * q, q, -Math.PI / 2 * (1 - q), q < 0.9 ? 3 : 1, 0.02); } return;
       case 'blur': { const q = 1 - Math.abs(2 * p - 1), c = off('q', Math.ceil(W / 4), Math.ceil(H / 4)), cx = c.getContext('2d'); cx.filter = `blur(${(q * 6).toFixed(1)}px)`; cx.drawImage(A, 0, 0, c.width, c.height); cx.globalAlpha = e; cx.drawImage(B, 0, 0, c.width, c.height); cx.filter = 'none'; cx.globalAlpha = 1; full(A); full(B, e); if (q > 0.02) { x.save(); x.globalAlpha = Math.min(1, q * 1.6); x.drawImage(c, 0, 0, W, H); x.restore(); } return; }
       case 'flash': full(p < 0.5 ? A : B); x.fillStyle = `rgba(255,255,255,${Math.pow(1 - Math.abs(2 * p - 1), 0.6)})`; x.fillRect(0, 0, W, H); return;
       case 'black': full(p < 0.5 ? A : B); x.fillStyle = `rgba(0,0,0,${1 - Math.abs(2 * p - 1)})`; x.fillRect(0, 0, W, H); return;
       case 'iris': { full(A); const r = e * Math.hypot(W, H) / 2; x.save(); x.beginPath(); x.arc(W / 2, H / 2, Math.max(0.1, r), 0, Math.PI * 2); x.clip(); x.drawImage(B, 0, 0, W, H); x.restore(); return; }
-      case 'wipe': { full(A); const edge = W * 0.08, xx = -edge + (W + edge * 2) * e, c = off('w', W, H), cx = c.getContext('2d'); cx.drawImage(B, 0, 0, W, H); cx.globalCompositeOperation = 'destination-in'; const g = cx.createLinearGradient(xx - edge, 0, xx, 0); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)'); cx.fillStyle = g; cx.fillRect(0, 0, W, H); cx.globalCompositeOperation = 'source-over'; x.drawImage(c, 0, 0); return; }
+      case 'wipe': { full(A); const edge = DL * 0.08, pos = -edge + (DL + edge * 2) * e, c = off('w', W, H), cx = c.getContext('2d'); cx.drawImage(B, 0, 0, W, H); cx.globalCompositeOperation = 'destination-in'; /* 방향: 기본은 왼쪽→오른쪽으로 닦음(다음 장면이 왼쪽부터) */ const rev = U[0] > 0 || U[1] > 0 ? false : true, a0 = rev ? pos - edge : DL - pos + edge, a1 = rev ? pos : DL - pos; const g = U[0] ? cx.createLinearGradient(a0, 0, a1, 0) : cx.createLinearGradient(0, a0, 0, a1); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)'); cx.fillStyle = g; cx.fillRect(0, 0, W, H); cx.globalCompositeOperation = 'source-over'; x.drawImage(c, 0, 0); return; }
       case 'blinds': { full(A); const n = 8, h = H / n; x.save(); x.beginPath(); for (let k = 0; k < n; k++) x.rect(0, k * h, W, h * e); x.clip(); x.drawImage(B, 0, 0, W, H); x.restore(); return; }
-      case 'glitch': { full(p < 0.5 ? A : B); if (p > 0.25 && p < 0.75) { const src = p < 0.5 ? A : B, n = 6 + Math.floor(rnd(f, 3) * 5); for (let k = 0; k < n; k++) { const y = rnd(f, k * 7) * H, h = H * (0.02 + rnd(f, k * 11) * 0.08), d = (rnd(f, k * 13) - 0.5) * W * 0.1; x.drawImage(src, 0, y, W, h, d, y, W, h); } x.save(); x.globalCompositeOperation = 'screen'; x.globalAlpha = 0.35; x.drawImage(src, 8, 0, W, H); x.restore(); } return; }
+      case 'glitch': { f = Math.floor(f / 10); full(p < 0.5 ? A : B); if (p > 0.25 && p < 0.75) { const src = p < 0.5 ? A : B, n = 6 + Math.floor(rnd(f, 3) * 5); for (let k = 0; k < n; k++) { const y = rnd(f, k * 7) * H, h = H * (0.02 + rnd(f, k * 11) * 0.08), d = (rnd(f, k * 13) - 0.5) * W * 0.1; x.drawImage(src, 0, y, W, h, d, y, W, h); } x.save(); x.globalCompositeOperation = 'screen'; x.globalAlpha = 0.35; x.drawImage(src, 8, 0, W, H); x.restore(); } return; }
       case 'shake': { const amp = W * 0.02 * (1 - Math.abs(2 * p - 1)), sx = (rnd(f, 5) - 0.5) * 2 * amp, sy = (rnd(f, 9) - 0.5) * 2 * amp; x.save(); x.translate(sx, sy); full(A); full(B, e); x.restore(); return; }
       case 'none': full(p < 0.5 ? A : B); return;
+      case 'split': { full(B); const d = e * (W >= H ? H : W) / 2; x.save(); if (W >= H) { x.drawImage(A, 0, 0, W, H / 2, 0, -d, W, H / 2); x.drawImage(A, 0, H / 2, W, H / 2, 0, H / 2 + d, W, H / 2); } else { x.drawImage(A, 0, 0, W / 2, H, -d, 0, W / 2, H); x.drawImage(A, W / 2, 0, W / 2, H, W / 2 + d, 0, W / 2, H); } x.restore(); return; }
+      case 'doors': { x.fillStyle = '#0d0f14'; x.fillRect(0, 0, W, H); x.save(); x.translate(W / 2, H / 2); const s0 = 0.9 + 0.1 * e; x.scale(s0, s0); x.drawImage(B, -W / 2, -H / 2, W, H); x.restore(); x.fillStyle = 'rgba(0,0,0,' + (0.35 * (1 - e)) + ')'; x.fillRect(0, 0, W, H);
+        const hw = W / 2, w1 = hw * (1 - e), N = 16; if (w1 < 0.5) return;  /* 가운데에서 양쪽으로 열리는 문: 바깥이 경첩, 안쪽 가장자리가 다가오며 커짐 */
+        for (let k = 0; k < N; k++) { const u = (k + 0.5) / N, sy = -H * 0.1 * e * u, ws = w1 / N + 1; x.drawImage(A, hw * k / N, 0, hw / N + 0.5, H, w1 * k / N, sy, ws, H - 2 * sy); x.drawImage(A, W - hw * (k + 1) / N, 0, hw / N + 0.5, H, W - w1 * (k + 1) / N, sy, ws, H - 2 * sy); }
+        x.fillStyle = 'rgba(0,0,0,' + (0.3 * e) + ')'; x.fillRect(0, 0, w1, H); x.fillRect(W - w1, 0, w1, H); return; }
+      case 'flip': { x.fillStyle = bg || '#fff'; x.fillRect(0, 0, W, H); x.fillStyle = '#111'; x.globalAlpha = 0.35; x.fillRect(0, 0, W, H); x.globalAlpha = 1; const c = Math.abs(Math.cos(Math.PI * e)), src = e < 0.5 ? A : B; x.save(); x.translate(W / 2, H / 2); x.scale(Math.max(0.002, c), 1 - 0.06 * Math.sin(Math.PI * e)); x.drawImage(src, -W / 2, -H / 2, W, H); x.fillStyle = 'rgba(0,0,0,' + (0.45 * (1 - c)) + ')'; x.fillRect(-W / 2, -H / 2, W, H); x.restore(); return; }
+      case 'cube': { x.fillStyle = '#111'; x.fillRect(0, 0, W, H); const sx = W * (1 - e), N = 28, z = 1 - 0.08 * Math.sin(Math.PI * e); x.save(); x.translate(W / 2, H / 2); x.scale(z, z); x.translate(-W / 2, -H / 2);
+        const face = (src, X0, X1, dep) => { const w = X1 - X0; if (w < 0.5) return; for (let k = 0; k < N; k++) { const u = (k + 0.5) / N, dpt = dep(u), sy = H * 0.14 * dpt; x.drawImage(src, W * k / N, 0, W / N + 0.5, H, X0 + w * k / N, sy, w / N + 1, H - 2 * sy); x.fillStyle = 'rgba(0,0,0,' + (0.5 * dpt) + ')'; x.fillRect(X0 + w * k / N, sy, w / N + 1, H - 2 * sy); } };
+        face(A, 0, sx, u => e * (1 - u)); face(B, sx, W, u => (1 - e) * u); x.restore(); return; }
+      case 'clock': { full(A); const r = Math.hypot(W, H), a0 = -Math.PI / 2; x.save(); x.beginPath(); x.moveTo(W / 2, H / 2); x.arc(W / 2, H / 2, r, a0, a0 + Math.PI * 2 * e); x.closePath(); x.clip(); x.drawImage(B, 0, 0, W, H); x.restore(); return; }
+      case 'checker': { full(A); const cols = W >= H ? 8 : 5, rows = W >= H ? 5 : 8, cw = W / cols, ch = H / rows; x.save(); x.beginPath(); for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const t0 = rnd(r * 13 + c, 7) * 0.7, k = clamp01((p - t0) / 0.3); if (k <= 0) continue; const kw = cw * k, kh = ch * k; x.rect(c * cw + (cw - kw) / 2 - 0.5, r * ch + (ch - kh) / 2 - 0.5, kw + 1, kh + 1); } x.clip(); x.drawImage(B, 0, 0, W, H); x.restore(); return; }
+      case 'heart': case 'star': { full(A); const P2 = SHAPES[st] || (SHAPES[st] = shapePath(st)), k = Math.pow(e, 1.6) * Math.hypot(W, H) * (st === 'heart' ? 2.4 : 3.2); if (k < 0.5) return; const oy = st === 'heart' ? k * 0.05 : 0; x.save(); x.translate(W / 2, H / 2 + oy); x.scale(k, k); x.clip(P2); x.scale(1 / k, 1 / k); x.translate(-W / 2, -H / 2 - oy); x.drawImage(B, 0, 0, W, H); x.restore(); return; }
+      case 'page': { const t = io(p); fold(x, A, B, W, H, [W, H], [W - 2.15 * W * t, H - H * 0.22 * Math.sin(Math.PI * t)], 'mirror'); return; }
+      case 'peel': { const t = io(p); fold(x, A, B, W, H, [W, H], [W - 2.2 * W * t, H - 2.2 * H * t * (0.85 + 0.15 * t)], 'paper'); return; }
+      case 'leak': { full(A); full(B, clamp01((p - 0.3) / 0.4)); const s = Math.sin(Math.PI * p); x.save(); x.globalCompositeOperation = 'screen'; [[0.15 + 0.7 * p, 0.3, '255,150,60'], [0.85 - 0.5 * p, 0.7, '255,90,140'], [0.5, 0.15 + 0.6 * p, '255,220,150']].forEach(([cx, cy, col], k) => { const R = Math.max(W, H) * (0.45 + 0.15 * k), g = x.createRadialGradient(cx * W, cy * H, 0, cx * W, cy * H, R); g.addColorStop(0, `rgba(${col},${0.85 * s})`); g.addColorStop(1, `rgba(${col},0)`); x.fillStyle = g; x.fillRect(0, 0, W, H); }); x.restore(); return; }
+      case 'mosaic': { const m = 1 - Math.abs(2 * p - 1), bs = Math.max(1, Math.round(1 + m * 46 * Math.max(W, H) / 1920)); const src = p < 0.5 ? A : B; if (bs <= 1) { full(src); return; } const c = off('m', Math.max(1, Math.ceil(W / bs)), Math.max(1, Math.ceil(H / bs))), cx = c.getContext('2d'); cx.imageSmoothingEnabled = true; cx.drawImage(A, 0, 0, c.width, c.height); cx.globalAlpha = clamp01((p - 0.4) / 0.2); cx.drawImage(B, 0, 0, c.width, c.height); cx.globalAlpha = 1; x.save(); x.imageSmoothingEnabled = false; x.drawImage(c, 0, 0, W, H); x.restore(); return; }
+      case 'wave': { const N = 72, h = H / N, amp = W * 0.03 * Math.sin(Math.PI * p), fa = clamp01((p - 0.3) / 0.4); full(fa < 0.5 ? A : B);  /* 가장자리 빈틈은 원래 장면으로 */ [[A, 1 - fa], [B, fa]].forEach(([src, al]) => { if (al <= 0) return; x.save(); x.globalAlpha = al; for (let k = 0; k < N; k++) { const y = k * h, dx = Math.sin(k * 0.13 + p * 7) * amp; x.drawImage(src, 0, y, W, h + 1, dx, y, W, h + 1); } x.restore(); }); return; }
     }
     // soft: 소식지 TV 영상과 같은 '부드럽게 넘김' — 앞 장이 왼쪽으로 물러나며 옅어진 뒤 다음 장이 오른쪽에서 또렷해짐
     x.fillStyle = bg || '#fff'; x.fillRect(0, 0, W, H);
@@ -272,7 +329,10 @@ NC.video = (function () {
   const vEnd = (v, total) => Math.min(total, v.len != null ? v.at + v.len : total);
   // 음량 점(vk): [[클립 시작부터 초, 배율], …] — 점 사이는 직선으로 이어지고, 첫 점 앞·끝 점 뒤는 그 점의 값
   function vkAt(vk, s) { if (s <= vk[0][0]) return vk[0][1]; for (let i = 1; i < vk.length; i++) if (s <= vk[i][0]) { const a = vk[i - 1], b = vk[i]; return a[1] + (b[1] - a[1]) * (s - a[0]) / Math.max(1e-6, b[0] - a[0]); } return vk[vk.length - 1][1]; }
-  function envAt(v, t, total) { const end = vEnd(v, total), vol = v.vk && v.vk.length ? vkAt(v.vk, t - v.at) : v.vol == null ? 1 : Number(v.vol); let g = vol; if (v.fin > 0 && t < v.at + v.fin) g *= Math.max(0, (t - v.at) / v.fin); if (v.fout > 0 && t > end - v.fout) g *= Math.max(0, (end - t) / v.fout); return g; }
+  // 더킹: 구간 [s,e] 안에서 k배, 앞뒤 r초 동안 직선으로 내려가고 올라감
+  function duckAt(D, t) { if (!D || !D.iv || !D.iv.length) return 1; const r = D.r || 0.35; let f = 1; for (const [s, e] of D.iv) { if (t < s - r || t > e + r) continue; const p = t < s ? (s - t) / r : t > e ? (t - e) / r : 0; f = Math.min(f, D.k + (1 - D.k) * Math.min(1, p)); } return f; }
+  function duckKeys(D) { const r = (D && D.r) || 0.35, o = []; ((D && D.iv) || []).forEach(([s, e]) => o.push(s - r, s, e, e + r)); return o; }
+  function envAt(v, t, total) { const end = vEnd(v, total), vol = v.vk && v.vk.length ? vkAt(v.vk, t - v.at) : v.vol == null ? 1 : Number(v.vol); let g = vol * duckAt(v.duck, t); if (v.fin > 0 && t < v.at + v.fin) g *= Math.max(0, (t - v.at) / v.fin); if (v.fout > 0 && t > end - v.fout) g *= Math.max(0, (end - t) / v.fout); return g; }
   // 미리보기·실시간 녹화: 짧은 소리는 버퍼로, 파일은 오디오 플레이어로 (몇 시간짜리도 바로 재생)
   // 반복 소리의 원본 위치: 처음엔 off부터 끝까지, 그다음부터는 off~끝을 되풀이 (저장 astream.bufferReader·reader의 loopFrom과 같은 규칙)
   const loopPos = (p, o0, D) => p < D ? p : o0 + ((p - o0) % Math.max(0.05, D - o0));
@@ -282,7 +342,7 @@ NC.video = (function () {
       const end = vEnd(v, total); if (end <= T0) return;
       const g = ac.createGain(), at = t => when + (t - T0), t1 = Math.max(T0, v.at);
       // 음량이 꺾이는 시각(페이드 끝·시작, 음량 점)마다 값을 정해 직선으로 이음 — 내보내기(envAt)와 같은 모양
-      const ks = new Set([end]); if (v.fin > 0) ks.add(v.at + v.fin); if (v.fout > 0) ks.add(end - v.fout); (v.vk || []).forEach(k => ks.add(v.at + Number(k[0])));
+      const ks = new Set([end]); if (v.fin > 0) ks.add(v.at + v.fin); if (v.fout > 0) ks.add(end - v.fout); (v.vk || []).forEach(k => ks.add(v.at + Number(k[0]))); duckKeys(v.duck).forEach(t => ks.add(t));
       g.gain.setValueAtTime(envAt(v, t1, total), at(t1)); [...ks].filter(t => t > t1 && t <= end).sort((a, b) => a - b).forEach(t => g.gain.linearRampToValueAtTime(envAt(v, t, total), at(t)));
       g.connect(dest);
       const startAt = Math.max(when, at(v.at)), pos = Number(v.off || 0) + Math.max(0, T0 - v.at), dur = end - Math.max(T0, v.at);
@@ -533,5 +593,5 @@ NC.video = (function () {
     let n = 0; list.slice(0, 8).forEach((u, k) => { const an = { t: u.t, d: Math.round(0.18 * k * 100) / 100, s: 0.7 }; u.els.forEach(e => { e.anim = Object.assign({}, an); n++; }); });
     return n;
   }
-  return { vkAt, ANIMS, TEXT_ANIMS, OUTS, LOOPS, KBS, CAMS, TRANS, DEF, outSize, build, timing, drawAt, sceneStarts, at, player, record, encode, canFast, decode, peaks, hasAnim, moves, autoAnimate, defragMulti, ctx, schedule, scheduleSfx, playVoices, mixVoices, syncVideos, seekVideos, CAP_STYLES };
+  return { trans, TRANS_CATS, TRANS_DIRS, TRANS_NOTE, TRANS_MIX, vkAt, ANIMS, TEXT_ANIMS, OUTS, LOOPS, KBS, CAMS, TRANS, DEF, outSize, build, timing, drawAt, sceneStarts, at, player, record, encode, canFast, decode, peaks, hasAnim, moves, autoAnimate, defragMulti, ctx, schedule, scheduleSfx, playVoices, mixVoices, syncVideos, seekVideos, CAP_STYLES };
 })();

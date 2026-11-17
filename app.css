@@ -949,9 +949,13 @@ body.tl-focus .side,body.tl-focus .rsz,body.tl-focus .inspector{display:none}
 .tl-heads .tm{flex:none;width:22px}
 /* 넓은 타임라인: 왼쪽 끝~오른쪽 끝, 위 창들은 위로 줄어듦 */
 body.tl-wide .vtl{left:0}
-.tl-grip{position:absolute;left:0;right:0;top:-4px;height:8px;cursor:ns-resize;z-index:3;display:none}
+.tl-grip{position:absolute;left:0;right:0;top:-7px;height:14px;cursor:ns-resize;z-index:5;display:none;touch-action:none}
+.tl-grip i{position:absolute;left:50%;top:5px;width:44px;height:4px;margin-left:-22px;border-radius:3px;background:#4a5263;transition:background .15s}
+.tl-grip:hover i,body.tl-resizing .tl-grip i{background:#5b8cff}
+body.tl-wide .vtl-bar{cursor:ns-resize}body.tl-wide .vtl-bar :is(button,input,select,label){cursor:pointer}body.tl-wide .vtl-bar input[type=range]{cursor:ew-resize}
+body.tl-resizing,body.tl-resizing *{cursor:ns-resize!important;user-select:none}
 body.tl-wide .tl-grip{display:block}
-.tl-grip:hover,.tl-grip:active{background:linear-gradient(180deg,transparent 3px,#5b8cff 3px,#5b8cff 5px,transparent 5px)}
+.tl-grip:hover,.tl-grip:active{background:linear-gradient(180deg,transparent 6px,#5b8cff 6px,#5b8cff 8px,transparent 8px)}
 /* 타임라인 도구 말풍선 + 단축키 */
 .tltip{position:fixed;z-index:10000;pointer-events:none;display:flex;align-items:center;gap:8px;background:#0f1117;color:#f2f4f8;border:1px solid #2e3340;border-radius:8px;padding:6px 9px;font:600 12.5px/1.2 var(--font-ui);box-shadow:0 8px 24px rgba(0,0,0,.35);white-space:nowrap}
 .tltip em{display:inline-flex;align-items:center;gap:3px;font-style:normal}
@@ -1255,3 +1259,45 @@ body.tl-focus #focusOut{display:inline-flex}
 #status{min-width:120px;flex:0 1 320px}
 .tile svg.ic{stroke:currentColor;fill:none;width:22px;height:22px}
 .topbar input.pname{min-width:140px;flex-shrink:0}
+#canvas .el-cal .cell.ovf{box-shadow:inset 0 -2px 0 #e5484d}
+#canvas .el-cal .cell.ovf::after{content:'넘침';position:absolute;right:.4mm;bottom:.3mm;font:700 2.4mm/1 'Noto Sans KR',sans-serif;color:#fff;background:#e5484d;border-radius:.6mm;padding:.3mm .6mm;pointer-events:none}
+/* 넘김 고르기 창 (묶음 탭·견본 칸) */
+.tr-pop2{width:480px;max-width:calc(100vw - 16px);overflow:auto;padding:12px 12px 10px}
+.tr-pop2 .trh{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px}.tr-pop2 .trh b{font-size:13px}.tr-pop2 .trh small{color:var(--ui-muted);font-size:11.5px;white-space:nowrap}
+.tr-tabs{display:flex;gap:0;flex-wrap:wrap;margin:6px 0 8px;border-bottom:1px solid var(--ui-line2)}
+.tr-tabs button{border:0;background:none;padding:6px 8px;font:600 12.5px var(--font-ui);color:var(--ui-muted);border-bottom:2px solid transparent;cursor:pointer;margin-bottom:-1px}
+.tr-tabs button:hover{color:#1f2937}.tr-tabs button[aria-selected=true]{color:#2f6fe4;border-bottom-color:#2f6fe4}
+.tr-grid2{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.tr-recent{display:grid;grid-template-columns:28px repeat(4,1fr);gap:6px;align-items:center;margin-bottom:2px}.tr-recent>span{font-size:11px;color:var(--ui-muted)}
+.tr-tile{display:flex;flex-direction:column;align-items:center;gap:4px;padding:5px 4px 6px;border:1px solid var(--ui-line2);border-radius:9px;background:#fff;cursor:pointer;font:500 11.5px/1.25 var(--font-ui);color:#1f2937;min-width:0}
+.tr-tile canvas{border-radius:4px;max-width:100%;height:auto;display:block;background:#e9ebf0}
+.tr-tile span{text-align:center;word-break:keep-all}
+.tr-tile:hover,.tr-tile:focus-visible{border-color:#2f6fe4;outline:none;box-shadow:0 0 0 2px rgba(47,111,228,.18)}
+.tr-tile.on{border-color:#2f6fe4;background:#eef3ff;color:#1f4fbf;font-weight:700}
+.tr-dir,.tr-len{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin:8px 0 4px}
+.tr-dir span{font-size:12px;color:var(--ui-muted);margin-right:4px}
+.tr-dir button,.tr-len button{border:1px solid var(--ui-line2);background:#fff;border-radius:7px;padding:3px 10px;cursor:pointer;font:600 12px var(--font-ui);color:#1f2937}
+.tr-dir button[aria-pressed=true],.tr-len button[aria-pressed=true]{background:#2f6fe4;color:#fff;border-color:#2f6fe4}
+.tr-pop2 #trTurn{width:100%}
+.tr-warn{color:#b54708;font-size:11.5px;margin:4px 0}
+.tr-tip{display:block;color:var(--ui-muted);font-size:11px;margin-top:6px;line-height:1.4}
+/* 나란히 보기: 왼쪽 편집 · 오른쪽 결과 화면 */
+.pgm{position:absolute;top:var(--pgm-top,0px);right:0;bottom:0;width:50%;border-top:1px solid #2a2e38;border-top-left-radius:10px;display:none;flex-direction:column;background:#12151c;color:#e6e9f0;border-left:1px solid #2a2e38;z-index:6}
+.stage.pgm-on .pgm{display:flex}
+.stage.pgm-on .scroller{right:50%}
+.stage.pgm-on #focusOut{right:calc(50% + 12px)}
+.pgm-h{display:flex;align-items:center;gap:8px;padding:8px 10px 6px 14px;font-size:12.5px;flex:none}
+.pgm-h span{color:#8b93a7;font-size:11.5px}
+.pgm-h small{font:600 12px ui-monospace,Menlo,monospace;color:#cfd5e2;margin-left:auto}
+.pgm-h .tb{background:transparent;border:0;color:#9aa3b5;width:26px;height:26px;border-radius:6px;cursor:pointer}.pgm-h .tb:hover{background:#262b36;color:#fff}
+.pgm-box{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:6px 14px 14px;position:relative}
+.pgm-box canvas{max-width:100%;max-height:100%;width:auto;height:auto;background:#000;box-shadow:0 0 0 1px #2c3240,0 8px 24px rgba(0,0,0,.45);cursor:pointer}
+.pgm-wait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#9aa3b5;font-size:12px;pointer-events:none}
+.vtl-bar #tlPgm.on{background:#2f6fe4;border-color:#2f6fe4;color:#fff}
+/* 타임라인을 끌 때 글자가 파랗게 선택되던 것 */
+.vtl{user-select:none;-webkit-user-select:none}.vtl input,.vtl textarea{user-select:text;-webkit-user-select:text}
+/* 낮은 화면: 글자 도구 묶음이 좁게 찌그러져 3줄이 되던 것 → 줄을 바꿔 한 줄로 */
+.stage.compact .toolbar{flex-wrap:wrap;justify-content:center;row-gap:2px}.stage.compact .toolbar .qbar{flex-wrap:nowrap;flex:none}
+.vprev-tag{display:none;position:absolute;left:0;bottom:100%;margin-bottom:6px;z-index:5;pointer-events:none;background:#ff4d6d;color:#fff;font:700 12px/1 var(--font-ui);padding:5px 9px;border-radius:7px;white-space:nowrap}
+.vprev:not([hidden])+.vprev-tag{display:block}
+.stage.pgm-on .canvas-wrap{margin-left:16px;margin-right:16px}
