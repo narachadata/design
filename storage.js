@@ -2,10 +2,14 @@
 window.NC = window.NC || {};
 NC.store = (function () {
   const DBN = 'naracal-v2';
-  function open() { return new Promise((res, rej) => { const r = indexedDB.open(DBN, 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+  /* 연결은 한 번 열어 다시 씀(다른 탭이 판을 올리면 닫고 다음에 새로). 쓰기는 요청 성공이 아니라 트랜잭션 완료(oncomplete)까지 기다려야 실제로 기록된 것 */
+  let dbp = null;
+  function open() { if (dbp) return dbp; dbp = new Promise((res, rej) => { const r = indexedDB.open(DBN, 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => { const db = r.result; db.onversionchange = () => { db.close(); dbp = null; }; db.onclose = () => { dbp = null; }; res(db); }; r.onerror = () => { dbp = null; rej(r.error); }; }); return dbp; }
   async function idbGet(k) { const db = await open(); return new Promise((res, rej) => { const t = db.transaction('kv').objectStore('kv').get(k); t.onsuccess = () => res(t.result); t.onerror = () => rej(t.error); }); }
-  async function idbSet(k, v) { const db = await open(); return new Promise((res, rej) => { const t = db.transaction('kv', 'readwrite').objectStore('kv').put(v, k); t.onsuccess = () => res(); t.onerror = () => rej(t.error); }); }
-  async function idbDel(k) { const db = await open(); return new Promise((res, rej) => { const t = db.transaction('kv', 'readwrite').objectStore('kv').delete(k); t.onsuccess = () => res(); t.onerror = () => rej(t.error); }); }
+  async function idbWrite(fn) { const db = await open(); return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); fn(tx.objectStore('kv')); tx.oncomplete = () => res(); tx.onerror = tx.onabort = () => rej(tx.error || new Error('브라우저 저장 실패')); }); }
+  const idbSet = (k, v) => idbWrite(s => s.put(v, k)), idbDel = k => idbWrite(s => s.delete(k));
+  /* 브라우저가 공간이 모자랄 때 이 사이트 자료를 마음대로 지우지 않도록 영구 보관 요청(한 번) */
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persisted().then(p => { if (!p) navigator.storage.persist().catch(() => {}); }).catch(() => {}); } catch (e) {}
 
   const state = { handle: null, fileName: '', lastMod: 0, dirty: false, saving: false, supported: !!window.showSaveFilePicker };
   const TYPES = [{ description: '디자인 공방 문서', accept: { 'application/json': ['.json'] } }];
@@ -69,7 +73,9 @@ NC.store = (function () {
       const f0 = await state.handle.getFile();
       if (state.lastMod && f0.lastModified > state.lastMod + 500) {
         let j = null; try { j = JSON.parse(await f0.text()); } catch (e) {}
-        if (!j) { if (++state.retries < 4) return { retry: true }; } // 동기화 중이라 덜 받은 파일일 수 있음: 잠시 뒤 다시
+        if (!j) { /* 동기화 중이라 덜 받은 파일일 수 있음: 덮어쓰지 않고 잠시 뒤 다시. 4번째에 이 PC 작업을 충돌 사본으로 한 번 보관(예전엔 4번째에 덮어씀) */
+          if (++state.retries === 4) { try { await writeCopy(doc, pcName() + ' 저장 대기'); } catch (e) {} }
+          return { retry: true, held: state.retries >= 4 }; }
         else if ((j.saveId || '') !== state.lastSaveId) { if (window.NC && NC.live && NC.live.peers() && j.docId && j.docId === doc.docId) adopt(j); else return { conflict: true, file: f0, data: j }; } // 실시간으로 같이 고치는 중이면 상대 저장본을 이어받아 그 다음 판으로 저장
       }
       const seq = state.seq, saveId = rid(), lineage = [saveId].concat(state.lineage).slice(0, 60);
@@ -152,7 +158,7 @@ NC.store = (function () {
   async function connectFolder() {
     if (!state.dirSupported) throw new Error('이 브라우저는 폴더 연결을 지원하지 않습니다 (Chrome, Edge 권장).');
     const h = await window.showDirectoryPicker({ id: 'naracha-sync', mode: 'readwrite' });
-    state.dir = h; state.dirName = h.name; state.setMod = 0; state.setBase = {};
+    state.dir = h; state.dirName = h.name; state.setMod = 0; state.setBase = {}; try { localStorage.removeItem(BASE_KEY); } catch (e) {} // 다른 폴더: 기준 새로
     await idbSet('syncDir', h);
     return h;
   }
@@ -164,8 +170,11 @@ NC.store = (function () {
     } catch (e) { return 'none'; }
   }
   async function requestFolderPermission() { if (!state.dir) return false; return (await state.dir.requestPermission({ mode: 'readwrite' })) === 'granted'; }
-  async function disconnectFolder() { state.dir = null; state.dirName = ''; state.setMod = 0; state.setBase = {}; await idbDel('syncDir'); }
+  async function disconnectFolder() { state.dir = null; state.dirName = ''; state.setMod = 0; state.setBase = {}; try { localStorage.removeItem(BASE_KEY); } catch (e) {} await idbDel('syncDir'); }
   async function folderReady() { try { return !!state.dir && (await state.dir.queryPermission({ mode: 'readwrite' })) === 'granted'; } catch (e) { return false; } }
+  const BASE_KEY = 'naracal-setbase';
+  function saveBase() { try { localStorage.setItem(BASE_KEY, JSON.stringify(state.setBase || {})); } catch (e) {} }
+  function loadBase() { try { const b = JSON.parse(localStorage.getItem(BASE_KEY) || 'null'); return b && typeof b === 'object' && Object.keys(b).length ? b : null; } catch (e) { return null; } }
   function localSettings() { const o = {}; SYNC_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v != null) o[k] = v; }); return o; }
   function applyVals(v) { for (const k of SYNC_KEYS) if (typeof v[k] === 'string' && localStorage.getItem(k) !== v[k]) { try { localStorage.setItem(k, v[k]); } catch (e) {} } }
   async function readRemote() {
@@ -193,7 +202,7 @@ NC.store = (function () {
     if (r && r.f.lastModified > state.setMod + 500) { const m = mergeAll(L, state.setBase, r.vals); merged = SYNC_KEYS.some(k => m[k] !== L[k]); L = m; applyVals(L); }
     const h = await state.dir.getFileHandle(SET_FILE, { create: true });
     const w = await h.createWritable(); await w.write(JSON.stringify({ v: 1, updatedAt: Date.now(), savedBy: pcName(), values: L }, null, 1)); await w.close();
-    state.setBase = L; state.setMod = (await h.getFile()).lastModified;
+    state.setBase = L; state.setMod = (await h.getFile()).lastModified; saveBase();
     return merged ? 'merged' : true;
   }
   // 다른 PC가 바꾼 설정을 가져옴 (이 PC에서 아직 안 올린 변경은 지킴). 가져왔으면 true
@@ -201,9 +210,10 @@ NC.store = (function () {
     if (!(await folderReady())) return false;
     const r = await readRemote(); if (!r) return false;
     if (state.setMod && r.f.lastModified <= state.setMod + 500) return false;
-    const first = !state.setMod, L = localSettings();
-    applyVals(first ? Object.assign({}, L, r.vals) : mergeAll(L, state.setBase, r.vals));
-    state.setBase = Object.assign({}, r.vals); state.setMod = r.f.lastModified; // 폴더에 없는 이 PC 값은 다음 올리기 때 올라감
+    const first = !state.setMod, L = localSettings(), B0 = first ? loadBase() : null;
+    /* 처음(창을 연 뒤 첫 가져오기): 지난번 맞춘 값을 기억하고 있으면 그걸 기준으로 합침 → 이 PC에서 그사이 바꾼 값을 지키고 다른 PC 값도 받음. 기억이 없으면 예전처럼 폴더 값 */
+    applyVals(first ? (B0 ? mergeAll(L, B0, r.vals) : Object.assign({}, L, r.vals)) : mergeAll(L, state.setBase, r.vals));
+    state.setBase = Object.assign({}, r.vals); state.setMod = r.f.lastModified; saveBase(); // 폴더에 없는 이 PC 값은 다음 올리기 때 올라감
     return true;
   }
   // 문서 번호(docId)로 동기화 폴더 안의 문서 파일 찾기 (영상 사본 → 원본 다시 가져오기용)

@@ -89,7 +89,7 @@ async function saveFileNow() {
     const r = await store.writeFile(doc);
     if (r === true) { ok = true; setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); }
     else if (r && r.conflict) await resolveConflict(r.data, r.file);
-    else if (r && r.retry) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 3000); }
+    else if (r && r.retry) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, r.held ? 15000 : 3000); if (r.held) setStatus(`연결된 파일을 아직 읽을 수 없어(동기화 중) 덮어쓰지 않고 기다립니다 · 이 PC 작업은 충돌 사본으로 보관 · ${tnow()}`); }
   } catch (e) { setStatus('파일 저장 실패: ' + e.message); toast('파일 저장 실패: ' + e.message, true); }
   updateSaveBadge(); return ok;
 }
@@ -5296,7 +5296,7 @@ async function renderVersions() {
     $('#verRestore').disabled = false; $('#verCopy').disabled = false;
     $('#verRestore').onclick = async () => {
       if (!window.confirm(`${fmt(x.time)} 버전으로 되돌릴까요?\n지금 상태는 버전 기록에 먼저 남겨 두고, Ctrl+Z로도 되돌릴 수 있습니다.`)) return;
-      await verNow('되돌리기 전'); Object.keys(j).forEach(k => { if (!DOC_KEYS_SKIP.has(k) && k !== 'assets' && k !== 'fonts') doc[k] = j[k]; }); doc.assets = Object.assign({}, doc.assets, j.assets || {}); (j.fonts || []).forEach(f => { if (!doc.fonts.some(x => x.family === f.family)) doc.fonts.push(f); }); cur = Math.min(cur, doc.pages.length - 1); sel = []; cellSel = null; commit(); zoom = 0; renderAll(); fitCanvas(); $('#dlgVer').close(); toast(`${fmt(x.time)} 버전으로 되돌렸습니다`);
+      await verNow('되돌리기 전'); { /* 그 버전에 없던 항목(뒤에 넣은 소리 트랙·표시 등)은 지우고, 문서 열기와 같은 정리(sanitizeDoc·기본값)를 거침 */ const nd = Object.assign(newDoc(), clone(j)); sanitizeDoc(nd); new Set([...Object.keys(doc), ...Object.keys(nd)]).forEach(k => { if (DOC_KEYS_SKIP.has(k) || k === 'assets' || k === 'fonts') return; if (k in nd) doc[k] = nd[k]; else delete doc[k]; }); } doc.assets = Object.assign({}, doc.assets, j.assets || {}); (j.fonts || []).forEach(f => { if (!doc.fonts.some(x => x.family === f.family)) doc.fonts.push(f); }); cur = Math.min(cur, doc.pages.length - 1); sel = []; cellSel = null; commit(); zoom = 0; renderAll(); fitCanvas(); $('#dlgVer').close(); try { checkMedia(true); } catch (e) {} toast(`${fmt(x.time)} 버전으로 되돌렸습니다`);
     };
     $('#verCopy').onclick = async () => { const c = Object.assign({}, j, { name: `${doc.name || '디자인'} (${fmt(x.time).replace(':', '시 ')}분 버전)` }); delete c._size; const h = await store.copyIntoFolder(c); toast(`"${h.name.replace(/\.design\.json$/i, '')}"을(를) 만들었습니다 (열기 목록에 있습니다)`); };
   };
