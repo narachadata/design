@@ -29,7 +29,12 @@ NC.fx = (function () {
     if (el.blend && el.blend !== 'normal') s += `mix-blend-mode:${el.blend};`;
     if (el.bg) s += `background-color:${el.bg};${grad ? '' : ''}border-radius:${el.bgR || 0}mm;`;
     if (el.pad) s += `padding:${el.pad}mm;`;
-    if (el.valign && el.valign !== 'top') s += `display:flex;flex-direction:column;justify-content:${el.valign === 'middle' ? 'center' : 'flex-end'};`;
+    /* 글 상자 고도화: 단 나누기(인디자인), 최대 줄 수+말줄임(Figma), 자동 너비(Figma) — 단·줄 수가 있으면 세로 정렬(flex)은 쓰지 않음 */
+    const cols = Math.max(1, Number(el.cols) || 1);
+    if (cols > 1) s += `column-count:${cols};column-gap:${el.colGap == null ? 5 : el.colGap}mm;column-fill:balance;`;
+    else if (Number(el.maxLines) > 0 && el.sizing !== 'autow') s += `display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:${Number(el.maxLines)};overflow:hidden;`;
+    else if (el.valign && el.valign !== 'top') s += `display:flex;flex-direction:column;justify-content:${el.valign === 'middle' ? 'center' : 'flex-end'};`;
+    if (el.sizing === 'autow') s += 'white-space:pre;';
     return s;
   }
   // 휘어진 글자: SVG textPath (한 줄 기준)

@@ -256,7 +256,8 @@ function elHTML(el, mode, ext) {
   if (el.hidden) return '';
   let { x, y, w, h } = el;
   if (ext && mode === 'print' && ((el.type === 'image' && el.fit !== 'contain' && !el.rot && (!el.clip || el.clip === 'none') && !el.radius && !el.borderW) || (el.type === 'shape' && el.kind === 'rect' && !el.radius && !el.strokeW && !el.rot))) { const b = doc.bleed || 0; if (x <= 0.3) { x -= b; w += b; } if (x + w >= doc.w - 0.3) w += b; if (y <= 0.3) { y -= b; h += b; } if (y + h >= doc.h - 0.3) h += b; }
-  const base = `left:${x}mm;top:${y}mm;width:${w}mm;${el.type === 'text' && !isWarp(el) ? 'min-height' : 'height'}:${h}mm;transform:rotate(${el.rot || 0}deg);opacity:${el.opacity == null ? 1 : el.opacity};`;
+  const tx = el.type === 'text' && !isWarp(el); /* 글 상자 크기 방식: 자동 높이(기본, min-height) · 고정(height) · 자동 너비(max-content) */
+  const base = `left:${x}mm;top:${y}mm;width:${tx && el.sizing === 'autow' ? 'max-content' : w + 'mm'};${tx && el.sizing !== 'fixed' ? 'min-height' : 'height'}:${h}mm;transform:rotate(${el.rot || 0}deg);opacity:${el.opacity == null ? 1 : el.opacity};`;
   const lock = el.locked ? ' locked' : '';
   const blend = el.blend && el.blend !== 'normal' && el.type !== 'text' ? `mix-blend-mode:${el.blend};` : '';
   if (el.type === 'text') {
@@ -337,13 +338,29 @@ function bookGuidesHTML() {
 function marks(b) { const L = Math.max(0, b - 0.5), t = 0.15; return `<div class="marks">${[['left', 'top'], ['right', 'top'], ['left', 'bottom'], ['right', 'bottom']].map(([x, y]) => `<i style="${x}:0;${y}:${b}mm;width:${L}mm;height:${t}mm"></i><i style="${y}:0;${x}:${b}mm;height:${L}mm;width:${t}mm"></i>`).join('')}</div>`; }
 
 /* ---------- 캔버스 ---------- */
+/* ---- 글 상자 고도화 (Figma 크기 방식·인디자인 넘침 표시·파워포인트 자동 맞춤) ---- */
+const textOver = new Set(); /* 고정 크기 상자에서 글이 넘친 요소 (인디자인 빨간 + 표시) */
+function textContentH(d) { const h0 = d.style.height, m0 = d.style.minHeight, o0 = d.style.overflow; d.style.height = 'auto'; d.style.minHeight = '0'; const ch = d.offsetHeight / MM, cw = d.scrollWidth / MM; d.style.height = h0; d.style.minHeight = m0; d.style.overflow = o0; return { ch, cw }; }
+function textOverflows(d, el) { if (Number(el.maxLines) > 0 && !(Number(el.cols) > 1)) return d.scrollHeight > d.clientHeight + 2; const { ch, cw } = textContentH(d); return ch > el.h + 0.3 || cw > el.w + 0.6; }
+function autoWidth(d, el) { const nw = r1(d.offsetWidth / MM); if (Math.abs(nw - el.w) < 0.05) return; if (el.align === 'center') el.x = r1(el.x + (el.w - nw) / 2); else if (el.align === 'right') el.x = r1(el.x + el.w - nw); el.w = nw; d.style.left = el.x + 'mm'; }
+/* 글자 크기 자동 맞춤: 고정 상자 안에 들어가는 가장 큰 글자 크기(최대 = 켤 때 크기 fitMax)를 찾아 el.size(부분 서식 크기도)에 씀 → 내보내기도 같음 */
+const fitCache = new Map();
+function autoFitText(d, el) {
+  const key = [el.text, el.html, el.w, el.h, el.fitMax, el.font, el.lh, el.ls, el.weight, el.pad, el.cols, el.colGap].join('|'); if (fitCache.get(el.id) === key) return null;
+  const max = Number(el.fitMax) || el.size, base = clone(el), node = () => { const t = document.createElement('div'); t.innerHTML = elHTML(el, 'edit'); const n = t.firstElementChild; d.replaceWith(n); d = n; return n; };
+  const fits = sz => { scaleTextBy(el, base, sz / base.size); node(); const { ch, cw } = textContentH(d); return ch <= el.h + 0.2 && cw <= el.w + 0.6; };
+  let best = 4;
+  if (fits(max)) best = max; else { let lo = 4, hi = max; for (let i = 0; i < 9; i++) { const mid = (lo + hi) / 2; if (fits(mid)) { best = mid; lo = mid; } else hi = mid; } }
+  best = Math.floor(best * 2) / 2; scaleTextBy(el, base, Math.max(1, best) / base.size); node(); fitCache.set(el.id, [el.text, el.html, el.w, el.h, el.fitMax, el.font, el.lh, el.ls, el.weight, el.pad, el.cols, el.colGap].join('|')); return d;
+}
 function kScale() { return Number($('#canvas').dataset.k) || 1; }
 function renderCanvas() {
   ensureLibFonts([page()]).then(n => { if (n && !editing) renderCanvas(); });
   const c = $('#canvas'); const pg = page();
   c.style.setProperty('--pw', doc.w); c.style.setProperty('--ph', doc.h); c.style.setProperty('--b', '0mm');
   c.innerHTML = bookTokens(pg, `<div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, 'edit')).join('')}${masterHTML(pg)}</div>`);
-  pg.els.forEach(el => { if (el.type === 'text' && !isWarp(el)) { const d = c.querySelector(`[data-id="${el.id}"]`); if (d) { const hh = fitTextH(d, el, true); if (hh != null) el.h = hh; } } });
+  textOver.clear();
+  pg.els.forEach(el => { if (el.type === 'text' && !isWarp(el)) { let d = c.querySelector(`[data-id="${el.id}"]`); if (!d) return; if (el.sizing === 'autow') autoWidth(d, el); if (el.fitText && el.sizing === 'fixed') d = autoFitText(d, el) || d; const hh = fitTextH(d, el, true); if (hh != null) el.h = hh; if (el.sizing === 'fixed' && textOverflows(d, el)) textOver.add(el.id); } });
   renderGhost(); fitCanvas(); renderOverlay(); NC.live.paint();
   $('#pageLabel').textContent = `${cur + 1} / ${doc.pages.length}${pg.label ? ' · ' + pg.label : ''}`;
   $('#stage').classList.toggle('pen', tool === 'pen');
@@ -414,10 +431,11 @@ document.addEventListener('change', e => { if (e.target.id === 'guideToggle') { 
 const lockedBg = el => el.locked && el.w * el.h >= doc.w * doc.h * 0.6;
 function renderOverlay(guides) {
   const o = $('#ovl'); const els = selEls(); let h = '';
-  els.forEach(el => { const single = els.length === 1; h += `<div class="sel${single ? '' : ' multi'}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += (el.type === 'text' && !isWarp(el) ? ['nw', 'ne', 'e', 'se', 'sw', 'w'] : ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']).map(d => `<div class="h ${d}" data-h="${d}"></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; if (el.locked) h += `<button class="lockbadge" data-unlock="${el.id}" title="잠금 풀기 (Ctrl+L)">🔒 잠금 풀기</button>`; h += '</div>'; });
+  els.forEach(el => { const single = els.length === 1; h += `<div class="sel${single ? '' : ' multi'}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += (el.type === 'text' && !isWarp(el) ? ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] : ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']).map(d => `<div class="h ${d}" data-h="${d}"></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; if (el.locked) h += `<button class="lockbadge" data-unlock="${el.id}" title="잠금 풀기 (Ctrl+L)">🔒 잠금 풀기</button>`; h += '</div>'; });
   if (els.length > 1) { const U = unionBox(els), bx = U.x, by = U.y, bw = U.w, bh = U.h; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm">${els.some(e => e.locked) ? '' : ['nw', 'ne', 'se', 'sw'].map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="함께 크기 조절 (비율 유지)"></div>`).join('')}</div>`; }
   (guides || []).forEach(g => { h += g.v != null ? `<div class="guide v" style="left:${g.v}mm"></div>` : `<div class="guide h" style="top:${g.h}mm"></div>`; });
-  h += calOverlay(); h += userGuidesHTML(); h += bookGuidesHTML(); try { if (showRulers()) requestAnimationFrame(drawRulers); } catch (e) {} // 고른 요소 범위를 눈금자에 표시
+  h += calOverlay(); h += userGuidesHTML(); h += bookGuidesHTML();
+  page().els.forEach(el => { if (textOver.has(el.id) && !el.hidden) h += `<button class="ovf" data-ovf="${el.id}" style="left:${el.x + el.w}mm;top:${el.y + el.h}mm" title="글이 상자를 넘칩니다 — 누르면 상자를 글에 맞춤 (인디자인의 넘침 표시)">+</button>`; }); try { if (showRulers()) requestAnimationFrame(drawRulers); } catch (e) {} // 고른 요소 범위를 눈금자에 표시
   // 인쇄 안내선: 도련(잘려 나가는 영역)·안전 여백(글자를 두지 않을 영역)
   if (showGuides() && Number(doc.bleed) > 0) { const b = Number(doc.bleed); h += `<div class="pg-bleed" style="left:${-b}mm;top:${-b}mm;width:${doc.w + 2 * b}mm;height:${doc.h + 2 * b}mm" title="도련 ${b}mm: 이 선까지 배경을 채우세요"></div><div class="pg-safe" style="left:${safeMM()}mm;top:${safeMM()}mm;width:${doc.w - 2 * safeMM()}mm;height:${doc.h - 2 * safeMM()}mm" title="안전 여백 ${safeMM()}mm: 글자·로고는 이 안쪽에"></div>`; }
   if (showGuides()) h += formatGuides();
@@ -612,6 +630,8 @@ function dragMove(e) {
       const wp = (bx, by, bw, bh) => { const cx = bx + bw / 2, cy = by + bh / 2, lx = ux * bw - bw / 2, ly = uy * bh - bh / 2; return [cx + lx * Math.cos(a) - ly * Math.sin(a), cy + lx * Math.sin(a) + ly * Math.cos(a)]; };
       const [ax0, ay0] = wp(o.x, o.y, o.w, o.h), [ax1, ay1] = wp(x, y, w, h); x += ax0 - ax1; y += ay0 - ay1; }
     el.x = r1(x); el.y = r1(y); el.w = r1(w); el.h = r1(h);
+    if (el.type === 'text' && (d === 'n' || d === 's') && el.sizing !== 'fixed') { el.sizing = 'fixed'; if (!drag.fixNote) { drag.fixNote = true; toast('높이를 고정했습니다 — 글이 넘치면 빨간 + 표시 (속성 "글 상자"에서 자동 높이로 되돌리기, 끌기점 두 번 누르면 글에 맞춤)'); } }
+    if (el.type === 'text' && el.sizing === 'autow' && (d === 'e' || d === 'w')) el.sizing = '';
     if (el.type === 'text' && d.length === 2) scaleTextBy(el, o, el.w / o.w); /* 모서리 끌기 = 글자 크기도 함께 (캔바·미리캔버스와 같음) */
     if (el.type === 'path' && o.pts) { const sx = el.w / o.w, sy = el.h / o.h; el.pts = o.pts.map(pt => [r1(pt[0] * sx), r1(pt[1] * sy)]); renderCanvas(); } else if (el.type === 'text') { renderCanvas(); } else liveUpdate([el]);
     renderOverlay();
@@ -753,8 +773,8 @@ function sizeSel(f) {
   editing.dispatchEvent(new Event('input', { bubbles: true }));
 }
 // 글 상자 높이 맞추기: 위쪽 정렬이면 내용 높이로(늘고 줄어듦), 중앙·아래 정렬이면 내용보다 작을 때만 늘림
-function fitTextH(d, el, growOnly) { const mh = d.style.minHeight; d.style.minHeight = '0'; const ch = r1(d.offsetHeight / MM); d.style.minHeight = mh; const top = !el.valign || el.valign === 'top'; if (top && !growOnly ? Math.abs(ch - el.h) > 0.05 : ch > el.h + 0.05) return Math.max(2, ch); return null; }
-$('#canvas').addEventListener('input', e => { if (editing && e.target === editing) { const el = find(editing.dataset.id); if (el) { const hh = fitTextH(editing, el); if (hh != null) { el.h = hh; editing.style.minHeight = hh + 'mm'; renderOverlay(); placeTextBar(); } } } });
+function fitTextH(d, el, growOnly) { if (el.sizing === 'fixed') return null; const mh = d.style.minHeight; d.style.minHeight = '0'; const ch = r1(d.offsetHeight / MM); d.style.minHeight = mh; const top = !el.valign || el.valign === 'top'; if (top && !growOnly ? Math.abs(ch - el.h) > 0.05 : ch > el.h + 0.05) return Math.max(2, ch); return null; }
+$('#canvas').addEventListener('input', e => { if (editing && e.target === editing) { const el = find(editing.dataset.id); if (el) { if (el.sizing === 'autow') { autoWidth(editing, el); renderOverlay(); } const hh = fitTextH(editing, el); if (hh != null) { el.h = hh; editing.style.minHeight = hh + 'mm'; renderOverlay(); placeTextBar(); } } } });
 // 붙여넣기는 글자만 (다른 곳 서식·글꼴이 섞여 들어오지 않게)
 $('#canvas').addEventListener('paste', e => { if (!editing || !editing.contains(e.target)) return; e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData('text/plain'); document.execCommand('insertText', false, t); });
 $('#canvas').addEventListener('blur', e => { if (editing && e.target === editing && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#textBar'))) endEdit(); }, true);
@@ -2677,6 +2697,7 @@ function renderInspector() {
     <div class="tfmt"><button type="button" data-tfi="bold" class="${fmtOn(el, 'bold') ? 'on' : ''}" title="굵게 (Ctrl+B)"><b>B</b></button><button type="button" data-tfi="italic" class="${el.italic ? 'on' : ''}" title="기울임 (Ctrl+I)"><i>I</i></button><button type="button" data-tfi="underline" class="${el.underline ? 'on' : ''}" title="밑줄 (Ctrl+U)"><u>U</u></button><button type="button" data-tfi="strike" class="${el.strike ? 'on' : ''}" title="취소선"><s>S</s></button><button type="button" data-tfi2="upper" class="${el.upper ? 'on' : ''}" title="영문 대문자">AA</button><button type="button" data-tfi2="vertical" class="${el.vertical ? 'on' : ''}" title="세로쓰기">세로</button>
     <select data-k="weight" title="굵기 단계 (이 글꼴에 실제로 있는 굵기만)">${(() => { const have = fontWeights(el.font); return [[100, '아주 가늘게'], [200, '더 가늘게'], [300, '가늘게'], [400, '보통'], [500, '중간'], [600, '약간 굵게'], [700, '굵게'], [800, '아주 굵게'], [900, '최대']].filter(([a]) => have.includes(a) || String(a) === String(el.weight)).map(([a, t]) => `<option value="${a}" ${String(a) === String(el.weight) ? 'selected' : ''}>${t}${have.includes(a) ? '' : ' (가짜 굵게)'}</option>`).join(''); })()}</select></div>
     <p class="hint" style="margin:2px 0 8px">글자를 두 번 눌러 편집하면서 일부만 드래그하면, 위에 뜨는 작은 도구 막대(또는 여기 B·I·U·S)로 <b>고른 글자만</b> 굵게·기울임·밑줄·색·크기를 바꿀 수 있습니다.</p>
+    ${tboxHTML(el)}
     <div class="grid2">${F('줄 간격', 'lh', el.lh, { type: 'slider', min: 0.6, max: 3, step: 0.05, def: 1.35 })}${F('자간', 'ls', el.ls, { type: 'slider', min: -0.2, max: 1, step: 0.01, unit: 'em', def: 0 })}</div>
     <div class="row"><div class="seg" style="flex:1">${[['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽'], ['justify', '양쪽']].map(([a, t]) => `<button data-set="align:${a}" aria-pressed="${el.align === a}" title="${t} 정렬">${t}</button>`).join('')}</div><div class="seg" style="flex:1">${[['top', '위'], ['middle', '중앙'], ['bottom', '아래']].map(([a, t]) => `<button data-set="valign:${a}" aria-pressed="${(el.valign || 'top') === a}">${t}</button>`).join('')}</div></div>
     ${F('혼합 모드', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['difference', '차이']] })}
@@ -4253,6 +4274,31 @@ async function bookletPdf() {
   } catch (e) { toast('소책자 PDF를 만들지 못했습니다: ' + e.message, true); } finally { setStatus(''); }
 }
 document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-book]')) openBook(); });
+
+function fitBoxToText(el) { const d = $(`#canvas [data-id="${el.id}"]`); if (!d) return; const { ch } = textContentH(d); el.sizing = ''; el.h = r1(Math.max(2, ch)); fitCache.delete(el.id); commit(); rerender(); toast('상자를 글에 맞췄습니다 (자동 높이)'); }
+document.addEventListener('dblclick', e => { const hd = e.target.closest && e.target.closest('.ovl .h'); if (!hd || hd.dataset.h === 'rot') return; const el = selEls()[0]; if (el && el.type === 'text' && selEls().length === 1) { e.preventDefault(); e.stopPropagation(); fitBoxToText(el); } }, true);
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-ovf]'); if (!b) return; e.stopPropagation(); const el = find(b.dataset.ovf); if (el) { select([el.id]); fitBoxToText(el); } }, true);
+document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('[data-ovf]')) e.stopPropagation(); }, true);
+/* 속성 패널 '글 상자' 칸 */
+function tboxHTML(el) {
+  const sz = el.sizing || '', over = textOver.has(el.id);
+  return `<h3>글 상자 <small>Figma·인디자인·파워포인트 방식</small></h3>
+  <div class="seg tbsz">${[['autow', '자동 너비', '한 줄로 글 길이만큼 넓어짐'], ['', '자동 높이', '너비는 그대로, 글에 맞춰 높이가 늘고 줆 (기본)'], ['fixed', '고정 크기', '상자 크기 그대로 — 넘치면 빨간 + 표시']].map(([a, t, ti]) => `<button data-tbsz="${a}" aria-pressed="${sz === a}" title="${ti}">${t}</button>`).join('')}</div>
+  ${over ? `<div class="ovfbar">⚠ 글이 상자를 넘칩니다 <button class="btn sm" data-tbfit>상자를 글에 맞추기</button><button class="btn sm" data-tbshrink>글자 줄여 맞추기</button></div>` : ''}
+  ${sz === 'fixed' ? `<label class="chk"><input type="checkbox" data-tbauto ${el.fitText ? 'checked' : ''}> 글자 크기 자동 맞춤 <small class="hint" style="margin:0">(넘치면 줄이고, 남으면 ${el.fitMax || el.size}pt까지 키움 — 이름표·상장에)</small></label>` : ''}
+  <div class="grid3">${F('단 수', 'cols', el.cols || 1, { type: 'select', options: [[1, '1단'], [2, '2단'], [3, '3단'], [4, '4단']] })}${F('단 사이(mm)', 'colGap', el.colGap == null ? 5 : el.colGap, { type: 'number', step: 0.5, min: 0 })}${F('최대 줄 수', 'maxLines', el.maxLines || 0, { type: 'select', options: [[0, '제한 없음'], [1, '1줄 …'], [2, '2줄 …'], [3, '3줄 …'], [4, '4줄 …'], [5, '5줄 …'], [6, '6줄 …']] })}</div>
+  ${F('안쪽 여백', 'pad', el.pad || 0, { type: 'slider', min: 0, max: 20, step: 0.5, unit: 'mm', def: 0 })}
+  <p class="hint" style="margin-top:2px">위·아래 가운데 끌기점으로 높이를 정하면 '고정 크기'가 됩니다. 끌기점을 두 번 누르면 상자가 글에 딱 맞춰집니다. 단 나누기·최대 줄 수를 쓰면 세로 정렬은 위로 고정됩니다.</p>`;
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest) return; const el = selEls()[0]; if (!el || el.type !== 'text') return;
+  const b = e.target.closest('[data-tbsz]'); if (b) { const v = b.dataset.tbsz; if (v === 'fixed') el.sizing = 'fixed'; else if (v === 'autow') { el.sizing = 'autow'; el.cols = 1; } else { delete el.sizing; delete el.fitText; } fitCache.delete(el.id); commit(); rerender(); return; }
+  if (e.target.closest('[data-tbfit]')) { fitBoxToText(el); return; }
+  if (e.target.closest('[data-tbshrink]')) { el.sizing = 'fixed'; el.fitText = true; el.fitMax = el.size; fitCache.delete(el.id); commit(); rerender(); toast('글자 크기를 줄여 상자에 맞췄습니다 (글자 크기 자동 맞춤 켬)'); }
+});
+/* 단 수·단 사이·최대 줄 수·안쪽 여백을 바꾸면 (자동 높이 상자는) 높이를 글에 다시 맞춤 */
+$('#inspector').addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.k; if (!['cols', 'colGap', 'maxLines', 'pad'].includes(k)) return; setTimeout(() => { const el = selEls()[0]; if (!el || el.type !== 'text' || el.sizing === 'fixed') return; const d = $(`#canvas [data-id="${el.id}"]`); if (!d) return; const ch = textContentH(d).ch; if (Math.abs(ch - el.h) > 0.2) { el.h = r1(Math.max(2, ch)); commit(); rerender(); } }, 0); });
+document.addEventListener('change', e => { if (!e.target.matches || !e.target.matches('[data-tbauto]')) return; const el = selEls()[0]; if (!el) return; el.fitText = e.target.checked; if (el.fitText) el.fitMax = el.size; else if (el.fitMax) { scaleTextBy(el, clone(el), el.fitMax / el.size); delete el.fitMax; } fitCache.delete(el.id); commit(); rerender(); });
 
 /* ---- D-day 블록 (Flodesk 카운트다운처럼): 글 속 {디데이:YYYY-MM-DD}가 볼 때마다 D-7·D-DAY·D+3으로 ---- */
 function openDday() {
