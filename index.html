@@ -14,7 +14,7 @@
 <meta property="og:image" content="https://narachadata.github.io/design/og.png">
 <meta property="og:type" content="website">
 <link rel="stylesheet" href="fonts/fonts.css">
-<link rel="stylesheet" href="app.css?v=20261117.1829">
+<link rel="stylesheet" href="app.css?v=20261117.1845">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -39,7 +39,7 @@
 <symbol id="i-pdf" viewBox="0 0 24 24"><path d="M6 9V4h12v5M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2"/><rect x="6" y="14" width="12" height="6"/></symbol>
 <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
 <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></symbol>
-<symbol id="i-pages" viewBox="0 0 24 24"><rect x="3" y="4" width="13" height="16" rx="2"/><path d="M16 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-9"/></symbol>
+<symbol id="i-award" viewBox="0 0 24 24"><circle cx="12" cy="9" r="6"/><path d="M8.6 13.8 7 22l5-3 5 3-1.6-8.2"/></symbol><symbol id="i-pages" viewBox="0 0 24 24"><rect x="3" y="4" width="13" height="16" rx="2"/><path d="M16 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-9"/></symbol>
 <symbol id="i-plus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
 <symbol id="i-tpl" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></symbol>
 <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5M3 17l9 5 9-5"/></symbol>
@@ -182,6 +182,7 @@
     </ol>
     <p><b>새 기능</b> 왼쪽 메뉴의 "요소"에서 도형·선·아이콘·프레임·배지·표·스마트 블록·장식·차트를 골라 넣고, "텍스트"에서 스타일 프리셋으로 글자를 넣습니다. 글자 속성 패널에는 그라데이션·외곽선·그림자·광선·3D·휘기(아치·원형) 효과가, 이미지 속성 패널에는 필터·틴트·모양 마스크·확대/이동과 "편집기"(색 지정 배경 지우기·지우개/복원 브러시·자르기)가 있습니다. 도구 막대의 펜(P)으로 자유 곡선을 그릴 수 있습니다.</p>
     <p><b>단축키</b> <kbd>Ctrl+Z</kbd> 실행 취소(그 쪽으로 돌아가 되돌림), <kbd>Ctrl+Shift+Z</kbd> 다시 실행, <kbd>Ctrl+C·X·V</kbd> 복사·잘라내기·붙여넣기(그림 포함, 다른 쪽에서는 같은 자리), <kbd>Ctrl+Shift+V</kbd> 같은 자리에 붙여넣기, <kbd>Ctrl+D</kbd> 복제, <kbd>Ctrl+G</kbd> 그룹, <kbd>Ctrl+]·[</kbd> 앞으로·뒤로(Shift: 맨 앞·맨 뒤), <kbd>Delete</kbd> 삭제(잠긴 요소 제외), <kbd>화살표</kbd> 1mm 이동(<kbd>Shift</kbd> 5mm, <kbd>Alt</kbd> 0.1mm), 아무것도 고르지 않았을 때 화살표로 쪽 이동, <kbd>Ctrl+0</kbd> 화면 맞춤, <kbd>Ctrl+1</kbd> 100%, <kbd>Ctrl+= / -</kbd> 확대·축소(마우스 위치 기준은 Ctrl+휠), <kbd>Space</kbd>+끌기 화면 이동, <kbd>T</kbd> 글 상자, <kbd>P</kbd> 펜, <kbd>Ctrl+B·I·U</kbd> 굵게·기울임·밑줄, <kbd>Ctrl+F</kbd> 찾아 바꾸기(글꼴 한꺼번에 바꾸기 포함), <kbd>Ctrl+Alt+C·V</kbd> 스타일 복사·붙여넣기(맥은 Control+Option+C·V), <kbd>Ctrl+L</kbd> 잠금, <kbd>Alt</kbd>+끌기 복제, <kbd>Shift+H·V</kbd> 그림 좌우·상하 뒤집기, <kbd>1~9·0</kbd> 투명도 10~90%·100%, <kbd>Ctrl+←·→</kbd> 1° 회전(Shift 15°), <kbd>Shift+R</kbd> 눈금자(눈금자에서 끌어 안내선 만들기, 안내선을 눈금자로 끌면 지움). 요소나 빈 곳을 <b>오른쪽 클릭</b>하면 메뉴가 열립니다.</p>
+    <p><b>상장 (메일머지)</b> 왼쪽 메뉴 <b>상장</b>에서 ① 상장 틀(PDF·그림)을 한 번 불러오고 ② 양식(기록 향상상·급증·일반 상장)과 모두 같은 값(상장 이름·측정 이름·날짜·종목)을 정한 뒤 ③ 명단 표에 이름·기록을 넣거나 엑셀에서 붙여 넣으면 ④ ◀ ▶로 사람마다 미리 보고 ⑤ "상장 N장 만들기"로 한 사람에 한 쪽씩 만들어집니다. 다운로드에서 PDF로 한 번에 저장하고, 틀이 인쇄된 상장 용지에는 "틀도 함께 인쇄"를 끄면 글자만 찍힙니다. 한 쪽에서 글 상자를 옮기거나 글꼴을 바꾼 뒤 "이 쪽 배치를 모든 상장에"를 누르면 모두 같은 배치가 됩니다.</p>
     <p><b>글 상자</b> 글 상자에도 위·아래 가운데 끌기점이 있어 높이를 정할 수 있습니다(그러면 "고정 크기"). 글자 속성의 <b>글 상자</b>에서 자동 너비(한 줄로 늘어남)·자동 높이(기본)·고정 크기를 고르고, 고정 크기에서 글이 넘치면 상자 오른쪽 아래에 빨간 <b>+</b>가 뜹니다(누르면 상자를 글에 맞춤). "글자 크기 자동 맞춤"을 켜면 상자에 맞게 글자 크기가 저절로 줄고 늘며(이름표·상장), 단 나누기(2~4단)·최대 줄 수(넘으면 …)·안쪽 여백도 정합니다. 끌기점을 두 번 누르면 상자가 글에 딱 맞춰집니다.</p>
     <p><b>3차 새 기능</b> 달력 칸을 고르면 뜨는 칸 도구 막대의 <b>📷 사진</b>으로 그 날짜 칸에 사진을 넣습니다(날짜·일정 글은 흰 바탕 위에 그대로). 텍스트 메뉴의 <b>⏳ D-day 넣기</b>로 "승급심사까지 D-12"를 넣으면 볼 때·내보낼 때 날짜로 저절로 계산됩니다(글 속 {디데이:2027-03-28}·{남은날:2027-03-28}). 글자 속성의 <b>문단 스타일</b>에서 "+ 저장"으로 제목·본문 같은 모양을 이름으로 저장하고 다른 글에 고르면 같은 모양이 되며, 한 글을 고친 뒤 "모두에 반영"하면 모든 쪽의 같은 스타일 글이 함께 바뀝니다(인디자인 단락 스타일).</p>
     <p><b>책자</b> 페이지 메뉴의 <b>📖 책자</b>에서 인디자인처럼 모든 쪽 공통 쪽 번호·머리글·바닥글(표지는 빼고, 펼침면이면 바깥쪽에), 여백·단 안내선, 펼침면 보기, 쪽 이름으로 목차 만들기, 중철 소책자 인쇄 PDF(A4 한 장에 두 쪽, 양면 인쇄 후 반으로 접기)를 씁니다. 글 상자에 {쪽}·{전체쪽}을 쓰면 쪽 번호로 바뀝니다.</p>
@@ -197,29 +198,29 @@
 <style id="pageStyle"></style>
 <div class="toast" id="toast" popover="manual" hidden></div>
 
-<script src="version.js?v=20261117.1829"></script>
-<script src="fonts/fonts.js?v=20261117.1829"></script>
-<script src="fonts/webfonts.js?v=20261117.1829"></script>
-<script src="assets.js?v=20261117.1829"></script>
-<script src="assets-brand.js?v=20261117.1829"></script>
-<script src="defaults.js?v=20261117.1829"></script>
-<script src="ai.js?v=20261117.1829"></script>
-<script src="storage.js?v=20261117.1829"></script>
-<script src="live.js?v=20261117.1829"></script>
-<script src="lib.js?v=20261117.1829"></script>
-<script src="calendar.js?v=20261117.1829"></script>
-<script src="templates.js?v=20261117.1829"></script>
-<script src="templates2.js?v=20261117.1829"></script>
-<script src="templates3.js?v=20261117.1829"></script>
-<script src="templates4.js?v=20261117.1829"></script>
-<script src="effects.js?v=20261117.1829"></script>
-<script src="imgedit.js?v=20261117.1829"></script>
-<script src="elements.js?v=20261117.1829"></script>
-<script src="news.js?v=20261117.1829"></script>
-<script src="astream.js?v=20261117.1829"></script>
-<script src="media.js?v=20261117.1829"></script>
-<script src="vtemplates.js?v=20261117.1829"></script>
-<script src="video.js?v=20261117.1829"></script>
-<script src="app.js?v=20261117.1829"></script>
+<script src="version.js?v=20261117.1845"></script>
+<script src="fonts/fonts.js?v=20261117.1845"></script>
+<script src="fonts/webfonts.js?v=20261117.1845"></script>
+<script src="assets.js?v=20261117.1845"></script>
+<script src="assets-brand.js?v=20261117.1845"></script>
+<script src="defaults.js?v=20261117.1845"></script>
+<script src="ai.js?v=20261117.1845"></script>
+<script src="storage.js?v=20261117.1845"></script>
+<script src="live.js?v=20261117.1845"></script>
+<script src="lib.js?v=20261117.1845"></script>
+<script src="calendar.js?v=20261117.1845"></script>
+<script src="templates.js?v=20261117.1845"></script>
+<script src="templates2.js?v=20261117.1845"></script>
+<script src="templates3.js?v=20261117.1845"></script>
+<script src="templates4.js?v=20261117.1845"></script>
+<script src="effects.js?v=20261117.1845"></script>
+<script src="imgedit.js?v=20261117.1845"></script>
+<script src="elements.js?v=20261117.1845"></script>
+<script src="news.js?v=20261117.1845"></script>
+<script src="astream.js?v=20261117.1845"></script>
+<script src="media.js?v=20261117.1845"></script>
+<script src="vtemplates.js?v=20261117.1845"></script>
+<script src="video.js?v=20261117.1845"></script>
+<script src="app.js?v=20261117.1845"></script>
 </body>
 </html>

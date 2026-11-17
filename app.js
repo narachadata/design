@@ -318,7 +318,7 @@ function bookTokens(pg, html) {
   if (html.indexOf('{디데이:') >= 0 || html.indexOf('{남은날:') >= 0) html = html.replace(/\{(디데이|남은날):(\d{4})-(\d{1,2})-(\d{1,2})\}/g, (_, k, y, m, d) => k === '디데이' ? ddayText(+y, +m, +d) : String(Math.max(0, Math.round((new Date(+y, +m - 1, +d) - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000)))); /* D-day: 볼 때(내보낼 때) 날짜 기준으로 계산 */
   if (html.indexOf('{쪽}') < 0 && html.indexOf('{전체쪽}') < 0) return html; const i = doc.pages.indexOf(pg); const n = i < 0 ? '' : (bookNum(i) == null ? i + 1 : bookNum(i)); return html.split('{쪽}').join(String(n)).split('{전체쪽}').join(String(bookTotal())); }
 function masterHTML(pg) {
-  if (!doc.book || !doc.book.on) return ''; const B = book(), i = doc.pages.indexOf(pg); if (i < 0 || pg.noMaster) return ''; const n = bookNum(i); if (n == null) return '';
+  if (!doc.book || !doc.book.on) return ''; const B = book(), i = doc.pages.indexOf(pg); if (i < 0 || pg.noMaster || pg.cert) return ''; /* 상장 쪽에는 쪽 번호·머리글 없음 */ const n = bookNum(i); if (n == null) return '';
   const right = isRightPage(i), outer = right ? 'right' : 'left', inner = right ? 'left' : 'right', al = B.pos === 'center' ? 'center' : B.pos === 'inner' ? inner : outer;
   const num = { n: String(n), dash: `- ${n} -`, p: `p.${n}`, total: `${n} / ${bookTotal()}` }[B.style] || String(n), m = Number(B.margin) || 8;
   const st = (pos, a) => `position:absolute;left:${m}mm;right:${m}mm;${pos};text-align:${a};font-family:'${esc(B.font)}';font-size:${Number(B.size) || 9}pt;color:${esc(B.color)};line-height:1.2;white-space:nowrap;overflow:hidden;pointer-events:none;z-index:50`;
@@ -2135,7 +2135,7 @@ function openVideoMaker() {
     } catch (e) { pr.textContent = e.message; } finally { busy = false; if (document.body.contains(go)) { go.lastChild.textContent = '영상 만들기'; if (Vp && !stop) { const msg = $('#vidProg').textContent; P = VIDEO.player($('#vidCv'), Vp); P.onTime = t => { seek.value = t; $('#vidTime').textContent = `${fmtT(t)} / ${fmtT(Vp.total)}`; ic(); }; P.seek(0); $('#vidProg').textContent = msg; } } }
   };
 }
-const RAIL = [['pages', '페이지', 'i-pages'], ['tpl', '템플릿', 'i-tpl'], ['news', '소식지', 'i-news'], ['video', '영상', 'i-video'], ['elems', '요소', 'i-elems'], ['text', '텍스트', 'i-text'], ['photo', '사진', 'i-img'], ['upload', '업로드', 'i-upload'], ['project', '프로젝트', 'i-folder'], ['ai', 'AI 도구', 'i-ai'], ['bg', '배경', 'i-bg'], ['theme', '테마', 'i-theme'], ['chart', '차트', 'i-chart'], ['layers', '레이어', 'i-layers']];
+const RAIL = [['pages', '페이지', 'i-pages'], ['tpl', '템플릿', 'i-tpl'], ['news', '소식지', 'i-news'], ['cert', '상장', 'i-award'], ['video', '영상', 'i-video'], ['elems', '요소', 'i-elems'], ['text', '텍스트', 'i-text'], ['photo', '사진', 'i-img'], ['upload', '업로드', 'i-upload'], ['project', '프로젝트', 'i-folder'], ['ai', 'AI 도구', 'i-ai'], ['bg', '배경', 'i-bg'], ['theme', '테마', 'i-theme'], ['chart', '차트', 'i-chart'], ['layers', '레이어', 'i-layers']];
 function renderRail() { $('#rail').innerHTML = RAIL.map(([k, t, ic]) => `<button data-tab="${k}" aria-selected="${sideTab === k}" title="${t}"><svg class="ic"><use href="#${ic}"/></svg><span>${t}</span></button>`).join(''); $$('#rail button').forEach(b => b.onclick = () => { sideTab = b.dataset.tab; if (sideTab !== 'news' && newsMode) setNewsMode(false); renderRail(); renderSide(); if (sideTab === 'video') { if (!tlOn()) tlShow(true); } else if (tlOn() && tlOnlyVideo) { if (tl.playing) tlPause(); tlShow(false); } }); }
 function tmpSheet(w, h, els, bg) { const tmp = Object.assign({}, doc, { w, h, bleed: 0, cropMarks: false }); const saved = doc; doc = tmp; try { return sheetHTML({ id: 'tmp', bg: bg || '#ffffff', els }, 'thumb'); } finally { doc = saved; } }
 function fitBoxes(root, sel_, maxH) { root.querySelectorAll(sel_).forEach(bx => { const w = Number(bx.dataset.w), h = Number(bx.dataset.h), n = Number(bx.dataset.n) || 1; const bw = bx.clientWidth; if (!bw) return; const k = Math.min(bw / (w * MM * n + (n - 1) * 4), (maxH || 110) / (h * MM)); const total = w * MM * k * n + (n - 1) * 4; bx.querySelectorAll(':scope > .sheet').forEach((sh, i) => { sh.style.transform = `scale(${k})`; sh.style.left = ((bw - total) / 2 + i * (w * MM * k + 4)) + 'px'; }); bx.style.height = (h * MM * k) + 'px'; }); }
@@ -2154,6 +2154,8 @@ function renderSide() {
     $('#pgDel').onclick = () => pageCmd('del');
     $('#pgUp').onclick = () => { if (cur === 0) return; [doc.pages[cur - 1], doc.pages[cur]] = [doc.pages[cur], doc.pages[cur - 1]]; commit(); goto(cur - 1); };
     $('#pgDown').onclick = () => { if (cur >= doc.pages.length - 1) return; [doc.pages[cur + 1], doc.pages[cur]] = [doc.pages[cur], doc.pages[cur + 1]]; commit(); goto(cur + 1); };
+  } else if (sideTab === 'cert') {
+    renderCertSide(body);
   } else if (sideTab === 'news') {
     renderNewsSide(body);
   } else if (sideTab === 'video') {
@@ -4299,6 +4301,176 @@ document.addEventListener('click', e => {
 /* 단 수·단 사이·최대 줄 수·안쪽 여백을 바꾸면 (자동 높이 상자는) 높이를 글에 다시 맞춤 */
 $('#inspector').addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.k; if (!['cols', 'colGap', 'maxLines', 'pad'].includes(k)) return; setTimeout(() => { const el = selEls()[0]; if (!el || el.type !== 'text' || el.sizing === 'fixed') return; const d = $(`#canvas [data-id="${el.id}"]`); if (!d) return; const ch = textContentH(d).ch; if (Math.abs(ch - el.h) > 0.2) { el.h = r1(Math.max(2, ch)); commit(); rerender(); } }, 0); });
 document.addEventListener('change', e => { if (!e.target.matches || !e.target.matches('[data-tbauto]')) return; const el = selEls()[0]; if (!el) return; el.fitText = e.target.checked; if (el.fitText) el.fitMax = el.size; else if (el.fitMax) { scaleTextBy(el, clone(el), el.fitMax / el.size); delete el.fitMax; } fitCache.delete(el.id); commit(); rerender(); });
+
+/* ======================= 상장 (메일머지) =======================
+   워드 편지 병합(메일머지)처럼: ① 상장 틀(배경) ② 양식(본문·공통 내용 = 주 문서) ③ 명단(데이터 원본) ④ 결과 미리 보기(◀ 1/12 ▶) ⑤ 병합 완료(사람마다 한 쪽)
+   doc.cert = { frame:'a:..', form, printFrame, data:{ [form]:{ common:{}, rows:[] } }, layout:{ [칸 이름]:{x,y,w,h,font,size,weight,color,align,lh} } }
+   만든 쪽은 pg.cert={form,i}. 틀은 관장님 도장이 있어 공개 저장소에 넣지 않고, 불러오면 이 문서와 이 PC(IndexedDB)에만 보관 */
+const CERT_TODAY = () => { const t = new Date(); return `${t.getFullYear()}년 ${t.getMonth() + 1}월 ${t.getDate()}일`; };
+const CERT_FORMS = {
+  record: { name: '기록 향상상', desc: '줄넘기·체력 향상왕 — 종목별 기록 전→후', common: [['title', '상장 이름', '줄넘기 향상왕'], ['event', '측정 이름', '2026년 나라차태권도 줄넘기측정'], ['date', '날짜', ''], ['k1', '종목 1', '앞으로 뛰기왕'], ['k2', '종목 2 (없으면 비움)', '뒤로 뛰기왕'], ['unit', '단위', '회']],
+    body: '위 사람은 평소 성실한 태도로 태권도 수련에 임하고,\n<{측정 이름}>에서 위와 같이\n좋은 성과를 얻게 되었기에\n이에 칭찬하며 상장을 수여합니다.',
+    cols: [['name', '이름', 7], ['a1', '종목1 전', 4], ['b1', '종목1 후', 4], ['a2', '종목2 전', 4], ['b2', '종목2 후', 4]] },
+  grade: { name: '급증', desc: '승급·승품 — 이름·급수·다음 예정일', common: [['title', '상장 이름', '급증'], ['date', '날짜', ''], ['org', '심사 기관', '대한민국 태권도 협회']],
+    body: '위 사람은 {심사 기관} 심사 규정에 의하여\n승급심사 결과 위와 같이 자격을 인정합니다.',
+    cols: [['name', '이름', 7], ['grade', '급수 (예: 1품 10급)', 8], ['note', '아래 작은 글 (예: 2품 승품 예정일 : 29년 3월)', 14]] },
+  free: { name: '일반 상장', desc: '모범상·개근상·우수상 — 문구 자유', common: [['title', '상장 이름', '모범상'], ['date', '날짜', '']],
+    body: '위 사람은 평소 바른 태도로 태권도 수련에 성실히 임하여\n다른 수련생의 모범이 되었기에\n이 상장을 수여합니다.',
+    cols: [['name', '이름', 7], ['title', '상장 이름 (비우면 공통)', 8], ['line', '이름 아래 한 줄 (선택)', 12]] }
+};
+let certPrev = 0;
+function certState() {
+  if (!doc.cert) doc.cert = { form: 'record', printFrame: true, data: {}, layout: {} };
+  const C = doc.cert; C.data = C.data || {}; C.layout = C.layout || {};
+  Object.entries(CERT_FORMS).forEach(([k, f]) => { if (!C.data[k]) C.data[k] = { common: Object.fromEntries(f.common.map(([a, , v]) => [a, a === 'date' ? CERT_TODAY() : v])), body: f.body, rows: [] }; });
+  return C;
+}
+/* 병합 필드 값: 행 값이 있으면 행, 없으면 공통 값 (워드의 '같은 값은 한 번만') */
+function certVal(D, r, k) { const v = r && r[k] != null && String(r[k]).trim() !== '' ? String(r[k]).trim() : (D.common[k] || ''); return v; }
+function certRec(v, unit) { v = String(v || '').trim(); return /^\d+(\.\d+)?$/.test(v) ? v + (unit || '') : v; }
+/* 한 사람의 상장 쪽 요소 (A4 210×297 기준 위치 → 문서 크기에 맞춰 비율) — 레이아웃 덮어쓰기(doc.cert.layout)가 있으면 그 위치·모양 */
+function certEls(form, r) {
+  const C = certState(), D = C.data[form], F = CERT_FORMS[form], kx = doc.w / 210, ky = doc.h / 297, k = Math.min(kx, ky), out = [];
+  const T = (key, text, o) => { if (!String(text || '').trim()) return; const L = C.layout[form + ':' + key] || {}; const base = Object.assign({}, TEXT_DEF, { id: uid(), text, font: 'Noto Sans KR', size: 15, weight: 700, color: '#1a1a1a', align: 'center', lh: 1.45, ls: 0, name: '상장 · ' + o.label, certKey: key }, o, { x: r1(o.x * kx), y: r1(o.y * ky), w: r1(o.w * kx), h: r1((o.h || 8) * ky), size: Math.round(o.size * k * 2) / 2 });
+    delete base.label; if (base.fitText) base.fitMax = base.size; Object.assign(base, L); out.push(base); };
+  const sans = 'Noto Sans KR', serif = 'Nanum Myeongjo', fill = t => String(t || '').replace(/\{([^{}\n]+)\}/g, (m, nm) => { const c = F.common.find(x => x[1].replace(/ \(.*\)$/, '') === nm.trim()); return c ? certVal(D, r, c[0]) : m; });
+  T('title', certVal(D, r, 'title'), { label: '상장 이름', x: 15, y: 91, w: 180, h: 22, size: 42, weight: 900, font: sans, ls: 0.06, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
+  T('name', certVal(D, r, 'name'), { label: '이름', x: 30, y: 139, w: 150, h: 17, size: 34, weight: 800, font: sans, ls: 0.04, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
+  let bodyY = 180;
+  if (form === 'record') {
+    const u = certVal(D, r, 'unit'), k1 = certVal(D, r, 'k1'), k2 = certVal(D, r, 'k2'), has2 = k2 && (r.a2 || r.b2);
+    const rec = (kk, a, b) => `${kk}\n${certRec(a, u)} → ${certRec(b, u)}`;
+    if (k1 && (r.a1 || r.b1)) T('rec1', rec(k1, r.a1, r.b1), has2 ? { label: '기록 1', x: 22, y: 160, w: 78, h: 14, size: 16, font: serif, weight: 700 } : { label: '기록 1', x: 55, y: 160, w: 100, h: 14, size: 16, font: serif, weight: 700 });
+    if (has2) T('rec2', rec(k2, r.a2, r.b2), { label: '기록 2', x: 110, y: 160, w: 78, h: 14, size: 16, font: serif, weight: 700 });
+  } else if (form === 'grade') { T('grade', r.grade, { label: '급수', x: 40, y: 158, w: 130, h: 11, size: 24, weight: 800, font: serif }); bodyY = 182; }
+  else if (form === 'free') { T('line', r.line, { label: '이름 아래 한 줄', x: 25, y: 160, w: 160, h: 9, size: 15, font: serif, weight: 700 }); }
+  T('body', fill(D.body), { label: '본문', x: 18, y: bodyY, w: 174, h: 30, size: 15, font: serif, weight: 700, lh: 1.75 });
+  T('date', certVal(D, r, 'date'), { label: '날짜', x: 24, y: 229.5, w: 60, h: 8, size: 14, font: serif, weight: 700 });
+  if (form === 'grade') T('note', r.note, { label: '작은 글', x: 24, y: 241, w: 90, h: 5, size: 9, font: serif, weight: 700, align: 'left' });
+  return out;
+}
+function certPage(form, r, i) {
+  const C = certState(), els = [];
+  if (C.frame) els.push({ type: 'image', id: uid(), src: C.frame, x: 0, y: 0, w: doc.w, h: doc.h, rot: 0, fit: 'cover', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '상장 틀', locked: true, hidden: C.printFrame === false, certFrame: true });
+  return { id: uid(), bg: '#ffffff', els: els.concat(certEls(form, r)), label: `상장 ${i + 1} · ${r.name || ''}`, cert: { form, i } };
+}
+/* 화면 밖에서 글자 크기 자동 맞춤을 미리 계산 (캔버스에 열지 않은 쪽도 PDF에서 이름이 넘치지 않게) */
+async function fitTextOffscreen(els) {
+  const list = els.filter(e => e.type === 'text' && e.fitText && e.sizing === 'fixed'); if (!list.length) return;
+  try { await Promise.all([...new Set(list.map(e => `${e.weight || 400} 20px "${e.font}"`))].map(f => document.fonts.load(f, '가나다'))); } catch (e) {}
+  const box = document.createElement('div'); box.className = 'sheet'; box.style.cssText = `position:fixed;left:-20000px;top:0;visibility:hidden;--pw:${doc.w};--ph:${doc.h};--b:0mm`; box.innerHTML = '<div class="page"></div>'; document.body.appendChild(box);
+  try { list.forEach(el => { fitCache.delete(el.id); const t = document.createElement('div'); t.innerHTML = elHTML(el, 'edit'); const d = t.firstElementChild; box.firstChild.appendChild(d); autoFitText(d, el); }); } finally { box.remove(); }
+}
+function certRows(form) { return (certState().data[form].rows || []).filter(r => String(r.name || '').trim()); }
+/* 상장 틀 불러오기: PDF(첫 쪽, 약 300dpi)나 그림 → 문서 그림 + 이 PC 기억(다음 상장 문서에 자동) */
+async function certLoadFrame() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/pdf,image/*';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0]; if (!f) return; let url, wmm = 0, hmm = 0;
+    try {
+      setStatus('상장 틀을 읽는 중…');
+      if (/pdf$/i.test(f.type) || /\.pdf$/i.test(f.name)) {
+        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', () => window.pdfjsLib); pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise, pg = await pdf.getPage(1), v1 = pg.getViewport({ scale: 1 });
+        wmm = v1.width * 25.4 / 72; hmm = v1.height * 25.4 / 72; const sc = 2480 / Math.min(v1.width, v1.height) * (Math.min(v1.width, v1.height) / v1.width), vp = pg.getViewport({ scale: Math.min(sc, 6) });
+        const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+        await pg.render({ canvasContext: x, viewport: vp }).promise; url = c.toDataURL('image/jpeg', 0.92); c.width = c.height = 0;
+      } else url = await shrinkDataURL(await fileToDataURL(f), 3508);
+    } catch (e) { toast('상장 틀을 읽지 못했습니다: ' + e.message, true); return; } finally { setStatus(''); }
+    const C = certState(); C.frame = addAsset(url); try { await store.idbSet('cert-frame', { url, wmm, hmm, name: f.name }); } catch (e) {}
+    if (wmm && hmm && (Math.abs(wmm - doc.w) > 2 || Math.abs(hmm - doc.h) > 2)) toast(`틀 크기(${Math.round(wmm)}×${Math.round(hmm)}mm)가 문서(${Math.round(doc.w)}×${Math.round(doc.h)}mm)와 다릅니다 — 상장 문서는 A4 세로로 만드세요`, true);
+    doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) e.src = C.frame; })); commit(); renderAll(); toast('상장 틀을 넣었습니다 — 이 PC는 다음 상장 문서에도 이 틀을 씁니다');
+  };
+  inp.click();
+}
+async function certNewDoc() {
+  if (doc.pages.some(p => p.els.length) && !window.confirm(`A4 상장 문서를 새로 만듭니다. 지금 문서를 닫을까요? (${keepNote()})`)) return;
+  await keepCurrentDoc(); await store.disconnect();
+  const nd = newDoc(SIZES.find(s_ => s_[0] === 'a4p')); nd.fmt = 'a4p'; nd.name = `상장 ${new Date().getFullYear()}`; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.rules = doc.rules; nd.fonts = doc.fonts;
+  doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; certState();
+  try { const fr = await store.idbGet('cert-frame'); if (fr && fr.url) doc.cert.frame = addAsset(fr.url); } catch (e) {}
+  commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다');
+  zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); toast(doc.cert.frame ? 'A4 상장 문서를 만들었습니다 — 이 PC에 기억된 상장 틀을 넣었습니다' : 'A4 상장 문서를 만들었습니다 — ① 상장 틀을 불러오세요');
+}
+/* 병합 완료: 이 양식으로 만든 쪽을 지우고 명단대로 다시 만듦 (다른 쪽은 그대로) */
+async function certMerge() {
+  const C = certState(), rows = certRows(C.form); if (!rows.length) { toast('명단에 이름이 없습니다', true); return; }
+  const pages = rows.map((r, i) => certPage(C.form, r, i)); setStatus('이름 길이에 맞춰 글자 크기를 맞추는 중…'); await fitTextOffscreen(pages.flatMap(p => p.els)); setStatus(''); const keep = doc.pages.filter(p => !(p.cert && p.cert.form === C.form) && (p.els.length || p.cert));
+  doc.pages = keep.concat(pages); cur = keep.length; sel = []; fitCache.clear(); commit(); renderAll();
+  toastUndo(`상장 ${rows.length}장을 만들었습니다 — 쪽마다 고칠 수 있고, 다운로드에서 PDF로 한 번에 저장합니다`);
+}
+/* 이 쪽에서 옮기거나 바꾼 글 상자 위치·모양을 양식에 기억 → 모든 상장에 (워드의 '주 문서 고치기') */
+function certSaveLayout() {
+  const pg = page(); if (!pg.cert) { toast('상장 쪽에서 쓰세요', true); return; } const C = certState(), form = pg.cert.form; let n = 0;
+  pg.els.forEach(e => { if (!e.certKey) return; const L = {}; ['x', 'y', 'w', 'h', 'font', 'size', 'weight', 'color', 'align', 'lh', 'ls', 'italic', 'sizing', 'fitText', 'valign', 'strokeW', 'strokeC', 'shadow'].forEach(kk => { if (e[kk] !== undefined) L[kk] = clone(e[kk]); }); if (e.fitText) L.size = e.fitMax || e.size; C.layout[form + ':' + e.certKey] = L; n++; });
+  commit(); certMerge(); toast(`이 쪽의 글 상자 ${n}개 위치·모양을 양식에 기억하고 모든 상장을 다시 만들었습니다`);
+}
+function renderCertSide(body) {
+  const C = certState(), form = C.form, F = CERT_FORMS[form], D = C.data[form], rows = D.rows, nOk = certRows(form).length, a4 = Math.abs(doc.w - 210) < 1 && Math.abs(doc.h - 297) < 1;
+  const fieldChips = F.common.map(([, l]) => l.replace(/ \(.*\)$/, '')).filter(l => !/날짜|단위|종목/.test(l));
+  body.innerHTML = `<div class="cert">
+  ${a4 && (doc.cert.frame || doc.pages.some(p => p.cert)) ? '' : `<div class="wz-card"><b>상장 만들기</b><p class="hint" style="margin:4px 0 8px">워드의 편지 병합처럼 양식은 한 번, 명단만 바꿔 여러 명의 상장을 한 번에 만듭니다.</p>${a4 ? '' : '<button class="btn primary full" data-cx="newdoc">A4 상장 문서 새로 만들기</button>'}</div>`}
+  <h3>① 상장 틀 <small>배경</small></h3>
+  <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm ${C.frame ? '' : 'primary'}" data-cx="frame">${C.frame ? '틀 바꾸기' : '📄 상장 틀 불러오기 (PDF·그림)'}</button>${C.frame ? `<label class="chk" title="틀이 미리 인쇄된 상장 용지에 찍을 때는 끄세요"><input type="checkbox" data-cx="printFrame" ${C.printFrame !== false ? 'checked' : ''}> 틀도 함께 인쇄</label>` : ''}</div>
+  ${C.frame ? '' : '<p class="hint">틀은 이 문서와 이 PC에만 보관됩니다 (관장 도장이 있어 인터넷에 올리지 않음).</p>'}
+  <h3>② 양식 <small>주 문서</small></h3>
+  <div class="cformgrid">${Object.entries(CERT_FORMS).map(([kk, f]) => `<button class="cform ${kk === form ? 'on' : ''}" data-cform="${kk}"><b>${f.name}</b><small>${f.desc}</small></button>`).join('')}</div>
+  <div class="ccommon">${F.common.map(([kk, l]) => `<label class="f"><span>${l} <em class="hint">모두 같음</em></span><input type="text" data-cc="${kk}" value="${esc(D.common[kk] || '')}"></label>`).join('')}
+  <label class="f"><span>본문 <em class="hint">{ } 자리는 위 값으로 바뀜</em></span><textarea data-cbody rows="4">${esc(D.body)}</textarea></label>
+  <div class="cchips">${fieldChips.map(l => `<button class="btn sm" data-cchip="${esc(l)}" title="본문에 넣기">{${esc(l)}}</button>`).join('')}<button class="btn sm" data-cx="bodyreset" title="처음 문구로">처음 문구</button></div></div>
+  <h3>③ 명단 <small>${nOk}명 · 엑셀에서 붙여넣기 가능</small></h3>
+  <div class="ctable-wrap"><table class="ctable"><tr><th>#</th>${F.cols.map(([, l]) => `<th title="${esc(l)}">${esc(l.replace(/ \(.*\)$/, ''))}</th>`).join('')}<th></th></tr>
+  ${rows.map((r, i) => `<tr class="${i === certPrev ? 'cur' : ''}"><td class="ci" data-cpick="${i}" title="미리 보기">${i + 1}</td>${F.cols.map(([kk, , w]) => `<td><input data-cr="${i}" data-ck="${kk}" value="${esc(r[kk] || '')}" style="width:${w}em"></td>`).join('')}<td><button class="x" data-cdel="${i}" title="이 줄 지우기">×</button></td></tr>`).join('')}</table></div>
+  <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" data-cx="add">+ 한 명</button><button class="btn sm" data-cx="paste">엑셀에서 붙여넣기</button>${rows.length ? '<button class="btn sm" data-cx="clear">명단 비우기</button>' : ''}</div>
+  <details class="fx" id="cpasteBox" style="margin-top:6px"><summary>붙여넣기 칸</summary><p class="hint">엑셀에서 <b>${F.cols.map(c => c[1].replace(/ \(.*\)$/, '')).join(' · ')}</b> 순서로 복사해 붙여 넣으세요. 첫 줄이 열 이름이면 이름으로 맞춥니다.</p><textarea id="cpaste" rows="5" placeholder="${F.cols.map(c => c[1].replace(/ \(.*\)$/, '')).join('&#9;')}"></textarea><button class="btn sm primary" data-cx="pastego">명단에 더하기</button></details>
+  <h3>④ 결과 미리 보기</h3>
+  ${nOk ? `<div class="row cprevnav"><button class="btn sm icon" data-cnav="-1">‹</button><span>${Math.min(certPrev + 1, rows.length)} / ${rows.length} · <b>${esc((rows[certPrev] || {}).name || '(이름 없음)')}</b></span><button class="btn sm icon" data-cnav="1">›</button></div><div class="cprev" id="cprev"></div>${certWarn(form)}` : '<p class="hint">이름을 넣으면 여기에 상장이 보입니다.</p>'}
+  <h3>⑤ 병합 완료</h3>
+  <button class="btn primary full" data-cx="merge" ${nOk ? '' : 'disabled'}>🏅 상장 ${nOk}장 만들기</button>
+  <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn sm" data-cx="pdf" ${doc.pages.some(p => p.cert) ? '' : 'disabled'}>PDF·인쇄로 저장</button><button class="btn sm" data-cx="layout" ${page().cert ? '' : 'disabled'} title="지금 상장 쪽에서 글 상자를 옮기거나 글꼴·크기를 바꾼 뒤 누르면, 모든 상장에 같은 배치로">이 쪽 배치를 모든 상장에</button>${Object.keys(C.layout).some(kk => kk.startsWith(form + ':')) ? '<button class="btn sm" data-cx="layoutreset">배치 처음대로</button>' : ''}</div>
+  <p class="hint" style="margin-top:8px">이름이 길면 글자 크기가 저절로 줄어듭니다. 종목 2 기록이 없는 사람은 기록 1이 가운데로 옵니다(조건부 필드). 날짜·측정 이름처럼 모두 같은 값은 ②에서 한 번만 바꾸면 됩니다.</p></div>`;
+  const pv = $('#cprev'); if (pv) { const r = rows[certPrev]; const tmp = certPage(form, r || {}, certPrev); const bw = pv.clientWidth || 260, kk = bw / (doc.w * MM); pv.style.height = doc.h * MM * kk + 'px'; const draw = () => { pv.innerHTML = `<div style="transform:scale(${kk});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(doc.w, doc.h, tmp.els.map(e => Object.assign({}, e, { hidden: false })), '#ffffff')}</div>`; }; draw(); fitTextOffscreen(tmp.els).then(() => { if (document.body.contains(pv)) draw(); }); }
+}
+function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEach((r, i) => { if (!String(r.name || '').trim() && Object.values(r).some(v => String(v || '').trim())) w.push(`${i + 1}번 줄에 이름이 없습니다`); if (form === 'record' && String(r.name || '').trim() && !(r.a1 || r.b1)) w.push(`${r.name}: 종목1 기록이 비었습니다`); }); return w.length ? `<div class="ovfbar" style="display:block">⚠ ${w.slice(0, 4).map(esc).join('<br>')}${w.length > 4 ? `<br>… ${w.length - 4}개 더` : ''}</div>` : ''; }
+(function () {
+  const sb = () => $('#sidebody'), on = () => sideTab === 'cert';
+  let tmr; const soon = () => { clearTimeout(tmr); tmr = setTimeout(() => { if (on()) { const a = document.activeElement, id = a && a.dataset ? JSON.stringify(a.dataset) : '', pos = a && a.selectionStart; markDirty(); renderSide(); if (id) { const n = [...sb().querySelectorAll('input,textarea')].find(x => JSON.stringify(x.dataset) === id); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} } } } }, 350); };
+  document.addEventListener('input', e => {
+    if (!on() || !sb().contains(e.target)) return; const C = certState(), D = C.data[C.form], t = e.target;
+    if (t.dataset.cc) { D.common[t.dataset.cc] = t.value; soon(); } else if (t.hasAttribute('data-cbody')) { D.body = t.value; soon(); }
+    else if (t.dataset.cr != null) { const i = Number(t.dataset.cr); D.rows[i] = D.rows[i] || {}; D.rows[i][t.dataset.ck] = t.value; certPrev = i; soon(); }
+  });
+  document.addEventListener('change', e => { if (!on() || !sb().contains(e.target)) return; if (e.target.dataset.cx === 'printFrame') { const C = certState(); C.printFrame = e.target.checked; doc.pages.forEach(p => p.els.forEach(x => { if (x.certFrame) x.hidden = !C.printFrame; })); commit(); renderAll(); toast(C.printFrame ? '틀도 함께 인쇄합니다' : '글자만 인쇄합니다 (틀이 인쇄된 상장 용지에)'); } });
+  document.addEventListener('paste', e => { if (!on() || !e.target.dataset || e.target.dataset.cr == null) return; const txt = (e.clipboardData || window.clipboardData).getData('text/plain'); if (!/[\t\n]/.test(txt.trim())) return; e.preventDefault(); certPaste(txt, Number(e.target.dataset.cr), e.target.dataset.ck); });
+  document.addEventListener('click', e => {
+    if (!on() || !e.target.closest || !sb().contains(e.target)) return; const C = certState(), D = C.data[C.form], F = CERT_FORMS[C.form];
+    const fb = e.target.closest('[data-cform]'); if (fb) { C.form = fb.dataset.cform; certPrev = 0; markDirty(); renderSide(); return; }
+    const ch = e.target.closest('[data-cchip]'); if (ch) { const ta = sb().querySelector('[data-cbody]'); const p = ta.selectionStart || ta.value.length; ta.value = ta.value.slice(0, p) + `{${ch.dataset.cchip}}` + ta.value.slice(p); D.body = ta.value; markDirty(); renderSide(); return; }
+    const pk = e.target.closest('[data-cpick]'); if (pk) { certPrev = Number(pk.dataset.cpick); const i = doc.pages.findIndex(p => p.cert && p.cert.form === C.form && p.cert.i === certRows(C.form).indexOf(D.rows[certPrev])); if (i >= 0) goto(i); renderSide(); return; }
+    const dl = e.target.closest('[data-cdel]'); if (dl) { D.rows.splice(Number(dl.dataset.cdel), 1); certPrev = Math.max(0, Math.min(certPrev, D.rows.length - 1)); markDirty(); renderSide(); return; }
+    const nv = e.target.closest('[data-cnav]'); if (nv) { certPrev = (certPrev + Number(nv.dataset.cnav) + D.rows.length) % Math.max(1, D.rows.length); renderSide(); return; }
+    const b = e.target.closest('[data-cx]'); if (!b || b.tagName === 'INPUT') return; const k = b.dataset.cx;
+    if (k === 'newdoc') certNewDoc(); if (k === 'frame') certLoadFrame();
+    if (k === 'add') { D.rows.push({}); certPrev = D.rows.length - 1; markDirty(); renderSide(); setTimeout(() => { const n = sb().querySelector(`[data-cr="${certPrev}"][data-ck="name"]`); if (n) n.focus(); }, 0); }
+    if (k === 'paste') { const d = $('#cpasteBox'); d.open = true; $('#cpaste').focus(); }
+    if (k === 'pastego') { certPaste($('#cpaste').value); }
+    if (k === 'clear' && window.confirm(`명단 ${D.rows.length}줄을 비울까요?`)) { D.rows = []; certPrev = 0; markDirty(); renderSide(); }
+    if (k === 'bodyreset') { D.body = F.body; markDirty(); renderSide(); }
+    if (k === 'merge') certMerge(); if (k === 'pdf') openDownload('pdfhq'); if (k === 'layout') certSaveLayout();
+    if (k === 'layoutreset') { Object.keys(C.layout).forEach(kk => { if (kk.startsWith(C.form + ':')) delete C.layout[kk]; }); certMerge(); }
+  });
+})();
+/* 엑셀 붙여넣기: 첫 줄이 열 이름이면 이름으로, 아니면 열 순서대로 (at·atKey = 표 칸에 바로 붙여 넣은 자리부터) */
+function certPaste(txt, at, atKey) {
+  const C = certState(), D = C.data[C.form], F = CERT_FORMS[C.form], lines = String(txt || '').replace(/\r/g, '').split('\n').filter(l => l.trim()); if (!lines.length) return;
+  const cells = l => l.split('\t').map(x => x.trim()), first = cells(lines[0]), lab = c => c[1].replace(/ \(.*\)$/, '');
+  const byName = first.some(h => F.cols.some(c => lab(c) === h || c[1].startsWith(h)) || h === '이름');
+  let keys = byName ? first.map(h => (F.cols.find(c => lab(c) === h || c[1].startsWith(h)) || [])[0] || null) : F.cols.map(c => c[0]);
+  if (!byName && atKey) { const s0 = F.cols.findIndex(c => c[0] === atKey); keys = F.cols.slice(s0).map(c => c[0]); }
+  const data = (byName ? lines.slice(1) : lines).map(cells); let i = at != null ? at : D.rows.length;
+  data.forEach(c => { const r = D.rows[i] || {}; keys.forEach((kk, j) => { if (kk && c[j] != null && c[j] !== '') r[kk] = c[j]; }); D.rows[i] = r; i++; });
+  markDirty(); renderSide(); toast(`${data.length}명을 명단에 넣었습니다`);
+}
 
 /* ---- D-day 블록 (Flodesk 카운트다운처럼): 글 속 {디데이:YYYY-MM-DD}가 볼 때마다 D-7·D-DAY·D+3으로 ---- */
 function openDday() {
