@@ -4887,7 +4887,7 @@ const showRulers = () => { try { return localStorage.getItem('naracal-rulers') =
 function toggleRulers() { try { localStorage.setItem('naracal-rulers', showRulers() ? '0' : '1'); } catch (e) {} drawRulers(); fitCanvas(); toast(showRulers() ? '눈금자를 켰습니다 — 눈금자에서 끌어 안내선을 만드세요 (Shift+R로 끄기)' : '눈금자를 껐습니다'); }
 function ensureRulers() {
   if ($('#rulerH')) return;
-  $('#stage').insertAdjacentHTML('beforeend', `<canvas id="rulerH" class="ruler rh" title="아래로 끌어 가로 안내선 만들기"></canvas><canvas id="rulerV" class="ruler rv" title="오른쪽으로 끌어 세로 안내선 만들기"></canvas><button id="rulerC" class="ruler rc" title="눈금자 끄기 (Shift+R)">mm</button>`);
+  $('#stage').insertAdjacentHTML('beforeend', `<canvas id="rulerH" class="ruler rh" title="눈금자 — 아래로 끌면 가로 안내선(분홍)"></canvas><canvas id="rulerV" class="ruler rv" title="눈금자 — 오른쪽으로 끌면 세로 안내선(분홍). 패널 너비는 바로 왼쪽 회색 손잡이로"></canvas><button id="rulerC" class="ruler rc" title="눈금자 끄기 (Shift+R)">mm</button>`);
   $('#rulerH').addEventListener('pointerdown', e => startGuide(e, 'y', null));
   $('#rulerV').addEventListener('pointerdown', e => startGuide(e, 'x', null));
   $('#rulerC').onclick = toggleRulers;

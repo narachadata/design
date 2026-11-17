@@ -51,8 +51,11 @@ button,input,select,textarea{font:inherit;color:inherit}
 .sidebody{overflow-y:auto;padding:12px;flex:1}
 .sidebody h3,.inspector h3{font-size:12px;color:var(--ui-fg2);letter-spacing:.04em;margin:16px 0 8px;font-weight:700;text-transform:uppercase}
 .sidebody h3:first-child{margin-top:2px}
-.rsz{background:transparent;cursor:col-resize;position:relative;z-index:6}
+/* 패널 너비 조절 손잡이: 늘 보이는 회색 손잡이(점 3개) + 올리면 파란 띠 — 바로 옆 눈금자(안내선 끌기, 분홍)와 구분 */
+.rsz{background:var(--ui-line,#e5e7eb);cursor:col-resize;position:relative;z-index:6;transition:background .12s}
 .rsz::after{content:"";position:absolute;left:2px;top:0;bottom:0;width:2px;border-radius:2px;background:transparent;transition:background .12s}
+.rsz::before{content:"";position:absolute;left:1px;top:50%;width:4px;height:28px;margin-top:-14px;border-radius:3px;background:radial-gradient(circle,#9aa3b2 1.1px,transparent 1.4px) 0 0/4px 7px repeat-y;opacity:.9}
+.rsz:hover,.rsz.on{background:color-mix(in srgb,var(--ui-accent) 22%,transparent)}
 .rsz:hover::after,.rsz.on::after{background:var(--ui-accent)}
 
 .thumb{display:block;width:100%;border:2px solid transparent;border-radius:10px;padding:5px;cursor:pointer;background:transparent;text-align:left;margin-bottom:6px;transition:background .12s}
@@ -606,8 +609,10 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .pg-fold{position:absolute;width:0;border-left:1px dashed rgba(47,111,228,.8);pointer-events:none}
 /* 눈금자·사용자 안내선 */
 .stage .ruler{position:absolute;z-index:6;display:block;border:0;padding:0;margin:0}
-.stage .ruler.rh{left:0;top:0;cursor:row-resize}
-.stage .ruler.rv{left:0;top:18px;cursor:col-resize}
+/* 눈금자: 안내선 모양(분홍 점선) 마우스 + 올리면 분홍 테두리 — 패널 너비 조절(↔, 파랑)과 다르게 */
+.stage .ruler.rh{left:0;top:0;cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M1 12h22' stroke='%23fff' stroke-width='4'/%3E%3Cpath d='M1 12h22' stroke='%23e0369a' stroke-width='2' stroke-dasharray='3 2'/%3E%3Cpath d='M9 15l3 4 3-4' fill='none' stroke='%23e0369a' stroke-width='2'/%3E%3C/svg%3E") 12 12,s-resize}
+.stage .ruler.rv{left:0;top:18px;cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M12 1v22' stroke='%23fff' stroke-width='4'/%3E%3Cpath d='M12 1v22' stroke='%23e0369a' stroke-width='2' stroke-dasharray='3 2'/%3E%3Cpath d='M15 9l4 3-4 3' fill='none' stroke='%23e0369a' stroke-width='2'/%3E%3C/svg%3E") 12 12,e-resize}
+.stage .ruler.rh:hover{box-shadow:inset 0 -2px 0 #e0369a}.stage .ruler.rv:hover{box-shadow:inset -2px 0 0 #e0369a}
 .stage .ruler.rc{left:0;top:0;width:18px;height:18px;z-index:7;background:#e9ebef;font:600 7px/18px system-ui,sans-serif;color:#6b7280;cursor:pointer;border-right:1px solid #d6d9e0;border-bottom:1px solid #d6d9e0}
 .stage .ruler[hidden]{display:none}
 .stage.rulers .toolbar{top:28px}
