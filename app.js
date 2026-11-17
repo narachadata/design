@@ -473,8 +473,8 @@ const lockedBg = el => el.locked && el.w * el.h >= doc.w * doc.h * 0.6;
 function rotCursor(d, rot) { const base = { n: 0, ne: 45, e: 90, se: 135, s: 180, sw: 225, w: 270, nw: 315 }[d] || 0; return ['ns-resize', 'nesw-resize', 'ew-resize', 'nwse-resize'][Math.round((((base + rot) % 180) + 180) % 180 / 45) % 4]; }
 function renderOverlay(guides) {
   const o = $('#ovl'); const els = selEls(); let h = '';
-  els.forEach(el => { const single = els.length === 1, kpx = kScale() * MM, sw = el.w * kpx, sh = el.h * kpx, tiny = single && Math.min(sw, sh) < 26; h += `<div class="sel${single ? '' : ' multi'}${tiny ? ' tiny' : ''}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].filter(d => !((d === 'n' || d === 's') && (sh < 34 || sw < 16)) && !((d === 'e' || d === 'w') && (sw < 34 || sh < 16))).map(d =>  /* 위·아래 손잡이는 높이가 낮으면, 좌·우 손잡이는 너비가 좁으면 가운데를 가리므로 뺌 (한 줄 글 상자는 좌·우 손잡이 유지) */ `<div class="h ${d}" data-h="${d}"${el.rot ? ` style="cursor:${rotCursor(d, el.rot)}"` : ''}></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; if (el.locked) h += `<button class="lockbadge" data-unlock="${el.id}" title="잠금 풀기 (Ctrl+L)">🔒 잠금 풀기</button>`; h += '</div>'; });
-  if (els.length > 1) { const U = unionBox(els), bx = U.x, by = U.y, bw = U.w, bh = U.h; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm">${els.some(e => e.locked) ? '' : ['nw', 'ne', 'se', 'sw'].map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="함께 크기 조절 (비율 유지)"></div>`).join('')}</div>`; }
+  els.forEach(el => { const single = els.length === 1, kpx = kScale() * MM, sw = el.w * kpx, sh = el.h * kpx, tiny = single && Math.min(sw, sh) < 26; h += `<div class="sel${single ? '' : ' multi'}${tiny ? ' tiny' : ''}${imgPan === el.id ? ' panning' : ''}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].filter(d => !((d === 'n' || d === 's') && (sh < 34 || sw < 16)) && !((d === 'e' || d === 'w') && (sw < 34 || sh < 16))).map(d =>  /* 위·아래 손잡이는 높이가 낮으면, 좌·우 손잡이는 너비가 좁으면 가운데를 가리므로 뺌 (한 줄 글 상자는 좌·우 손잡이 유지) */ `<div class="h ${d}" data-h="${d}"${el.rot ? ` style="cursor:${rotCursor(d, el.rot)}"` : ''}></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; if (el.locked) h += `<button class="lockbadge" data-unlock="${el.id}" title="잠금 풀기 (Ctrl+L)">🔒 잠금 풀기</button>`; h += '</div>'; });
+  if (els.length > 1) { const U = unionBox(els), bx = U.x, by = U.y, bw = U.w, bh = U.h; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm">${els.some(e => e.locked) ? '' : ['nw', 'ne', 'se', 'sw'].map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="함께 크기 조절 (비율 유지)"></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot" data-g="1" title="함께 돌리기 (Shift: 15°씩)"></div>'}</div>`; }
   (guides || []).forEach(g => { h += g.v != null ? `<div class="guide v" style="left:${g.v}mm"></div>` : `<div class="guide h" style="top:${g.h}mm"></div>`; });
   h += calOverlay(); h += userGuidesHTML(); h += bookGuidesHTML();
   page().els.forEach(el => { if (textOver.has(el.id) && !el.hidden) h += `<button class="ovf" data-ovf="${el.id}" style="left:${el.x + el.w}mm;top:${el.y + el.h}mm" title="글이 상자를 넘칩니다 — 누르면 상자를 글에 맞춤 (인디자인의 넘침 표시)">+</button>`; }); try { if (showRulers()) requestAnimationFrame(drawRulers); } catch (e) {} // 고른 요소 범위를 눈금자에 표시
@@ -493,10 +493,11 @@ function renderThumbs() {
   box.innerHTML = doc.pages.map((pg, i) => `<button class="thumb ${i === cur ? 'active' : ''} ${pgSel.has(i) ? 'picked' : ''}" data-i="${i}" draggable="true" title="누르면 이 쪽으로 · Ctrl/⌘·Shift로 여러 쪽 고르기 · 끌어서 순서 바꾸기 · 오른쪽 버튼: 메뉴"><div class="tbox" style="height:${doc.h * MM * k}px">${sheetHTML(pg, 'thumb')}</div><div class="tlabel"><b>${i + 1}</b><span>${esc(pg.label || '')}${pg.pgLock ? '<i class="tbadge" title="쪽 잠금 (오른쪽 버튼 → 잠금 풀기)">🔒</i>' : ''}${pg.dlOff ? '<i class="tbadge" title="숨긴 쪽: 다운로드·인쇄에서 빠짐">숨김</i>' : ''}</span></div></button>`).join('');
   box.querySelectorAll('.thumb').forEach(t => { if (doc.pages[Number(t.dataset.i)].dlOff) t.classList.add('dloff'); });
   box.querySelectorAll('.tbox .sheet').forEach(s => { s.style.transform = `scale(${k})`; });
+  rescaleThumbs();  /* 실제 칸 너비로 다시 맞춤 (테두리·안쪽 여백만큼 오른쪽이 잘리던 것) */
   const info = $('#pgSelInfo'); if (info) info.textContent = pgSel.size > 1 ? `${pgSel.size}쪽 고름 — Ctrl+C 복사 · Ctrl+V 붙여넣기 · Delete 삭제` : '';
 }
 /* 너비만 바뀌었을 때: 다시 그리지 않고 미리보기 배율만 맞춤 (끌어서 너비 조절·창 크기 바꾸기) */
-function rescaleThumbs() { const box = $('#thumbs'); if (!box || !doc) return; const k = (box.clientWidth - 12 || 200) / (doc.w * MM), hh = doc.h * MM * k + 'px'; box.querySelectorAll('.thumb .tbox').forEach(b => { b.style.height = hh; const sh = b.querySelector('.sheet'); if (sh) sh.style.transform = `scale(${k})`; }); }
+function rescaleThumbs() { const box = $('#thumbs'); if (!box || !doc) return; const tb0 = box.querySelector('.thumb .tbox'), wpx = (tb0 && tb0.clientWidth) || (box.clientWidth - 14) || 200, k = wpx / (doc.w * MM), hh = doc.h * MM * k + 'px'; box.querySelectorAll('.thumb .tbox').forEach(b => { b.style.height = hh; const sh = b.querySelector('.sheet'); if (sh) sh.style.transform = `scale(${k})`; }); }
 function renderAll() { renderCanvas(); renderSide(); renderInspector(); if (tlOn()) { if (!tl.playing) tlHidePrev(); renderTimeline(); } }
 function rerender(opts) { opts = opts || {}; renderCanvas(); if (!opts.noPanel) renderInspector(); clearTimeout(thumbTimer); thumbTimer = setTimeout(() => { if (sideTab === 'pages') renderThumbs(); else if (sideTab === 'layers') renderSide(); if (tlOn()) { if (!tl.playing) tlHidePrev(); renderTimeline(); } }, 150); }
 function goto(i) { endEdit(); cur = clamp(i, 0, doc.pages.length - 1); sel = []; selDay = null; cellSel = null; renderAll(); }
@@ -615,7 +616,8 @@ function popupOpen() { return !!document.querySelector('dialog[open], .fmenu, [r
   let dlgDown = null; const outside = (d, e) => { const r = d.getBoundingClientRect(); return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom; };
   document.addEventListener('pointerdown', e => { const d = e.target; dlgDown = (d instanceof HTMLDialogElement && d.open && outside(d, e)) ? d : null; }, true);
   document.addEventListener('click', e => { const d = e.target; if (d instanceof HTMLDialogElement && d.open && dlgDown === d && !d.classList.contains('askdlg') && outside(d, e)) d.close(); dlgDown = null; }, true); }
-let drag = null, lastClick = null, pen = null;
+let drag = null, lastClick = null, pen = null, imgPan = null;  /* imgPan: 자리 조정 중인 그림 id */
+function endImgPan(quiet) { if (!imgPan) return; imgPan = null; renderOverlay(); if (!quiet) toast('그림 자리 조정을 마쳤습니다'); }
 /* 마우스로 슬라이더·목록을 바꾼 뒤에는 초점을 캔버스 쪽으로 돌려줌(키보드로 조절 중일 때는 그대로) */
 { let ptAt = 0; document.addEventListener('pointerdown', () => { ptAt = Date.now(); }, true); const giveBack = t => setTimeout(() => { if (document.activeElement === t && !t.closest('dialog')) t.blur(); }, 0);
   document.addEventListener('pointerup', e => { ptAt = Date.now(); const t = e.target; if (t && t.matches && t.matches('input[type=range]')) giveBack(t); }, true);
@@ -634,6 +636,7 @@ wrap.addEventListener('pointerdown', e => {
   const hd = hdPre;
   /* 손잡이 두 번 누르기 = 글 상자를 글에 맞춤 (첫 클릭 때 선택 상자를 다시 그려 브라우저 dblclick이 오지 않으므로 직접 셈) */
   if (hd && sel.length === 1 && hd.dataset.h !== 'rot') { const now = Date.now(), L = wrap._lastHd; if (L && L.h === hd.dataset.h && L.id === sel[0] && now - L.t < 450) { wrap._lastHd = null; const el0 = find(sel[0]); if (el0 && el0.type === 'text' && !isWarp(el0)) { fitBoxToText(el0); e.preventDefault(); return; } } else wrap._lastHd = { h: hd.dataset.h, id: sel[0], t: now }; }
+  if (hd && sel.length > 1 && hd.dataset.g && hd.dataset.h === 'rot') { const els = selEls().filter(x => !x.locked), U0 = unionBox(els), cx = U0.x + U0.w / 2, cy = U0.y + U0.h / 2; drag = { kind: 'grot', cx, cy, a0: Math.atan2(p.y - cy, p.x - cx) * 180 / Math.PI, o: els.map(x => clone(x)), els, start: p, moved: false }; e.preventDefault(); return; }
   if (hd && sel.length > 1 && hd.dataset.g) { const els = selEls(); const U0 = unionBox(els), bx = U0.x, by = U0.y, bw = U0.w, bh = U0.h; drag = { kind: 'gresize', dir: hd.dataset.h, start: p, box: { x: bx, y: by, w: bw, h: bh }, o: els.map(e => clone(e)), els, moved: false }; e.preventDefault(); return; }
   if (hd && sel.length === 1) { const el = find(sel[0]); drag = { kind: hd.dataset.h === 'rot' ? 'rot' : 'resize', dir: hd.dataset.h, el, start: p, o: clone(el), cx: el.x + el.w / 2, cy: el.y + el.h / 2, moved: false }; e.preventDefault(); return; }
   const gl = e.target.closest('.ovl .cgl');
@@ -642,6 +645,9 @@ wrap.addEventListener('pointerdown', e => {
   let hitNode = e.target; const dom = (() => { const seen = new Set(); for (const n of document.elementsFromPoint(e.clientX, e.clientY)) { let d = n.closest && n.closest('#canvas .el, #ghost .el'); if (d && d.closest('#ghost')) d = $(`#canvas [data-id="${d.dataset.id}"]`) || d; if (!d || seen.has(d)) continue; seen.add(d); const x = find(d.dataset.id); if (x && (!x.locked || sel.includes(x.id) || !lockedBg(x))) { hitNode = n; return d; } } return null; })();
   if (dom) {
     const id = dom.dataset.id, el = find(id); const was = sel.includes(id);
+    if (imgPan && imgPan === id && !el.locked) { drag = { kind: 'imgpan', el, start: p, o: { panX: el.panX || 0, panY: el.panY || 0 }, moved: false }; e.preventDefault(); return; }
+    if (imgPan) endImgPan(true);
+    if (el.type === 'image' && was && !el.locked && !e.altKey && !e.shiftKey && sel.length === 1 && lastClick && lastClick.id === id && Date.now() - lastClick.t < 450) { lastClick = null; imgPan = id; renderOverlay(); toast('그림 자리 조정 — 끌어서 틀 안의 그림을 옮기고 휠로 확대합니다 · Esc나 다른 곳을 누르면 끝'); e.preventDefault(); return; }
     // 고른 달력의 칸 위를 누르면 칸 선택 (요일 줄을 누르면 달력 이동)
     if (el.type === 'cal' && was && !el.locked && hitNode.closest('.cell')) { const cellNode = hitNode.closest('.cell'); const c = Number(cellNode.dataset.c); if (e.shiftKey && cellSel && cellSel.id === id) cellSel.b = c; else cellSel = { id, a: c, b: c }; const dd = cellNode.dataset.day; selDay = dd ? Number(dd) : null; drag = { kind: 'cells', start: p, moved: false }; renderOverlay(); renderInspector(); e.preventDefault(); return; }
     if (!was || el.type !== 'cal') cellSel = null;
@@ -660,9 +666,11 @@ wrap.addEventListener('pointerdown', e => {
     drag = { kind: 'move', dup, shiftOff, reduceTo: (was && !e.shiftKey && !e.altKey && sel.length > ids.length) ? ids : null, els: selEls().filter(x => !x.locked), start: p, orig: selEls().map(x => ({ id: x.id, x: x.x, y: x.y })), moved: false };
     e.preventDefault(); return;
   }
+  if (imgPan) endImgPan(true);
   if (!e.shiftKey) { cellSel = null; select([]); }
   drag = { kind: 'marq', start: p, moved: false, base: e.shiftKey ? sel.slice() : [] };
 });
+wrap.addEventListener('wheel', e => { if (!imgPan || e.ctrlKey || e.metaKey) return; const el = find(imgPan), dom = e.target.closest && e.target.closest('#canvas .el'); if (!el || !dom || dom.dataset.id !== imgPan) return; e.preventDefault(); e.stopPropagation(); el.zoom = Math.round(clamp((el.zoom || 1) * (e.deltaY < 0 ? 1.06 : 1 / 1.06), 1, 4) * 100) / 100; renderCanvas(); renderOverlay(); clearTimeout(wrap._zt); wrap._zt = setTimeout(() => { commit(); renderInspector(); }, 400); }, { passive: false, capture: true });
 // 끌기 중 마우스 이동은 화면 한 프레임에 한 번만 처리 (현수막처럼 큰 문서에서 버벅임 방지)
 let moveEv = null, moveRaf = 0;
 document.addEventListener('pointermove', e => {
@@ -677,7 +685,8 @@ function dragMove(e) {
   const p = toMM(e); let dx = p.x - drag.start.x, dy = p.y - drag.start.y;
   if (!drag.moved && Math.hypot(dx, dy) * kScale() * MM >= (drag.kind === 'marq' || drag.kind === 'cells' ? 3 : 4)) drag.moved = true;
   if (!drag.moved) return;
-  if (drag.kind === 'move') {
+  if (drag.kind === 'imgpan') { const el = drag.el, a = -(el.rot || 0) * Math.PI / 180, lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a); el.panX = Math.round(clamp(drag.o.panX + lx / el.w * 100, -50, 50)); el.panY = Math.round(clamp(drag.o.panY + ly / el.h * 100, -50, 50)); renderCanvas(); renderOverlay(); dragTip(e, `그림 자리 ${el.panX}, ${el.panY}`); }
+  else if (drag.kind === 'move') {
     let guides = [];
     if (!e.altKey || drag.dup) { const bx = Math.min(...drag.orig.map(o => o.x)) , by = Math.min(...drag.orig.map(o => o.y)); const bw = Math.max(...drag.els.map(el => drag.orig.find(q => q.id === el.id).x + el.w)) - bx, bh = Math.max(...drag.els.map(el => drag.orig.find(q => q.id === el.id).y + el.h)) - by; const sn = snap(bx + dx, by + dy, bw, bh, drag.els.map(el => el.id)); dx = sn.x - bx; dy = sn.y - by; guides = sn.guides; }
     if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
@@ -692,7 +701,8 @@ function dragMove(e) {
     const keep = (el.type === 'image' || el.type === 'video' || el.type === 'mini' || el.type === 'path' || el.type === 'text' || e.shiftKey) && d.length === 2;
     if (keep) { const k = Math.max(0.02, (w * o.w + h * o.h) / (o.w * o.w + o.h * o.h)); w = o.w * k; h = o.h * k; /* 대각선에 투영한 배율 — 넓은 제목에서도 튀지 않음(가로·세로 중 큰 쪽을 고르던 방식은 마우스가 조금만 흔들려도 바뀜) */ if (d.includes('w')) x = o.x + o.w - w; if (d.includes('n')) y = o.y + o.h - h; }
     if (w < 2) { w = 2; if (d.includes('w')) x = o.x + o.w - 2; } if (h < 2) { h = 2; if (d.includes('n')) y = o.y + o.h - 2; }
-    if (o.rot) { const ux = d.includes('e') ? 0 : d.includes('w') ? 1 : 0.5, uy = d.includes('s') ? 0 : d.includes('n') ? 1 : 0.5, a = o.rot * Math.PI / 180;
+    if (e.altKey) { w = Math.max(2, o.w + (w - o.w) * 2); h = Math.max(2, o.h + (h - o.h) * 2); x = o.x + o.w / 2 - w / 2; y = o.y + o.h / 2 - h / 2; }  /* Alt: 가운데를 그대로 두고 양쪽으로 */
+    else if (o.rot) { const ux = d.includes('e') ? 0 : d.includes('w') ? 1 : 0.5, uy = d.includes('s') ? 0 : d.includes('n') ? 1 : 0.5, a = o.rot * Math.PI / 180;
       const wp = (bx, by, bw, bh) => { const cx = bx + bw / 2, cy = by + bh / 2, lx = ux * bw - bw / 2, ly = uy * bh - bh / 2; return [cx + lx * Math.cos(a) - ly * Math.sin(a), cy + lx * Math.sin(a) + ly * Math.cos(a)]; };
       const [ax0, ay0] = wp(o.x, o.y, o.w, o.h), [ax1, ay1] = wp(x, y, w, h); x += ax0 - ax1; y += ay0 - ay1; }
     el.x = r1(x); el.y = r1(y); el.w = r1(w); el.h = r1(h);
@@ -703,6 +713,10 @@ function dragMove(e) {
     renderOverlay(); dragTip(e, dimText(el.w, el.h) + (el.type === 'text' && d.length === 2 ? ` · ${el.size}pt` : ''));
   } else if (drag.kind === 'rot') {
     const el = drag.el; let a = Math.atan2(p.y - drag.cy, p.x - drag.cx) * 180 / Math.PI + 90; if (e.shiftKey) a = Math.round(a / 15) * 15; else { const m = Math.round(a / 45) * 45; if (Math.abs(a - m) < 3) a = m; } /* 0·45·90° 자석 */ el.rot = Math.round(((a % 360) + 360) % 360); liveUpdate([el]); renderOverlay(); dragTip(e, `${el.rot}°`);
+  } else if (drag.kind === 'grot') {
+    let a = Math.atan2(p.y - drag.cy, p.x - drag.cx) * 180 / Math.PI - drag.a0; if (e.shiftKey) a = Math.round(a / 15) * 15; else a = Math.round(a); const r = a * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r);
+    drag.els.forEach((el, i) => { const o = drag.o[i], ox = o.x + o.w / 2 - drag.cx, oy = o.y + o.h / 2 - drag.cy; el.x = r1(drag.cx + ox * cs - oy * sn - o.w / 2); el.y = r1(drag.cy + ox * sn + oy * cs - o.h / 2); el.rot = Math.round(((((o.rot || 0) + a) % 360) + 360) % 360); });
+    liveUpdate(drag.els); renderOverlay(); dragTip(e, `${((a % 360) + 360) % 360 > 180 ? ((a % 360) + 360) % 360 - 360 : ((a % 360) + 360) % 360}°`);
   } else if (drag.kind === 'gresize') {
     // 여러 요소를 한 상자처럼 비율 유지 확대·축소 (글자 크기·선 두께도 함께)
     const B = drag.box, d = drag.dir; const ax = d.includes('w') ? B.x + B.w : B.x, ay = d.includes('n') ? B.y + B.h : B.y;
@@ -882,6 +896,7 @@ $$('[data-tool]').forEach(b => b.onclick = () => setTool(tool === b.dataset.tool
 
 document.addEventListener('keydown', e => {
   if (editing) { if (e.key === 'Escape' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); endEdit(); } return; }
+  if (imgPan && e.key === 'Escape') { e.preventDefault(); endImgPan(); return; }
   { const tIn = e.target.matches && e.target.matches('input,textarea,select'), nonText = tIn && e.target.matches('input[type=range],input[type=checkbox],input[type=radio],input[type=color],select'), undoKey = (e.ctrlKey || e.metaKey) && !e.altKey && (e.code === 'KeyZ' || e.code === 'KeyY'); if ((tIn && !(nonText && undoKey)) || popupOpen()) return; }
   const mod = e.ctrlKey || e.metaKey;
   // 달력 칸이 골라져 있을 때: Delete=칸 글자·서식 지우기, Esc=칸 선택 해제, 글자 입력=칸에 바로 쓰기
@@ -4305,7 +4320,7 @@ function openDownload(fmt) {
   p = document.createElement('div'); p.id = 'dlPanel'; p.className = 'dlpanel'; document.body.appendChild(p);
   const b = $('#btnExport').getBoundingClientRect(); p.style.right = Math.max(8, innerWidth - b.right) + 'px'; p.style.top = (b.bottom + 8) + 'px';
   renderDownload();
-  document.addEventListener('keydown', function escDl(ev) { const q = $('#dlPanel'); if (!q) { document.removeEventListener('keydown', escDl, true); return; } if (ev.key === 'Escape' && !document.querySelector('dialog[open]')) { ev.preventDefault(); q.remove(); document.removeEventListener('keydown', escDl, true); const b = $('#btnExport'); if (b) b.focus(); } }, true);
+  document.addEventListener('keydown', function escDl(ev) { const q = $('#dlPanel'); if (!q) { document.removeEventListener('keydown', escDl, true); return; } if (ev.key === 'Escape' && !document.querySelector('dialog[open]') && !editing && !$('#cellEd')) { ev.preventDefault(); q.remove(); document.removeEventListener('keydown', escDl, true); const b = $('#btnExport'); if (b) b.focus(); } }, true);
   setTimeout(() => document.addEventListener('pointerdown', function off(ev) { const q = $('#dlPanel'); if (!q) { document.removeEventListener('pointerdown', off); return; } if (!q.contains(ev.target) && !ev.target.closest('#btnExport') && !ev.target.closest('dialog')) { q.remove(); document.removeEventListener('pointerdown', off); } }), 0);
 }
 function renderDownload() {
@@ -4325,7 +4340,7 @@ function renderDownload() {
   ${img && n > 1 ? `<label class="chk"><input type="checkbox" id="dlMerge" ${S.merge ? 'checked' : ''}> 한 장의 이미지로 합치기 (세로로 이어 붙임)</label>` : ''}
   ${img && Number(doc.bleed) > 0 ? `<label class="chk"><input type="checkbox" id="dlImgBleed" ${S.imgBleed ? 'checked' : ''}> 도련 ${doc.bleed}mm 포함 (명함·스티커를 인쇄소에 이미지로 보낼 때)</label>` : ''}
   <div class="dlinfo"><b>다운로드 정보</b><ul><li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${docSizeLabel(' × ')}${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${(px(doc.h + 2 * bleed) * (img && S.merge && n > 1 ? n : 1)).toLocaleString()} px · ${Math.round(dpi)}dpi${(img ? Math.round(dpi) < Math.round(96 * S.scale) - 1 : DL_PDF[S.fmt] && Math.round(dpi) < DL_PDF[S.fmt].dpi - 1) ? (Math.max(doc.w, doc.h) >= 1500 ? ' <small>(현수막처럼 큰 인쇄물은 멀리서 보므로 60~100dpi면 충분)</small>' : ' <b>(크기가 커서 브라우저 한계에 맞춰 낮춤)</b>') : ''}</li>${(() => { const pc = px(doc.w + 2 * bleed) * px(doc.h + 2 * bleed) * n, f = img ? S.fmt : 'jpg', q = img ? 0.92 : DL_PDF[S.fmt].q, mb = dlEstMB(pc, f, q); return `<li>파일 크기 최대 약 ${mb < 1 ? '1MB' : mb < 10 ? mb.toFixed(1) + 'MB' : Math.round(mb) + 'MB'} <small>(사진이 적은 디자인은 훨씬 작아짐)</small>${mb > 300 ? ' <b>— 아주 클 수 있으니 인쇄소 웹하드로 보내거나 쪽을 나눠 받으세요</b>' : ''}</li>`; })()}${!img && DL_PDF[S.fmt] && PDF_TENTH(doc.w + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0)), doc.h + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0))) ? '<li><b>5.08m가 넘어 PDF를 1/10 크기로 만듭니다</b> — 인쇄소에 "1000% 확대 출력" 요청 (화질은 그대로)</li>' : ''}` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
-  ${S.fmt === 'pdfprint' ? `<p class="hint" style="margin:6px 0 0">${bleed ? `도련 ${bleed}mm 포함 작업 사이즈${doc.cropMarks ? ' + 재단선(도련 바깥)' : ''}.` : '<b>도련이 0mm입니다.</b> 프로젝트 탭에서 도련을 넣으세요 (보통 1.5~3mm).'} 대부분의 인쇄소는 재단선 없는 작업 사이즈 파일을 받습니다.<br>이 PDF는 sRGB 그림(${Math.round(dpi || 300)}dpi)으로 된 파일입니다. 인쇄소에 "sRGB 기준 CMYK 변환"을 요청하고, 밝은 파랑·초록은 탁해질 수 있으니 시안(교정쇄)으로 확인하세요. 명함처럼 작은 검정 글자가 많으면 "PDF (벡터)"가 더 선명합니다(검정 단색 처리 가능).</p>` : ''}${S.fmt === 'pdfweb' ? '<p class="hint" style="margin:6px 0 0">확대하거나 인쇄하면 글자가 덜 선명할 수 있습니다. 인쇄·보관용은 "PDF (고화질)"을 쓰세요.</p>' : ''}</div>
+  ${S.fmt === 'pdfprint' ? `<p class="hint" style="margin:6px 0 0">${bleed ? `도련 ${bleed}mm 포함 작업 사이즈${doc.cropMarks ? ` + 재단선(도련 바깥 5mm) — 파일 한 장은 ${r1(doc.w + 2 * bleed + 10)}×${r1(doc.h + 2 * bleed + 10)}mm` : ''}.` : '<b>도련이 0mm입니다.</b> 프로젝트 탭에서 도련을 넣으세요 (보통 1.5~3mm).'} 대부분의 인쇄소는 재단선 없는 작업 사이즈 파일을 받습니다.<br>이 PDF는 sRGB 그림(${Math.round(dpi || 300)}dpi)으로 된 파일입니다. 인쇄소에 "sRGB 기준 CMYK 변환"을 요청하고, 밝은 파랑·초록은 탁해질 수 있으니 시안(교정쇄)으로 확인하세요. 명함처럼 작은 검정 글자가 많으면 "PDF (벡터)"가 더 선명합니다(검정 단색 처리 가능).</p>` : ''}${S.fmt === 'pdfweb' ? '<p class="hint" style="margin:6px 0 0">확대하거나 인쇄하면 글자가 덜 선명할 수 있습니다. 인쇄·보관용은 "PDF (고화질)"을 쓰세요.</p>' : ''}</div>
   <div id="dlWarn"></div><div class="dlprog" id="dlProg"></div>
   <button class="btn primary full" id="dlGo"><svg class="ic"><use href="#i-upload"/></svg>${S.fmt === 'pdfvector' ? '인쇄 창 열기' : '다운로드'}</button>`;
   p.onclick = e => { const c = e.target.closest('[data-dl="close"]'); if (c) { p.remove(); return; } const fm = e.target.closest('[data-fmt2]'); if (fm) { S.fmt = fm.dataset.fmt2; S.userFmt = true; renderDownload(); } };
@@ -4337,6 +4352,7 @@ function renderDownload() {
   const tp = $('#dlTransp'); if (tp) tp.onchange = e => { S.transp = e.target.checked; renderDownload(); };
   $('#dlGo').onclick = runDownload;
   const printy = S.fmt === 'pdfprint' || S.fmt === 'pdfhq'; // 인쇄 점검은 인쇄용·고화질 PDF에서만
+  if (printy) { const w0 = $('#dlWarn'); if (w0) w0.innerHTML = '<div class="dlok">인쇄 점검 중… (쪽이 많으면 몇 초 걸립니다)</div>'; }
   if (printy) checkResolution(dlPages()).then(list => {
     const w = $('#dlWarn'); if (!w) return; const iss = printIssues(dlPages()); if (!list.length && !iss.length) { w.innerHTML = '<div class="dlok">✓ 인쇄 점검: 해상도·안전 여백·글자 크기 문제 없음</div>'; return; }
     const row = x => `<li><button class="lnk" data-dlgo="${x.page - 1}|${x.id}">${x.page}쪽 · ${esc(x.name)}</button> ${x.msg}</li>`;
@@ -5351,7 +5367,7 @@ function ctxDo(k) {
 /* 고른 요소를 쪽 크기에 맞춤: 맞추기=비율 그대로 쪽 안에 가득·가운데, 채우기=비율 그대로 쪽을 빈틈없이(그림 하나는 상자를 쪽에 맞추고 그림은 잘라 채움) */
 function fitToPage(fill) {
   const els = selEls().filter(x => !x.locked); if (!els.length) return;
-  if (fill && els.length === 1 && els[0].type === 'image') { const el = els[0]; el.x = 0; el.y = 0; el.w = doc.w; el.h = doc.h; el.rot = 0; el.fit = 'cover'; commit(); rerender(); toast('그림을 쪽에 꽉 채웠습니다 (그림 비율은 그대로, 넘치는 곳은 잘림 — 오른쪽 속성의 확대·가로 이동·세로 이동으로 자리 조정)'); return; }
+  if (fill && els.length === 1 && els[0].type === 'image') { const el = els[0]; el.x = 0; el.y = 0; el.w = doc.w; el.h = doc.h; el.rot = 0; el.fit = 'cover'; commit(); rerender(); toast('그림을 쪽에 꽉 채웠습니다 (그림 비율은 그대로, 넘치는 곳은 잘림 — 그림을 두 번 눌러 자리 조정)'); return; }
   const U = unionBox(els), k = fill ? Math.max(doc.w / U.w, doc.h / U.h) : Math.min(doc.w / U.w, doc.h / U.h); if (!isFinite(k) || k <= 0) return;
   const ox = (doc.w - U.w * k) / 2, oy = (doc.h - U.h * k) / 2;
   els.forEach(el => { if (el.pts) el.pts = el.pts.map(q => [r1(q[0] * k), r1(q[1] * k)]); el.x = r1(ox + (el.x - U.x) * k); el.y = r1(oy + (el.y - U.y) * k); el.w = r1(el.w * k); el.h = r1(el.h * k); scaleProps(el, k); });
