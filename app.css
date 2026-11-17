@@ -1329,3 +1329,7 @@ dialog:focus{outline:none}
 .tl-range{position:absolute;top:0;bottom:0;background:rgba(255,211,77,.13);border-left:2px solid #ffd34d;border-right:2px solid #ffd34d;z-index:3;pointer-events:none;box-sizing:border-box}
 .ovl .sel.panning{border-style:dashed;border-color:#f59e0b}.ovl .sel.panning .h{display:none}
 .vd-use{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.vd-use>span{font-size:12.5px;color:var(--ui-muted);margin-right:2px}.vd-use .btn.on{background:var(--ui-accent-soft,#eef3ff);border-color:#2f6fe4;color:#1f4fbf;font-weight:700}
+/* 상장 양식: 사람마다 바뀌는 자리 표시 */
+#canvas .el.tplf{outline:calc(1.5px / var(--k,1)) dashed #f59e0b;outline-offset:calc(1px / var(--k,1));background:rgba(245,158,11,.12)}
+.cchips{align-items:center}.cchips .cchips-l{font-size:11.5px;color:var(--ui-muted);margin-right:2px}
+.cchips .cchip{border-style:dashed;border-color:#f59e0b;background:rgba(245,158,11,.10)}
