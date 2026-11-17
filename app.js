@@ -392,12 +392,19 @@ function renderOverlay(guides) {
   o.innerHTML = h; showCellBar();
 }
 let thumbTimer;
+/* 왼쪽 페이지 목록에서 여러 쪽 고르기: pgSel=고른 쪽 번호들, pgAnchor=Shift 범위의 기준, pgSelCur=고를 때의 현재 쪽(다른 방법으로 쪽을 옮기면 현재 쪽 하나로 되돌림), pgFocus=마지막으로 누른 곳이 페이지 목록인가(단축키가 쪽에 적용) */
+let pgSel = new Set(), pgAnchor = 0, pgSelCur = -1, pgFocus = false, pageClip = null;
 function renderThumbs() {
   const box = $('#thumbs'); if (!box) return;
   const tw = box.clientWidth - 12 || 200; const k = tw / (doc.w * MM);
-  box.innerHTML = doc.pages.map((pg, i) => `<button class="thumb ${i === cur ? 'active' : ''}" data-i="${i}" draggable="true" title="끌어서 순서 바꾸기"><div class="tbox" style="height:${doc.h * MM * k}px">${sheetHTML(pg, 'thumb')}</div><div class="tlabel"><b>${i + 1}</b><span>${esc(pg.label || '')}</span></div></button>`).join('');
+  pgSel = new Set([...pgSel].filter(i => i < doc.pages.length)); if (cur !== pgSelCur || !pgSel.size) { pgSel = new Set([cur]); pgSelCur = cur; pgAnchor = cur; }
+  box.innerHTML = doc.pages.map((pg, i) => `<button class="thumb ${i === cur ? 'active' : ''} ${pgSel.has(i) ? 'picked' : ''}" data-i="${i}" draggable="true" title="누르면 이 쪽으로 · Ctrl/⌘·Shift로 여러 쪽 고르기 · 끌어서 순서 바꾸기 · 오른쪽 버튼: 메뉴"><div class="tbox" style="height:${doc.h * MM * k}px">${sheetHTML(pg, 'thumb')}</div><div class="tlabel"><b>${i + 1}</b><span>${esc(pg.label || '')}${pg.pgLock ? '<i class="tbadge" title="쪽 잠금 (오른쪽 버튼 → 잠금 풀기)">🔒</i>' : ''}${pg.dlOff ? '<i class="tbadge" title="숨긴 쪽: 다운로드·인쇄에서 빠짐">숨김</i>' : ''}</span></div></button>`).join('');
+  box.querySelectorAll('.thumb').forEach(t => { if (doc.pages[Number(t.dataset.i)].dlOff) t.classList.add('dloff'); });
   box.querySelectorAll('.tbox .sheet').forEach(s => { s.style.transform = `scale(${k})`; });
+  const info = $('#pgSelInfo'); if (info) info.textContent = pgSel.size > 1 ? `${pgSel.size}쪽 고름 — Ctrl+C 복사 · Ctrl+V 붙여넣기 · Delete 삭제` : '';
 }
+/* 너비만 바뀌었을 때: 다시 그리지 않고 미리보기 배율만 맞춤 (끌어서 너비 조절·창 크기 바꾸기) */
+function rescaleThumbs() { const box = $('#thumbs'); if (!box || !doc) return; const k = (box.clientWidth - 12 || 200) / (doc.w * MM), hh = doc.h * MM * k + 'px'; box.querySelectorAll('.thumb .tbox').forEach(b => { b.style.height = hh; const sh = b.querySelector('.sheet'); if (sh) sh.style.transform = `scale(${k})`; }); }
 function renderAll() { renderCanvas(); renderSide(); renderInspector(); if (tlOn()) { if (!tl.playing) tlHidePrev(); renderTimeline(); } }
 function rerender(opts) { opts = opts || {}; renderCanvas(); if (!opts.noPanel) renderInspector(); clearTimeout(thumbTimer); thumbTimer = setTimeout(() => { if (sideTab === 'pages') renderThumbs(); else if (sideTab === 'layers') renderSide(); if (tlOn()) { if (!tl.playing) tlHidePrev(); renderTimeline(); } }, 150); }
 function goto(i) { endEdit(); cur = clamp(i, 0, doc.pages.length - 1); sel = []; selDay = null; cellSel = null; renderAll(); }
@@ -742,7 +749,7 @@ $('#zoomIn').onclick = () => zoomAt((zoom || kScale()) * 1.2);
 $('#zoomOut').onclick = () => zoomAt((zoom || kScale()) / 1.2);
 $('#zoomFit').onclick = () => { zoom = 0; fitCanvas(); };
 $('#pnTl').onclick = () => tlShow(!tlOn()); $('#prevPage').onclick = () => goto(cur - 1); $('#nextPage').onclick = () => goto(cur + 1);
-window.addEventListener('resize', () => { fitCanvas(); renderThumbs(); });
+{ let rzRaf = 0; window.addEventListener('resize', () => { if (rzRaf) return; rzRaf = requestAnimationFrame(() => { rzRaf = 0; fitCanvas(); rescaleThumbs(); }); }); } /* 창 크기를 바꾸는 동안 화면 한 번에 한 번만, 미리보기는 배율만 */
 function setTool(t) { tool = t; $$('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t)); $('#stage').classList.toggle('pen', t === 'pen'); if (t === 'pen') { select([]); toast('펜: 페이지 위에서 끌어 선을 그립니다. Esc로 끝냅니다.'); } }
 $$('[data-tool]').forEach(b => b.onclick = () => setTool(tool === b.dataset.tool ? 'select' : b.dataset.tool));
 
@@ -2074,13 +2081,14 @@ function renderSide() {
   $('#sideTitle').textContent = (RAIL.find(r => r[0] === sideTab) || [])[1] || '';
   body.onclick = null; body.oninput = null; body.onchange = null;
   if (sideTab === 'pages') {
-    body.innerHTML = `<div class="row" style="margin-bottom:8px"><button class="btn sm" id="pgAdd">+ 새 페이지</button><button class="btn sm" id="pgDup">복제</button><button class="btn sm icon" id="pgUp" title="위로">↑</button><button class="btn sm icon" id="pgDown" title="아래로">↓</button><button class="btn sm danger" id="pgDel">삭제</button><button class="btn sm" id="pgGrid" title="모든 쪽을 한눈에 (여러 쪽 고르기·끌어서 순서 바꾸기)">모아 보기</button></div><div id="thumbs"></div>`;
+    body.innerHTML = `<div class="row" style="margin-bottom:8px"><button class="btn sm" id="pgAdd">+ 새 페이지</button><button class="btn sm" id="pgDup">복제</button><button class="btn sm icon" id="pgUp" title="위로">↑</button><button class="btn sm icon" id="pgDown" title="아래로">↓</button><button class="btn sm danger" id="pgDel">삭제</button><button class="btn sm" id="pgGrid" title="모든 쪽을 한눈에 (여러 쪽 고르기·끌어서 순서 바꾸기)">모아 보기</button></div><div class="hint" id="pgSelInfo" style="margin:-2px 0 6px;min-height:0"></div><div id="thumbs"></div>`;
     renderThumbs();
-    $('#thumbs').onclick = e => { const b = e.target.closest('.thumb'); if (b) goto(Number(b.dataset.i)); };
+    $('#thumbs').onclick = e => { const b = e.target.closest('.thumb'); if (!b) return; pgClick(Number(b.dataset.i), e); };
+    $('#thumbs').ondblclick = e => { const b = e.target.closest('.thumb'); if (b) pageCmd('rename'); };
     $('#pgGrid').onclick = openPageGrid;
     $('#pgAdd').onclick = () => { doc.pages.splice(cur + 1, 0, newPage(page().bg)); commit(); goto(cur + 1); };
-    $('#pgDup').onclick = () => { const n = clone(page()); n.id = uid(); const gmap = {}; n.els.forEach(e => { e.id = uid(); if (e.group) { gmap[e.group] = gmap[e.group] || uid(); e.group = gmap[e.group]; } }); doc.pages.splice(cur + 1, 0, n); commit(); goto(cur + 1); };
-    $('#pgDel').onclick = () => { if (doc.pages.length === 1) { toast('마지막 페이지는 지울 수 없습니다', true); return; } if (!window.confirm(`${cur + 1}쪽을 지울까요?`)) return; doc.pages.splice(cur, 1); commit(); goto(Math.min(cur, doc.pages.length - 1)); };
+    $('#pgDup').onclick = () => pageCmd('dup'); /* 고른 쪽(여러 쪽이면 모두)을 복제·삭제 */
+    $('#pgDel').onclick = () => pageCmd('del');
     $('#pgUp').onclick = () => { if (cur === 0) return; [doc.pages[cur - 1], doc.pages[cur]] = [doc.pages[cur], doc.pages[cur - 1]]; commit(); goto(cur - 1); };
     $('#pgDown').onclick = () => { if (cur >= doc.pages.length - 1) return; [doc.pages[cur + 1], doc.pages[cur]] = [doc.pages[cur], doc.pages[cur + 1]]; commit(); goto(cur + 1); };
   } else if (sideTab === 'news') {
@@ -2157,7 +2165,7 @@ function renderSide() {
     body.innerHTML = `<h3>문서</h3>${F('문서 이름', 'doc.name', doc.name)}
     <div class="grid2">${F('도련(mm)', 'doc.bleed', doc.bleed, { type: 'number', min: 0, max: 10, step: 0.5 })}${F('재단선', 'doc.cropMarks', doc.cropMarks, { type: 'check' })}</div>
     <label class="chk"><input type="checkbox" id="guideToggle" ${showGuides() ? 'checked' : ''}> 인쇄 안내선 보기 (빨강: 도련, 파랑: 안전 여백 ${SAFE}mm)</label>
-    <p class="hint">${docSizeLabel()} · ${doc.pages.length}쪽 · 크기는 템플릿 탭 아래에서 바꿉니다.</p>
+    <p class="hint">${docSizeLabel()} · ${doc.pages.length}쪽 <button class="btn sm" id="docSizeBtn" type="button">크기 조정…</button></p>
     <h3>저장 · 동기화</h3>
     <p class="hint">${st.dir && st.handle ? `동기화 폴더 <b>${esc(st.dirName)}</b>의 <b>${esc(st.fileName)}</b>에 자동 저장 중 · 설정값도 함께 동기화` : st.handle ? `파일 <b>${esc(st.fileName)}</b>에 자동 저장 중` : '브라우저에만 자동 저장 중 (여러 PC에서 쓰려면 "저장·동기화"에서 구글 드라이브 폴더 연결)'}</p>
     <div class="tile"><button data-pj="save"><svg class="ic" style="width:22px;height:22px"><use href="#i-save"/></svg>저장·동기화</button><button data-pj="open"><svg class="ic" style="width:22px;height:22px"><use href="#i-open"/></svg>열기</button><button data-pj="new"><svg class="ic" style="width:22px;height:22px"><use href="#i-new"/></svg>새 문서</button><button data-pj="down"><svg class="ic" style="width:22px;height:22px"><use href="#i-upload"/></svg>사본 내려받기</button></div>
@@ -2588,7 +2596,7 @@ function renderInspector() {
   const ins = $('#inspector'); const els = selEls(); ins.onclick = null;
   if (!els.length) {
     const pg = page();
-    ins.innerHTML = `<h2>${cur + 1}쪽 <small>${docSizeLabel()}</small></h2>
+    ins.innerHTML = `<h2>${cur + 1}쪽 <button class="sizechip" id="inspSize" title="캔버스 크기 바꾸기 (내용 맞추기)">${docSizeLabel()} ✎</button></h2>
     ${F('페이지 이름', 'pg.label', pg.label)}
     <h3>배경</h3><div class="swrow">${['#ffffff', '#FFE89A', '#E6EDF2', '#DDF3EA', '#FDE7E4', '#F0EBFB', '#1E2B5A', '#1a1a1a'].map(c => `<button class="swb" data-pgbg="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>
     <label class="f"><span>직접 고르기</span><input type="color" data-k="pg.bg" value="${/^#[0-9a-f]{6}$/i.test(pg.bg) ? pg.bg : '#ffffff'}"></label>
@@ -3786,7 +3794,7 @@ function loadScript(src, test) { if (test()) return Promise.resolve(); return ne
 function dlPages() {
   const n = doc.pages.length; if (dlState.pages === 'cur' || dlState.pages === 'sel') return [cur];
   if (dlState.pages === 'range') { const out = []; (dlState.range || '').split(',').forEach(p => { const m = p.trim().match(/^(\d+)(?:\s*[-~]\s*(\d+))?$/); if (!m) return; const a = Number(m[1]), b = Number(m[2] || m[1]); for (let i = Math.min(a, b); i <= Math.max(a, b); i++) if (i >= 1 && i <= n) out.push(i - 1); }); return [...new Set(out)]; }
-  return doc.pages.map((_, i) => i);
+  const vis = doc.pages.map((_, i) => i).filter(i => !doc.pages[i].dlOff); return vis.length ? vis : doc.pages.map((_, i) => i); /* 숨긴 쪽(페이지 목록 오른쪽 버튼 → 숨기기)은 '모든 페이지'에서 뺌 */
 }
 // 캔버스 한계 안에서 쓸 수 있는 dpi
 function dlDpi(want, bleed) { const W = (doc.w + 2 * bleed) / 25.4, H = (doc.h + 2 * bleed) / 25.4; return Math.max(24, Math.min(want, 14000 / W, 14000 / H, Math.sqrt(120e6 / (W * H)))); }
@@ -3811,7 +3819,7 @@ function renderDownload() {
   p.innerHTML = `<div class="dlhead"><b>다운로드</b><button class="x" data-dl="close">×</button></div>
   <label class="f"><span>파일 형식</span></label><div class="dlfmts">${DL_FMTS.map(([k, t, d]) => { const tag = k === (Number(doc.bleed) > 0 ? 'pdfprint' : 'pdfhq') ? '권장' : ''; return `<button data-fmt2="${k}" class="${S.fmt === k ? 'on' : ''}"><b>${t}${tag ? ` <em>${tag}</em>` : ''}</b><small>${d}</small></button>`; }).join('')}</div>
   ${img ? `<label class="f"><span>크기</span><select id="dlScale">${[[1, '1배 (화면·SNS용 96dpi)'], [2, '2배 (선명하게 192dpi)'], [3.125, '인쇄용 300dpi'], [3.646, '고급 인쇄 350dpi']].map(([v, t]) => `<option value="${v}" ${S.scale === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>` : ''}
-  <label class="f"><span>페이지 선택</span><select id="dlPages"><option value="all" ${S.pages === 'all' ? 'selected' : ''}>모든 페이지 (1~${doc.pages.length})</option><option value="cur" ${S.pages === 'cur' ? 'selected' : ''}>현재 페이지 (${cur + 1})</option><option value="range" ${S.pages === 'range' ? 'selected' : ''}>직접 입력</option>${img && sel.length ? `<option value="sel" ${S.pages === 'sel' ? 'selected' : ''}>선택한 요소만 (${sel.length}개)</option>` : ''}</select></label>
+  <label class="f"><span>페이지 선택</span><select id="dlPages"><option value="all" ${S.pages === 'all' ? 'selected' : ''}>${doc.pages.some(p => p.dlOff) && doc.pages.some(p => !p.dlOff) ? `모든 페이지 (숨긴 ${doc.pages.filter(p => p.dlOff).length}쪽 빼고 ${doc.pages.filter(p => !p.dlOff).length}쪽)` : `모든 페이지 (1~${doc.pages.length})`}</option><option value="cur" ${S.pages === 'cur' ? 'selected' : ''}>현재 페이지 (${cur + 1})</option><option value="range" ${S.pages === 'range' ? 'selected' : ''}>직접 입력</option>${img && sel.length ? `<option value="sel" ${S.pages === 'sel' ? 'selected' : ''}>선택한 요소만 (${sel.length}개)</option>` : ''}</select></label>
   ${S.pages === 'range' ? `<label class="f"><input id="dlRange" placeholder="예: 1-3, 5" value="${esc(S.range)}"></label>` : ''}
   ${S.fmt === 'png' ? `<label class="chk"><input type="checkbox" id="dlTransp" ${S.transp ? 'checked' : ''}> 투명 배경 (쪽 배경색을 빼고 저장 — 로고·스티커용)</label>` : ''}
   ${img && n > 1 ? `<label class="chk"><input type="checkbox" id="dlMerge" ${S.merge ? 'checked' : ''}> 한 장의 이미지로 합치기 (세로로 이어 붙임)</label>` : ''}
@@ -4012,7 +4020,7 @@ function saveBlob(b, name) { const a = document.createElement('a'); a.href = URL
 async function printVector(pages) {
   const b = Math.max(0, Number(doc.bleed) || 0);
   $('#pageStyle').textContent = `@page{size:${doc.w + 2 * b}mm ${doc.h + 2 * b}mm;margin:0}`;
-  $('#canvas').innerHTML = ''; const th = $('#thumbs'); if (th) th.innerHTML = '';  // SVG id 중복 방지
+  $('#canvas').innerHTML = ''; const th = $('#thumbs'); if (th) th.innerHTML = ''; pgSel = new Set(); pgSelCur = -1; /* 다른 문서를 열면 고른 쪽은 비움 (복사한 쪽은 남겨 다른 문서에 붙여넣기 가능) */  // SVG id 중복 방지
   // 브라우저 인쇄 PDF에는 재단 여백(슬러그)이 없어 재단선이 도련 위 그림에 찍히므로 끔. 파일 이름에 도련 포함을 표시
   const keepMarks = doc.cropMarks; doc.cropMarks = false; const root = $('#printRoot'); try { root.innerHTML = pages.map(i => sheetHTML(doc.pages[i], 'print')).join(''); } finally { doc.cropMarks = keepMarks; }
   const keepTitle = document.title; document.title = `${(doc.name || 'design').replace(/[\\/:*?"<>|]/g, '_')}_인쇄용${b ? `_도련${b}mm` : ''}`; window.addEventListener('afterprint', () => { document.title = keepTitle; }, { once: true }); setTimeout(() => { document.title = keepTitle; }, 60000);
@@ -4116,13 +4124,23 @@ function openCtx(ev, items) {
   setTimeout(() => document.addEventListener('pointerdown', off, true), 0); document.addEventListener('keydown', esc_, true); $('#scroller').addEventListener('scroll', close);
 }
 function ctxDo(k) {
+  if (k.startsWith('pg-')) { pageCmd(k.slice(3)); return; } /* 페이지 목록의 오른쪽 버튼 메뉴 */
   const els = selEls(), el = els[0];
   ({ copy: () => doCopy(false), cut: () => doCopy(true), paste: () => doPaste(false), pastein: () => doPaste(true), dup: duplicate, del: removeSel, ungroup: ungroupSel, cstyle: copyStyle, pstyle: pasteStyle,
     front: () => reorder('front'), up: () => reorder('up'), down: () => reorder('down'), back: () => reorder('back'), group: groupSel,
     lock: () => { const on = !els.every(x => x.locked); els.forEach(x => x.locked = on); commit(); renderOverlay(); renderInspector(); if (sideTab === 'layers') renderSide(); toast(on ? '잠갔습니다 (Ctrl+L로 풀기)' : '잠금을 풀었습니다'); },
-    flipH: () => flipSel('h'), flipV: () => flipSel('v'),
+    flipH: () => flipSel('h'), flipV: () => flipSel('v'), fitpage: () => fitToPage(false), fillpage: () => fitToPage(true),
     asbg: () => { if (!el || el.type !== 'image') return; el.x = 0; el.y = 0; el.w = doc.w; el.h = doc.h; el.fit = 'cover'; el.rot = 0; el.locked = true; reorder('back'); toast('배경으로 만들고 잠갔습니다 (레이어에서 잠금 해제)'); },
     all: () => select(page().els.filter(x => !x.hidden && !x.locked).map(x => x.id)), find: openFind, rulers: toggleRulers, clrguides: () => { doc.guides = { x: [], y: [] }; commit(); renderOverlay(); toast('안내선을 모두 지웠습니다'); } })[k]();
+}
+/* 고른 요소를 쪽 크기에 맞춤: 맞추기=비율 그대로 쪽 안에 가득·가운데, 채우기=비율 그대로 쪽을 빈틈없이(그림 하나는 상자를 쪽에 맞추고 그림은 잘라 채움) */
+function fitToPage(fill) {
+  const els = selEls().filter(x => !x.locked); if (!els.length) return;
+  if (fill && els.length === 1 && els[0].type === 'image') { const el = els[0]; el.x = 0; el.y = 0; el.w = doc.w; el.h = doc.h; el.rot = 0; el.fit = 'cover'; commit(); rerender(); toast('그림을 쪽에 꽉 채웠습니다 (그림 비율은 그대로, 넘치는 곳은 잘림 — 두 번 눌러 자리 조정)'); return; }
+  const U = unionBox(els), k = fill ? Math.max(doc.w / U.w, doc.h / U.h) : Math.min(doc.w / U.w, doc.h / U.h); if (!isFinite(k) || k <= 0) return;
+  const ox = (doc.w - U.w * k) / 2, oy = (doc.h - U.h * k) / 2;
+  els.forEach(el => { if (el.pts) el.pts = el.pts.map(q => [r1(q[0] * k), r1(q[1] * k)]); el.x = r1(ox + (el.x - U.x) * k); el.y = r1(oy + (el.y - U.y) * k); el.w = r1(el.w * k); el.h = r1(el.h * k); scaleProps(el, k); });
+  commit(); rerender(); toast(fill ? '쪽을 빈틈없이 채웠습니다 (Ctrl+Z로 되돌리기)' : '쪽에 맞췄습니다 (Ctrl+Z로 되돌리기)');
 }
 function flipSel(dir) { const els = selEls().filter(x => !x.locked && x.type === 'image'); if (!els.length) { toast('뒤집기는 그림에 쓸 수 있습니다', true); return; } els.forEach(x => { if (dir === 'h') x.flip = !x.flip; else x.flipV = !x.flipV; }); commit(); rerender(); }
 $('#scroller').addEventListener('contextmenu', e => {
@@ -4134,6 +4152,7 @@ $('#scroller').addEventListener('contextmenu', e => {
   openCtx(e, [['copy', '복사', 'Ctrl+C'], ['cut', '잘라내기', 'Ctrl+X'], ['paste', '붙여넣기', 'Ctrl+V', !clip], ['dup', '복제', 'Ctrl+D'], ['del', '삭제', 'Delete'], '-', ['cstyle', '스타일 복사', 'Ctrl+Alt+C'], ['pstyle', '스타일 붙여넣기', 'Ctrl+Alt+V', !styleClip], '-',
     ['front', '맨 앞으로', 'Ctrl+Shift+]'], ['up', '앞으로', 'Ctrl+]'], ['down', '뒤로', 'Ctrl+['], ['back', '맨 뒤로', 'Ctrl+Shift+['], '-',
     ...(selUnitCount() >= 2 ? [['group', '그룹으로 묶기', 'Ctrl+G']] : []), ...(els.some(x => x.group) ? [['ungroup', '그룹 해제', 'Ctrl+Shift+G']] : []), ['lock', locked ? '잠금 풀기' : '잠그기', 'Ctrl+L'],
+    ...(locked ? [] : [['fitpage', '쪽에 맞추기 (비율 유지)', ''], ['fillpage', img ? '쪽 꽉 채우기' : '쪽 꽉 채우기 (넘치는 곳 잘림)', '']]),
     ...(img ? [['flipH', '좌우 뒤집기', 'Shift+H'], ['flipV', '상하 뒤집기', 'Shift+V'], ['asbg', '배경으로 만들기', '']] : [])]);
 });
 
@@ -4151,6 +4170,76 @@ document.addEventListener('keydown', e => {
   if (!mod && !e.altKey && !e.shiftKey && /^Digit[0-9]$/.test(e.code) && !cellSel) { stop(); const n = Number(e.code.slice(5)); selEls().forEach(x => { if (!x.locked) x.opacity = n === 0 ? 1 : n / 10; }); commitSoon(); renderCanvas(); renderInspector(); toast(`투명도 ${n === 0 ? 100 : n * 10}%`); return; }
   if (mod && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) { stop(); const d = (e.code === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 15 : 1); selEls().forEach(x => { if (!x.locked) x.rot = Math.round((((x.rot || 0) + d) % 360 + 360) % 360); }); commitSoon(); renderCanvas(); renderOverlay(); renderInspector(); return; }
 }, true);
+
+/* ---- 페이지 목록: 여러 쪽 고르기(누르기·Ctrl/⌘·Shift·Ctrl+A)와 복사·잘라내기·붙여넣기·복제·삭제, 오른쪽 버튼 메뉴 ---- */
+function pgPicked() { const a = [...pgSel].filter(i => i < doc.pages.length).sort((x, y) => x - y); return a.length ? a : [cur]; }
+function pgClick(i, e) {
+  pgFocus = true;
+  if (e.shiftKey) { pgSel = new Set(); for (let j = Math.min(pgAnchor, i); j <= Math.max(pgAnchor, i); j++) pgSel.add(j); pgSelCur = cur; renderThumbs(); return; }
+  if (e.ctrlKey || e.metaKey) { if (pgSel.has(i)) { if (pgSel.size > 1) pgSel.delete(i); } else pgSel.add(i); pgAnchor = i; pgSelCur = cur; renderThumbs(); return; }
+  pgSel = new Set([i]); pgAnchor = i; pgSelCur = i; goto(i);
+}
+function pgAssetsOf(pages) { const assets = {}; const walk = v => { if (typeof v === 'string' && v.startsWith('a:') && doc.assets[v.slice(2)]) assets[v] = doc.assets[v.slice(2)]; else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(pages); return assets; }
+function pgAfter(at, n, msg, undoable) { pgSel = new Set(); for (let j = 0; j < n; j++) pgSel.add(at + j); cur = clamp(at, 0, doc.pages.length - 1); pgSelCur = cur; pgAnchor = cur; sel = []; cellSel = null; selDay = null; commit(); renderAll(); if (msg) (undoable ? toastUndo(msg) : toast(msg)); requestAnimationFrame(() => { const t = document.querySelector(`#thumbs .thumb[data-i="${cur}"]`); if (t) t.scrollIntoView({ block: 'nearest' }); }); }
+function pgRemove(idx) { const curPg = page(); doc.pages = doc.pages.filter((p, i) => !idx.includes(i)); const k = doc.pages.indexOf(curPg); return Math.min(k >= 0 ? k : idx[0], doc.pages.length - 1); }
+function pageCmd(k) {
+  const idx = pgPicked(), n = idx.length;
+  if (k === 'all') { pgSel = new Set(doc.pages.map((_, i) => i)); pgSelCur = cur; pgFocus = true; renderThumbs(); toast(`${doc.pages.length}쪽을 모두 골랐습니다`); return; }
+  if (k === 'add') { doc.pages.splice(idx[n - 1] + 1, 0, newPage(page().bg)); pgAfter(idx[n - 1] + 1, 1); return; }
+  if (k === 'grid') { openPageGrid(); return; }
+  if (k === 'rename') { const pg = doc.pages[idx[0]]; const v = window.prompt(`${idx[0] + 1}쪽 이름`, pg.label || ''); if (v == null) return; pg.label = v.trim(); commit(); renderAll(); return; }
+  if (k === 'up' || k === 'down' || k === 'first' || k === 'last') {
+    const moving = idx.map(i => doc.pages[i]), curPg = page(), rest = doc.pages.filter((p, i) => !idx.includes(i)); const before = j => idx.length ? doc.pages.slice(0, j).filter(p => !moving.includes(p)).length : 0;
+    const to = k === 'first' ? 0 : k === 'last' ? rest.length : k === 'up' ? Math.max(0, before(idx[0]) - 1) : Math.min(rest.length, before(idx[n - 1]) + 1);
+    rest.splice(to, 0, ...moving); if (rest.every((p, i) => p === doc.pages[i])) return; doc.pages = rest; pgSel = new Set(moving.map(p => doc.pages.indexOf(p))); cur = doc.pages.indexOf(curPg); pgSelCur = cur; sel = []; cellSel = null; selDay = null; commit(); renderAll(); return;
+  }
+  if (k === 'lock') { const on = !idx.every(i => doc.pages[i].pgLock); idx.forEach(i => { const pg = doc.pages[i]; if (on) { pg.pgLock = true; pg.els.forEach(el => { if (!el.locked) { el.locked = true; el.pgLock = true; } }); } else { delete pg.pgLock; pg.els.forEach(el => { if (el.pgLock) { el.locked = false; delete el.pgLock; } }); } }); sel = []; commit(); renderAll(); toast(on ? `${n}쪽을 잠갔습니다 — 요소가 움직이지 않습니다 (풀기: 오른쪽 버튼 → 쪽 잠금 풀기)` : `${n}쪽의 잠금을 풀었습니다`); return; }
+  if (k === 'hide') { const on = !idx.every(i => doc.pages[i].dlOff); if (on && doc.pages.every((p, i) => p.dlOff || idx.includes(i))) { toast('모든 쪽을 숨길 수는 없습니다', true); return; } idx.forEach(i => { if (on) doc.pages[i].dlOff = true; else delete doc.pages[i].dlOff; }); commit(); renderThumbs(); toast(on ? `${n}쪽을 숨겼습니다 — 다운로드·인쇄의 '모든 페이지'에서 빠집니다 (편집은 그대로)` : `${n}쪽을 다시 보이게 했습니다`); return; }
+  if (k === 'dl') { dlState.pages = 'range'; dlState.range = idx.map(i => i + 1).join(', '); const q = $('#dlPanel'); if (q) q.remove(); openDownload(); return; }
+  if (k === 'copy' || k === 'cut') {
+    const pages = clone(idx.map(i => doc.pages[i])); pageClip = { pages, assets: pgAssetsOf(pages), t: Date.now() };
+    try { navigator.clipboard.writeText('nc-pages:' + uid()).catch(() => {}); } catch (e) {} /* 바깥 클립보드의 예전 요소 표식을 덮어 둠 */
+    if (k === 'copy') { toast(`${n}쪽을 복사했습니다 — 붙여 넣을 쪽을 고르고 Ctrl+V (고른 쪽 바로 뒤에 들어갑니다)`); return; }
+    if (n >= doc.pages.length) { toast('모든 쪽을 잘라낼 수는 없습니다 — 복사만 해 두었습니다', true); return; }
+    const at = pgRemove(idx); pgAfter(at, 1, `${n}쪽을 잘라냈습니다 (붙여넣기: Ctrl+V)`, true); return;
+  }
+  if (k === 'paste') {
+    if (!pageClip) { toast('먼저 쪽을 복사하세요 (쪽을 고르고 Ctrl+C)', true); return; }
+    const amap = {}; Object.entries(pageClip.assets).forEach(([ref, data]) => { if (doc.assets[ref.slice(2)] !== data) amap[ref] = addAsset(data); });
+    const swap = v => { if (typeof v === 'string' && amap[v]) return amap[v]; if (Array.isArray(v)) return v.map(swap); if (v && typeof v === 'object') { for (const q in v) v[q] = swap(v[q]); } return v; };
+    const copies = pageClip.pages.map(p => swap(dupPage(p))); const at = idx[n - 1] + 1; doc.pages.splice(at, 0, ...copies);
+    pgAfter(at, copies.length, `${copies.length}쪽을 ${at + 1}번째 자리에 붙여 넣었습니다`, true); return;
+  }
+  if (k === 'dup') { const copies = idx.map(i => dupPage(doc.pages[i])); const at = idx[n - 1] + 1; doc.pages.splice(at, 0, ...copies); pgAfter(at, copies.length, `${n}쪽을 복제했습니다`); return; }
+  if (k === 'del') {
+    if (n >= doc.pages.length) { toast(doc.pages.length === 1 ? '마지막 페이지는 지울 수 없습니다' : '모든 쪽을 지울 수는 없습니다', true); return; }
+    if (!window.confirm(n > 1 ? `고른 ${n}쪽(${idx.map(i => i + 1).join(', ')}쪽)을 지울까요? (Ctrl+Z로 되돌릴 수 있습니다)` : `${idx[0] + 1}쪽을 지울까요? (Ctrl+Z로 되돌릴 수 있습니다)`)) return;
+    const at = pgRemove(idx); pgAfter(at, 1, `${n}쪽을 지웠습니다`, true);
+  }
+}
+/* 마지막으로 누른 곳이 페이지 목록이면 단축키가 쪽에 적용 (캔버스 등 다른 곳을 누르면 요소 단축키로 돌아감) */
+document.addEventListener('pointerdown', e => { if (!e.target.closest) return; if (e.target.closest('#ctxMenu')) return; pgFocus = !!e.target.closest('#thumbs, #pgDup, #pgDel, #pgAdd, #pgUp, #pgDown'); }, true);
+document.addEventListener('keydown', e => {
+  if (!pgFocus || sideTab !== 'pages' || !$('#thumbs') || editing || $('#cellEd') || (e.target.matches && e.target.matches('input,textarea,select')) || document.querySelector('dialog[open]') || e.isComposing) return;
+  const mod = e.ctrlKey || e.metaKey, stop = () => { e.preventDefault(); e.stopImmediatePropagation(); }; const K = /^Key[A-Z]$/.test(e.code || '') ? e.code.slice(3) : (e.key || '').toUpperCase(); /* 한글 입력 중엔 code, code가 없으면 key */
+  if (mod && !e.altKey && K === 'A') { stop(); pageCmd('all'); return; }
+  if (mod && !e.altKey && K === 'C') { stop(); pageCmd('copy'); return; }
+  if (mod && !e.altKey && K === 'X') { stop(); pageCmd('cut'); return; }
+  if (mod && !e.altKey && K === 'V' && pageClip && (!clip || !clip.t || pageClip.t > clip.t)) { stop(); pageCmd('paste'); return; } /* 요소를 더 나중에 복사했으면 원래대로 요소 붙여넣기 */
+  if (mod && !e.altKey && K === 'D') { stop(); pageCmd('dup'); return; }
+  if (!mod && (e.key === 'Delete' || e.key === 'Backspace')) { stop(); pageCmd('del'); return; }
+  if (mod && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { stop(); pageCmd(e.key === 'ArrowUp' ? 'up' : 'down'); return; }
+  if (e.key === 'F2') { stop(); pageCmd('rename'); return; }
+  if (e.key === 'Escape' && pgSel.size > 1) { stop(); pgSel = new Set([cur]); pgAnchor = cur; renderThumbs(); return; }
+  if (e.shiftKey && !mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { stop(); const last = pgSel.has(pgAnchor) ? [...pgSel].sort((a, b) => a - b) : [cur]; const end = clamp((pgAnchor === last[0] ? last[last.length - 1] : last[0]) + (e.key === 'ArrowUp' ? -1 : 1), 0, doc.pages.length - 1); pgSel = new Set(); for (let j = Math.min(pgAnchor, end); j <= Math.max(pgAnchor, end); j++) pgSel.add(j); pgSelCur = cur; renderThumbs(); const t = document.querySelector(`#thumbs .thumb[data-i="${end}"]`); if (t) t.scrollIntoView({ block: 'nearest' }); return; }
+}, true);
+document.addEventListener('contextmenu', e => {
+  const box = e.target.closest && e.target.closest('#thumbs'); if (!box) return; e.preventDefault(); pgFocus = true;
+  const t = e.target.closest('.thumb'); if (t) { const i = Number(t.dataset.i); if (!pgSel.has(i)) { pgSel = new Set([i]); pgAnchor = i; pgSelCur = cur; renderThumbs(); } } /* 쪽을 넘기면 캔버스가 다시 그려지며 메뉴가 닫혀서, 고르기만 함 */
+  const n = pgPicked().length, one = n > 1 ? `고른 ${n}쪽 ` : '';
+  openCtx(e, t ? [['pg-copy', `${one}복사`, 'Ctrl+C'], ['pg-cut', `${one}잘라내기`, 'Ctrl+X'], ['pg-paste', pageClip ? `붙여넣기 (${pageClip.pages.length}쪽, 뒤에)` : '붙여넣기', 'Ctrl+V', !pageClip], ['pg-dup', `${one}복제`, 'Ctrl+D'], ['pg-del', `${one}삭제`, 'Delete'], '-', ['pg-add', '뒤에 새 페이지', ''], ...(n === 1 ? [['pg-rename', '이름 바꾸기…', 'F2']] : []), ['pg-up', '위로 옮기기', 'Ctrl+↑'], ['pg-down', '아래로 옮기기', 'Ctrl+↓'], ['pg-first', '맨 앞으로', ''], ['pg-last', '맨 뒤로', ''], '-', ['pg-lock', pgPicked().every(i => doc.pages[i].pgLock) ? `${one}쪽 잠금 풀기` : `${one}쪽 잠그기`, ''], ['pg-hide', pgPicked().every(i => doc.pages[i].dlOff) ? `${one}숨기기 풀기` : `${one}숨기기 (다운로드·인쇄에서 빼기)`, ''], ['pg-dl', `${one || '이 쪽 '}다운로드…`, ''], '-', ['pg-all', '모든 쪽 고르기', 'Ctrl+A'], ['pg-grid', '모아 보기…', '']]
+    : [['pg-paste', pageClip ? `붙여넣기 (${pageClip.pages.length}쪽)` : '붙여넣기', 'Ctrl+V', !pageClip], ['pg-add', '새 페이지', ''], ['pg-all', '모든 쪽 고르기', 'Ctrl+A'], ['pg-grid', '모아 보기…', '']]);
+});
 
 /* ---- 페이지 목록: 끌어서 순서 바꾸기 ---- */
 document.addEventListener('dragstart', e => { const t = e.target.closest && e.target.closest('#thumbs .thumb'); if (!t) return; e.dataTransfer.setData('text/x-nc-page', t.dataset.i); e.dataTransfer.effectAllowed = 'move'; t.classList.add('dragging'); });
@@ -4286,8 +4375,30 @@ $('#scroller').addEventListener('drop', async e => {
 /* ---- 크기 조정 (Canva '크기 조정'): 새 크기에 맞춰 내용을 다시 배치. 이 디자인을 바꾸거나 새 크기로 사본을 만듦 ----
    fit: 비율을 지키며 줄이고 늘림. 쪽 가장자리에 가까운 요소는 그 가장자리 기준, 가운데 요소는 가운데 기준. 배경·띠는 새 쪽을 꽉 채움
    stretch: 가로·세로를 따로 늘림 / keep: 크기는 그대로 두고 가운데로 옮김 */
-function resizeEls(els, w0, h0, W, H, mode) {
-  const sx = W / w0, sy = H / h0, s = mode === 'keep' ? 1 : Math.min(sx, sy);
+const MM_KEYS = ['strokeW', 'shX', 'shY', 'shB', 'glowB', 'd3X', 'd3Y', 'pad', 'bgR', 'borderW', 'radius'];
+function scaleProps(el, f) { /* 글자 크기·선 굵기·그림자 등 mm 값을 f배로 */
+  if (f === 1) return;
+  if (el.size) el.size = Math.round(el.size * f * 10) / 10;
+  if (el.html) el.html = el.html.replace(/font-size:\s*([\d.]+)pt/g, (_, v) => 'font-size:' + Math.round(v * f * 2) / 2 + 'pt');
+  MM_KEYS.forEach(k => { if (typeof el[k] === 'number' && el[k]) el[k] = Math.round(el[k] * f * 100) / 100; });
+  if (el.s && (el.type === 'cal' || el.type === 'mini')) Object.keys(el.s).forEach(k => { if (/Size$|H$/.test(k) && typeof el.s[k] === 'number') el.s[k] = Math.round(el.s[k] * f * 10) / 10; });
+}
+/* contain: 디자인 전체를 비율 그대로 줄이거나 키워 새 쪽 안에 모두 (잘림 없음) / cover: 비율 그대로 새 쪽을 빈틈없이 (넘치는 곳 잘림) / keep: 크기 그대로
+   A = 기준 위치 [가로 0·0.5·1, 세로 0·0.5·1]. 쪽 전체 배경은 새 쪽을 꽉 채우고, contain·keep에서는 쪽을 가로지르는 띠도 그 방향으로 늘림 */
+function resizeUniform(els, w0, h0, W, H, mode, A) {
+  A = A || [0.5, 0.5]; const s = mode === 'keep' ? 1 : mode === 'contain' ? Math.min(W / w0, H / h0) : Math.max(W / w0, H / h0), ox = (W - w0 * s) * A[0], oy = (H - h0 * s) * A[1];
+  els.forEach(el => {
+    const free = !el.rot, full = (a, l, L) => a <= L * 0.025 && a + l >= L * 0.975;
+    const bandX = free && mode !== 'cover' && full(el.x, el.w, w0), bandY = free && mode !== 'cover' && full(el.y, el.h, h0), bg = free && full(el.x, el.w, w0) && full(el.y, el.h, h0);
+    const sx_ = bg || bandX ? W / w0 : s, sy_ = bg || bandY ? H / h0 : s;
+    if (el.pts) el.pts = el.pts.map(q => [r1(q[0] * sx_), r1(q[1] * sy_)]);
+    el.x = r1(bg || bandX ? el.x * sx_ : ox + el.x * s); el.y = r1(bg || bandY ? el.y * sy_ : oy + el.y * s); el.w = r1(el.w * sx_); el.h = r1(el.h * sy_);
+    scaleProps(el, s);
+  });
+}
+function resizeEls(els, w0, h0, W, H, mode, A) {
+  if (mode === 'contain' || mode === 'cover' || mode === 'keep') return resizeUniform(els, w0, h0, W, H, mode, A);
+  const sx = W / w0, sy = H / h0, s = Math.min(sx, sy);
   const fit1 = (p, sz, len0, len1, k, band) => { // 한 축의 새 위치·크기
     if (mode === 'stretch' || band) return [p * (len1 / len0), sz * (len1 / len0)]; // 쪽을 가로지르는 배경·띠는 그 축을 꽉 채움
     const n = sz * k, c = p + sz / 2;
@@ -4298,7 +4409,6 @@ function resizeEls(els, w0, h0, W, H, mode) {
   };
   // 그룹은 한 덩어리로 자리를 정하고 안의 요소는 비율대로 (배지의 바탕과 글자가 흩어지지 않게)
   const units = new Map(); els.forEach(el => { const k = el.group || el.id; if (!units.has(k)) units.set(k, []); units.get(k).push(el); });
-  const MM_KEYS = ['strokeW', 'shX', 'shY', 'shB', 'glowB', 'd3X', 'd3Y', 'pad', 'bgR', 'borderW', 'radius'];
   units.forEach(list => {
     const bx = Math.min(...list.map(e => e.x)), by = Math.min(...list.map(e => e.y)), bw = Math.max(...list.map(e => e.x + e.w)) - bx, bh = Math.max(...list.map(e => e.y + e.h)) - by;
     const rot = list.length === 1 && list[0].rot;
@@ -4309,34 +4419,32 @@ function resizeEls(els, w0, h0, W, H, mode) {
       const ex = fx, ey = fy;
       if (el.pts) el.pts = el.pts.map(q => [r1(q[0] * ex), r1(q[1] * ey)]);
       el.x = r1(nx + (el.x - bx) * fx); el.y = r1(ny + (el.y - by) * fy); el.w = r1(el.w * ex); el.h = r1(el.h * ey);
-      if (f !== 1) {
-        if (el.size) el.size = Math.round(el.size * f * 10) / 10;
-        if (el.html) el.html = el.html.replace(/font-size:\s*([\d.]+)pt/g, (_, v) => 'font-size:' + Math.round(v * f * 2) / 2 + 'pt');
-        MM_KEYS.forEach(k => { if (typeof el[k] === 'number' && el[k]) el[k] = Math.round(el[k] * f * 100) / 100; });
-        if (el.s && (el.type === 'cal' || el.type === 'mini')) Object.keys(el.s).forEach(k => { if (/Size$|H$/.test(k) && typeof el.s[k] === 'number') el.s[k] = Math.round(el.s[k] * f * 10) / 10; });
-      }
+      scaleProps(el, f);
     });
   });
 }
-function resizedDoc(src_, W, H, mode) { const d = clone(src_); d.pages.forEach(p => resizeEls(p.els, src_.w, src_.h, W, H, mode)); d.w = W; d.h = H; return d; }
-let rsState = { fmt: '', w: 0, h: 0, unit: 'mm', mode: 'fit' };
+function resizedDoc(src_, W, H, mode, A) { const d = clone(src_); d.pages.forEach(p => resizeEls(p.els, src_.w, src_.h, W, H, mode, A)); d.w = W; d.h = H; return d; }
+let rsState = { fmt: '', w: 0, h: 0, unit: 'mm', mode: 'fit', A: [0.5, 0.5], pi: 0 };
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#btnResize, #inspSize, #docSizeBtn')) openResize(); }); /* 위 막대 '크기 조정'·속성 패널의 크기 표시·문서 패널 */
 function openResize() {
   endEdit(); let d = $('#dlgResize');
   if (!d) { d = document.createElement('dialog'); d.id = 'dlgResize'; d.className = 'wide'; d.innerHTML = `<div class="dhead"><h2>크기 조정</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="rsBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
-  rsState = { fmt: '', w: doc.w, h: doc.h, unit: 'mm', mode: 'fit' }; renderResize(); d.showModal();
+  const f0 = FORMATS.find(x => x[0] === doc.fmt), px_ = f0 && f0[5] === 'px'; rsState = { fmt: '', w: px_ ? f0[3] : doc.w, h: px_ ? f0[4] : doc.h, unit: px_ ? 'px' : 'mm', mode: rsState.mode || 'fit', A: rsState.A || [0.5, 0.5], pi: cur }; renderResize(); d.showModal();
 }
 function rsMM() { return rsState.unit === 'px' ? [PX(rsState.w), PX(rsState.h)] : [rsState.w, rsState.h]; }
 function renderResize() {
   const S = rsState, [W, H] = rsMM(), ok = W > 5 && H > 5 && W < 20000 && H < 20000;
-  const prevPage = ok ? resizedDoc({ w: doc.w, h: doc.h, pages: [page()] }, W, H, S.mode).pages[0] : null;
+  S.pi = clamp(S.pi || 0, 0, doc.pages.length - 1); const srcPg = doc.pages[S.pi];
+  const prevPage = ok ? resizedDoc({ w: doc.w, h: doc.h, pages: [srcPg] }, W, H, S.mode, S.A).pages[0] : null;
   const box = 220, k = ok ? Math.min(box / W, box / H) : 1;
   $('#rsBody').innerHTML = `<div class="rsgrid"><div>
     <label class="f"><span>새 크기 고르기</span><select id="rsFmt"><option value="">직접 입력</option>${ND_GROUPS.filter(g => g[0] !== 'rec').map(([g, t]) => `<optgroup label="${t}">${FORMATS.filter(f => f[2] === g).map(f => `<option value="${f[0]}" ${S.fmt === f[0] ? 'selected' : ''}>${esc(f[1])} · ${fmtLabel(f)}</option>`).join('')}</optgroup>`).join('')}</select></label>
     <div class="row"><label class="f" style="flex:1"><span>가로</span><input type="number" id="rsW" value="${S.w}" step="0.5"></label><button class="btn sm" id="rsSwap" title="가로·세로 바꾸기" style="margin-top:18px">⇄</button><label class="f" style="flex:1"><span>세로</span><input type="number" id="rsH" value="${S.h}" step="0.5"></label><label class="f" style="width:72px"><span>단위</span><select id="rsU"><option value="mm" ${S.unit === 'mm' ? 'selected' : ''}>mm</option><option value="px" ${S.unit === 'px' ? 'selected' : ''}>px</option></select></label></div>
     <p class="hint" style="margin:0">지금 크기: ${docSizeLabel(' × ')} · 쪽 ${doc.pages.length}개</p>
     <h3>내용 맞추는 방법</h3>
-    <div class="rsmodes">${[['fit', '알맞게 다시 배치 (추천)', '비율을 지키며 크기를 맞추고, 가장자리 요소는 가장자리에, 배경·띠는 새 쪽을 꽉 채웁니다'], ['stretch', '늘려서 채우기', '가로·세로를 따로 늘립니다. 비율 차이가 작을 때'], ['keep', '내용 크기 그대로', '요소 크기는 두고 가운데로만 옮깁니다']].map(([m, t, dd]) => `<label class="rsmode ${S.mode === m ? 'on' : ''}"><input type="radio" name="rsMode" value="${m}" ${S.mode === m ? 'checked' : ''}><b>${t}</b><small>${dd}</small></label>`).join('')}</div>
-  </div><div class="rsprev"><span class="hint">미리보기 (${cur + 1}쪽)</span><div class="rsbox" style="width:${ok ? W * k : box}px;height:${ok ? H * k : box}px">${ok ? `<div style="transform:scale(${k * 25.4 / 96});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(W, H, prevPage.els, page().bg)}</div>` : ''}</div>
+    <div class="rsmodes">${[['fit', '알맞게 다시 배치 (추천)', '비율을 지키며 크기를 맞추고, 가장자리 요소는 가장자리에, 배경·띠는 새 쪽을 꽉 채웁니다'], ['contain', '전체 크기 맞추기 (잘림 없음)', '디자인 전체를 비율 그대로 줄이거나 키워 새 쪽 안에 모두 들어오게 합니다. 배경·가로지르는 띠는 새 쪽에 맞춰 늘어납니다'], ['cover', '꽉 채우기 (넘치는 곳 잘림)', '디자인 전체를 비율 그대로 키워 새 쪽을 빈틈없이 채웁니다. 기준 위치의 반대쪽이 잘립니다'], ['stretch', '늘려서 채우기 (모양 변형)', '가로·세로를 따로 늘립니다. 비율 차이가 작을 때'], ['keep', '내용 크기 그대로', '요소 크기는 그대로 두고 기준 위치로만 옮깁니다']].map(([m, t, dd]) => `<label class="rsmode ${S.mode === m ? 'on' : ''}"><input type="radio" name="rsMode" value="${m}" ${S.mode === m ? 'checked' : ''}><b>${t}</b><small>${dd}</small></label>`).join('')}</div>
+    ${['contain', 'cover', 'keep'].includes(S.mode) ? `<div class="row" style="align-items:center;gap:10px;margin-top:8px"><span class="hint" style="margin:0">기준 위치</span><div class="rsanchor">${[0, 0.5, 1].map(y => [0, 0.5, 1].map(x => `<button type="button" data-rsa="${x},${y}" class="${S.A[0] === x && S.A[1] === y ? 'on' : ''}" title="${['위', '가운데', '아래'][y * 2]}${['왼쪽', '가운데', '오른쪽'][x * 2] === '가운데' && y === 0.5 ? '' : ' ' + ['왼쪽', '가운데', '오른쪽'][x * 2]}"></button>`).join('')).join('')}</div><span class="hint" style="margin:0">${S.mode === 'cover' ? '이 쪽은 남기고 반대쪽이 잘립니다' : '남는 곳이 반대쪽에 생깁니다'}</span></div>` : ''}
+  </div><div class="rsprev"><span class="hint">${doc.pages.length > 1 ? `<button class="btn sm icon" id="rsPrev" title="앞 쪽" ${S.pi ? '' : 'disabled'}>‹</button> ` : ''}미리보기 (${S.pi + 1} / ${doc.pages.length}쪽)${doc.pages.length > 1 ? ` <button class="btn sm icon" id="rsNext" title="다음 쪽" ${S.pi < doc.pages.length - 1 ? '' : 'disabled'}>›</button>` : ''}</span><div class="rsbox" style="width:${ok ? W * k : box}px;height:${ok ? H * k : box}px">${ok ? `<div style="transform:scale(${k * 25.4 / 96});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(W, H, prevPage.els, srcPg.bg)}</div>` : ''}</div>
   <p class="hint" style="text-align:center">${ok ? `${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm` : '크기를 확인해 주세요'}</p></div></div>
   <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="rsCopy" ${ok ? '' : 'disabled'}>새 크기로 사본 만들기</button><button class="btn primary" id="rsApply" ${ok ? '' : 'disabled'}>이 디자인 크기 바꾸기</button></div>`;
   const B = $('#rsBody');
@@ -4345,9 +4453,11 @@ function renderResize() {
   $('#rsU').onchange = e => { const u = e.target.value; if (u !== S.unit) { const f = u === 'px' ? 96 / 25.4 : 25.4 / 96; S.w = Math.round(S.w * f * 10) / 10; S.h = Math.round(S.h * f * 10) / 10; S.unit = u; } renderResize(); };
   $('#rsSwap').onclick = () => { [S.w, S.h] = [S.h, S.w]; S.fmt = ''; renderResize(); };
   B.querySelectorAll('[name=rsMode]').forEach(r => r.onchange = () => { S.mode = r.value; renderResize(); });
-  $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode); doc.pages = nd.pages; doc.w = W; doc.h = H; doc.fmt = S.fmt || ''; { const f = FORMATS.find(x => x[0] === S.fmt); if (f) doc.bleed = ['print', 'doc', 'cal'].includes(f[2]) && f[5] === 'mm' ? (doc.bleed || 3) : 0; } commit();  /* 인쇄물↔SNS로 바꾸면 도련도 맞춤 */ zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toastUndo(`크기를 ${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm로 바꿨습니다`, () => { zoom = 0; fitCanvas(); }); };
+  B.querySelectorAll('[data-rsa]').forEach(b => b.onclick = () => { S.A = b.dataset.rsa.split(',').map(Number); renderResize(); });
+  if ($('#rsPrev')) $('#rsPrev').onclick = () => { S.pi--; renderResize(); }; if ($('#rsNext')) $('#rsNext').onclick = () => { S.pi++; renderResize(); };
+  $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode, S.A); doc.pages = nd.pages; doc.w = W; doc.h = H; doc.fmt = S.fmt || ''; { const f = FORMATS.find(x => x[0] === S.fmt); if (f) doc.bleed = ['print', 'doc', 'cal'].includes(f[2]) && f[5] === 'mm' ? (doc.bleed || 3) : 0; } commit();  /* 인쇄물↔SNS로 바꾸면 도련도 맞춤 */ zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toastUndo(`크기를 ${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm로 바꿨습니다`, () => { zoom = 0; fitCanvas(); }); };
   $('#rsCopy').onclick = async () => {
-    const f = FORMATS.find(x => x[0] === S.fmt); const nd = resizedDoc(doc, W, H, S.mode); nd.fmt = S.fmt || ''; nd.name = `${doc.name || '새 디자인'} (${f ? f[1] : `${Math.round(W)}×${Math.round(H)}`})`;
+    const f = FORMATS.find(x => x[0] === S.fmt); const nd = resizedDoc(doc, W, H, S.mode, S.A); nd.fmt = S.fmt || ''; nd.name = `${doc.name || '새 디자인'} (${f ? f[1] : `${Math.round(W)}×${Math.round(H)}`})`;
     if (f) nd.bleed = ['print', 'doc', 'cal'].includes(f[2]) && f[5] === 'mm' ? (doc.bleed || 3) : 0;
     $('#dlgResize').close(); gcAssets();
     try {
@@ -4677,8 +4787,13 @@ if (/[?&]qa\b/.test(location.search)) window.NCQA = { live: NC.live, renderPageC
   function save() { try { localStorage.setItem('naracal-panels', JSON.stringify({ side: parseInt(getComputedStyle(root).getPropertyValue('--side-w')), insp: parseInt(getComputedStyle(root).getPropertyValue('--insp-w')) })); } catch (e) {} }
   [['rszL', '--side-w', 1, 200, 560], ['rszR', '--insp-w', -1, 240, 560]].forEach(([id, v, dir, min, max]) => {
     const h = document.getElementById(id); if (!h) return;
-    h.addEventListener('pointerdown', e => { e.preventDefault(); const x0 = e.clientX, w0 = parseInt(getComputedStyle(root).getPropertyValue(v)); h.classList.add('on'); h.setPointerCapture(e.pointerId); const mv = ev => { root.style.setProperty(v, clamp(w0 + dir * (ev.clientX - x0), min, max) + 'px'); }; const up = () => { h.classList.remove('on'); h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); save(); fitCanvas(); renderThumbs(); }; h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); });
-    h.addEventListener('dblclick', () => { root.style.setProperty(v, (dir === 1 ? 300 : 320) + 'px'); save(); fitCanvas(); renderThumbs(); });
+    /* 끄는 동안에는 문서 전체 변수(--side-w) 대신 .app의 칸 너비만 바꿈 — 변수를 바꾸면 쪽 미리보기 속 글자·그림까지 모두 스타일을 다시 계산해 버벅임(12쪽 기준 23ms→5ms). 화면 한 번 그릴 때 한 번만(rAF), 놓을 때 변수에 저장 */
+    h.addEventListener('pointerdown', e => { e.preventDefault(); const app = $('.app'), x0 = e.clientX, w0 = parseInt(getComputedStyle(root).getPropertyValue(v)); const tr = getComputedStyle(app).gridTemplateColumns.split(' '), ti = dir === 1 ? 1 : 5, fast = tr.length === 6; let want = w0, raf = 0; h.classList.add('on'); document.body.classList.add('rsz-on'); h.setPointerCapture(e.pointerId);
+      const paint = () => { raf = 0; if (fast) { tr[ti] = want + 'px'; tr[3] = '1fr'; app.style.gridTemplateColumns = tr.join(' '); } else root.style.setProperty(v, want + 'px'); fitCanvas(); if (dir === 1) rescaleThumbs(); };
+      const mv = ev => { want = clamp(w0 + dir * (ev.clientX - x0), min, max); if (!raf) raf = requestAnimationFrame(paint); };
+      const up = () => { if (raf) { cancelAnimationFrame(raf); paint(); } h.classList.remove('on'); document.body.classList.remove('rsz-on'); h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); root.style.setProperty(v, want + 'px'); app.style.gridTemplateColumns = ''; save(); fitCanvas(); rescaleThumbs(); };
+      h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up); });
+    h.addEventListener('dblclick', () => { root.style.setProperty(v, (dir === 1 ? 300 : 320) + 'px'); save(); fitCanvas(); rescaleThumbs(); });
   });
 })();
 
