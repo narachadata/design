@@ -1342,9 +1342,9 @@ async function videoVoices(ps, total) {
 // 동영상 원본을 열어 <video>로 (이 PC에 원본이 없으면 검은 화면 + 안내)
 const vEls = new Map();
 async function openVideoEl(el) {
-  try { const u = await NC.media.urlOf(el.src, true, r => src(r)); if (vEls.has(u)) return vEls.get(u);
+  try { const u = await NC.media.urlOf(el.src, true, r => src(r)), key = u + '#' + (el.id || ''); /* 조각마다 따로(같은 원본을 나눈 조각들이 한 화면·넘김에 함께 나와도 각자 시각) */ if (vEls.has(key)) return vEls.get(key);
     const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = u; v.crossOrigin = 'anonymous';
-    await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('동영상을 열 수 없습니다')); setTimeout(res, 8000); }); vEls.set(u, v); return v;
+    await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('동영상을 열 수 없습니다')); setTimeout(res, 8000); }); vEls.set(key, v); return v;
   } catch (e) { toast(`동영상 '${el.name || ''}': ${e.message}`, true); return null; }
 }
 // 동영상 속 소리: 장면 시작 시각에 사용 구간만큼 (소리 끄기면 빼기)
@@ -1930,6 +1930,10 @@ function tlSplitScene(quiet) {
   const a = x.pg, b = clone(a); b.id = uid(); const gm = {}; b.els.forEach(e => { e.id = uid(); if (e.group) { gm[e.group] = gm[e.group] || uid(); e.group = gm[e.group]; } if (e.anim) { const d = Number(e.anim.d || 0) - q; if (d < 0) delete e.anim; else e.anim.d = d; } });  /* 이미 시작한 움직임은 끝난 모습으로 이어짐(뒤 조각에서 처음부터 다시 튀지 않게) */
   // 동영상: 앞 조각은 자른 지점에서 끝나고, 뒤 조각은 자른 지점부터 이어서 재생
   a.els.forEach((e, k) => { if (e.type !== 'video') return; const e2 = b.els[k], d0 = e.anim ? Number(e.anim.d || 0) : 0, used = Math.max(0, q - d0), tin = Number(e.tin || 0), tout = Number(e.tout || e.dur || 0); if (!used) return; const cut = Math.min(tout, tin + used); e.tout = Math.round(cut * 100) / 100; e2.tin = Math.round(cut * 100) / 100; e2.tout = tout; if (e2.anim) e2.anim.d = 0; });
+  /* 켄 번즈·카메라: 앞 조각은 움직임의 처음~나눈 곳, 뒤 조각은 나눈 곳~끝 (처음부터 다시 시작하지 않게) */
+  const f = q / Math.max(0.1, x.dur), mid = (P0, P1) => Math.round((P0 + (P1 - P0) * f) * 1000) / 1000;
+  a.els.forEach((e, k) => { if (!e.kb || !b.els[k] || !b.els[k].kb) return; const P0 = e.kb.p0 != null ? Number(e.kb.p0) : 0, P1 = e.kb.p1 != null ? Number(e.kb.p1) : 1, m = mid(P0, P1); e.kb.p0 = P0; e.kb.p1 = m; b.els[k].kb.p0 = m; b.els[k].kb.p1 = P1; });
+  if (a.vcam && a.vcam !== 'none') { const CP = Array.isArray(a.vcamP) ? a.vcamP : [0, 1], m = mid(CP[0], CP[1]); a.vcamP = [CP[0], m]; b.vcamP = [m, CP[1]]; }
   b.vdur = Math.round((x.dur - q) * 10) / 10; a.vdur = q; b.vtrans = a.vtrans; b.vturn = a.vturn; a.vtrans = 'none'; a.els.forEach(e => { delete e.animOut; });
   doc.pages.splice(x.i + 1, 0, b); commit(); goto(x.i + 1); renderTimeline(); if (!quiet) toastUndo(`${x.i + 1}쪽을 ${q}초에서 나눴습니다`);
 }
@@ -1973,7 +1977,13 @@ function tlWire() {
     const lh = t.closest('[data-lh]'), rh = t.closest('[data-rh]'), clip = t.closest('.tl-clip'), tr = t.closest('[data-tr]'), an = t.closest('[data-ael]'), au = t.closest('#tlAu'), itEl = t.closest('[data-it]');
     tl.selIt = null; tl.selAu = false; tl.selScene = false;
     if (tr) { up = () => openTransPop(Number(tr.dataset.tr), tr); }
-    else if (lh) { const pg = doc.pages[Number(lh.dataset.lh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(lh.dataset.lh)), rip = s0 ? tlRippleSnap(s0.t0 + s0.dur) : () => {}; move = ev => { pg.vdur = Math.max(0.5, Math.round((d0 - (ev.clientX - sx) / tl.pxs) * 10) / 10); rip(pg.vdur - d0); renderTimeline(); }; up = () => { if (moved) commit(); }; }
+    else if (lh) { /* 왼쪽 손잡이 = 앞부분 자르기·늘리기 (Q와 같게): 끈 만큼 동영상 시작(tin)과 글자·요소 등장 시각을 함께 당기고 장면 길이를 줄임. 왼쪽으로 끌면 앞을 늘림(동영상은 원본 앞쪽이 남은 만큼만) */
+      const pg = doc.pages[Number(lh.dataset.lh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(lh.dataset.lh)), rip = s0 ? tlRippleSnap(s0.t0 + s0.dur) : () => {};
+      const base = pg.els.map(e => ({ e, tin: Number(e.tin || 0), tout: Number(e.tout || e.dur || 0), d: e.anim ? Number(e.anim.d || 0) : null })), vids = base.filter(b => b.e.type === 'video'), ext = vids.length ? Math.min(...vids.map(b => b.tin)) : 30;
+      let dq = 0; move = ev => { dq = Math.round(Math.max(-ext, Math.min(d0 - 0.5, (ev.clientX - sx) / tl.pxs)) * 10) / 10; pg.vdur = Math.round((d0 - dq) * 10) / 10;
+        base.forEach(b => { if (b.e.type === 'video') b.e.tin = Math.round(Math.max(0, Math.min(b.tout - 0.1, b.tin + dq)) * 100) / 100; if (b.d != null && b.e.anim) b.e.anim.d = Math.max(0, Math.round((b.d - dq) * 10) / 10); });
+        rip(pg.vdur - d0); renderTimeline(); };
+      up = () => { if (!moved) return; base.forEach(b => { if (b.d != null && b.e.anim && b.d - dq + Number(b.e.anim.s || 0.8) <= 0) delete b.e.anim; }); commit(); if (dq) toastUndo(dq > 0 ? `${Number(lh.dataset.lh) + 1}쪽 앞부분 ${dq}초를 잘라냈습니다` : `${Number(lh.dataset.lh) + 1}쪽 앞부분을 ${-dq}초 늘렸습니다`); }; }
     else if (rh) { const pg = doc.pages[Number(rh.dataset.rh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(rh.dataset.rh)), rip = s0 ? tlRippleSnap(s0.t0 + s0.dur) : () => {}, sP = s0 ? tlSnapPts(null, s0.i).filter(v => v > s0.t0 + s0.dur + 0.01 || v < s0.t0 + s0.dur - 0.01) : []; move = ev => { let end = (s0 ? s0.t0 : 0) + d0 + (ev.clientX - sx) / tl.pxs; const v = s0 ? tlSnapTo(end, sP.filter(x => x < s0.t0 + s0.dur || x > s0.t0 + s0.dur)) : null; tl.snapT = v; if (v != null) end = v; pg.vdur = Math.max(0.5, Math.round((end - (s0 ? s0.t0 : 0)) * 100) / 100); rip(pg.vdur - d0); renderTimeline(); }; up = () => { tl.snapT = null; if (moved) commit(); renderTimeline(); }; }
     else if (an) { const pg = doc.pages[Number(an.dataset.ap)], el = pg.els.find(q => q.id === an.dataset.ael), edge = t.closest('[data-ah]'); const a0 = el.anim ? Object.assign({}, el.anim) : null; move = ev => { if (!a0) return; const dt = (ev.clientX - sx) / tl.pxs; if (edge) el.anim.s = Math.max(0.2, Math.round((Number(a0.s || 0.8) + dt) * 10) / 10); else el.anim.d = Math.max(0, Math.round((Number(a0.d || 0) + dt) * 10) / 10); renderTimeline(); }; up = () => { if (moved) { commit(); renderInspector(); } else { const i = doc.pages.indexOf(pg); if (i !== cur) goto(i); select([el.id]); renderTimeline(); } }; }
     else if (au) { if (au.classList.contains('miss')) { relinkMedia(doc.audio.src); return; } tl.selAu = true; const s0 = Number(doc.audio.start || 0); move = ev => { doc.audio.start = Math.max(0, Math.round((s0 + (ev.clientX - sx) / tl.pxs) * 10) / 10); renderTimeline(); }; up = () => { if (moved) commit(); }; }
@@ -2807,7 +2817,7 @@ function renderInspector() {
   ins.onmousedown = e => { if (e.target.closest('[data-tfi]') && editing) e.preventDefault(); };
   ins.onclick = async e => {
     const at = e.target.closest('[data-atab]'); if (at) { animTab = at.dataset.atab; renderInspector(); return; }
-    const ab = e.target.closest('[data-anim]'); if (ab) { const v = ab.dataset.anim, k = ab.dataset.ak || 'anim'; const defs = { anim: { d: 0, s: 0.8 }, animOut: { s: 0.6, at: 0 }, animLoop: { T: 1.2, a: 1 }, kb: { a: 0.12 } }; if (v === 'none') delete el[k]; else el[k] = Object.assign({}, defs[k], el[k] || {}, { t: v }); if (k === 'anim' && v !== 'none' && VIDEO.TEXT_ANIMS.some(x => x[0] === v) && (!el.anim.s || el.anim.s < 1.2)) el.anim.s = Math.max(1.2, Math.min(4, (el.text || '').length * 0.06)); commit(); renderInspector(); if (sideTab === 'video') renderSide(); renderTimeline(); return; }
+    const ab = e.target.closest('[data-anim]'); if (ab) { const v = ab.dataset.anim, k = ab.dataset.ak || 'anim'; const defs = { anim: { d: 0, s: 0.8 }, animOut: { s: 0.6, at: 0 }, animLoop: { T: 1.2, a: 1 }, kb: { a: 0.12 } }; if (v === 'none') delete el[k]; else { const was = el[k] && el[k].t; el[k] = Object.assign({}, defs[k], el[k] || {}, { t: v }); if (k === 'kb' && was !== v) { delete el.kb.p0; delete el.kb.p1; } /* 다른 움직임을 고르면 나눈 구간 정보는 버리고 처음부터 */ } if (k === 'anim' && v !== 'none' && VIDEO.TEXT_ANIMS.some(x => x[0] === v) && (!el.anim.s || el.anim.s < 1.2)) el.anim.s = Math.max(1.2, Math.min(4, (el.text || '').length * 0.06)); commit(); renderInspector(); if (sideTab === 'video') renderSide(); renderTimeline(); return; }
     if (e.target.closest('#iAnimPlay')) { openVideoPlayer(true); return; }
     if (e.target.closest('#vFitScene')) { page().vdur = Math.max(0.5, Math.round((Number(el.tout || el.dur || 0) - Number(el.tin || 0)) * 10) / 10); commit(); renderAll(); toast(`장면 길이를 ${page().vdur}초로 맞췄습니다`); return; }
     if (e.target.closest('#vRelink')) { relinkMedia(el.src); return; }
