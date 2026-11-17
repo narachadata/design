@@ -395,7 +395,7 @@ NC.cal = (function () {
           T_(mo.meaning, 76, 21.5, 90, 14, { size: 8.3, lh: 1.4, color: CTX, name: '사자성어 뜻', role: 'meaning', month: m }),
           S_('rect', 170, 10.5, 41, 26, { fill: '#ffffff', radius: 3, name: '미니 바탕' }),
           mini(m, 171.5, 12, 38, 23),
-          calEl(m, { x: 10, y: 43, w: 204, h: 102, s: { lineW: 0.18 } }),
+          calEl(m, { x: 10, y: 43, w: 204, h: 102, s: { lineW: 0.25 } }),
           I_(C.dojang.footer, 97, 147.5, 30, 4.4, { name: '하단 로고' }),
         ].filter(Boolean), `${m}월 달력`, 'cal');
       }
