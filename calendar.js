@@ -84,6 +84,7 @@ NC.cal = (function () {
   /* ---------- 달력 요소 ---------- */
   const CAL_DEF = { weekStart: 0, rows: 'merge', wdLang: 'en', wdH: 5.5, wdSize: 8, daySize: 11, evSize: 7, fontNum: 'Montserrat', fontBody: 'Noto Sans KR', outer: '#444444', outerW: 0.35, line: '#8A8A8A', lineW: 0.25, sunBg: '#F1F1F1', satBg: '', sunColor: '#E0564B', satColor: '#000000', dayColor: '#000000', evColor: '#000000', holColor: '', noteColor: '#1F5BD6', wdColor: '#000000', showHol: true, showWd: true, showHolName: true, cellPad: 1.2, lunar: '' };
   /* 음력: 브라우저의 한국 음력(단기) 달력으로 계산 — 지원하지 않는 브라우저면 표시하지 않음 */
+  let srcOf = x => x; /* 그림 주소 풀이 (app.js가 setSrc로 넘겨 줌) — 칸 사진에 씀 */
   const LUNF = (() => { try { const f = new Intl.DateTimeFormat('ko-KR-u-ca-dangi', { month: 'numeric', day: 'numeric', timeZone: 'UTC' }); return f.resolvedOptions().calendar === 'dangi' ? f : null; } catch (e) { return null; } })();
   const lunarOf = (y, m, d) => { if (!LUNF) return null; try { const p = LUNF.formatToParts(new Date(Date.UTC(y, m - 1, d))); return { m: (p.find(x => x.type === 'month') || {}).value || '', d: Number((p.find(x => x.type === 'day') || {}).value) }; } catch (e) { return null; } };
   const MINI_DEF = { fontNum: 'Montserrat', titleSize: 9, wdSize: 4.4, numSize: 5, sunColor: '#E0564B', color: '#222222', showTitle: true, weekStart: 0 };
@@ -141,7 +142,8 @@ NC.cal = (function () {
       if (!last && s.lineW > 0) lines += ln(XS[q], YS[re], XS[qe], YS[re], s.line, s.lineW);
       const border = '';
       const al = cs.align ? `text-align:${cs.align};` : '';
-      cells += `<div class="cell" data-c="${c}" data-day="${n >= 1 && n <= dim ? n : ''}" style="grid-row:${r + 1}/span ${g.rs};grid-column:${q + 1}/span ${g.cs};${bgc ? `background:${bgc};` : ''}${border}${al}padding:${s.cellPad}mm ${s.cellPad + 0.2}mm">${inner}</div>`;
+      const ph = cs.img ? srcOf(cs.img) : ''; /* 날짜 칸 사진 (Snapfish처럼): 칸을 꽉 채우고 날짜·일정은 흰 바탕 위에 */
+      cells += `<div class="cell${ph ? ' phc' : ''}" data-c="${c}" data-day="${n >= 1 && n <= dim ? n : ''}" style="grid-row:${r + 1}/span ${g.rs};grid-column:${q + 1}/span ${g.cs};${bgc ? `background:${bgc};` : ''}${ph ? `background-image:url('${ph}');background-size:cover;background-position:${cs.imgPos || 'center'};` : ''}${border}${al}padding:${s.cellPad}mm ${s.cellPad + 0.2}mm">${inner}</div>`;
     }
     const wd = s.showWd ? `<div class="wd" style="grid-template-columns:${colW.map(w => w + 'fr').join(' ')};height:${s.wdH}mm;font-family:'${s.fontNum}';font-size:${s.wdSize}pt;color:${s.wdColor}">${Array.from({ length: 7 }, (_, i) => { const d = (i + s.weekStart) % 7; return `<span style="${d === 0 ? `color:${s.sunColor}` : ''}">${(WD[s.wdLang] || WD.en)[d]}</span>`; }).join('')}</div>` : '';
     // 바깥선(위·아래)과 왼쪽 선
@@ -493,5 +495,5 @@ NC.cal = (function () {
   // 칸 번호 → 칸 서식 키 (날짜 칸은 날짜로 고정해 달·주 시작이 바뀌어도 그 날짜를 따라감)
   function cellKey(el, c) { const s = Object.assign({}, CAL_DEF, el.s || {}); const first = (new Date(el.year, el.month - 1, 1).getDay() - s.weekStart + 7) % 7; const n = c - first + 1; return n >= 1 && n <= daysIn(el.year, el.month) ? 'd' + n : String(c); }
   function calRows(el) { const s = Object.assign({}, CAL_DEF, el.s || {}); const first = (new Date(el.year, el.month - 1, 1).getDay() - s.weekStart + 7) % 7; return s.rows === '6' ? 6 : s.rows === 'auto' ? Math.ceil((first + daysIn(el.year, el.month)) / 7) : 5; }
-  return { cellKey, calRows, builtinHolidays, autoHolidays, canAuto, AUTO_RANGE, fetchHolidays, holidayMap, calHTML, miniHTML, applyRules, buildPages, retheme, syncFromPages, themeOf, THEMES, CAL_DEF, MINI_DEF, MONTHS_EN, daysIn, WD };
+  return { setSrc: f => { srcOf = f; }, cellKey, calRows, builtinHolidays, autoHolidays, canAuto, AUTO_RANGE, fetchHolidays, holidayMap, calHTML, miniHTML, applyRules, buildPages, retheme, syncFromPages, themeOf, THEMES, CAL_DEF, MINI_DEF, MONTHS_EN, daysIn, WD };
 })();
