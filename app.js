@@ -627,7 +627,7 @@ function dragMove(e) {
     if (d.includes('e')) w = o.w + lx; if (d.includes('s')) h = o.h + ly;
     if (d.includes('w')) { w = o.w - lx; x = o.x + lx; } if (d.includes('n')) { h = o.h - ly; y = o.y + ly; }
     const keep = (el.type === 'image' || el.type === 'video' || el.type === 'mini' || el.type === 'path' || el.type === 'text' || e.shiftKey) && d.length === 2;
-    if (keep) { const ar = o.w / o.h; if (Math.abs(w - o.w) > Math.abs(h - o.h)) h = w / ar; else w = h * ar; if (d.includes('w')) x = o.x + o.w - w; if (d.includes('n')) y = o.y + o.h - h; }
+    if (keep) { const k = Math.max(0.02, (w * o.w + h * o.h) / (o.w * o.w + o.h * o.h)); w = o.w * k; h = o.h * k; /* 대각선에 투영한 배율 — 넓은 제목에서도 튀지 않음(가로·세로 중 큰 쪽을 고르던 방식은 마우스가 조금만 흔들려도 바뀜) */ if (d.includes('w')) x = o.x + o.w - w; if (d.includes('n')) y = o.y + o.h - h; }
     if (w < 2) { w = 2; if (d.includes('w')) x = o.x + o.w - 2; } if (h < 2) { h = 2; if (d.includes('n')) y = o.y + o.h - 2; }
     if (o.rot) { const ux = d.includes('e') ? 0 : d.includes('w') ? 1 : 0.5, uy = d.includes('s') ? 0 : d.includes('n') ? 1 : 0.5, a = o.rot * Math.PI / 180;
       const wp = (bx, by, bw, bh) => { const cx = bx + bw / 2, cy = by + bh / 2, lx = ux * bw - bw / 2, ly = uy * bh - bh / 2; return [cx + lx * Math.cos(a) - ly * Math.sin(a), cy + lx * Math.sin(a) + ly * Math.cos(a)]; };
@@ -637,14 +637,15 @@ function dragMove(e) {
     if (el.type === 'text' && el.sizing === 'autow' && (d === 'e' || d === 'w')) el.sizing = '';
     if (el.type === 'text' && d.length === 2) scaleTextBy(el, o, el.w / o.w); /* 모서리 끌기 = 글자 크기도 함께 (캔바·미리캔버스와 같음) */
     if (el.type === 'path' && o.pts) { const sx = el.w / o.w, sy = el.h / o.h; el.pts = o.pts.map(pt => [r1(pt[0] * sx), r1(pt[1] * sy)]); renderCanvas(); } else if (el.type === 'text') { renderCanvas(); } else liveUpdate([el]);
-    renderOverlay();
+    renderOverlay(); dragTip(e, dimText(el.w, el.h) + (el.type === 'text' && d.length === 2 ? ` · ${el.size}pt` : ''));
   } else if (drag.kind === 'rot') {
-    const el = drag.el; let a = Math.atan2(p.y - drag.cy, p.x - drag.cx) * 180 / Math.PI + 90; if (e.shiftKey) a = Math.round(a / 15) * 15; el.rot = Math.round(((a % 360) + 360) % 360); liveUpdate([el]); renderOverlay();
+    const el = drag.el; let a = Math.atan2(p.y - drag.cy, p.x - drag.cx) * 180 / Math.PI + 90; if (e.shiftKey) a = Math.round(a / 15) * 15; else { const m = Math.round(a / 45) * 45; if (Math.abs(a - m) < 3) a = m; } /* 0·45·90° 자석 */ el.rot = Math.round(((a % 360) + 360) % 360); liveUpdate([el]); renderOverlay(); dragTip(e, `${el.rot}°`);
   } else if (drag.kind === 'gresize') {
     // 여러 요소를 한 상자처럼 비율 유지 확대·축소 (글자 크기·선 두께도 함께)
     const B = drag.box, d = drag.dir; const ax = d.includes('w') ? B.x + B.w : B.x, ay = d.includes('n') ? B.y + B.h : B.y;
-    const nw = Math.abs(p.x - ax), nh = Math.abs(p.y - ay); const k = Math.max(0.05, Math.max(nw / B.w, nh / B.h));
+    const vx = d.includes('w') ? -B.w : d.includes('e') ? B.w : 0, vy = d.includes('n') ? -B.h : d.includes('s') ? B.h : 0; const k = Math.max(0.05, ((p.x - ax) * vx + (p.y - ay) * vy) / Math.max(1e-6, vx * vx + vy * vy)); /* 대각선(모서리)·한 축(변) 투영 */
     const nx = d.includes('w') ? ax - B.w * k : ax, ny = d.includes('n') ? ay - B.h * k : ay;
+    dragTip(e, `${dimText(B.w * k, B.h * k)} · ${Math.round(k * 100)}%`);
     drag.els.forEach((el, i) => { const o = drag.o[i]; el.x = r1(nx + (o.x - B.x) * k); el.y = r1(ny + (o.y - B.y) * k); el.w = r1(o.w * k); el.h = r1(o.h * k); if (o.size) el.size = Math.round(o.size * k * 10) / 10; if (o.html) el.html = o.html.replace(/font-size:\s*([\d.]+)pt/g, (_, v) => 'font-size:' + Math.round(v * k * 2) / 2 + 'pt'); if (o.strokeW) el.strokeW = Math.round(o.strokeW * k * 100) / 100; if (o.pts) el.pts = o.pts.map(q => [r1(q[0] * k), r1(q[1] * k)]); });
     renderCanvas(); renderOverlay();
   } else if (drag.kind === 'cells') {
@@ -658,7 +659,11 @@ function dragMove(e) {
     const hit = page().els.filter(el => !el.hidden && !el.locked && el.x < x + w && el.x + el.w > x && el.y < y + h && el.y + el.h > y).map(el => el.id); const ids = new Set(drag.base.concat(hit)); hit.forEach(id => groupOf(id).forEach(g => ids.add(g))); sel = [...ids]; renderOverlay(); $('#ovl').insertAdjacentHTML('beforeend', `<div class="marq" style="left:${x}mm;top:${y}mm;width:${w}mm;height:${h}mm"></div>`);
   }
 }
+/* 끄는 동안 마우스 옆 말풍선: 크기(mm 또는 px)·각도 (캔바·미리캔버스와 같음) */
+function dimText(w, h) { const px = doc.fmt === 'px' || (doc.w > 150 && Math.abs(doc.w * 96 / 25.4 - Math.round(doc.w * 96 / 25.4)) < 0.05); return px ? `${Math.round(w * 96 / 25.4)} × ${Math.round(h * 96 / 25.4)} px` : `${r1(w)} × ${r1(h)} mm`; }
+function dragTip(e, txt) { let t = $('#dragTip'); if (!t) { t = document.createElement('div'); t.id = 'dragTip'; document.body.appendChild(t); } t.textContent = txt; t.style.left = (e.clientX + 16) + 'px'; t.style.top = (e.clientY + 18) + 'px'; t.hidden = false; }
 document.addEventListener('pointerup', e => {
+  { const t = $('#dragTip'); if (t) t.hidden = true; }
   flushMove();
   if (pen) { const pts = pen.pts; pen = null; const pv = $('#ovl .penprev'); if (pv) pv.remove(); if (pts.length < 3) return; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); const x0 = Math.min(...xs) - 1, y0 = Math.min(...ys) - 1, w = Math.max(2, Math.max(...xs) - x0 + 1), h = Math.max(2, Math.max(...ys) - y0 + 1); const el = { id: uid(), type: 'path', pts: pts.map(p => [r1(p[0] - x0), r1(p[1] - y0)]), x: r1(x0), y: r1(y0), w: r1(w), h: r1(h), rot: 0, stroke: penStyle.stroke, strokeW: penStyle.strokeW, fill: '', closed: false, smooth: true, opacity: 1, name: '펜 선' }; page().els.push(el); commit(); select([el.id]); rerender(); return; }
   if (!drag) return; const d = drag; drag = null;
@@ -2667,7 +2672,10 @@ function openFontPop(btn) {
   setTimeout(() => { const q = pop.querySelector('#fpQ'); if (q) q.focus(); }, 0);
 }
 function closeFontPop() { const p = $('#fpPop'); if (p) p.remove(); }
-function applyFontChoice(k, fam) { const els = selEls(); if (!els.length) return; els.forEach(el => { if (k === 'font' ? el.type === 'text' : true) { setK(el, k, fam); if (k === 'font' && el.weight && !fontWeights(fam).includes(Number(el.weight))) el.weight = nearestWeight(fam, Number(el.weight)); } }); noteFont(fam); if (els[0].type === 'text') lastTextStyle = Object.assign({}, lastTextStyle || {}, { font: fam }); commit(); rerender(); }
+let multiLockNote = '';
+// 글 상자 html 안 부분 서식에서 한 가지 속성만 지움 (브라우저로 읽어서 — 글꼴 이름의 따옴표·&quot;도 안전)
+function stripStyle(html, prop) { const t = document.createElement('div'); t.innerHTML = html; t.querySelectorAll('[style]').forEach(n => { n.style.removeProperty(prop); if (!n.getAttribute('style')) n.removeAttribute('style'); }); return t.innerHTML; }
+function applyFontChoice(k, fam) { const els = selEls(); if (!els.length) return; els.forEach(el => { if (els.length > 1 && el.locked) return; /* 여러 개를 고르면 잠긴 글자는 그대로 */ if (k === 'font' ? el.type === 'text' : true) { setK(el, k, fam); if (k === 'font' && els.length > 1 && el.html) el.html = stripStyle(el.html, 'font-family'); /* 부분 글꼴도 하나로 */ if (k === 'font' && el.weight && !fontWeights(fam).includes(Number(el.weight))) el.weight = nearestWeight(fam, Number(el.weight)); } }); noteFont(fam); if (els[0].type === 'text') lastTextStyle = Object.assign({}, lastTextStyle || {}, { font: fam }); commit(); rerender(); }
 document.addEventListener('pointerdown', e => { if ($('#fpPop') && !e.target.closest('#fpPop') && !e.target.closest('.fp-btn')) closeFontPop(); }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#fpPop')) { closeFontPop(); e.stopPropagation(); } }, true);
 
@@ -2864,7 +2872,14 @@ $('#inspector').addEventListener('input', e => {
     else { if (v < 1) return; const f = v / (kk === 'w' ? bw : bh); els.forEach(e => { e.x = r1(bx + (e.x - bx) * f); e.y = r1(by + (e.y - by) * f); e.w = r1(e.w * f); e.h = r1(e.h * f); if (e.size) e.size = Math.round(e.size * f * 10) / 10; if (e.strokeW) e.strokeW = Math.round(e.strokeW * f * 100) / 100; if (e.pts) e.pts = e.pts.map(q => [r1(q[0] * f), r1(q[1] * f)]); if (e.html) e.html = e.html.replace(/font-size:\s*([\d.]+)pt/g, (_, z) => 'font-size:' + Math.round(z * f * 2) / 2 + 'pt'); }); }
     renderCanvas(); renderOverlay(); return;
   }
-  if (k.startsWith('multi.')) { const kk = k.slice(6); selEls().forEach(el => { if (kk === 'opacity' || el.type === 'text') el[kk] = v; }); renderCanvas(); return; }
+  if (k.startsWith('multi.')) { /* 여러 글자 한꺼번에: 잠긴 요소는 건너뜀, 크기는 부분 서식 글자까지 같은 비율로, 색은 부분 색을 지우고 하나로 */
+    const kk = k.slice(6); let skip = 0;
+    selEls().forEach(el => { if (el.locked) { skip++; return; } if (kk === 'opacity') { el.opacity = v; return; } if (el.type !== 'text') return;
+      if (kk === 'size') { const n = Number(v); if (n > 0 && el.size) scaleTextBy(el, clone(el), n / el.size); }
+      else if (kk === 'color') { el.color = v; if (el.html) el.html = stripStyle(el.html, 'color'); }
+      else el[kk] = v; });
+    const nk = sel.join(','); if (skip && multiLockNote !== nk) { multiLockNote = nk; toast(`잠긴 요소 ${skip}개는 바꾸지 않았습니다`); }
+    renderCanvas(); return; }
   const el = selEls()[0]; if (!el) return;
   if (['year', 'month', 'weight', 's.weekStart'].includes(k)) v = Number(v);
   if (t.dataset.ev != null) return;
