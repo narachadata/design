@@ -1440,7 +1440,7 @@ function renderVideoSide(body) {
     const tf = t.closest('[data-tfx]'); if (tf) { const v = tf.dataset.tfx; if (selT.length) { applyTo(selT, 'anim', v); toast('글자 효과를 넣었습니다'); } else { const el = addText('h', { text: '제목을 입력하세요', noEdit: true }); el.anim = { t: v, d: 0.2, s: 1.4 }; commit(); renderAll(); } return; }
     const tlp = t.closest('[data-tloop]'); if (tlp) { const els = selAny.length ? selAny : []; if (!els.length) { toast('먼저 요소를 고르세요', true); return; } applyTo(els, 'animLoop', tlp.dataset.tloop); return; }
     const mf = t.closest('[data-mfx]'); if (mf) { if (!selAny.length) { toast('먼저 요소를 고르세요 (또는 아래 «차례로 나타나기»)', true); return; } const [k, v] = mf.dataset.mfx.split(':'); applyTo(selAny, k, v); return; }
-    const tx = t.closest('[data-trx]'); if (tx) { page().vtrans = tx.dataset.trx; commit(); renderSide(); renderTimeline(); const { list } = tlScenes(), x = list.find(q => q.i === cur); if (x && x.turn && tlOn()) { tl.T = x.t0 + Math.max(0, x.dur - 0.3); tlPlay(); setTimeout(() => { if (tl.playing) tlPause(); }, (x.turn + 1.0) * 1000); } return; }
+    const tx = t.closest('[data-trx]'); if (tx) { page().vtrans = tx.dataset.trx; delete page().vsplit; commit(); renderSide(); renderTimeline(); const { list } = tlScenes(), x = list.find(q => q.i === cur); if (x && x.turn && tlOn()) { tl.T = x.t0 + Math.max(0, x.dur - 0.3); tlPlay(); setTimeout(() => { if (tl.playing) tlPause(); }, (x.turn + 1.0) * 1000); } return; }
     const vtp = t.closest('[data-vtpl]'); if (vtp) { applyVideoTpl(vtp.dataset.vtpl); return; }
     const vts = t.closest('[data-vts]'); if (vts) { vtSize = vts.dataset.vts; renderSide(); return; }
     const vrs = t.closest('[data-vresp]'); if (vrs) { applyRespToVideo(vrs.dataset.vresp); return; }
@@ -1449,7 +1449,7 @@ function renderVideoSide(body) {
     else if (id === 'vdAutoAnim') { let n = 0; doc.pages.forEach(pg => { pg.els.forEach(el => { delete el.anim; }); n += VIDEO.autoAnimate(pg, doc.w, doc.h); }); commit(); renderAll(); toastUndo(`글자·사진·묶음 ${n}개에 '차례로 나타나기'를 넣었습니다`); }
     else if (id === 'vdCamAll') { doc.pages.forEach(pg => { if (!pg.vcam) pg.vcam = 'in'; }); commit(); renderAll(); toastUndo('모든 장면에 천천히 다가가는 카메라를 넣었습니다'); }
     else if (id === 'vdClrAnim') { doc.pages.forEach(pg => { delete pg.vcam; pg.els.forEach(el => { delete el.anim; delete el.animOut; delete el.animLoop; delete el.kb; }); }); commit(); renderAll(); toastUndo('모든 움직임을 뺐습니다'); }
-    else if (id === 'vdTrAll') { const pg = page(); doc.pages.forEach(p2 => { p2.vtrans = pg.vtrans || V.trans; p2.vturn = pg.vturn; }); commit(); renderTimeline(); toastUndo('모든 장면에 같은 넘김 효과를 넣었습니다'); }
+    else if (id === 'vdTrAll') { const pg = page(); let skip = 0; doc.pages.forEach(p2 => { if (p2.vsplit) { skip++; return; } p2.vtrans = pg.vtrans || V.trans; p2.vturn = pg.vturn; }); commit(); renderTimeline(); toastUndo(`모든 장면에 같은 넘김 효과를 넣었습니다${skip ? ` (장면을 나눈 자리 ${skip}곳은 그대로 이어짐)` : ''}`); }
     else if (id === 'vdDurAll') { doc.pages.forEach(pg => { delete pg.vdur; delete pg.vtrans; delete pg.vturn; }); commit(); renderSide(); renderTimeline(); }
     else if (id === 'vdMusicDel') { delete doc.audio; commit(); renderSide(); renderTimeline(); }
     else if (id === 'vdMusicLocal') pickMusicLocal();
@@ -1934,7 +1934,7 @@ function tlSplitScene(quiet) {
   const f = q / Math.max(0.1, x.dur), mid = (P0, P1) => Math.round((P0 + (P1 - P0) * f) * 1000) / 1000;
   a.els.forEach((e, k) => { if (!e.kb || !b.els[k] || !b.els[k].kb) return; const P0 = e.kb.p0 != null ? Number(e.kb.p0) : 0, P1 = e.kb.p1 != null ? Number(e.kb.p1) : 1, m = mid(P0, P1); e.kb.p0 = P0; e.kb.p1 = m; b.els[k].kb.p0 = m; b.els[k].kb.p1 = P1; });
   if (a.vcam && a.vcam !== 'none') { const CP = Array.isArray(a.vcamP) ? a.vcamP : [0, 1], m = mid(CP[0], CP[1]); a.vcamP = [CP[0], m]; b.vcamP = [m, CP[1]]; }
-  b.vdur = Math.round((x.dur - q) * 10) / 10; a.vdur = q; b.vtrans = a.vtrans; b.vturn = a.vturn; a.vtrans = 'none'; a.els.forEach(e => { delete e.animOut; });
+  b.vdur = Math.round((x.dur - q) * 10) / 10; a.vdur = q; b.vtrans = a.vtrans; b.vturn = a.vturn; b.vsplit = a.vsplit; a.vtrans = 'none'; a.vsplit = true; /* 나눈 자리: '모든 장면에 같은 넘김'이 건드리지 않음 */ a.els.forEach(e => { delete e.animOut; });
   doc.pages.splice(x.i + 1, 0, b); commit(); goto(x.i + 1); renderTimeline(); if (!quiet) toastUndo(`${x.i + 1}쪽을 ${q}초에서 나눴습니다`);
 }
 function tlWire() {
@@ -2066,7 +2066,7 @@ function openTransPop(i, anchor) {
   document.body.appendChild(m); m.style.left = Math.max(8, Math.min(innerWidth - 330, r.left - 150)) + 'px'; m.style.top = Math.max(8, r.top - m.offsetHeight - 8) + 'px';
   const close = () => { m.remove(); document.removeEventListener('pointerdown', out, true); }, out = e => { if (!m.contains(e.target)) close(); };
   setTimeout(() => document.addEventListener('pointerdown', out, true));
-  m.onclick = e => { const b = e.target.closest('[data-tv]'); if (b) { pg.vtrans = b.dataset.tv; commit(); renderTimeline(); m.querySelectorAll('[data-tv]').forEach(x => x.classList.toggle('on', x === b)); const { list } = tlScenes(), x = list.find(s2 => s2.i === i); if (x) { tl.T = x.t0 + Math.max(0, x.dur - 0.3); tlPlay(); setTimeout(() => { if (tl.playing && tl.T > x.t0 + x.dur + x.turn + 0.3) tlPause(); }, (x.turn + 0.9) * 1000); } return; } if (e.target.id === 'trAll') { doc.pages.forEach(p2 => { p2.vtrans = pg.vtrans || V.trans; p2.vturn = pg.vturn; }); commit(); renderTimeline(); toastUndo('모든 장면에 같은 넘김 효과를 넣었습니다'); close(); } if (e.target.id === 'trClose') close(); };
+  m.onclick = e => { const b = e.target.closest('[data-tv]'); if (b) { pg.vtrans = b.dataset.tv; delete pg.vsplit; commit(); renderTimeline(); m.querySelectorAll('[data-tv]').forEach(x => x.classList.toggle('on', x === b)); const { list } = tlScenes(), x = list.find(s2 => s2.i === i); if (x) { tl.T = x.t0 + Math.max(0, x.dur - 0.3); tlPlay(); setTimeout(() => { if (tl.playing && tl.T > x.t0 + x.dur + x.turn + 0.3) tlPause(); }, (x.turn + 0.9) * 1000); } return; } if (e.target.id === 'trAll') { doc.pages.forEach(p2 => { p2.vtrans = pg.vtrans || V.trans; p2.vturn = pg.vturn; }); commit(); renderTimeline(); toastUndo('모든 장면에 같은 넘김 효과를 넣었습니다'); close(); } if (e.target.id === 'trClose') close(); };
   m.querySelector('#trTurn').oninput = e => { pg.vturn = Number(e.target.value); $('#trTv').textContent = pg.vturn + '초'; renderTimeline(); }; m.querySelector('#trTurn').onchange = () => commit();
 }
 async function relinkMedia(ref) { if (!NC.media.isLocal(ref)) return; const id = ref.slice(2), m = (doc.media || {})[id]; try { const r = await NC.media.file(id, true); if (r.url) { mediaMissing.delete(id); toast('원본을 읽을 수 있게 됐습니다'); renderCanvas(); renderTimeline(); return; } if (!window.confirm(`이 PC에 원본 "${m ? m.name : ''}"이(가) 연결되어 있지 않습니다. 이 PC의 파일을 골라 다시 연결할까요?`)) return; await NC.media.relink(id); mediaMissing.delete(id); vEls.clear(); tl.Vkey = ''; toast('원본을 다시 연결했습니다'); renderCanvas(); renderTimeline(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } }
@@ -3911,7 +3911,7 @@ function dlPages() {
 function dlDpi(want, bleed) { const W = (doc.w + 2 * bleed) / 25.4, H = (doc.h + 2 * bleed) / 25.4; return Math.max(24, Math.min(want, 14000 / W, 14000 / H, Math.sqrt(120e6 / (W * H)))); }
 function openDownload(fmt) {
   if (fmt) { dlState.fmt = fmt; dlState.userFmt = true; }
-  const pxDoc = Math.abs(doc.w * 96 / 25.4 - Math.round(doc.w * 96 / 25.4)) < 0.05 && Math.abs(doc.h * 96 / 25.4 - Math.round(doc.h * 96 / 25.4)) < 0.05 && doc.w > 150; if (dlState.docKey !== doc.w + 'x' + doc.h) { dlState.docKey = doc.w + 'x' + doc.h; dlState.scale = pxDoc ? 1 : 3.125; if (!dlState.userFmt) dlState.fmt = Number(doc.bleed) > 0 && !pxDoc ? 'pdfprint' : 'pdfhq'; }
+  const pxDoc = Math.abs(doc.w * 96 / 25.4 - Math.round(doc.w * 96 / 25.4)) < 0.05 && Math.abs(doc.h * 96 / 25.4 - Math.round(doc.h * 96 / 25.4)) < 0.05 && doc.w > 150; if (dlState.docKey !== doc.w + 'x' + doc.h) { dlState.docKey = doc.w + 'x' + doc.h; dlState.scale = pxDoc ? 1 : 3.125; if (!fmt) dlState.userFmt = false; /* 다른 문서로 바뀌면 그 문서에 맞는 기본 형식부터 */ if (!dlState.userFmt) dlState.fmt = pxDoc ? 'png' : Number(doc.bleed) > 0 ? 'pdfprint' : 'pdfhq'; } /* SNS·화면용(px) 문서는 PNG, 인쇄물은 PDF */
   let p = $('#dlPanel'); if (p) { p.remove(); if (!fmt) return; }
   p = document.createElement('div'); p.id = 'dlPanel'; p.className = 'dlpanel'; document.body.appendChild(p);
   const b = $('#btnExport').getBoundingClientRect(); p.style.right = Math.max(8, innerWidth - b.right) + 'px'; p.style.top = (b.bottom + 8) + 'px';

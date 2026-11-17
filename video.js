@@ -142,9 +142,9 @@ NC.video = (function () {
     x.drawImage(v, b.x + (b.w - dw) / 2, b.y + (b.h - dh) / 2, dw, dh); x.restore();
   }
   // 동영상의 '원본 시각': 장면 시각 t → 사용 구간(tin~tout) 안의 시각
-  function mediaTime(L, t) { const d = L.video, len = Math.max(0.05, d.tout - d.tin), u = Math.max(0, t - d.d0); return d.tin + (d.loop ? u % len : Math.min(u, len - 0.04)); }
+  function mediaTime(L, t) { const d = L.video, len = Math.max(0.05, d.tout - d.tin), u = Math.max(0, t - d.d0); if (t < 0 && !d.loop) return Math.max(0, d.tin + t); /* 넘김 동안(장면 시작 전): 사용 구간 앞쪽 원본을 미리 재생 → 멈춘 화면으로 들어오지 않음(파이널컷 '핸들') */ return d.tin + (d.loop ? u % len : Math.min(u, len - 0.04)); }
   // 시각 T에 화면에 나오는 동영상 층들
-  function activeVideos(V, T) { const { i, q } = at(V, T), A = V.scenes[i], out = []; A.layers.forEach(L => { if (L.vEl) out.push({ L, t: q }); }); if (q >= A.dur && A.turn) { const B = V.scenes[(i + 1) % V.scenes.length]; B.layers.forEach(L => { if (L.vEl) out.push({ L, t: 0 }); }); } return out; }
+  function activeVideos(V, T) { const { i, q } = at(V, T), A = V.scenes[i], out = []; A.layers.forEach(L => { if (L.vEl) out.push({ L, t: q }); }); if (q >= A.dur && A.turn) { const B = V.scenes[(i + 1) % V.scenes.length], tb = q - A.dur - A.turn; B.layers.forEach(L => { if (L.vEl) out.push({ L, t: tb }); }); } return out; }
   // 미리보기: 재생 중이면 동영상도 재생(어긋나면 맞춤), 멈췄으면 그 시각으로 감기
   function syncVideos(V, T, playing) { const act = new Set(); activeVideos(V, T).forEach(({ L, t }) => { const v = L.vEl, mt = mediaTime(L, t); act.add(v); if (playing) { const d = v.currentTime - mt; if (Math.abs(d) > 0.25) { v.currentTime = mt; v.playbackRate = 1; } else if (!v.seeking) v.playbackRate = Math.abs(d) > 0.03 ? Math.max(0.95, Math.min(1.05, 1 - d * 0.8)) : 1; if (v.paused) v.play().catch(() => {}); } else { if (!v.paused) v.pause(); if (v.playbackRate !== 1) v.playbackRate = 1; if (Math.abs(v.currentTime - mt) > 0.004) v.currentTime = mt; } }); (V.videos || []).forEach(v => { if (!act.has(v) && !v.paused) v.pause(); }); }
   // 저장: 프레임마다 정확한 시각으로 감고 기다림
@@ -180,7 +180,7 @@ NC.video = (function () {
     const j = (i + 1) % V.scenes.length, B = V.scenes[j], p = clamp01((q - A.dur) / A.turn);
     const ca = off('a', W, H), cb = off('b', W, H); const xa = ca.getContext('2d'), xb = cb.getContext('2d');
     xa.fillStyle = A.bg; xa.fillRect(0, 0, W, H); drawScene(xa, A, q, W, H);
-    xb.fillStyle = B.bg; xb.fillRect(0, 0, W, H); drawScene(xb, B, 0, W, H);
+    xb.fillStyle = B.bg; xb.fillRect(0, 0, W, H); drawScene(xb, B, q - A.dur - A.turn, W, H); /* 다음 장면은 시작 전 시각(−넘김~0)으로: 동영상은 앞쪽을 미리 재생 */
     trans(x, ca, cb, p, A.trans, W, H, B.bg, Math.floor(T * 30)); drawTracks(x, V, T); x.restore();
   }
   // 자막·오버레이 트랙 (장면 위에 영상 전체 시간 기준으로 겹침)
