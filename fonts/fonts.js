@@ -270,7 +270,8 @@ window.NARACAL_FONTS = [
   "cat": "body",
   "weights": [
    400,
-   700
+   700,
+   800
   ]
  },
  {
