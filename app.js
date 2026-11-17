@@ -4117,7 +4117,7 @@ function saveBlob(b, name) { const a = document.createElement('a'); a.href = URL
 async function printVector(pages) {
   const b = Math.max(0, Number(doc.bleed) || 0);
   $('#pageStyle').textContent = `@page{size:${doc.w + 2 * b}mm ${doc.h + 2 * b}mm;margin:0}`;
-  $('#canvas').innerHTML = ''; const th = $('#thumbs'); if (th) th.innerHTML = ''; pgSel = new Set(); pgSelCur = -1; /* 다른 문서를 열면 고른 쪽은 비움 (복사한 쪽은 남겨 다른 문서에 붙여넣기 가능) */  // SVG id 중복 방지
+  $('#canvas').innerHTML = ''; const th = $('#thumbs'); if (th) th.innerHTML = '';  // SVG id 중복 방지
   // 브라우저 인쇄 PDF에는 재단 여백(슬러그)이 없어 재단선이 도련 위 그림에 찍히므로 끔. 파일 이름에 도련 포함을 표시
   const keepMarks = doc.cropMarks; doc.cropMarks = false; const root = $('#printRoot'); try { root.innerHTML = pages.map(i => sheetHTML(doc.pages[i], 'print')).join(''); } finally { doc.cropMarks = keepMarks; }
   const keepTitle = document.title; document.title = `${(doc.name || 'design').replace(/[\\/:*?"<>|]/g, '_')}_인쇄용${b ? `_도련${b}mm` : ''}`; window.addEventListener('afterprint', () => { document.title = keepTitle; }, { once: true }); setTimeout(() => { document.title = keepTitle; }, 60000);
@@ -4308,7 +4308,7 @@ document.addEventListener('change', e => { if (!e.target.matches || !e.target.ma
    만든 쪽은 pg.cert={form,i}. 틀은 관장님 도장이 있어 공개 저장소에 넣지 않고, 불러오면 이 문서와 이 PC(IndexedDB)에만 보관 */
 const CERT_TODAY = () => { const t = new Date(); return `${t.getFullYear()}년 ${t.getMonth() + 1}월 ${t.getDate()}일`; };
 const CERT_FORMS = {
-  record: { name: '기록 향상상', desc: '줄넘기·체력 향상왕 — 종목별 기록 전→후', common: [['title', '상장 이름', '줄넘기 향상왕'], ['event', '측정 이름', '2026년 나라차태권도 줄넘기측정'], ['date', '날짜', ''], ['k1', '종목 1', '앞으로 뛰기왕'], ['k2', '종목 2 (없으면 비움)', '뒤로 뛰기왕'], ['unit', '단위', '회']],
+  record: { name: '기록 향상왕', desc: '줄넘기·체력 향상왕 — 종목별 기록 전→후', common: [['title', '상장 이름', '줄넘기 향상왕'], ['event', '측정 이름', '2026년 나라차태권도 줄넘기측정'], ['date', '날짜', ''], ['k1', '종목 1', '앞으로 뛰기왕'], ['k2', '종목 2 (없으면 비움)', '뒤로 뛰기왕'], ['unit', '단위', '회']],
     body: '위 사람은 평소 성실한 태도로 태권도 수련에 임하고,\n<{측정 이름}>에서 위와 같이\n좋은 성과를 얻게 되었기에\n이에 칭찬하며 상장을 수여합니다.',
     cols: [['name', '이름', 7], ['a1', '종목1 전', 4], ['b1', '종목1 후', 4], ['a2', '종목2 전', 4], ['b2', '종목2 후', 4]] },
   grade: { name: '급증', desc: '승급·승품 — 이름·급수·다음 예정일', common: [['title', '상장 이름', '급증'], ['date', '날짜', ''], ['org', '심사 기관', '대한민국 태권도 협회']],
@@ -4338,10 +4338,12 @@ function certEls(form, r) {
   T('name', certVal(D, r, 'name'), { label: '이름', x: 30, y: 139, w: 150, h: 17, size: 34, weight: 800, font: sans, ls: 0.04, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
   let bodyY = 180;
   if (form === 'record') {
-    const u = certVal(D, r, 'unit'), k1 = certVal(D, r, 'k1'), k2 = certVal(D, r, 'k2'), has2 = k2 && (r.a2 || r.b2);
-    const rec = (kk, a, b) => `${kk}\n${certRec(a, u)} → ${certRec(b, u)}`;
-    if (k1 && (r.a1 || r.b1)) T('rec1', rec(k1, r.a1, r.b1), has2 ? { label: '기록 1', x: 22, y: 160, w: 78, h: 14, size: 16, font: serif, weight: 700 } : { label: '기록 1', x: 55, y: 160, w: 100, h: 14, size: 16, font: serif, weight: 700 });
-    if (has2) T('rec2', rec(k2, r.a2, r.b2), { label: '기록 2', x: 110, y: 160, w: 78, h: 14, size: 16, font: serif, weight: 700 });
+    /* 종목 목록: 관리프로그램에서 가져온 사람은 r.recs(사람마다 종목·단위가 다름), 손으로 넣은 사람은 공통 종목1·2 + 기록 */
+    const u = certVal(D, r, 'unit'), recs = Array.isArray(r.recs) && r.recs.length ? r.recs : [[certVal(D, r, 'k1'), r.a1, r.b1], [certVal(D, r, 'k2'), r.a2, r.b2]].filter(x => x[0] && (x[1] || x[2])).map(x => ({ k: x[0], a: x[1], b: x[2], u }));
+    const n = recs.length, cols = n <= 2 ? n : n === 4 ? 2 : 3, rows_ = Math.ceil(n / Math.max(1, cols)), sz = n <= 2 ? 16 : n <= 4 ? 14.5 : 13, rh = n <= 2 ? 14 : 12.5, cw = n === 1 ? 100 : cols === 2 ? 78 : 56, gap = cols === 3 ? 4 : 10;
+    recs.forEach((q, i) => { const row = Math.floor(i / cols), inRow = Math.min(cols, n - row * cols), col = i - row * cols, tw = inRow * cw + (inRow - 1) * gap, x0 = 105 - tw / 2;
+      T('rec' + (i + 1), `${q.k}\n${certRec(q.a, q.u != null ? q.u : u)} → ${certRec(q.b, q.u != null ? q.u : u)}`, { label: '기록 ' + (i + 1), x: x0 + col * (cw + gap), y: 160 + row * rh, w: cw, h: rh - 1, size: sz, font: serif, weight: 700 }); });
+    bodyY = Math.max(180, 160 + rows_ * rh + 6);
   } else if (form === 'grade') { T('grade', r.grade, { label: '급수', x: 40, y: 158, w: 130, h: 11, size: 24, weight: 800, font: serif }); bodyY = 182; }
   else if (form === 'free') { T('line', r.line, { label: '이름 아래 한 줄', x: 25, y: 160, w: 160, h: 9, size: 15, font: serif, weight: 700 }); }
   T('body', fill(D.body), { label: '본문', x: 18, y: bodyY, w: 174, h: 30, size: 15, font: serif, weight: 700, lh: 1.75 });
@@ -4420,14 +4422,15 @@ function renderCertSide(body) {
   <div class="cchips">${fieldChips.map(l => `<button class="btn sm" data-cchip="${esc(l)}" title="본문에 넣기">{${esc(l)}}</button>`).join('')}<button class="btn sm" data-cx="bodyreset" title="처음 문구로">처음 문구</button></div></div>
   <h3>③ 명단 <small>${nOk}명 · 엑셀에서 붙여넣기 가능</small></h3>
   <div class="ctable-wrap"><table class="ctable"><tr><th>#</th>${F.cols.map(([, l]) => `<th title="${esc(l)}">${esc(l.replace(/ \(.*\)$/, ''))}</th>`).join('')}<th></th></tr>
-  ${rows.map((r, i) => `<tr class="${i === certPrev ? 'cur' : ''}"><td class="ci" data-cpick="${i}" title="미리 보기">${i + 1}</td>${F.cols.map(([kk, , w]) => `<td><input data-cr="${i}" data-ck="${kk}" value="${esc(r[kk] || '')}" style="width:${w}em"></td>`).join('')}<td><button class="x" data-cdel="${i}" title="이 줄 지우기">×</button></td></tr>`).join('')}</table></div>
+  ${rows.map((r, i) => `<tr class="${i === certPrev ? 'cur' : ''}"><td class="ci" data-cpick="${i}" title="미리 보기">${i + 1}</td>${Array.isArray(r.recs) && r.recs.length && form === 'record' ? `<td><input data-cr="${i}" data-ck="name" value="${esc(r.name || '')}" style="width:7em"></td><td colspan="${F.cols.length - 1}" class="crecs" title="관리프로그램 측정에서 가져온 기록">${r.recs.map(q => `${esc(q.k)} ${esc(q.a)}→${esc(q.b)}${esc(q.u || '')}`).join(' · ')}</td>` : F.cols.map(([kk, , w]) => `<td><input data-cr="${i}" data-ck="${kk}" value="${esc(r[kk] || '')}" style="width:${w}em"></td>`).join('')}<td><button class="x" data-cdel="${i}" title="이 줄 지우기">×</button></td></tr>`).join('')}</table></div>
+  ${form === 'record' ? '<button class="btn sm primary full" data-cx="meas" style="margin:6px 0" title="관리프로그램 측정입력에 쌓인 줄넘기·체력 기록으로 향상왕을 계산해 명단을 채웁니다 (한 사람이 여러 종목이면 한 장에)">📥 관리프로그램 측정에서 향상왕 가져오기</button>' : ''}
   <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" data-cx="add">+ 한 명</button><button class="btn sm" data-cx="paste">엑셀에서 붙여넣기</button>${rows.length ? '<button class="btn sm" data-cx="clear">명단 비우기</button>' : ''}</div>
   <details class="fx" id="cpasteBox" style="margin-top:6px"><summary>붙여넣기 칸</summary><p class="hint">엑셀에서 <b>${F.cols.map(c => c[1].replace(/ \(.*\)$/, '')).join(' · ')}</b> 순서로 복사해 붙여 넣으세요. 첫 줄이 열 이름이면 이름으로 맞춥니다.</p><textarea id="cpaste" rows="5" placeholder="${F.cols.map(c => c[1].replace(/ \(.*\)$/, '')).join('&#9;')}"></textarea><button class="btn sm primary" data-cx="pastego">명단에 더하기</button></details>
   <h3>④ 결과 미리 보기</h3>
   ${nOk ? `<div class="row cprevnav"><button class="btn sm icon" data-cnav="-1">‹</button><span>${Math.min(certPrev + 1, rows.length)} / ${rows.length} · <b>${esc((rows[certPrev] || {}).name || '(이름 없음)')}</b></span><button class="btn sm icon" data-cnav="1">›</button></div><div class="cprev" id="cprev"></div>${certWarn(form)}` : '<p class="hint">이름을 넣으면 여기에 상장이 보입니다.</p>'}
   <h3>⑤ 병합 완료</h3>
   <button class="btn primary full" data-cx="merge" ${nOk ? '' : 'disabled'}>🏅 상장 ${nOk}장 만들기</button>
-  <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn sm" data-cx="pdf" ${doc.pages.some(p => p.cert) ? '' : 'disabled'}>PDF·인쇄로 저장</button><button class="btn sm" data-cx="layout" ${page().cert ? '' : 'disabled'} title="지금 상장 쪽에서 글 상자를 옮기거나 글꼴·크기를 바꾼 뒤 누르면, 모든 상장에 같은 배치로">이 쪽 배치를 모든 상장에</button>${Object.keys(C.layout).some(kk => kk.startsWith(form + ':')) ? '<button class="btn sm" data-cx="layoutreset">배치 처음대로</button>' : ''}</div>
+  <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn sm primary" data-cx="print" ${doc.pages.some(p => p.cert) ? '' : 'disabled'}>🖨 바로 출력</button><button class="btn sm" data-cx="pdf" ${doc.pages.some(p => p.cert) ? '' : 'disabled'}>PDF로 저장</button><button class="btn sm" data-cx="layout" ${page().cert ? '' : 'disabled'} title="지금 상장 쪽에서 글 상자를 옮기거나 글꼴·크기를 바꾼 뒤 누르면, 모든 상장에 같은 배치로">이 쪽 배치를 모든 상장에</button>${Object.keys(C.layout).some(kk => kk.startsWith(form + ':')) ? '<button class="btn sm" data-cx="layoutreset">배치 처음대로</button>' : ''}</div>
   <p class="hint" style="margin-top:8px">이름이 길면 글자 크기가 저절로 줄어듭니다. 종목 2 기록이 없는 사람은 기록 1이 가운데로 옵니다(조건부 필드). 날짜·측정 이름처럼 모두 같은 값은 ②에서 한 번만 바꾸면 됩니다.</p></div>`;
   const pv = $('#cprev'); if (pv) { const r = rows[certPrev]; const tmp = certPage(form, r || {}, certPrev); const bw = pv.clientWidth || 260, kk = bw / (doc.w * MM); pv.style.height = doc.h * MM * kk + 'px'; const draw = () => { pv.innerHTML = `<div style="transform:scale(${kk});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(doc.w, doc.h, tmp.els.map(e => Object.assign({}, e, { hidden: false })), '#ffffff')}</div>`; }; draw(); fitTextOffscreen(tmp.els).then(() => { if (document.body.contains(pv)) draw(); }); }
 }
@@ -4456,10 +4459,121 @@ function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEa
     if (k === 'pastego') { certPaste($('#cpaste').value); }
     if (k === 'clear' && window.confirm(`명단 ${D.rows.length}줄을 비울까요?`)) { D.rows = []; certPrev = 0; markDirty(); renderSide(); }
     if (k === 'bodyreset') { D.body = F.body; markDirty(); renderSide(); }
-    if (k === 'merge') certMerge(); if (k === 'pdf') openDownload('pdfhq'); if (k === 'layout') certSaveLayout();
+    if (k === 'merge') certMerge(); if (k === 'pdf') openDownload('pdfhq'); if (k === 'layout') certSaveLayout(); if (k === 'meas') openMeasImport(); if (k === 'print') openPrint('cert');
     if (k === 'layoutreset') { Object.keys(C.layout).forEach(kk => { if (kk.startsWith(C.form + ':')) delete C.layout[kk]; }); certMerge(); }
   });
 })();
+/* ---- 관리프로그램 측정 → 향상왕 (같은 사이트 주소라 이 브라우저에 저장된 'naracha-meas'를 읽기만 함, 관리프로그램은 고치지 않음)
+   계산은 관리프로그램 computeImprove와 같게: 같은 종류의 직전 회차 대비 기록 향상 > 0 인 사람 중 나이 그룹(14~19세 = 청소년)별 1위, 재원생만 ---- */
+const MEAS_SEP = String.fromCharCode(1);
+function measLocal() { try { const v = JSON.parse(localStorage.getItem('naracha-meas') || 'null'); return v && v.map ? v : null; } catch (e) { return null; } }
+/* 재원생 판정 (관리프로그램 _measEnrolled와 같게 — 관리프로그램 작업방 확인): 명단 roster.list[].n 에 있고, 퇴관 quitMapAtt.map[이름](del:true가 아님)·휴관 closedMapAtt.map[이름]이 아님. st 꼬리표는 옛 표시라 보조로만 */
+function measEnrolledFn() { try { const a = JSON.parse(localStorage.getItem('naracha-att') || 'null'); const L = a && a.roster && a.roster.list; if (!Array.isArray(L) || !L.length) return null; const quit = (a.quitMapAtt && a.quitMapAtt.map) || {}, closed = (a.closedMapAtt && a.closedMapAtt.map) || {}; const live = new Set(L.filter(x => x && x.n && !(quit[x.n] && !quit[x.n].del) && !closed[x.n] && !/휴관|퇴관/.test(x.st || '')).map(x => x.n)); return nm => live.has(nm); } catch (e) { return null; } }
+function measSessions() { const m = measLocal(); if (!m) return null; const tomb = m.tomb || {}; return Object.values(m.map || {}).filter(s => s && s.kind && Array.isArray(s.rows) && !(tomb[s.id] > (s._t || 0))).sort((a, b) => (b.year + (b.half === 'H2' ? .5 : 0)) - (a.year + (a.half === 'H2' ? .5 : 0)) || (a.kind < b.kind ? -1 : 1)); }
+const measSc = s => s.year + (s.half === 'H2' ? 0.5 : 0), measHalf = s => s.half === 'H2' ? '후반기' : '전반기'; /* 도장은 측정을 연도 + 전반기/후반기로만 구분 (관장님 결정) */
+function measCellV(row, cat, sub) { for (const k in (row.cells || {})) { const p = k.split(MEAS_SEP); if (p[0].indexOf(cat) >= 0 && (!sub || (p[1] || '').indexOf(sub) >= 0)) return row.cells[k]; } return ''; }
+function measCatTitle(kind, name) { let t = String(name).replace(/\s*\(.*\)\s*$/, ''); if (kind === '줄넘기') t = t.replace(/^엇걸어뛰기$/, '엇걸어 풀어뛰기').replace(/^(앞으로|뒤로)뛰기$/, '$1 뛰기'); return t + '왕'; }
+function measUnit(kind, name) { if (kind === '줄넘기') return '회'; if (/악력/.test(name)) return 'kg'; if (/앉아윗몸|유연성|멀리뛰기|순발력/.test(name)) return 'cm'; return '회'; }
+function measImprove(s, all, enrolled) {
+  const prev = all.filter(o => o.id !== s.id && o.kind === s.kind && measSc(o) < measSc(s)).sort((a, b) => measSc(b) - measSc(a))[0]; if (!prev) return { prev: null, wins: [] };
+  const pBy = {}; (prev.rows || []).forEach(r => { pBy[r.name] = r; });
+  const cats = (s.cats || []).filter(c => !/비만도|종합|비고/.test(c.name) && (c.subs || []).some(su => (su.sub || su) === '기록'));
+  const wins = [];
+  cats.forEach(cat => { const by = {}; (s.rows || []).forEach(r => { if (enrolled && !enrolled(r.name)) return; const pr = pBy[r.name]; if (!pr) return; const cv = parseFloat(measCellV(r, cat.name, '기록')), pv = parseFloat(measCellV(pr, cat.name, '기록')); if (isNaN(cv) || isNaN(pv)) return; const imp = cv - pv; if (imp <= 0) return; const n = parseFloat(r.age), age = n >= 14 && n <= 19 ? '청소년' : (r.age || '?'); if (!by[age] || imp > by[age].imp) by[age] = { age, name: r.name, prev: pv, cur: cv, imp, cat: cat.name }; });
+    Object.values(by).forEach(w => wins.push(Object.assign(w, { kind: s.kind, k: measCatTitle(s.kind, w.cat), u: measUnit(s.kind, w.cat) }))); });
+  return { prev, wins };
+}
+let measImp = { year: 0, half: '', kinds: null, off: {} };
+function openMeasImport() {
+  const all = measSessions(); let d = $('#dlgMeas'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgMeas'; d.className = 'wide'; document.body.appendChild(d); }
+  if (!all || !all.length) { d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="max-width:560px"><p>이 PC 브라우저에 관리프로그램 측정 자료가 없습니다.</p><p class="hint">같은 브라우저(크롬·엣지)에서 <b>관리프로그램(narachadata.github.io/naracha)</b>을 열어 <b>측정</b> 화면이 한 번 불러와지면, 여기서 바로 가져올 수 있습니다. 공방은 그 자료를 읽기만 하고 고치지 않습니다.</p></div>`; d.querySelector('[data-close]').onclick = () => d.close(); d.showModal(); return; }
+  const enrolled = measEnrolledFn(), live = !!enrolled;
+  /* 관장님 지시: 지금 휴관·퇴관생은 반드시 제외 — 명단·장부를 못 읽으면 필터 없이 계산하지 않고 멈춤 */
+  if (!enrolled) { d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="max-width:560px"><p><b>수련생 명단을 읽지 못해 멈췄습니다.</b></p><p class="hint">지금 휴관·퇴관한 수련생이 상장에 잘못 들어가지 않도록, 명단·휴관·퇴관 자료가 있어야 향상왕을 계산합니다. 같은 브라우저에서 <b>관리프로그램(narachadata.github.io/naracha)</b>을 열어 명단이 불러와진 뒤 다시 누르세요.</p></div>`; d.querySelector('[data-close]').onclick = () => d.close(); d.showModal(); return; }
+  const years = [...new Set(all.map(s => s.year))].sort((a, b) => b - a);
+  if (!measImp.year || !years.includes(measImp.year)) { measImp.year = all[0].year; measImp.half = all[0].half === 'H2' ? 'H2' : 'H1'; measImp.kinds = ['줄넘기', '체력']; measImp.off = {}; }
+  const draw = () => {
+    /* 연도 · 상반기/하반기 · 줄넘기/체력 을 고르면 그 측정 회차들의 향상왕 (관장님: "년도, 전반기, 후반기, 줄넘기, 체력 데이터를 선택") */
+    const picked = all.filter(s => s.year === measImp.year && (s.half === 'H2' ? 'H2' : 'H1') === measImp.half && measImp.kinds.includes(s.kind)), res = picked.map(s => ({ s, r: measImprove(s, all, enrolled) }));
+    const by = {}; res.forEach(({ s, r }) => r.wins.forEach(w => { (by[w.name] = by[w.name] || { name: w.name, age: w.age, recs: [] }).recs.push({ k: w.k, a: String(w.prev), b: String(w.cur), u: w.u, kind: s.kind }); }));
+    const people = Object.values(by).sort((a, b) => b.recs.length - a.recs.length || a.name.localeCompare(b.name, 'ko')), nOn = people.filter(p => !measImp.off[p.name]).length, kinds = [...new Set(picked.map(s => s.kind))];
+    d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기 <small>관리프로그램 측정입력</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
+      <p class="hint" style="margin-top:0">관리프로그램과 같은 계산: 같은 종류의 <b>직전 회차보다 기록이 오른 학생 중 나이 그룹별 1위</b>(14~19세는 청소년)', 지금 재원생만 (휴관·퇴관 제외)'. 한 학생이 여러 종목이면 <b>상장 한 장에 모두</b> 들어갑니다.</p>
+      <div class="msel"><label class="f"><span>연도</span><select id="mYear">${years.map(y => `<option value="${y}" ${y === measImp.year ? 'selected' : ''}>${y}년</option>`).join('')}</select></label>
+      <div class="f"><span>반기</span><div class="seg">${[['H1', '전반기'], ['H2', '후반기']].map(([a, t]) => `<button data-mhalf="${a}" aria-pressed="${measImp.half === a}" ${all.some(s => s.year === measImp.year && (s.half === 'H2' ? 'H2' : 'H1') === a) ? '' : 'disabled title="이 반기 측정 자료가 없습니다"'}>${t}</button>`).join('')}</div></div>
+      <div class="f"><span>종류 <small>둘 다 고르면 한 사람 한 장에 합침</small></span><div class="row" style="gap:12px">${['줄넘기', '체력'].map(kd => { const ss = all.find(s => s.year === measImp.year && (s.half === 'H2' ? 'H2' : 'H1') === measImp.half && s.kind === kd); return `<label class="chk" style="margin:0"><input type="checkbox" data-mkind="${kd}" ${measImp.kinds.includes(kd) ? 'checked' : ''} ${ss ? '' : 'disabled'}> ${kd} ${ss ? `<small class="hint" style="margin:0">${(ss.rows || []).length}명 측정</small>` : '<small class="hint" style="margin:0">자료 없음</small>'}</label>`; }).join('')}</div></div></div>
+      ${res.some(x => !x.r.prev) ? `<p class="hint" style="color:#b3261e">⚠ ${res.filter(x => !x.r.prev).map(x => `${x.s.year} ${measHalf(x.s)} ${x.s.kind}`).join(', ')}: 비교할 직전 회차가 없어 향상왕을 계산할 수 없습니다.</p>` : ''}
+      <h3>향상왕 ${people.length}명 <small>${people.reduce((t, p) => t + p.recs.length, 0)}개 종목 · 체크를 풀면 빠짐</small></h3>
+      <div class="mpeople">${people.map(p => `<label class="mper ${measImp.off[p.name] ? 'off' : ''}"><input type="checkbox" data-moff="${esc(p.name)}" ${measImp.off[p.name] ? '' : 'checked'}><b>${esc(p.name)}</b> <small>${esc(p.age === '청소년' ? '청소년' : p.age + '세')}</small><span>${p.recs.map(q => `${esc(q.k)} ${esc(q.a)}→${esc(q.b)}${esc(q.u)}`).join(' · ')}</span></label>`).join('') || '<p class="hint">향상왕이 없습니다</p>'}</div>
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="mReplace" checked> 지금 명단을 바꾸기 (끄면 뒤에 더함)</label><button class="btn" id="mGo" ${nOn ? '' : 'disabled'}>명단에 넣기</button><button class="btn primary" id="mGoMake" ${nOn ? '' : 'disabled'}>넣고 상장 ${nOn}장 만들기</button></div></div>`;
+    d.querySelector('[data-close]').onclick = () => d.close();
+    d.onclick = e => { const h = e.target.closest('[data-mhalf]'); if (h && !h.disabled) { measImp.half = h.dataset.mhalf; measImp.off = {}; draw(); } };
+    d.onchange = e => { const t = e.target; if (t.id === 'mYear') { measImp.year = Number(t.value); const hs = all.filter(s => s.year === measImp.year).map(s => s.half === 'H2' ? 'H2' : 'H1'); if (!hs.includes(measImp.half)) measImp.half = hs[0]; measImp.off = {}; draw(); return; } if (t.dataset.mkind) { const kd = t.dataset.mkind; measImp.kinds = t.checked ? [...new Set(measImp.kinds.concat(kd))] : measImp.kinds.filter(x => x !== kd); measImp.off = {}; draw(); return; } if (t.dataset.moff) { if (t.checked) delete measImp.off[t.dataset.moff]; else measImp.off[t.dataset.moff] = 1; draw(); } };
+    const go = async make => {
+      const C = certState(); C.form = 'record'; const D = C.data.record, s0 = picked[0];
+      const sameHalf = picked.every(s => measSc(s) === measSc(s0));
+      D.common.title = kinds.length === 1 ? `${kinds[0]} 향상왕` : '향상왕';
+      D.common.event = `${s0.year}년${sameHalf ? ' ' + measHalf(s0) : ''} 나라차태권도 ${kinds.join('·')}측정`;
+      const rows = people.filter(p => !measImp.off[p.name]).map(p => ({ name: p.name, recs: p.recs }));
+      D.rows = $('#mReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; markDirty(); d.close(); sideTab = 'cert'; renderRail(); renderSide();
+      toast(`향상왕 ${rows.length}명을 명단에 넣었습니다 — 상장 이름·측정 이름·날짜를 확인하세요`);
+      if (make) { if (!doc.cert.frame) toast('상장 틀이 아직 없습니다 — ① 상장 틀을 불러오면 배경이 들어갑니다', true); await certMerge(); }
+    };
+    $('#mGo').onclick = () => go(false); $('#mGoMake').onclick = () => go(true);
+  };
+  draw(); d.showModal();
+}
+
+/* ======================= 출력 (프린터로 바로) =======================
+   윈도우·맥 모두 브라우저 인쇄 창을 씀. 기본은 '고화질 그림'(화면과 똑같이 — 글꼴·효과·그림이 프린터마다 달라지지 않음), 필요하면 '글자 선명(벡터)'.
+   엡손 잉크젯: 배율 100%(실제 크기)·테두리 없음·용지 종류·품질 안내 */
+let prState = { pages: 'all', range: '', mode: 'img', dpi: 300, fit: 'full', frame: true };
+function prPages() {
+  const n = doc.pages.length, S = prState; if (S.pages === 'cur') return [cur]; if (S.pages === 'sel') return [...pgSel].filter(i => i < n).sort((a, b) => a - b);
+  if (S.pages === 'cert') return doc.pages.map((p, i) => p.cert ? i : -1).filter(i => i >= 0);
+  if (S.pages === 'range') { const out = []; (S.range || '').split(',').forEach(p => { const m = p.trim().match(/^(\d+)(?:\s*[-~]\s*(\d+))?$/); if (!m) return; const a = Number(m[1]), b = Number(m[2] || m[1]); for (let i = Math.min(a, b); i <= Math.max(a, b); i++) if (i >= 1 && i <= n) out.push(i - 1); }); return [...new Set(out)]; }
+  return doc.pages.map((_, i) => i).filter(i => !doc.pages[i].dlOff);
+}
+function openPrint(pre) {
+  endEdit(); let d = $('#dlgPrint'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgPrint'; document.body.appendChild(d); }
+  const hasCert = doc.pages.some(p => p.cert), isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  if (pre === 'cert' && hasCert) prState.pages = 'cert'; else if (prState.pages === 'cert' && !hasCert) prState.pages = 'all'; if (prState.pages === 'sel' && pgSel.size < 2) prState.pages = 'all';
+  const draw = () => {
+    const S = prState, list = prPages(), C = doc.cert;
+    d.innerHTML = `<div class="dhead"><h2>🖨 출력</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody prdlg">
+      <div class="grid2"><label class="f"><span>출력할 쪽</span><select id="prPg">${[['all', `모든 쪽${doc.pages.some(p => p.dlOff) ? ' (숨긴 쪽 빼고)' : ''}`], ['cur', `지금 쪽 (${cur + 1})`], ...(pgSel.size > 1 ? [['sel', `페이지 목록에서 고른 ${pgSel.size}쪽`]] : []), ...(hasCert ? [['cert', `상장 쪽만 (${doc.pages.filter(p => p.cert).length}장)`]] : []), ['range', '직접 입력']].map(([a, t]) => `<option value="${a}" ${S.pages === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      ${S.pages === 'range' ? `<label class="f"><span>쪽 번호</span><input id="prRange" value="${esc(S.range)}" placeholder="예: 1-3, 5"></label>` : `<div class="prcount">${list.length}쪽 · 종이 ${Math.round(doc.w)}×${Math.round(doc.h)}mm</div>`}</div>
+      <div class="seg prmode">${[['img', '고화질 그림 (추천)', '화면과 똑같이 — 글꼴·효과·사진이 프린터·PC마다 달라지지 않음'], ['vec', '글자 선명 (벡터)', '작은 글자가 아주 또렷 — 효과가 많은 디자인은 그림 방식이 안전']].map(([a, t, ti]) => `<button data-prmode="${a}" aria-pressed="${S.mode === a}" title="${ti}">${t}</button>`).join('')}</div>
+      ${S.mode === 'img' ? `<div class="grid2"><label class="f"><span>품질</span><select id="prDpi"><option value="300" ${S.dpi === 300 ? 'selected' : ''}>고품질 300dpi (상장·사진)</option><option value="200" ${S.dpi === 200 ? 'selected' : ''}>표준 200dpi (빠름·많은 쪽)</option></select></label><label class="f"><span>종이 가장자리</span><select id="prFit"><option value="full" ${S.fit === 'full' ? 'selected' : ''}>꽉 채움 (테두리 없음 인쇄)</option><option value="safe" ${S.fit === 'safe' ? 'selected' : ''}>프린터 여백 안에 (96%로 조금 작게)</option></select></label></div>` : ''}
+      ${C && C.frame && list.some(i => doc.pages[i].cert) ? `<label class="chk"><input type="checkbox" id="prFrame" ${S.frame ? 'checked' : ''}> 상장 틀도 함께 출력 <small class="hint" style="margin:0">(틀이 인쇄된 상장 용지면 끄기)</small></label>` : ''}
+      <details class="fx prtip" open><summary><b>엡손 잉크젯 설정 (${isMac ? '맥' : '윈도우'})</b></summary>${isMac ? `<ol><li>인쇄 창의 <b>프린터</b>에서 EPSON을 고르고 <b>용지 크기: A4</b> — 꽉 채움이면 <b>A4 (테두리 없음)</b>.</li><li><b>배율 100%</b> (크롬은 '추가 설정 → 배율: 기본값', 사파리는 '크기 조절 100%').</li><li><b>인쇄 설정</b>(또는 '용지 처리/품질')에서 <b>용지 종류</b>: 상장지·두꺼운 무광지는 'Matte(무광) / 고급 무광지', 일반지는 '일반 용지' · <b>인쇄 품질: 높음(고품질)</b>.</li><li>크롬은 <b>배경 그래픽</b>을 켭니다(그림 방식은 꺼도 됨).</li></ol>` : `<ol><li>인쇄 창의 <b>대상</b>에서 EPSON 프린터를 고릅니다 (PDF로 저장 아님).</li><li><b>추가 설정</b> → <b>용지 크기 A4</b> · <b>배율: 기본값(100%)</b> · <b>여백: 없음</b> · <b>배경 그래픽</b> 체크.</li><li>꽉 채움(테두리 없음)은 <b>'시스템 대화 상자를 사용하여 인쇄'</b>(Ctrl+Shift+P) → <b>기본 설정</b> → <b>테두리 없음</b> 체크, <b>용지 종류</b>: 상장지·두꺼운 무광지는 '고급 무광지(Matte)', 일반지는 '일반 용지' · <b>품질: 높음</b>.</li></ol>`}<p class="hint">테두리 없음이 안 되는 용지·프린터면 '프린터 여백 안에'를 고르세요 (가장자리가 잘리지 않음). 두꺼운 상장지는 프린터 뒤쪽 급지대에 한 장씩 넣는 것이 안전합니다.</p></details>
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:8px"><button class="btn primary" id="prGo" ${list.length ? '' : 'disabled'}>🖨 ${list.length}쪽 출력</button></div></div>`;
+    d.querySelector('[data-close]').onclick = () => d.close();
+  };
+  d.onchange = e => { const t = e.target; if (t.id === 'prPg') prState.pages = t.value; if (t.id === 'prRange') prState.range = t.value; if (t.id === 'prDpi') prState.dpi = Number(t.value); if (t.id === 'prFit') prState.fit = t.value; if (t.id === 'prFrame') prState.frame = t.checked; draw(); };
+  d.onclick = e => { const m = e.target.closest('[data-prmode]'); if (m) { prState.mode = m.dataset.prmode; draw(); return; } if (e.target.closest('#prGo')) { const list = prPages(); d.close(); runPrint(list); } };
+  draw(); d.showModal();
+}
+async function runPrint(list) {
+  if (!list.length) return; const S = prState, C = doc.cert;
+  /* 상장 틀 출력 여부를 이번 출력에만 적용 */
+  const frames = []; doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { frames.push([e, e.hidden]); e.hidden = !S.frame || (C && C.printFrame === false && S.frame !== true); } }));
+  const restore = () => frames.forEach(([e, h]) => { e.hidden = h; });
+  if (S.mode === 'vec') { try { await printVector(list); } finally { setTimeout(restore, 1500); } return; }
+  const urls = []; try {
+    for (let i = 0; i < list.length; i++) { setStatus(`출력 준비 ${i + 1}/${list.length}쪽…`); const c = await renderPageCanvas(doc.pages[list[i]], dlDpi(S.dpi, 0), 'thumb', '#ffffff'); const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95)); urls.push(URL.createObjectURL(b)); c.width = c.height = 0; }
+  } catch (e) { toast('출력 준비 중 문제가 생겼습니다: ' + e.message, true); urls.forEach(u => URL.revokeObjectURL(u)); restore(); setStatus(''); return; }
+  restore(); setStatus('');
+  const k = S.fit === 'safe' ? 0.96 : 1, W = doc.w, H = doc.h, f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'; document.body.appendChild(f);
+  const fd = f.contentDocument; fd.open(); fd.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(doc.name || '출력')}</title><style>@page{size:${W}mm ${H}mm;margin:0}html,body{margin:0;padding:0;background:#fff}.pg{width:${W}mm;height:${H}mm;display:flex;align-items:center;justify-content:center;overflow:hidden;break-after:page;page-break-after:always}.pg:last-child{break-after:auto;page-break-after:auto}img{width:${W * k}mm;height:${H * k}mm;display:block}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>${urls.map(u => `<div class="pg"><img src="${u}"></div>`).join('')}</body></html>`); fd.close();
+  await Promise.all([...fd.images].map(im => im.complete ? null : new Promise(r => { im.onload = im.onerror = r; })));
+  const cleanup = () => { setTimeout(() => { f.remove(); urls.forEach(u => URL.revokeObjectURL(u)); }, 1000); };
+  f.contentWindow.addEventListener('afterprint', cleanup, { once: true }); setTimeout(cleanup, 600000);
+  f.contentWindow.focus(); f.contentWindow.print(); toast(`인쇄 창을 열었습니다 — ${list.length}쪽 · 배율 100%·용지 A4를 확인하세요`);
+}
+$('#btnPrint').onclick = () => openPrint();
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.code === 'KeyP' || (e.key || '').toLowerCase() === 'p') && !document.querySelector('dialog[open]') && !editing) { e.preventDefault(); e.stopPropagation(); openPrint(); } }, true);
+
 /* 엑셀 붙여넣기: 첫 줄이 열 이름이면 이름으로, 아니면 열 순서대로 (at·atKey = 표 칸에 바로 붙여 넣은 자리부터) */
 function certPaste(txt, at, atKey) {
   const C = certState(), D = C.data[C.form], F = CERT_FORMS[C.form], lines = String(txt || '').replace(/\r/g, '').split('\n').filter(l => l.trim()); if (!lines.length) return;
