@@ -2247,7 +2247,7 @@ function renderElems() {
   const libEls = libElemItems(); const cats = NC.elems.cats.slice(0, 1).concat([['naracha', '나라차']], NC.elems.cats.slice(1));
   const qw = q.split(/\s+/).filter(Boolean), pool = libEls.concat(NC.elems.items), txtOf = i => (i.name + ' ' + i.kw).toLowerCase(); let all = pool.filter(i => qw.every(w => txtOf(i).includes(w))); if (!all.length && qw.length > 1) { const hits = i => qw.filter(w => txtOf(i).includes(w)).length; all = pool.filter(i => hits(i) > 0).sort((a, b) => hits(b) - hits(a)); }  // 모든 낱말이 맞는 것이 없으면 맞는 낱말이 많은 순
   const recent = recentElems().map(getElem).filter(Boolean);
-  let h = `<div class="row" style="gap:6px;margin-bottom:6px"><label class="f" style="flex:1;margin:0"><input type="text" id="elSearch" placeholder="요소 검색 (예: 로고, 라차, 별, 말풍선)" value="${esc(elQ)}"></label><button class="btn sm" data-addmine title="내 PC의 PNG·SVG·JPG를 요소로 추가 (자료실에 보관돼 두 PC 모두에서 보임)">＋ 내 요소</button></div><div class="tcats" id="elcats">${cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+  let h = `<div class="row" style="gap:6px;margin-bottom:6px"><label class="f" style="flex:1;margin:0"><input type="text" id="elSearch" placeholder="요소 검색 (예: 로고, 라차, 별, 말풍선)" value="${esc(elQ)}"></label><button class="btn sm" data-addmine title="내 PC의 PNG·SVG·JPG를 요소로 추가 (자료실에 보관돼 두 PC 모두에서 보임)">＋ 내 요소</button><button class="btn sm" data-addqr title="신청서·밴드·유튜브 주소를 QR 코드로 넣기">▦ QR</button><button class="btn sm" data-addcal title="한 달 달력 칸 넣기 (공휴일·일정·음력 표시)">📅 달력</button></div><div class="tcats" id="elcats">${cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
   if (elCat === 'naracha' && !q) {
     h += libEls.length ? `<div class="row" style="margin:4px 0 2px;flex-wrap:wrap;gap:6px"><button class="btn sm primary" data-addmine>＋ 내 요소 추가</button><button class="btn sm ai" data-aistudio>✨ AI로 태권도 그림 만들기</button><button class="btn sm ai" data-racha>🐧 라차 동작 한 번에 만들기</button></div><p class="hint">사진 포즈는 배경을 지운 사람만 들어갑니다. 실루엣은 이미지 속성의 "색 입히기"로 색을 바꿀 수 있습니다. AI로 만든 그림은 우클릭으로 이름 바꾸기·삭제를 합니다.</p>` + LIB_ECATS.map(([k, t]) => { const list = libEls.filter(i => i.sub === k); return list.length ? `<h3>${t} <small>${list.length}</small></h3><div class="egrid">${list.map(elemCard).join('')}</div>` : (k === 'mine-el' ? `<h3>내 요소</h3><p class="hint">위의 <b>＋ 내 요소 추가</b>로 PNG·SVG를 올리면 여기에 모입니다 (자료실에 보관되어 두 PC 모두에서 보임).</p>` : ''); }).join('') + (NC.lib.ready ? '' : rachaBtn + libHint()) : rachaBtn + libHint();
   } else if (elCat === 'all' && !q) {
@@ -2499,7 +2499,7 @@ function renderWizard() {
 }
 
 /* ======================= 속성 패널 ======================= */
-const presetsOpen = () => { try { return localStorage.getItem('naracal-presets-open') !== '0'; } catch (e) { return true; } };
+const presetsOpen = () => { try { return localStorage.getItem('naracal-presets-open') === '1'; } catch (e) { return false; } }; /* 기본은 접음 — 글꼴·크기·색이 위로 오게 (펼친 상태는 기억) */
 // 잠금 풀기·잠그기 (속성 창 단추, 선택 테두리의 잠금 단추 공용)
 function setLock(ids, on) { ids.forEach(id => { const el = find(id); if (el) el.locked = on; }); commit(); renderOverlay(); renderInspector(); if (sideTab === 'layers') renderSide(); toast(on ? '잠갔습니다 (Ctrl+L로 풀기)' : '잠금을 풀었습니다'); }
 document.addEventListener('click', e => {
@@ -2601,7 +2601,7 @@ function renderInspector() {
     <h3>배경</h3><div class="swrow">${['#ffffff', '#FFE89A', '#E6EDF2', '#DDF3EA', '#FDE7E4', '#F0EBFB', '#1E2B5A', '#1a1a1a'].map(c => `<button class="swb" data-pgbg="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>
     <label class="f"><span>직접 고르기</span><input type="color" data-k="pg.bg" value="${/^#[0-9a-f]{6}$/i.test(pg.bg) ? pg.bg : '#ffffff'}"></label>
     <p class="hint">그라데이션·패턴 배경은 왼쪽 "배경" 메뉴에서 고릅니다. 요소를 누르면 그 요소의 속성이 여기에 나옵니다. 빈 곳을 끌면 여러 요소를 함께 고릅니다.</p>
-    <h3 class="anim-h"><svg class="ic"><use href="#i-video"/></svg>영상 장면</h3><div class="grid2">${F('보여 주는 시간', 'pg.vdur', pg.vdur || vset().dur, { type: 'slider', min: 1, max: 20, step: 0.5, unit: '초', def: vset().dur })}${F('다음으로 넘김', 'pg.vtrans', pg.vtrans || '', { type: 'select', options: [['', '기본 (' + VIDEO.TRANS.find(t => t[0] === vset().trans)[1] + ')']].concat(VIDEO.TRANS) })}</div><div class="grid2">${F('넘김 길이', 'pg.vturn', pg.vturn || vset().turn, { type: 'slider', min: 0.2, max: 2, step: 0.1, unit: '초', def: vset().turn })}${F('카메라', 'pg.vcam', pg.vcam || '', { type: 'select', options: [['', '없음']].concat(VIDEO.CAMS.slice(1)) })}</div><div class="row" style="gap:6px"><button class="btn sm" id="pgVplay"><svg class="ic"><use href="#i-play"/></svg>이 쪽부터 미리보기</button><button class="btn sm" id="pgVtab">영상 메뉴</button></div>
+    <details class="fx pgvid" ${tlOn() || (doc.video && doc.video.isCopy) ? 'open' : ''}><summary><span class="anim-h"><svg class="ic"><use href="#i-video"/></svg>영상 장면 설정</span> <small class="hint" style="margin:0">영상으로 만들 때만</small></summary><div class="grid2">${F('보여 주는 시간', 'pg.vdur', pg.vdur || vset().dur, { type: 'slider', min: 1, max: 20, step: 0.5, unit: '초', def: vset().dur })}${F('다음으로 넘김', 'pg.vtrans', pg.vtrans || '', { type: 'select', options: [['', '기본 (' + VIDEO.TRANS.find(t => t[0] === vset().trans)[1] + ')']].concat(VIDEO.TRANS) })}</div><div class="grid2">${F('넘김 길이', 'pg.vturn', pg.vturn || vset().turn, { type: 'slider', min: 0.2, max: 2, step: 0.1, unit: '초', def: vset().turn })}${F('카메라', 'pg.vcam', pg.vcam || '', { type: 'select', options: [['', '없음']].concat(VIDEO.CAMS.slice(1)) })}</div><div class="row" style="gap:6px"><button class="btn sm" id="pgVplay"><svg class="ic"><use href="#i-play"/></svg>이 쪽부터 미리보기</button><button class="btn sm" id="pgVtab">영상 메뉴</button></div></details>
     <h3>단축키</h3><p class="hint">T 글자 추가 · P 펜 · Ctrl+D 복제 · Ctrl+G 그룹 · Ctrl+Z 취소 · 화살표 이동 · Delete 삭제 · Ctrl+휠 확대</p>`;
     ins.onclick = e => { if (e.target.closest('#pgVplay')) { openVideoPlayer(true); return; } if (e.target.closest('#pgVtab')) { sideTab = 'video'; renderRail(); renderSide(); return; } const b = e.target.closest('[data-pgbg]'); if (b) { pg.bg = b.dataset.pgbg; commit(); rerender(); } };
     return;
@@ -2618,6 +2618,7 @@ function renderInspector() {
   }
   const el = els[0];
   let h = el.type === 'text' ? `<h2 class="phead"><span>스타일 프리셋</span><button class="btn sm icon" id="presetFold" title="스타일 프리셋 ${presetsOpen() ? '접기' : '펴기'}">${presetsOpen() ? '▴' : '▾'}</button></h2>` : `<h2>${esc(elName(el))}</h2>`;
+  if (el.qr) h += `<div class="row" style="margin:-4px 0 8px"><button class="btn sm primary" id="qrEdit">▦ QR 내용·색 고치기</button><span class="hint" style="margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(el.qr.text)}</span></div>`;
   if (el.locked) h += `<div class="lockbar">🔒 잠긴 요소입니다 — 옮기거나 크기를 바꿀 수 없습니다<button class="btn sm" id="elUnlock">잠금 풀기</button></div>`;
   const geo = `<h3 class="phead"><span>위치·크기</span><button class="btn sm" id="elLock" title="Ctrl+L">${el.locked ? '🔓 잠금 풀기' : '🔒 잠그기'}</button></h3><div class="grid4">${F('X', 'x', el.x, { type: 'number', step: 0.5 })}${F('Y', 'y', el.y, { type: 'number', step: 0.5 })}${F('너비', 'w', el.w, { type: 'number', step: 0.5 })}${F('높이', 'h', el.h, { type: 'number', step: 0.5 })}</div>${['image', 'shape', 'path', 'chart'].includes(el.type) ? F('너비·높이 비율 고정 (숫자로 바꿀 때)', 'ratioLock', el.ratioLock == null ? el.type === 'image' : el.ratioLock, { type: 'check' }) : ''}${F('회전', 'rot', el.rot || 0, { type: 'angle', def: 0 })}${F('투명도', 'opacity', el.opacity == null ? 1 : el.opacity, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 1 })}${el.type !== 'text' ? F('혼합 모드', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['darken', '어둡게'], ['lighten', '밝게'], ['difference', '차이']] }) : ''}${F('이름', 'name', el.name)}`;
   const shadowBlock = (pfx) => `<details class="fx" ${el.shadow ? 'open' : ''}><summary>${F('그림자', 'shadow', el.shadow, { type: 'check' })}</summary>${F('위치 — 점을 끌어 조정', 'shX,shY', [el.shX == null ? 0.6 : el.shX, el.shY == null ? 0.7 : el.shY], { type: 'xy', range: 4, step: 0.1, presets: [['아래', 0, 1], ['오른쪽 아래', 0.8, 0.8], ['왼쪽 아래', -0.8, 0.8], ['위', 0, -1], ['가운데(번짐만)', 0, 0]] })}
@@ -2708,7 +2709,7 @@ function renderInspector() {
     <div class="grid4">${F('일요일 색', 's.sunColor', s.sunColor, { type: 'color' })}${F('토요일 색', 's.satColor', s.satColor, { type: 'color' })}${F('날짜 색', 's.dayColor', s.dayColor, { type: 'color' })}${F('공휴일 색', 's.holColor', s.holColor || s.sunColor, { type: 'color' })}</div>
     <div class="grid4">${F('일요일 칸', 's.sunBg', s.sunBg || '#ffffff', { type: 'color' })}${F('안쪽 선', 's.line', s.line, { type: 'color' })}${F('바깥 선', 's.outer', s.outer, { type: 'color' })}${F('메모 색', 's.noteColor', s.noteColor, { type: 'color' })}</div>
     <div class="grid3">${F('안쪽 선 두께', 's.lineW', s.lineW, { type: 'number', step: 0.05, min: 0 })}${F('바깥 선 두께', 's.outerW', s.outerW, { type: 'number', step: 0.05, min: 0 })}${F('칸 여백(mm)', 's.cellPad', s.cellPad, { type: 'number', step: 0.2, min: 0 })}</div>
-    <div class="row">${F('요일 줄 보이기', 's.showWd', s.showWd, { type: 'check' })}${F('공휴일 표시', 's.showHol', s.showHol, { type: 'check' })}${F('공휴일 이름', 's.showHolName', s.showHolName, { type: 'check' })}</div><button class="btn sm" data-set="s.sunBg:">일요일 칸 색 없음</button>` + geo;
+    <div class="row">${F('요일 줄 보이기', 's.showWd', s.showWd, { type: 'check' })}${F('공휴일 표시', 's.showHol', s.showHol, { type: 'check' })}${F('공휴일 이름', 's.showHolName', s.showHolName, { type: 'check' })}</div>${F('음력 표시', 's.lunar', s.lunar || '', { type: 'select', options: [['', '안 함'], ['key', '음력 1일·15일만'], ['all', '매일 (작게)']] })}<button class="btn sm" data-set="s.sunBg:">일요일 칸 색 없음</button>` + geo;
   } else if (el.type === 'mini') {
     const s = Object.assign({}, CAL.MINI_DEF, el.s || {});
     h += `<h3>미니 달력</h3><div class="grid2">${F('연도', 'year', el.year, { type: 'number' })}${F('월', 'month', el.month, { type: 'select', options: Array.from({ length: 12 }, (_, i) => [i + 1, (i + 1) + '월']) })}</div>
@@ -4110,6 +4111,69 @@ function findClick(e) {
   if (e.target.id === 'fAll') { slots.forEach(x => x.set(x.get().split(S.q).join(S.r))); commit(); renderAll(); toastUndo(`${cnt}곳을 바꿨습니다`); renderFindRes(); }
   if (e.target.id === 'fFont') { const a = $('#fFrom').value, b = $('#fTo').value; if (!a || a === b) return; let n = 0; doc.pages.forEach(p => p.els.forEach(el => { if (el.locked) return; if (el.type === 'text' && el.font === a) { el.font = b; n++; } if ((el.type === 'cal' || el.type === 'mini') && el.s) { if (el.s.fontNum === a) { el.s.fontNum = b; n++; } if (el.s.fontBody === a) { el.s.fontBody = b; n++; } } })); commit(); renderAll(); toast(`${n}곳의 글꼴을 바꿨습니다`); renderFindRes(); }
 }
+
+/* ---- QR 코드 (Adobe Express처럼): 주소·글을 넣으면 선명한 SVG 그림 요소로. el.qr에 내용을 남겨 다시 고칠 수 있음 ---- */
+function qrSVG(text, color, bg) {
+  const q = window.qrcode(0, 'M'); q.addData(text); q.make(); const n = q.getModuleCount(), m = 4, N = n + m * 2; let d = '';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c + m} ${r + m}h1v1h-1z`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${N} ${N}" shape-rendering="crispEdges">${bg ? `<rect width="${N}" height="${N}" fill="${bg}"/>` : ''}<path d="${d}" fill="${color}"/></svg>`;
+}
+async function openQr(target) {
+  try { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', () => window.qrcode); window.qrcode.stringToBytes = window.qrcode.stringToBytesFuncs['UTF-8']; } catch (e) { toast('QR 모듈을 불러오지 못했습니다 (인터넷 연결 확인)', true); return; }
+  const S = Object.assign({ text: '', color: '#1E2B5A', bg: '#ffffff' }, target && target.qr); let d = $('#dlgQr');
+  if (!d) { d = document.createElement('dialog'); d.id = 'dlgQr'; document.body.appendChild(d); }
+  d.innerHTML = `<div class="dhead"><h2>QR 코드 ${target ? '고치기' : '넣기'}</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><div class="qrgrid"><div>
+    <label class="f"><span>연결할 주소 또는 글</span><textarea id="qrText" rows="3" placeholder="예: https://band.us/... · 신청서 주소 · 유튜브 영상 주소 · 전화 tel:0100000000">${esc(S.text)}</textarea></label>
+    <div class="grid2"><label class="f"><span>QR 색</span><input type="color" id="qrColor" value="${S.color}"></label><label class="f"><span>바탕</span><select id="qrBg"><option value="#ffffff" ${S.bg === '#ffffff' ? 'selected' : ''}>흰색 (추천)</option><option value="" ${!S.bg ? 'selected' : ''}>투명</option></select></label></div>
+    <div class="swrow">${['#000000', '#1E2B5A', '#2F5BEA', '#E0564B', '#2E7D4F', '#6B3FA0'].map(c => `<button class="swb" data-qrc="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>
+    <p class="hint">진한 색일수록 잘 읽힙니다. 인쇄물은 가로·세로 2cm 이상으로 두세요. 넣은 뒤 휴대폰 카메라로 꼭 한 번 찍어 확인하세요.</p></div>
+    <div class="qrprev" id="qrPrev"></div></div>
+    <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn primary" id="qrGo">${target ? '바꾸기' : '넣기'}</button></div></div>`;
+  const prev = () => { S.text = $('#qrText').value.trim(); S.color = $('#qrColor').value; S.bg = $('#qrBg').value; let h = '<p class="hint">주소를 넣으면 여기에 보입니다</p>'; if (S.text) { try { h = qrSVG(S.text, S.color, S.bg || '#ffffff'); } catch (e) { h = '<p class="hint">글이 너무 깁니다</p>'; } } $('#qrPrev').innerHTML = h; $('#qrGo').disabled = !S.text; };
+  d.querySelector('[data-close]').onclick = () => d.close(); d.oninput = prev; d.onchange = prev;
+  d.onclick = e => { const c = e.target.closest('[data-qrc]'); if (c) { $('#qrColor').value = c.dataset.qrc; prev(); } };
+  $('#qrGo').onclick = () => {
+    prev(); if (!S.text) return; let svg; try { svg = qrSVG(S.text, S.color, S.bg); } catch (e) { toast('글이 너무 길어 QR로 만들 수 없습니다', true); return; }
+    const ref = addAsset('data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)))), qr = { text: S.text, color: S.color, bg: S.bg };
+    if (target && find(target.id)) { const el = find(target.id); el.src = ref; el.qr = qr; commit(); rerender(); }
+    else { const w = Math.max(25, Math.min(doc.w, doc.h) * 0.22); addEl({ type: 'image', src: ref, x: 0, y: 0, w: r1(w), h: r1(w), rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: 'QR 코드', qr }); }
+    d.close(); toast(target ? 'QR 코드를 바꿨습니다' : 'QR 코드를 넣었습니다 — 휴대폰으로 찍어 확인해 보세요');
+  };
+  prev(); d.showModal(); setTimeout(() => $('#qrText').focus(), 0);
+}
+document.addEventListener('click', e => { if (!e.target.closest) return; if (e.target.closest('[data-addcal]')) { addCal(); toast('달력을 넣었습니다 — 오른쪽에서 연·월, 일정, 음력 표시를 고릅니다'); return; } if (e.target.closest('[data-addqr]')) openQr(); else if (e.target.closest('#qrEdit')) { const el = selEls()[0]; if (el && el.qr) openQr(el); } });
+
+/* ---- 글자 빠른 도구 막대: 글자를 고르면 캔버스 위 도구 막대에 글꼴·크기·색·굵게·정렬 (캔바·Adobe Express처럼). 속성 패널이 다시 그려질 때 함께 갱신 ---- */
+function renderQbar() {
+  const q = $('#qbar'); if (!q) return; const els = selEls(), el = els.length === 1 ? els[0] : null;
+  if (!el || el.type !== 'text' || el.locked) { q.hidden = true; q.innerHTML = ''; return; }
+  if (document.activeElement && document.activeElement.id === 'qSize' && !q.hidden) return; /* 크기를 입력하는 중에는 그대로 */
+  const al = el.align || 'left', ic = a => `<svg class="ic" viewBox="0 0 24 24"><path d="${{ left: 'M4 6h16M4 10h10M4 14h16M4 18h10', center: 'M4 6h16M7 10h10M4 14h16M7 18h10', right: 'M4 6h16M10 10h10M4 14h16M10 18h10', justify: 'M4 6h16M4 10h16M4 14h16M4 18h16' }[a]}"/></svg>`;
+  q.hidden = false;
+  q.innerHTML = `${fontPicker('font', el.font)}<div class="qsz"><button type="button" class="btn icon" data-fsz="-1" title="작게">−</button><input class="num" id="qSize" type="number" step="0.5" min="1" value="${el.size}" title="글자 크기(pt)"><button type="button" class="btn icon" data-fsz="1" title="크게">+</button></div>`
+    + `<label class="qcol" title="글자 색"><span style="background:${esc(el.color || '#000')}">A</span><input type="color" id="qColor" value="${/^#[0-9a-f]{6}$/i.test(el.color) ? el.color : '#000000'}"></label>`
+    + [['bold', '<b>B</b>', '굵게 (Ctrl+B)'], ['italic', '<i>I</i>', '기울임 (Ctrl+I)'], ['underline', '<u>U</u>', '밑줄 (Ctrl+U)']].map(([k, t, ti]) => `<button type="button" class="btn icon ${fmtOn(el, k) ? 'on' : ''}" data-qf="${k}" title="${ti}">${t}</button>`).join('')
+    + `<button type="button" class="btn icon" data-qa="${{ left: 'center', center: 'right', right: 'justify', justify: 'left' }[al]}" title="글자 정렬: ${{ left: '왼쪽', center: '가운데', right: '오른쪽', justify: '양쪽' }[al]} (누르면 바뀜)">${ic(al)}</button>`
+    + `<button type="button" class="btn sm" data-qp title="스타일 프리셋·효과는 오른쪽 패널에서">스타일 ▸</button>`;
+}
+(function () {
+  const q = $('#qbar'); if (!q) return;
+  new MutationObserver(() => renderQbar()).observe($('#inspector'), { childList: true });
+  q.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return; const el = selEls()[0]; if (!el) return;
+    if (b.dataset.fp) { openFontPop(b); return; }
+    if (b.dataset.qf) { toggleFmt(b.dataset.qf); return; }
+    if (b.dataset.qa) { setK(el, 'align', b.dataset.qa); commit(); rerender(); return; }
+    if (b.hasAttribute('data-qp')) { try { localStorage.setItem('naracal-presets-open', '1'); } catch (err) {} renderInspector(); const g = $('#presetGrid'); if (g) g.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+  });
+  q.addEventListener('input', e => {
+    const el = selEls()[0]; if (!el) return;
+    if (e.target.id === 'qColor') { setK(el, 'color', e.target.value); if (el.fillType === 'gradient') el.fillType = 'solid'; const sp = q.querySelector('.qcol span'); if (sp) sp.style.background = e.target.value; renderCanvas(); commitSoon(); }
+    if (e.target.id === 'qSize') { const v = Number(e.target.value); if (v >= 1) { setK(el, 'size', v); renderCanvas(); renderOverlay(); commitSoon(); } }
+  });
+  q.addEventListener('change', e => { if (e.target.id === 'qColor' || e.target.id === 'qSize') { commit(); e.target.blur(); renderInspector(); } });
+  q.addEventListener('keydown', e => { if (e.target.id === 'qSize' && e.key === 'Enter') e.target.blur(); e.stopPropagation(); });
+})();
 
 /* ---- 우클릭 메뉴 ---- */
 function openCtx(ev, items) {
