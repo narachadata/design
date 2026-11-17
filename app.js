@@ -397,6 +397,9 @@ function renderCanvas() {
 // 회전까지 고려한 요소의 바깥 상자(mm)
 // 여러 요소를 감싸는 상자(회전 반영)
 // 문서 크기 글: SNS·화면용(px) 문서는 px로, 인쇄물은 mm로
+// 크기 글: 화면용(px) 형식이거나 px 단위로 넣었으면 px, 아니면 mm
+function sizeLabelFor(W, H, fmtId, unit) { const f = FORMATS.find(x => x[0] === fmtId), px = (f && f[5] === 'px') || unit === 'px'; return px ? `${Math.round(W * 96 / 25.4)} × ${Math.round(H * 96 / 25.4)} px` : `${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm`; }
+function isPxDoc() { const f = FORMATS.find(x => x[0] === doc.fmt); return !!(f && f[5] === 'px'); }
 function docSizeLabel(sep) { const f = FORMATS.find(x => x[0] === doc.fmt); sep = sep || '×'; return f && f[5] === 'px' ? `${f[3]}${sep}${f[4]}px` : `${Math.round(doc.w * 100) / 100}${sep}${Math.round(doc.h * 100) / 100}mm`; }
 function unionBox(els) { const bb = els.map(elBox), x = Math.min(...bb.map(b => b.x)), y = Math.min(...bb.map(b => b.y)); return { x, y, w: Math.max(...bb.map(b => b.x + b.w)) - x, h: Math.max(...bb.map(b => b.y + b.h)) - y }; }
 function elBox(el) {
@@ -578,7 +581,7 @@ function openCellEditor(c, append) {
   ta.placeholder = isDay ? `${el.month}월 ${n}일 일정 (한 줄에 하나)` : '칸에 넣을 글자';
   ta.style.cssText = `left:${G.xs[q]}mm;top:${G.ys[r] + (isDay ? s.daySize * 0.45 : 0)}mm;width:${G.xs[Math.min(7, q + g.cs)] - G.xs[q]}mm;height:${G.ys[Math.min(G.rows, r + g.rs)] - G.ys[r] - (isDay ? s.daySize * 0.45 : 0)}mm;font-size:${cs.size || s.evSize}pt;font-family:'${s.fontBody}'`;
   ta.dataset.c = c; ta.dataset.day = isDay ? n : ''; ta.dataset.id = el.id;
-  $('#canvas').appendChild(ta); ta.focus(); if (append) { if (ta.value) ta.value += '\n'; ta.setSelectionRange(ta.value.length, ta.value.length); } else ta.select();
+  $('#canvas').appendChild(ta); ta.focus(); if (append || (isDay && ta.value)) { if (append && ta.value) ta.value += '\n'; ta.setSelectionRange(ta.value.length, ta.value.length); } else ta.select();  /* 일정이 있는 날짜 칸은 전체 선택하지 않음(바로 치면 기존 일정이 지워짐) */
   ta.addEventListener('keydown', e => { if (e.isComposing || e.keyCode === 229) { e.stopPropagation(); return; } /* 한글 조합 중 Esc·Enter는 조합만 끝냄 */ if (e.key === 'Escape') { e.preventDefault(); closeCellEditor(false); } if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); closeCellEditor(true); } e.stopPropagation(); });
   ta.addEventListener('blur', () => closeCellEditor(true));
 }
@@ -1612,7 +1615,7 @@ async function reimportFromSource() {
   const v = doc.video || {}; if (!v.isCopy) return;
   let pages = null;
   try { if (v.fromId && await store.folderReady()) { const h = await store.findDocById(v.fromId); if (h) { const f = await h.getFile(); pages = JSON.parse(await f.text()).pages; } } } catch (e) {}
-  if (!pages) { const j = await store.pickLocal(); if (!j || !j.pages) return; pages = j.pages; }
+  if (!pages) { toast('원본 문서를 찾지 못했습니다 — 저장해 둔 원본 디자인 파일(.design.json)을 직접 골라 주세요'); const j = await store.pickLocal().catch(() => null); if (!j || !j.pages) { toast('원본을 고르지 않아 그대로 둡니다 (원본이 \'직전 문서\'에만 있으면 저장 ▾ → 직전 문서 되살리기로 열어 파일로 저장한 뒤 다시 해 보세요)', true); return; } pages = j.pages; }
   if (!window.confirm(`원본의 ${pages.length}쪽을 이 사본의 장면으로 다시 가져옵니다. 지금 장면의 내용은 원본 내용으로 바뀝니다 (소리·자막 트랙은 유지). 계속할까요?`)) return;
   const old = doc.pages; doc.pages = clone(pages).map((pg, i) => { const o = old[i]; if (o) { ['vdur', 'vtrans', 'vturn', 'anim', 'vcam', 'vkb'].forEach(k => { if (o[k] != null && pg[k] == null) pg[k] = o[k]; }); } return pg; });
   commit(); goto(0); toast('원본 장면을 다시 가져왔습니다');
@@ -2463,7 +2466,7 @@ function renderSide0() {
       const tr = window.NARACAL_VTRACK(yearNow), P = (window.NARACAL_VPLAN || {})[tr]; if (!P || !doc.calendar.months) return;
       if (!confirm(`${yearNow}년은 ${tr === '극기' ? '1년차 극기(나의 가치)' : '2년차 홍익(우리·모두의 가치)'}입니다.\n12달의 덕목·영문·명언·실천 2가지·사자성어를 나라차 인성덕목 2년 계획으로 바꿉니다.\n(그림·일정·디자인은 그대로 — 덕목이 바뀐 달은 그림을 새로 넣어 주세요)`)) return;
       let n = 0; P.forEach((x, k) => { if (doc.calendar.months[k]) n += applyMonthContent(k, x); });
-      commit(); rerender(); alert(`인성 문구를 넣었습니다 (글 상자 ${n}곳 갱신).`);
+      commit(); rerender(); toast(n ? `인성 문구를 넣었습니다 (글 상자 ${n}곳)` : '이 문서에는 인성 문구 자리가 없습니다 — 캘린더 마법사로 만든 달력 문서에서 쓰세요', !n);
     };
     renderGallery();
     body.querySelectorAll('[data-facet]').forEach(sl => sl.onchange = () => tplGo(() => { tplF[sl.dataset.facet] = sl.value; }));
@@ -2785,7 +2788,7 @@ function openTplPreview(t) {
     const ss = $('#tplSize'); if (ss) ss.onchange = () => { choice = ss.value; draw(); };
     if (t.theme) { $('#tplWizard').onclick = () => { d.close(); openWizard(doc.calendar.year, t.theme.id); }; const rb = $('#tplRetheme'); if (rb) rb.onclick = () => { doc.calendar.theme = clone(t.theme); const y = doc.calendar.year || 2027; const nrep = CAL.retheme(doc, uid, y); ensureAllHolidays(); commit(); renderAll(); d.close(); toast(`"${t.name}" 테마를 ${nrep}쪽에 적용했습니다`); }; return; }
     const ready = async pgs => { if (!t.lib) return true; try { setStatus('자료실 그림을 넣는 중…'); await NC.lib.materialize(pgs, addAsset); return true; } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return false; } finally { setStatus(''); } };
-    $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm(`현재 문서를 닫고 새 문서를 만들까요? (${keepNote()})`)) return; await keepCurrentDoc(); const pgs = tplPagesFor(t, S); fillDojang(pgs); const keepAssets = doc.assets; doc.assets = {}; if (!(await ready(pgs))) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = S.w; nd.h = S.h; nd.fmt = S.fmt || ''; nd.name = t.name; nd.pages = pgs; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; if (!S.screen && ['print', 'doc', 'cal', 'sign'].includes((FORMATS.find(f => f[0] === S.fmt) || [])[2])) nd.bleed = 3; doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)'); zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다 (${label(S)})`); };
+    $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm(`현재 문서를 닫고 새 문서를 만들까요? (${keepNote()})`)) return; await keepCurrentDoc(); const pgs = tplPagesFor(t, S); fillDojang(pgs); const keepAssets = doc.assets; doc.assets = {}; if (!(await ready(pgs))) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = S.w; nd.h = S.h; nd.fmt = S.fmt || ''; nd.name = t.name; nd.pages = pgs; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; nd.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); if (!S.screen && ['print', 'doc', 'cal', 'sign'].includes((FORMATS.find(f => f[0] === S.fmt) || [])[2])) nd.bleed = 3; doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)'); zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다 (${label(S)})`); };
     // 지금 문서에 넣기: 늘 지금 문서 크기로 다시 짜서 넣음. 지금 쪽이 비어 있으면 그 쪽을 바꿈
     $('#tplHere').onclick = async () => { const pg = tplPagesFor(t, docS); if (!(await ready(pg))) return; const nDj = fillDojang(pg); const emp = !page().els.length; doc.pages.splice(emp ? cur : cur + 1, emp ? 1 : 0, ...pg); const at = emp ? cur : cur + 1; commit(); goto(at); d.close(); toastUndo((emp ? `"${t.name}"을(를) 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`) + (nDj ? ` · 도장 정보 ${nDj}곳 채움` : '')); };
   };
@@ -2841,7 +2844,7 @@ function renderWizard() {
   const setYear = y => { wz.year = clamp(Math.round(y) || wz.year, 2000, 2100); ensureHolidays(wz.year, true); renderWizard(); };
   body.querySelectorAll('[data-th]').forEach(b => b.onclick = () => { const th = CAL.THEMES.find(x => x.id === b.dataset.th); wz.themeId = th.id; wz.colorA = th.colorA; wz.colorB = th.colorB; renderWizard(); });
   $('#wzYm').onclick = () => setYear(wz.year - 1); $('#wzYp').onclick = () => setYear(wz.year + 1); $('#wzYear').onchange = e => setYear(Number(e.target.value));
-  $('#wzHol').onclick = () => { $('#dlgWizard').close(); openHoliday(wz.year); };
+  $('#wzHol').onclick = () => { $('#dlgWizard').close(); openHoliday(wz.year); const dh = $('#dlgHoliday'), back = () => { dh.removeEventListener('close', back); renderWizard(); $('#dlgWizard').showModal(); }; dh.addEventListener('close', back); };
   body.querySelectorAll('[name=wzKind]').forEach(r => r.onchange = () => { wz.kind = r.value; renderWizard(); });
   $('#wzWs').onchange = e => { wz.weekStart = Number(e.target.value); renderWizard(); }; $('#wzRows').onchange = e => { wz.rows = e.target.value; renderWizard(); };
   $('#wzA').oninput = e => { wz.colorA = e.target.value; }; $('#wzA').onchange = () => renderWizard(); $('#wzB').oninput = e => { wz.colorB = e.target.value; }; $('#wzB').onchange = () => renderWizard();
@@ -2852,7 +2855,8 @@ function renderWizard() {
     const oldName = doc.name, oldW = doc.w, oldH = doc.h, theme = wizardTheme();
     if (wz.mode === 'replace') { /* 새 문서로: 지금 문서는 파일에 저장하거나 '직전 문서'로 보관 (예전엔 지금 문서를 비워 덮어써 상장·파일 연결이 그대로 남았음) */
       keepCurrentDoc.kept = ''; if (doc.pages.some(p => p.els.length) && !(await keepCurrentDoc())) return; const kept = keepCurrentDoc.kept, wasFile = store.state.fileName;
-      await store.disconnect(); const nm = `${wz.year} 인성 캘린더`; doc = newDoc(['custom', nm, 224, 154]); doc.name = nm; doc.bleed = 3; doc.pages = []; doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = nm; clearTimeout(fileTimer);
+      const hol0 = clone(doc.holidays || {}), cal0 = clone(doc.calendar || null), showHol0 = doc.showHolidays;  /* 앞 문서에서 손본 공휴일·달력 설정(인성 문구·반복 일정 규칙)은 새 문서로 가져감 */
+      await store.disconnect(); const nm = `${wz.year} 인성 캘린더`; doc = newDoc(['custom', nm, 224, 154]); doc.name = nm; doc.bleed = 3; doc.pages = []; doc.holidays = Object.assign({}, doc.holidays, hol0); if (cal0) doc.calendar = cal0; if (showHol0 != null) doc.showHolidays = showHol0; doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = nm; clearTimeout(fileTimer);
       doc.calendar.year = wz.year; doc.calendar.theme = theme; const pages = wizardPages(wz.kind); doc.pages.push(...pages); ensureAllHolidays(); commit(); zoom = 0; renderAll(); updateSaveBadge(); fitCanvas(); goto(0);
       $('#dlgWizard').close(); toast(`새 문서 "${nm}" ${pages.length}쪽을 만들었습니다 — 저장(Ctrl+S)으로 내 드라이브에 저장하세요${kept ? ` · 저장하지 않은 "${kept}"는 직전 문서로 보관` : wasFile ? ` · 앞 문서는 "${wasFile}"에 그대로` : ''}`);
       if (!doc.holidays[wz.year]) setTimeout(() => openHoliday(wz.year), 400); return; }
@@ -2990,7 +2994,7 @@ function renderInspector() {
   let h = el.type === 'text' ? `<h2 class="phead"><span>스타일 프리셋</span><button class="btn sm icon" id="presetFold" title="스타일 프리셋 ${presetsOpen() ? '접기' : '펴기'}">${presetsOpen() ? '▴' : '▾'}</button></h2>` : `<h2>${esc(elName(el))}</h2>`;
   if (el.qr) h += `<div class="row" style="margin:-4px 0 8px"><button class="btn sm primary" id="qrEdit">▦ QR 내용·색 고치기</button><span class="hint" style="margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(el.qr.text)}</span></div>`;
   if (el.locked) h += `<div class="lockbar">🔒 잠긴 요소입니다 — 옮기거나 크기를 바꿀 수 없습니다<button class="btn sm" id="elUnlock">잠금 풀기</button></div>`;
-  const geo = `<h3 class="phead"><span>위치·크기</span><button class="btn sm" id="elLock" title="Ctrl+L">${el.locked ? '🔓 잠금 풀기' : '🔒 잠그기'}</button></h3><div class="grid4">${F('X', 'x', el.x, { type: 'number', step: 0.5 })}${F('Y', 'y', el.y, { type: 'number', step: 0.5 })}${F('너비', 'w', el.w, { type: 'number', step: 0.5 })}${F('높이', 'h', el.h, { type: 'number', step: 0.5 })}</div>${['image', 'shape', 'path', 'chart'].includes(el.type) ? F('너비·높이 비율 고정 (숫자로 바꿀 때)', 'ratioLock', el.ratioLock == null ? el.type === 'image' : el.ratioLock, { type: 'check' }) : ''}${F('회전', 'rot', el.rot || 0, { type: 'angle', def: 0 })}${F('투명도', 'opacity', el.opacity == null ? 1 : el.opacity, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 1 })}${el.type !== 'text' ? F('혼합 모드', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['darken', '어둡게'], ['lighten', '밝게'], ['difference', '차이']] }) : ''}${F('이름', 'name', el.name)}`;
+  const geo = `<h3 class="phead"><span>위치·크기 <small>mm</small></span><button class="btn sm" id="elLock" title="Ctrl+L">${el.locked ? '🔓 잠금 풀기' : '🔒 잠그기'}</button></h3><div class="grid4">${F('X', 'x', el.x, { type: 'number', step: 0.5 })}${F('Y', 'y', el.y, { type: 'number', step: 0.5 })}${F('너비', 'w', el.w, { type: 'number', step: 0.5 })}${F('높이', 'h', el.h, { type: 'number', step: 0.5 })}</div>${isPxDoc() ? `<p class="hint" style="margin:2px 0 6px">화면용 문서 — 픽셀로는 위치 ${Math.round(el.x * 96 / 25.4)}, ${Math.round(el.y * 96 / 25.4)} · 크기 ${Math.round(el.w * 96 / 25.4)} × ${Math.round(el.h * 96 / 25.4)}px</p>` : ''}${['image', 'shape', 'path', 'chart'].includes(el.type) ? F('너비·높이 비율 고정 (숫자로 바꿀 때)', 'ratioLock', el.ratioLock == null ? el.type === 'image' : el.ratioLock, { type: 'check' }) : ''}${F('회전', 'rot', el.rot || 0, { type: 'angle', def: 0 })}${F('투명도', 'opacity', el.opacity == null ? 1 : el.opacity, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 1 })}${el.type !== 'text' ? F('혼합 모드', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['darken', '어둡게'], ['lighten', '밝게'], ['difference', '차이']] }) : ''}${F('이름', 'name', el.name)}`;
   const shadowBlock = (pfx) => `<details class="fx" ${el.shadow ? 'open' : ''}><summary>${F('그림자', 'shadow', el.shadow, { type: 'check' })}</summary>${F('위치 — 점을 끌어 조정', 'shX,shY', [el.shX == null ? 0.6 : el.shX, el.shY == null ? 0.7 : el.shY], { type: 'xy', range: 4, step: 0.1, presets: [['아래', 0, 1], ['오른쪽 아래', 0.8, 0.8], ['왼쪽 아래', -0.8, 0.8], ['위', 0, -1], ['가운데(번짐만)', 0, 0]] })}
     ${F('번짐', 'shB', el.shB == null ? 0.5 : el.shB, { type: 'slider', min: 0, max: 6, step: 0.1, unit: 'mm', def: 0.5 })}${F('진하기', 'shA', el.shA == null ? 0.3 : el.shA, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 0.3 })}
     ${F('그림자 색', 'shC', el.shC || '#000000', { type: 'color' })}<div class="shq"><span>빠른 설정</span>${[['부드럽게', 0.4, 0.8, 2.2, 0.22], ['또렷하게', 0.6, 0.7, 0.2, 0.45], ['강하게', 1.2, 1.4, 0.6, 0.6], ['떠 있게', 0, 2.2, 3.5, 0.3]].map(([t, x, y, b, a]) => `<button type="button" class="btn sm" data-shq="${x},${y},${b},${a}">${t}</button>`).join('')}</div></details>`;
@@ -3215,6 +3219,12 @@ $('#inspector').addEventListener('change', e => {
   if (t.dataset.ev != null && el) { el.events[Number(t.dataset.ev)].text = t.value; commit(); rerender({ noPanel: true }); return; }
   if (t.dataset.evc != null && el) { el.events[Number(t.dataset.evc)].color = t.value; commit(); rerender(); return; }
   if (t.id === 'imgReplace' && el) { const f = t.files[0]; if (!f) return; fileToDataURL(f).then(d => { el.src = addAsset(d); delete el.srcOrig; commit(); rerender(); }); return; }
+  if ((t.dataset.k === 'month' || t.dataset.k === 'year') && el && el.type === 'cal' && el.role === 'cal' && page().kind === 'cal') {
+    const m = Number(el.month), y = Number(el.year); ensureHolidays(y); let np = null;
+    try { np = CAL.buildPages(doc, uid, { year: y, kind: 'cal', month: m })[0]; } catch (e2) { np = null; }
+    if (np) { const old = page(); const oc = old.els.find(x => x.type === 'cal'), nc = np.els.find(x => x.type === 'cal'); if (oc && nc) { ['colW', 'merges'].forEach(k2 => { if (oc[k2] != null) nc[k2] = clone(oc[k2]); }); nc.s = Object.assign({}, nc.s, { weekStart: (oc.s || {}).weekStart != null ? oc.s.weekStart : (nc.s || {}).weekStart, rows: (oc.s || {}).rows != null ? oc.s.rows : (nc.s || {}).rows }); }
+      if (old.els.some(x => x.gen)) np.els.push(...old.els.filter(x => !x.gen)); ['vdur', 'vtrans', 'vturn', 'vdir'].forEach(k2 => { if (old[k2] != null) np[k2] = old[k2]; });
+      doc.pages[cur] = np; sel = []; cellSel = null; commit(); renderAll(); toastUndo(`이 쪽을 ${y}년 ${m}월 달력으로 바꿨습니다 — 달 이름·문구·일정도 ${m}월 것으로 (앞 달 일정은 되돌리기로 복구)`); return; } }
   if (t.dataset.k) { if (t.dataset.k === 'year' && el && (el.type === 'cal' || el.type === 'mini')) ensureHolidays(el.year); commit(); if (t.tagName === 'SELECT' || t.type === 'checkbox' || ['year', 'month', 'kind', 'warp', 'fillType'].includes(t.dataset.k)) { renderCanvas(); renderInspector(); } }
 });
 
@@ -4793,7 +4803,7 @@ async function certNewDoc(carry) {
   if (!carry && doc.pages.some(p => p.els.length) && !window.confirm(`A4 상장 문서를 새로 만듭니다. 지금 문서를 닫을까요? (${keepNote()})`)) return;
   const keepCert = carry && doc.cert ? clone(Object.assign({}, doc.cert, { frame: undefined, framePdf: undefined })) : null;
   await keepCurrentDoc(); await store.disconnect();
-  const nd = newDoc(SIZES.find(s_ => s_[0] === 'a4p')); nd.fmt = 'a4p'; nd.name = `상장 ${new Date().getFullYear()}`; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.rules = doc.rules; nd.fonts = doc.fonts;
+  const nd = newDoc(SIZES.find(s_ => s_[0] === 'a4p')); nd.fmt = 'a4p'; nd.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); nd.name = `상장 ${new Date().getFullYear()}`; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.rules = doc.rules; nd.fonts = doc.fonts;
   doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; if (keepCert) doc.cert = keepCert; certState();
   try { const fr = await store.idbGet('cert-frame'); if (fr && fr.url) { doc.cert.frame = addAsset(fr.url); if (fr.pdf) doc.cert.framePdf = addAsset(fr.pdf); } } catch (e) {}
   commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다');
@@ -5595,7 +5605,7 @@ function renderResize() {
     <div class="rsmodes">${[['fit', '알맞게 다시 배치 (추천)', '비율을 지키며 크기를 맞추고, 가장자리 요소는 가장자리에, 배경·띠는 새 쪽을 꽉 채웁니다'], ['contain', '전체 크기 맞추기 (잘림 없음)', '디자인 전체를 비율 그대로 줄이거나 키워 새 쪽 안에 모두 들어오게 합니다. 배경·가로지르는 띠는 새 쪽에 맞춰 늘어납니다'], ['cover', '꽉 채우기 (넘치는 곳 잘림)', '디자인 전체를 비율 그대로 키워 새 쪽을 빈틈없이 채웁니다. 기준 위치의 반대쪽이 잘립니다'], ['stretch', '늘려서 채우기 (모양 변형)', '가로·세로를 따로 늘립니다. 비율 차이가 작을 때'], ['keep', '내용 크기 그대로', '요소 크기는 그대로 두고 기준 위치로만 옮깁니다']].map(([m, t, dd]) => `<label class="rsmode ${S.mode === m ? 'on' : ''}"><input type="radio" name="rsMode" value="${m}" ${S.mode === m ? 'checked' : ''}><b>${t}</b><small>${dd}</small></label>`).join('')}</div>
     ${['contain', 'cover', 'keep'].includes(S.mode) ? `<div class="row" style="align-items:center;gap:10px;margin-top:8px"><span class="hint" style="margin:0">기준 위치</span><div class="rsanchor">${[0, 0.5, 1].map(y => [0, 0.5, 1].map(x => `<button type="button" data-rsa="${x},${y}" class="${S.A[0] === x && S.A[1] === y ? 'on' : ''}" title="${['위', '가운데', '아래'][y * 2]}${['왼쪽', '가운데', '오른쪽'][x * 2] === '가운데' && y === 0.5 ? '' : ' ' + ['왼쪽', '가운데', '오른쪽'][x * 2]}"></button>`).join('')).join('')}</div><span class="hint" style="margin:0">${S.mode === 'cover' ? '이 쪽은 남기고 반대쪽이 잘립니다' : '남는 곳이 반대쪽에 생깁니다'}</span></div>` : ''}
   </div><div class="rsprev"><span class="hint">${doc.pages.length > 1 ? `<button class="btn sm icon" id="rsPrev" title="앞 쪽" ${S.pi ? '' : 'disabled'}>‹</button> ` : ''}미리보기 (${S.pi + 1} / ${doc.pages.length}쪽)${doc.pages.length > 1 ? ` <button class="btn sm icon" id="rsNext" title="다음 쪽" ${S.pi < doc.pages.length - 1 ? '' : 'disabled'}>›</button>` : ''}</span><div class="rsbox" style="width:${ok ? W * k : box}px;height:${ok ? H * k : box}px">${ok ? `<div style="transform:scale(${k * 25.4 / 96});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(W, H, prevPage.els, srcPg.bg)}</div>` : ''}</div>
-  <p class="hint" style="text-align:center">${ok ? `${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm` : '크기를 확인해 주세요'}</p></div></div>
+  <p class="hint" style="text-align:center">${ok ? sizeLabelFor(W, H, S.fmt, S.unit) : '크기를 확인해 주세요'}</p></div></div>
   <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="rsCopy" ${ok ? '' : 'disabled'}>새 크기로 사본 만들기</button><button class="btn primary" id="rsApply" ${ok ? '' : 'disabled'}>이 디자인 크기 바꾸기</button></div>`;
   const B = $('#rsBody');
   $('#rsFmt').onchange = e => { const f = FORMATS.find(x => x[0] === e.target.value); S.fmt = e.target.value; if (f) { S.w = f[3]; S.h = f[4]; S.unit = f[5]; } renderResize(); };
@@ -5605,7 +5615,7 @@ function renderResize() {
   B.querySelectorAll('[name=rsMode]').forEach(r => r.onchange = () => { S.mode = r.value; renderResize(); });
   B.querySelectorAll('[data-rsa]').forEach(b => b.onclick = () => { S.A = b.dataset.rsa.split(',').map(Number); renderResize(); });
   if ($('#rsPrev')) $('#rsPrev').onclick = () => { S.pi--; renderResize(); }; if ($('#rsNext')) $('#rsNext').onclick = () => { S.pi++; renderResize(); };
-  $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode, S.A); doc.pages = nd.pages; doc.w = W; doc.h = H; doc.fmt = S.fmt || ''; { const f = FORMATS.find(x => x[0] === S.fmt); if (f) doc.bleed = bleedFor(f); } commit();  /* 인쇄물↔SNS로 바꾸면 도련도 맞춤 */ zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toastUndo(`크기를 ${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm로 바꿨습니다`, () => { zoom = 0; fitCanvas(); }); };
+  $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode, S.A); doc.pages = nd.pages; doc.w = W; doc.h = H; doc.fmt = S.fmt || ''; { const f = FORMATS.find(x => x[0] === S.fmt); if (f) doc.bleed = bleedFor(f); } commit();  /* 인쇄물↔SNS로 바꾸면 도련도 맞춤 */ zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toastUndo(`크기를 ${sizeLabelFor(W, H, S.fmt, S.unit)}로 바꿨습니다`, () => { zoom = 0; fitCanvas(); }); };
   $('#rsCopy').onclick = async () => {
     const f = FORMATS.find(x => x[0] === S.fmt); const nd = resizedDoc(doc, W, H, S.mode, S.A); nd.fmt = S.fmt || ''; nd.name = `${doc.name || '새 디자인'} (${f ? f[1] : `${Math.round(W)}×${Math.round(H)}`})`;
     if (f) nd.bleed = bleedFor(f);

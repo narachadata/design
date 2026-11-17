@@ -19,7 +19,7 @@ NC.fx = (function () {
   function textStyle(el) {
     const grad = el.fillType === 'gradient';
     let s = `font-family:'${el.font}','Pretendard','Noto Sans KR',sans-serif;font-size:${el.size}pt;font-weight:${el.weight};font-style:${el.italic ? 'italic' : 'normal'};text-align:${el.align};line-height:${el.lh};letter-spacing:${el.ls}em;`;
-    s += grad ? `background:linear-gradient(${el.gAngle || 90}deg,${el.g1},${el.g2});-webkit-background-clip:text;background-clip:text;color:transparent;` : `color:${el.color};`;
+    s += grad ? `background:linear-gradient(${el.gAngle || 90}deg,${el.g1 || '#2f5bea'},${el.g2 || '#e0564b'});-webkit-background-clip:text;background-clip:text;color:transparent;` : `color:${el.color};`;
     if (el.strokeW > 0) s += `-webkit-text-stroke:${el.strokeW}pt ${el.strokeC};paint-order:stroke fill;`;
     s += textShadows(el, grad);
     const deco = [el.underline ? 'underline' : '', el.strike ? 'line-through' : ''].filter(Boolean).join(' ');
@@ -96,7 +96,7 @@ NC.fx = (function () {
     }
   }
   function fillAttr(el, id) {
-    if (el.fillType === 'gradient') return { attr: `fill="url(#${id})"`, defs: el.gKind === 'radial' ? `<radialGradient id="${id}"><stop offset="0" stop-color="${el.g1}"/><stop offset="1" stop-color="${el.g2}"/></radialGradient>` : `<linearGradient id="${id}" gradientTransform="rotate(${(el.gAngle || 0)} .5 .5)"><stop offset="0" stop-color="${el.g1}"/><stop offset="1" stop-color="${el.g2}"/></linearGradient>` };
+    if (el.fillType === 'gradient') { const c1 = el.g1 || '#2f5bea', c2 = el.g2 || '#e0564b', ang = el.gAngle == null ? 90 : el.gAngle; /* 속성 창의 기본값과 같게 (전에는 색이 비어 검정) */ return { attr: `fill="url(#${id})"`, defs: el.gKind === 'radial' ? `<radialGradient id="${id}"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></radialGradient>` : `<linearGradient id="${id}" gradientTransform="rotate(${ang} .5 .5)"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient>` }; }
     return { attr: `fill="${el.fill || 'none'}"`, defs: '' };
   }
   function shapeSVG(el) {

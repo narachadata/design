@@ -470,6 +470,8 @@ NC.cal = (function () {
     }));
   }
   // 테마를 바꿔 캘린더 페이지를 다시 만들되, 캘린더가 아닌 페이지는 그대로 둡니다.
+  // 쪽이 나타내는 달: 큰 달력 요소 → 그 밖의 달 표시 요소(작은 '다음 달' 달력은 빼고)
+  function pageMonth(p) { const c = (p.els || []).find(e => e.type === 'cal' && e.month) || (p.els || []).find(e => e.month && e.type !== 'mini'); return c ? c.month : null; }
   function retheme(doc, uid, year) {
     syncFromPages(doc);
     const fresh = buildPages(doc, uid, { year, kind: 'full' });
@@ -480,7 +482,7 @@ NC.cal = (function () {
       if (!p.kind) return p;
       let np = null;
       if (p.kind === 'cover') np = byKind.cover.shift(); else if (p.kind === 'back') np = byKind.back.shift();
-      else { const m = (p.els.find(e => e.month) || {}).month; if (p.kind === 'virtue') np = vir.find(x => x.els.some(e => e.month === m)); if (p.kind === 'cal') np = cal.find(x => x.els.some(e => e.month === m)); }
+      else { const m = pageMonth(p); if (p.kind === 'virtue') np = vir.find(x => pageMonth(x) === m); if (p.kind === 'cal') np = cal.find(x => pageMonth(x) === m); }  /* 쪽의 달: 그 쪽 달력 요소의 달 — '다음 달' 작은 달력(month = 다음 달)에 먼저 걸려 한 칸씩 밀리고 12월이 사라지던 것 */
       if (np) {
         replaced++;
         // 달력 칸 편집(합치기·너비·높이·칸 색·칸 글자)은 그대로 옮김
