@@ -462,6 +462,7 @@ function renderAll() { renderCanvas(); renderSide(); renderInspector(); if (tlOn
 function rerender(opts) { opts = opts || {}; renderCanvas(); if (!opts.noPanel) renderInspector(); clearTimeout(thumbTimer); thumbTimer = setTimeout(() => { if (sideTab === 'pages') renderThumbs(); else if (sideTab === 'layers') renderSide(); if (tlOn()) { if (!tl.playing) tlHidePrev(); renderTimeline(); } }, 150); }
 function goto(i) { endEdit(); cur = clamp(i, 0, doc.pages.length - 1); sel = []; selDay = null; cellSel = null; renderAll(); }
 function select(ids) { endEdit(); sel = ids.filter(id => find(id)); if (sel.length) { tl.selIt = null; tl.selAu = false; tl.selScene = false; } selDay = null; if (cellSel && !sel.includes(cellSel.id)) cellSel = null; renderOverlay(); renderInspector(); if (sideTab === 'layers' || (sideTab === 'video' && ['text', 'motion', 'trans'].includes(vTab))) renderSide(); updateToolbarState(); }
+let groupTipShown = false;
 function groupOf(id) { const el = find(id); if (!el || !el.group) return [id]; return page().els.filter(e => e.group === el.group).map(e => e.id); }
 function updateToolbarState() { const n = sel.length; const g = selEls().some(e => e.group); const b = $('#btnGroup'); if (b) { b.hidden = n < 2 && !g; b.textContent = g ? '그룹 해제' : '그룹'; } const ds = $('#btnDist'); if (ds) ds.hidden = n < 3; }
 
@@ -587,6 +588,9 @@ wrap.addEventListener('pointerdown', e => {
     if (el.type === 'cal' && was && !el.locked && hitNode.closest('.cell')) { const cellNode = hitNode.closest('.cell'); const c = Number(cellNode.dataset.c); if (e.shiftKey && cellSel && cellSel.id === id) cellSel.b = c; else cellSel = { id, a: c, b: c }; const dd = cellNode.dataset.day; selDay = dd ? Number(dd) : null; drag = { kind: 'cells', start: p, moved: false }; renderOverlay(); renderInspector(); e.preventDefault(); return; }
     if (!was || el.type !== 'cal') cellSel = null;
     if (el.type === 'text' && was && !el.locked && !e.altKey && !(el.warp && el.warp !== 'none') && lastClick && lastClick.id === id && Date.now() - lastClick.t < 450) { lastClick = null; startEdit(dom, e); e.preventDefault(); return; }
+    /* 묶음 안 요소 두 번 누르기 → 그 요소 하나만 (캔바·피그마와 같음, Alt+누르기와 같은 결과) */
+    if (el.group && was && !e.shiftKey && !e.altKey && sel.length > 1 && groupOf(id).every(i => sel.includes(i)) && lastClick && lastClick.id === id && Date.now() - lastClick.t < 450) { lastClick = { id, t: Date.now() }; select([id]); if (!groupTipShown) { groupTipShown = true; toast('묶음 안의 요소 하나만 골랐습니다 — 묶음 전체는 다른 곳을 누른 뒤 다시 누르기'); }
+      if (!el.locked) drag = { kind: 'move', els: [el], start: p, orig: [{ id, x: el.x, y: el.y }], moved: false }; e.preventDefault(); return; }
     lastClick = { id, t: Date.now() };
     const ids = e.altKey ? [id] : groupOf(id);
     if (e.shiftKey) { sel = was ? sel.filter(i => !ids.includes(i)) : sel.concat(ids.filter(i => !sel.includes(i))); select(sel); }
@@ -886,12 +890,12 @@ $('#btnUndo').onclick = undo; $('#btnRedo').onclick = redo;
 /* ---------- 요소 추가 ---------- */
 const TEXT_DEF = Object.assign({ type: 'text', text: '글자를 입력하세요', x: 20, y: 20, w: 80, h: 10, rot: 0, font: 'Pretendard', size: 14, weight: 400, italic: false, color: '#1a1a1a', align: 'left', lh: 1.3, ls: 0, strokeW: 0, strokeC: '#ffffff', shadow: false, shC: '#000000', shA: 0.25, shX: 0.6, shY: 0.7, shB: 0.4, bg: '', pad: 0, opacity: 1, valign: 'top', name: '' }, FX.TEXT_FX_DEF);
 function addEl(el, at) { el.id = el.id || uid(); delete el.gen; if (at !== false) { el.x = r1(clamp((doc.w - el.w) / 2, 0, doc.w)); el.y = r1(clamp((doc.h - el.h) / 2, 0, doc.h)); } page().els.push(el); commit(); select([el.id]); rerender(); return el; }
-function addEls(els, name) { if (!els.length) return; els.forEach(e => delete e.gen);
+function addEls(els, name, at) { if (!els.length) return; /* at: 끌어다 놓은 자리(mm) — 묶음 가운데를 그곳에 */ els.forEach(e => delete e.gen);
   { /* 문서 크기에 맞춰 요소 크기 조절 (현수막에선 점처럼, 명함에선 넘치던 것) — 묶음 전체를 같은 비율로 */
     const bw0 = Math.max(...els.map(e => e.x + e.w)) - Math.min(...els.map(e => e.x)), bh0 = Math.max(...els.map(e => e.y + e.h)) - Math.min(...els.map(e => e.y));
     const kk = Math.min(docK(), doc.w * 0.6 / Math.max(1, bw0), doc.h * 0.6 / Math.max(1, bh0));
     if (Math.abs(kk - 1) > 0.02) els.forEach(e => { e.x *= kk; e.y *= kk; e.w = r1(e.w * kk); e.h = r1(e.h * kk); if (e.size) e.size = Math.round(e.size * kk * 10) / 10; if (e.strokeW) e.strokeW = Math.round(e.strokeW * kk * 100) / 100; if (e.radius) e.radius *= kk; if (Array.isArray(e.pts)) e.pts = e.pts.map(q => [q[0] * kk, q[1] * kk]); }); }
-  const xs = els.map(e => e.x), ys = els.map(e => e.y); const bw = Math.max(...els.map(e => e.x + e.w)) - Math.min(...xs), bh = Math.max(...els.map(e => e.y + e.h)) - Math.min(...ys); const ox = r1(clamp((doc.w - bw) / 2, 0, doc.w)) - Math.min(...xs), oy = r1(clamp((doc.h - bh) / 2, 0, doc.h)) - Math.min(...ys); const g = els.length > 1 ? uid() : null; els.forEach(e => { e.id = e.id || uid(); e.x = r1(e.x + ox); e.y = r1(e.y + oy); if (g) e.group = g; page().els.push(e); }); commit(); select(els.map(e => e.id)); rerender(); noteRecentElem(name); }
+  const xs = els.map(e => e.x), ys = els.map(e => e.y); const bw = Math.max(...els.map(e => e.x + e.w)) - Math.min(...xs), bh = Math.max(...els.map(e => e.y + e.h)) - Math.min(...ys); const ox = r1(at ? clamp(at.x - bw / 2, -bw / 2, doc.w - bw / 2) : clamp((doc.w - bw) / 2, 0, doc.w)) - Math.min(...xs), oy = r1(at ? clamp(at.y - bh / 2, -bh / 2, doc.h - bh / 2) : clamp((doc.h - bh) / 2, 0, doc.h)) - Math.min(...ys); const g = els.length > 1 ? uid() : null; els.forEach(e => { e.id = e.id || uid(); e.x = r1(e.x + ox); e.y = r1(e.y + oy); if (g) e.group = g; page().els.push(e); }); commit(); select(els.map(e => e.id)); rerender(); noteRecentElem(name); }
 // 새 요소 크기는 문서 크기에 맞춤 (A5 기준. 현수막에서 너무 작거나 스티커에서 너무 크지 않게)
 const docK = () => clamp(Math.min(doc.w, doc.h) / 148, 0.35, 20);
 function addText(preset, st) { const base = Object.assign({}, TEXT_DEF, lastTextStyle || {}); const k = docK(); const p0 = preset === 'h' ? { text: '제목을 입력하세요', size: 36, weight: 700, w: 120, h: 16, ls: -0.02 } : preset === 's' ? { text: '부제목을 입력하세요', size: 20, weight: 500, w: 100, h: 10 } : { text: '본문 글을 입력하세요', size: 12, weight: 400, w: 90, h: 8 }; const p = Object.assign({}, p0, { size: Math.round(p0.size * k * 2) / 2, w: r1(Math.min(p0.w * k, doc.w * 0.9)), h: r1(p0.h * k) }); if (st && st.text && !st.w) p.w = r1(Math.min(doc.w * 0.8, Math.max(p.w, 20 * k))); const noEdit = st && st.noEdit; if (st) delete st.noEdit; const el = addEl(Object.assign(base, p, st || {})); if (noEdit) return el; freshText = el.id; setTimeout(() => { const d = $(`#canvas [data-id="${el.id}"]`); if (d && !(el.warp && el.warp !== 'none')) startEdit(d); }, 50); return el; }
@@ -2294,7 +2298,7 @@ function renderSide() {
   }
 }
 /* ---- 요소 패널 ---- */
-function elemCard(it) { const els = it.make(uid, { year: doc.calendar.year || 2027 }); return `<button class="ecard" data-el="${it.id}" title="${esc(it.name)}"><div class="ebox" data-w="${it.w}" data-h="${it.h}">${tmpSheet(it.w, it.h, els, it.dark ? '#002559' : it.cat === 'icon' || it.cat === 'illust' || it.cat === 'naracha' ? 'transparent' : '#ffffff')}</div>${it.cat === 'icon' ? '' : `<span>${esc(it.name)}</span>`}</button>`; }
+function elemCard(it) { const els = it.make(uid, { year: doc.calendar.year || 2027 }); return `<button class="ecard" data-el="${it.id}" title="${esc(it.name)} — 누르면 가운데에, 끌면 원하는 자리에" draggable="true"><div class="ebox" data-w="${it.w}" data-h="${it.h}">${tmpSheet(it.w, it.h, els, it.dark ? '#002559' : it.cat === 'icon' || it.cat === 'illust' || it.cat === 'naracha' ? 'transparent' : '#ffffff')}</div>${it.cat === 'icon' ? '' : `<span>${esc(it.name)}</span>`}</button>`; }
 const LIB_ECATS = [['brand', '로고 · 심볼'], ['logo', '로고 (자료실)'], ['emblem', '엠블럼·패치'], ['mascot', '마스코트 라차'], ['mine-el', '내 요소'], ['cartoon', '태권도 캐릭터 (만화)'], ['ai-char', 'AI 캐릭터·사람'], ['ai-sticker', 'AI 스티커'], ['ai-scene', 'AI 배경·장면'], ['ai-photo', 'AI 사진'], ['ai-coloring', 'AI 색칠 도안'], ['ai-icon', 'AI 아이콘'], ['ai-mascot', 'AI 라차'], ['aiimg', 'AI로 만든 그림'], ['pose', '태권도 포즈 (사진)'], ['pair', '겨루기 · 두 사람'], ['silhouette', '동작 실루엣'], ['illust', '태권도 일러스트'], ['belt', '띠·라벨'], ['pattern', '패턴·장식']];
 // 프로그램에 들어 있는 나라차 로고·심볼 (자료실이 없어도 늘 맨 위에)
 const BRAND_ELS = [['brand-horizontal', '가로 로고'], ['brand-horizontal-navy', '가로 로고 (남색)'], ['brand-horizontal-white', '가로 로고 (흰색)'], ['brand-horizontal-mono', '가로 로고 (한 색)'], ['brand-korean', '한글 로고'], ['brand-korean-navy', '한글 로고 (남색)'], ['brand-korean-white', '한글 로고 (흰색)'], ['brand-since', 'Since 2002 로고'], ['brand-since-white', 'Since 2002 (흰색)'], ['brand-hex', '육각 심볼'], ['brand-symbol-gray', '심볼 (회색)'], ['logo-wordmark-white', '워드마크 (흰색)']];
@@ -2317,7 +2321,7 @@ function libElemItems0() {
 const rachaBtn = '<div class="row" style="margin:4px 0 2px"><button class="btn sm ai" data-racha>🐧 라차 동작 한 번에 만들기</button></div>';
 function libHint(short) { const st = NC.lib.st; const msg = store.state.dir ? (st.error === 'none' ? '동기화 폴더에 "디자인자료" 폴더가 없습니다.' : st.ready ? '' : '나라차 자료실을 불러오는 중…') : '저장·동기화에서 구글 드라이브 폴더를 연결하면 나라차 로고·마스코트·사진·템플릿(나라차 자료실)이 여기에 나옵니다.'; return msg ? `<p class="hint">${short ? '<b>나라차 자료실</b> · ' : ''}${msg}</p>` : ''; }
 function getElem(id) { return NC.elems.get(id) || libElemItems().find(x => x.id === id); }
-async function insertElem(id) { const it = getElem(id); if (!it) return; let els = it.make(uid, { year: doc.calendar.year || 2027 }); if (it.lib) { setStatus('자료실에서 불러오는 중…'); try { els = await NC.lib.materialize(els, addAsset); } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return; } finally { setStatus(''); } } addEls(els, it.id); }
+async function insertElem(id, at) { const it = getElem(id); if (!it) return; let els = it.make(uid, { year: doc.calendar.year || 2027 }); if (it.lib) { setStatus('자료실에서 불러오는 중…'); try { els = await NC.lib.materialize(els, addAsset); } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return; } finally { setStatus(''); } } addEls(els, it.id, at); }
 // 내 요소 추가: PNG·SVG·JPG를 자료실 '내 그림'에 보관 (동기화 폴더라 두 PC 모두에서 요소로 보임)
 async function addMyElements() {
   const files = await new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.multiple = true; i.accept = 'image/png,image/svg+xml,image/jpeg,image/webp'; i.onchange = () => res([...i.files]); i.click(); }); if (!files.length) return;
@@ -5126,14 +5130,14 @@ new MutationObserver(() => decorateColors($('#inspector'))).observe($('#inspecto
 decorateColors($('#inspector'));
 
 /* ---- 사진 끌어 넣기: 컴퓨터 파일이나 왼쪽 패널의 그림을 캔버스로. 그림 위에 놓으면 그 그림만 바꿈(크기·자르기 유지) ---- */
-document.addEventListener('dragstart', e => { const b = e.target.closest && e.target.closest('#sidebody [data-img], #sidebody [data-libimg]'); if (!b) return; e.dataTransfer.setData('text/x-nc-img', b.dataset.libimg ? 'lib|' + b.dataset.libimg : b.dataset.img); e.dataTransfer.effectAllowed = 'copy'; });
-const dropKind = e => { const t = e.dataTransfer && e.dataTransfer.types; return t && (t.includes('text/x-nc-img') ? 'img' : t.includes('Files') ? 'file' : ''); };
+document.addEventListener('dragstart', e => { const ec = e.target.closest && e.target.closest('#sidebody .ecard[data-el]'); if (ec) { e.dataTransfer.setData('text/x-nc-el', ec.dataset.el); e.dataTransfer.effectAllowed = 'copy'; return; } const b = e.target.closest && e.target.closest('#sidebody [data-img], #sidebody [data-libimg]'); if (!b) return; e.dataTransfer.setData('text/x-nc-img', b.dataset.libimg ? 'lib|' + b.dataset.libimg : b.dataset.img); e.dataTransfer.effectAllowed = 'copy'; });
+const dropKind = e => { const t = e.dataTransfer && e.dataTransfer.types; return t && (t.includes('text/x-nc-el') ? 'el' : t.includes('text/x-nc-img') ? 'img' : t.includes('Files') ? 'file' : ''); };
 function dropTarget(e) { const d = document.elementsFromPoint(e.clientX, e.clientY).map(n => n.closest && n.closest('#canvas .el')).find(Boolean); const el = d && find(d.dataset.id); return el && el.type === 'image' && !el.locked ? el : null; }
 window.addEventListener('dragover', e => { if (dropKind(e) === 'file') e.preventDefault(); }); // 캔버스 밖에 떨어뜨려도 브라우저가 파일을 열지 않게
 window.addEventListener('drop', e => { if (dropKind(e) === 'file' && !e.target.closest('#scroller')) e.preventDefault(); });
 $('#scroller').addEventListener('dragover', e => {
   if (!dropKind(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
-  const el = dropTarget(e); $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon')); if (el) { const d = $(`#canvas .el[data-id="${el.id}"]`); if (d) d.classList.add('dropon'); }
+  const el = dropKind(e) === 'el' ? null : dropTarget(e); $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon')); if (el) { const d = $(`#canvas .el[data-id="${el.id}"]`); if (d) d.classList.add('dropon'); }
 });
 $('#scroller').addEventListener('dragleave', e => { if (!e.relatedTarget || !$('#scroller').contains(e.relatedTarget)) $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon')); });
 // 동영상·소리 파일 끌어다 놓기: 원본은 이 PC에 그대로 두고 위치(손잡이)만 기억 — 길이와 상관없이 편집 가능
@@ -5149,6 +5153,7 @@ document.addEventListener('drop', e => { if (e.target.closest && e.target.closes
 document.addEventListener('dragover', e => { if (e.target.closest && e.target.closest('#vtl') && e.dataTransfer && [...(e.dataTransfer.items || [])].some(it => it.kind === 'file')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }, true);
 $('#scroller').addEventListener('drop', async e => {
   const kind = dropKind(e); if (!kind) return; if (kind === 'file' && mediaDrop(e)) return; e.preventDefault(); $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon'));
+  if (kind === 'el') { await insertElem(e.dataTransfer.getData('text/x-nc-el'), toMM(e)); return; } /* 요소 패널에서 끌어다 놓기 → 놓은 자리에 */
   const tgt = dropTarget(e), p = toMM(e), pg0 = page(); let refs = [];
   if (kind === 'img') { const v = e.dataTransfer.getData('text/x-nc-img'); const r = v.startsWith('lib|') ? await libInsert(v.slice(4)) : v; if (r) refs = [r]; }
   else { const fs = [...e.dataTransfer.files].filter(f => /^image\//.test(f.type)); if (!fs.length) { toast('그림·동영상·소리 파일만 넣을 수 있습니다', true); return; } for (const f of fs) refs.push(addAsset(await fileToDataURL(f))); }
