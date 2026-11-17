@@ -312,7 +312,10 @@ function book() { if (!doc.book) doc.book = clone(BOOK_DEF); return Object.assig
 function bookNum(i) { const B = book(); return i < (Number(B.skip) || 0) ? null : i - (Number(B.skip) || 0) + (Number(B.start) || 1); }
 function bookTotal() { const B = book(); return Math.max(0, doc.pages.length - (Number(B.skip) || 0)); }
 function isRightPage(i) { const B = book(); if (!B.facing) return true; return i % 2 === 0; } /* 펼침면: 1쪽(표지)은 오른쪽, 그다음부터 왼·오른쪽 번갈아 */
-function bookTokens(pg, html) { if (html.indexOf('{쪽}') < 0 && html.indexOf('{전체쪽}') < 0) return html; const i = doc.pages.indexOf(pg); const n = i < 0 ? '' : (bookNum(i) == null ? i + 1 : bookNum(i)); return html.split('{쪽}').join(String(n)).split('{전체쪽}').join(String(bookTotal())); }
+function ddayText(y, m, d) { const t = new Date(); t.setHours(0, 0, 0, 0); const n = Math.round((new Date(y, m - 1, d) - t) / 86400000); return n > 0 ? `D-${n}` : n === 0 ? 'D-DAY' : `D+${-n}`; }
+function bookTokens(pg, html) {
+  if (html.indexOf('{디데이:') >= 0 || html.indexOf('{남은날:') >= 0) html = html.replace(/\{(디데이|남은날):(\d{4})-(\d{1,2})-(\d{1,2})\}/g, (_, k, y, m, d) => k === '디데이' ? ddayText(+y, +m, +d) : String(Math.max(0, Math.round((new Date(+y, +m - 1, +d) - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000)))); /* D-day: 볼 때(내보낼 때) 날짜 기준으로 계산 */
+  if (html.indexOf('{쪽}') < 0 && html.indexOf('{전체쪽}') < 0) return html; const i = doc.pages.indexOf(pg); const n = i < 0 ? '' : (bookNum(i) == null ? i + 1 : bookNum(i)); return html.split('{쪽}').join(String(n)).split('{전체쪽}').join(String(bookTotal())); }
 function masterHTML(pg) {
   if (!doc.book || !doc.book.on) return ''; const B = book(), i = doc.pages.indexOf(pg); if (i < 0 || pg.noMaster) return ''; const n = bookNum(i); if (n == null) return '';
   const right = isRightPage(i), outer = right ? 'right' : 'left', inner = right ? 'left' : 'right', al = B.pos === 'center' ? 'center' : B.pos === 'inner' ? inner : outer;
@@ -477,6 +480,7 @@ function showCellBar() {
     <label title="칸 글자 색"><input type="color" id="cbColor" value="#1f5bd6"><span class="sw">A</span></label><button data-cb="smaller" title="칸 글자 작게">가−</button><button data-cb="bigger" title="칸 글자 크게">가+</button><button data-cb="bold" title="칸 글자 굵게"><b>B</b></button>
     <span class="sep"></span><button data-cb="left" title="왼쪽 정렬">⇤</button><button data-cb="center" title="가운데 정렬">↔</button><button data-cb="right" title="오른쪽 정렬">⇥</button>
     <span class="sep"></span><button data-cb="merge" title="고른 칸 합치기">합치기</button><button data-cb="split" title="합친 칸 나누기">나누기</button><button data-cb="evenc" title="모든 열 너비 같게">열 같게</button><button data-cb="evenr" title="모든 행 높이 같게">행 같게</button>
+    <span class="sep"></span><button data-cb="photo" title="고른 칸에 사진 넣기 (심사일·대회·행사 사진)">📷 사진</button><button data-cb="nophoto" title="칸 사진 빼기">사진 빼기</button>
     <span class="sep"></span><button data-cb="type" title="칸에 글자 넣기 (두 번 누르기)">✎ 입력</button><button data-cb="clear" title="고른 칸 서식·글자 지우기">지우기</button>`;
     b.addEventListener('mousedown', e => { if (!e.target.closest('input')) e.preventDefault(); });
     b.addEventListener('click', e => { const t = e.target.closest('[data-cb]'); if (t) cellCmd(t.dataset.cb); });
@@ -495,6 +499,8 @@ function cellCmd(k) {
   const el = selEls()[0]; if (!el || !cellSel) return; const s = Object.assign({}, CAL.CAL_DEF, el.s || {}); const cs = (el.cells || {})[CAL.cellKey(el, cellSel.a)] || {};
   const rows = CAL.calRows(el);
   if (k === 'nobg') cellSet({ bg: undefined });
+  if (k === 'photo') { pickCellPhoto(); return; }
+  if (k === 'nophoto') { cellSet({ img: undefined, imgPos: undefined }); return; }
   if (k === 'smaller' || k === 'bigger') cellSet({ size: Math.max(4, Math.round(((cs.size || s.evSize) * (k === 'bigger' ? 1.15 : 1 / 1.15)) * 2) / 2) });
   if (k === 'bold') cellSet({ bold: cs.bold ? undefined : true });
   if (k === 'left' || k === 'center' || k === 'right') cellSet({ align: k === 'left' ? undefined : k });
@@ -864,6 +870,14 @@ function addShape(kind, st) { const k = docK(); const def = { type: 'shape', kin
 function addImage(ref) { const el = { type: 'image', src: ref, x: 0, y: 0, w: 60, h: 60, rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '' }; const s = src(ref); if (s) { const i = new Image(); i.onload = () => { const ar = i.naturalWidth / i.naturalHeight; el.w = Math.min(80 * docK(), doc.w * 0.6); el.h = r1(el.w / ar); if (el.h > doc.h * 0.8) { el.h = r1(doc.h * 0.8); el.w = r1(el.h * ar); } el.x = r1((doc.w - el.w) / 2); el.y = r1((doc.h - el.h) / 2); rerender(); if (hptr === at && hist.length - 1 === at) amendCommit(); else commit(); }; i.src = s; } addEl(el); const at = hptr; }
 function addCal() { const y = doc.calendar.year || new Date().getFullYear(); ensureHolidays(y, true); addEl({ type: 'cal', year: y, month: 1, x: 0, y: 0, w: Math.min(204, doc.w - 20), h: Math.min(100, doc.h - 30), rot: 0, opacity: 1, s: {}, events: [], notes: [], name: '달력' }); }
 function addMini() { const y = doc.calendar.year || new Date().getFullYear(); addEl({ type: 'mini', year: y, month: 1, x: 0, y: 0, w: 42, h: 24, rot: 0, opacity: 1, s: {}, name: '미니 달력' }); }
+CAL.setSrc && CAL.setSrc(ref => src(ref)); /* 달력 칸 사진 */
+/* 사진을 긴 변 max 픽셀 이하 JPEG로 줄임 (칸 사진처럼 작게 쓰는 곳 — 문서가 무거워지지 않게) */
+function shrinkDataURL(url, max) { return new Promise(res => { const i = new Image(); i.onload = () => { const k = Math.min(1, max / Math.max(i.naturalWidth, i.naturalHeight)); if (k >= 1 && /^data:image\/jpe?g/.test(url)) { res(url); return; } const c = document.createElement('canvas'); c.width = Math.round(i.naturalWidth * k); c.height = Math.round(i.naturalHeight * k); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(i, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.88)); }; i.onerror = () => res(url); i.src = url; }); }
+function pickCellPhoto() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = async () => { const f = inp.files && inp.files[0]; if (!f) return; const url = await shrinkDataURL(await fileToDataURL(f), 900); cellSet({ img: addAsset(url) }); toast('칸에 사진을 넣었습니다 — 날짜·일정 글은 그대로 위에 보입니다 (빼기: 칸 도구 막대의 "사진 빼기")'); };
+  inp.click();
+}
 function fileToDataURL(f) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); }); }
 function recentElems() { try { return JSON.parse(localStorage.getItem('naracal-recent-elems') || '[]'); } catch (e) { return []; } }
 function noteRecentElem(id) { if (!id) return; const r = recentElems().filter(x => x !== id); r.unshift(id); try { localStorage.setItem('naracal-recent-elems', JSON.stringify(r.slice(0, 8))); } catch (e) {} }
@@ -2156,7 +2170,7 @@ function renderSide() {
     renderElems();
   } else if (sideTab === 'text') {
     const rf = recentFonts();
-    body.innerHTML = `<button class="btn sm full" data-dojang style="margin-bottom:8px" title="전화·주소·도장 이름을 저장하면 템플릿에 자동으로 채움">🏠 도장 정보 (전화·주소 자동 채우기)</button><h3>글자 추가</h3><div class="tile"><button data-add="text:h"><span class="t-h">제목</span></button><button data-add="text:s"><span class="t-s">부제목</span></button><button data-add="text:b">본문 글</button><button data-add="text:v"><span style="writing-mode:vertical-rl">세로</span></button></div>
+    body.innerHTML = `<button class="btn sm full" data-dojang style="margin-bottom:8px" title="전화·주소·도장 이름을 저장하면 템플릿에 자동으로 채움">🏠 도장 정보 (전화·주소 자동 채우기)</button><button class="btn sm full" data-dday style="margin-bottom:8px" title="행사까지 남은 날(D-7)을 자동으로 계산하는 글">⏳ D-day 넣기 (승급심사·캠프까지 남은 날)</button><h3>글자 추가</h3><div class="tile"><button data-add="text:h"><span class="t-h">제목</span></button><button data-add="text:s"><span class="t-s">부제목</span></button><button data-add="text:b">본문 글</button><button data-add="text:v"><span style="writing-mode:vertical-rl">세로</span></button></div>
     <h3>스타일로 추가</h3><div class="tstyles">${FX.TEXT_PRESETS.map(p => `<button data-tstyle="${p.id}" class="tsb"><span style="${FX.textStyle(Object.assign({}, TEXT_DEF, { font: 'Jua', size: 18, weight: 800, align: 'center' }, p.st))}">${esc(p.name)}</span></button>`).join('')}</div>
     <h3>글꼴 조합</h3><div class="fontpairs">${[['Jua', 'Noto Sans KR', '귀엽고 또렷'], ['Black Han Sans', 'Pretendard', '강하고 현대적'], ['Gowun Batang', 'Gowun Dodum', '단정한 명조'], ['Do Hyeon', 'Nanum Gothic', '힘찬 고딕'], ['Nanum Brush Script', 'Noto Serif KR', '붓글씨 감성'], ['Dongle', 'Gaegu', '둥글둥글 손글씨']].map(([a, b, t]) => `<button class="fontpair" data-pair="${a}|${b}"><b style="font-family:'${a}'">${esc(a)}</b><span style="font-family:'${b}'">${esc(b)} · ${t}</span></button>`).join('')}</div>
     ${rf.length ? `<h3>최근 사용 글꼴</h3><div class="row">${rf.map(f => `<button class="btn sm" data-usefont="${esc(f)}" style="font-family:'${esc(f)}'">${esc(f)}</button>`).join('')}</div>` : ''}
@@ -2657,7 +2671,7 @@ function renderInspector() {
   const fillBlock = `<div class="seg">${[['solid', '단색'], ['gradient', '그라데이션']].map(([a, t]) => `<button data-set="fillType:${a}" aria-pressed="${(el.fillType || 'solid') === a}">${t}</button>`).join('')}</div>${(el.fillType || 'solid') === 'gradient' ? `<div class="grid3">${F('시작 색', 'g1', el.g1 || '#2f5bea', { type: 'color' })}${F('끝 색', 'g2', el.g2 || '#e0564b', { type: 'color' })}</div>${F('방향', 'gAngle', el.gAngle == null ? 90 : el.gAngle, { type: 'angle', def: 90 })}${el.type === 'shape' || el.type === 'path' ? F('모양', 'gKind', el.gKind || 'linear', { type: 'select', options: [['linear', '직선'], ['radial', '원형']] }) : ''}` : ''}`;
   if (el.type === 'text') {
     h += `<div class="tstyles sm" id="presetGrid" ${presetsOpen() ? '' : 'hidden'}>${FX.TEXT_PRESETS.map(p => `<button data-preset="${p.id}" class="tsb"><span style="${FX.textStyle(Object.assign({}, TEXT_DEF, { font: 'Jua', size: 13, weight: 800, align: 'center' }, p.st))}">${esc(p.name)}</span></button>`).join('')}</div>
-    <h3>글자</h3>${el.html && el.htmlFor === el.text ? `<label class="f"><span>내용 <small>부분 서식이 있어 캔버스에서 두 번 눌러 고칩니다</small></span><textarea rows="3" readonly>${esc(el.text)}</textarea></label><button class="btn sm" data-set="html:">부분 서식 지우고 여기서 편집</button>` : F('내용', 'text', el.text, { type: 'textarea', rows: 3 })}
+    <h3>글자</h3>${psHTML(el)}${el.html && el.htmlFor === el.text ? `<label class="f"><span>내용 <small>부분 서식이 있어 캔버스에서 두 번 눌러 고칩니다</small></span><textarea rows="3" readonly>${esc(el.text)}</textarea></label><button class="btn sm" data-set="html:">부분 서식 지우고 여기서 편집</button>` : F('내용', 'text', el.text, { type: 'textarea', rows: 3 })}
     <div class="row"><label class="f" style="flex:1;margin:0"><span>글꼴</span>${fontPicker('font', el.font)}</label><button class="btn sm" id="fontBrowse" style="margin-top:17px">둘러보기</button></div>
     <div class="fsz"><span>글자 크기</span><div class="fszc"><button type="button" data-fsz="-1" title="작게 (Ctrl+Shift+,)">−</button><input class="num" id="fszIn" data-k="size" type="number" step="0.5" min="1" value="${el.size}" title="크기를 직접 입력 (제한 없음)"><button type="button" class="fszdd" data-fszdd title="자주 쓰는 크기">▾</button><button type="button" data-fsz="1" title="크게 (Ctrl+Shift+.)">+</button><em>pt</em></div></div>
     <div class="tfmt"><button type="button" data-tfi="bold" class="${fmtOn(el, 'bold') ? 'on' : ''}" title="굵게 (Ctrl+B)"><b>B</b></button><button type="button" data-tfi="italic" class="${el.italic ? 'on' : ''}" title="기울임 (Ctrl+I)"><i>I</i></button><button type="button" data-tfi="underline" class="${el.underline ? 'on' : ''}" title="밑줄 (Ctrl+U)"><u>U</u></button><button type="button" data-tfi="strike" class="${el.strike ? 'on' : ''}" title="취소선"><s>S</s></button><button type="button" data-tfi2="upper" class="${el.upper ? 'on' : ''}" title="영문 대문자">AA</button><button type="button" data-tfi2="vertical" class="${el.vertical ? 'on' : ''}" title="세로쓰기">세로</button>
@@ -4239,6 +4253,37 @@ async function bookletPdf() {
   } catch (e) { toast('소책자 PDF를 만들지 못했습니다: ' + e.message, true); } finally { setStatus(''); }
 }
 document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-book]')) openBook(); });
+
+/* ---- D-day 블록 (Flodesk 카운트다운처럼): 글 속 {디데이:YYYY-MM-DD}가 볼 때마다 D-7·D-DAY·D+3으로 ---- */
+function openDday() {
+  let d = $('#dlgDday'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgDday'; document.body.appendChild(d); }
+  const pad2 = n => String(n).padStart(2, '0'), t0 = new Date(); t0.setDate(t0.getDate() + 14); const def = `${t0.getFullYear()}-${pad2(t0.getMonth() + 1)}-${pad2(t0.getDate())}`;
+  d.innerHTML = `<div class="dhead"><h2>⏳ D-day 넣기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="width:min(420px,90vw)">
+    <label class="f"><span>행사 이름</span><input type="text" id="ddName" placeholder="예: 정기 승급심사, 여름 캠프" value="정기 승급심사"></label>
+    <label class="f"><span>날짜</span><input type="date" id="ddDate" value="${def}"></label>
+    <p class="hint">"D-12"처럼 남은 날이 <b>볼 때·내보낼 때의 날짜</b>로 계산됩니다. 다른 글 상자에도 <b>{디데이:2027-03-28}</b>(D-12) 또는 <b>{남은날:2027-03-28}</b>(12)을 쓰면 됩니다.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn primary" id="ddGo">넣기</button></div></div>`;
+  d.querySelector('[data-close]').onclick = () => d.close();
+  $('#ddGo').onclick = () => { const nm = $('#ddName').value.trim(), dt = $('#ddDate').value; if (!/^\d{4}-\d{2}-\d{2}$/.test(dt)) { toast('날짜를 골라 주세요', true); return; } const k = docK(); const [y, m, dd] = dt.split('-').map(Number);
+    addText('h', { text: `${nm ? nm + '까지\n' : ''}{디데이:${dt}}`, size: Math.round(30 * k * 2) / 2, weight: 800, align: 'center', color: '#E0564B', lh: 1.15, w: r1(Math.min(doc.w * 0.7, 90 * k)), noEdit: true, name: `D-day ${m}/${dd}` }); d.close(); toast(`D-day를 넣었습니다 — 지금 기준 ${ddayText(y, m, dd)}`); };
+  d.showModal();
+}
+/* ---- 문단 스타일 (인디자인 단락 스타일): 글 모양을 이름으로 저장 → 다른 글에 적용 → 한 곳을 고친 뒤 "모두에 반영"하면 문서 전체의 같은 스타일 글자가 함께 바뀜. doc.pstyles=[{id,name,st}], el.pstyle=id ---- */
+const PS_SKIP = new Set(['text', 'html', 'htmlFor', 'x', 'y', 'w', 'h', 'rot', 'id', 'type', 'name', 'group', 'locked', 'hidden', 'gen', 'pstyle', 'opacity', 'anim', 'animIn', 'animOut', 'qr']);
+function pstyleOf(el) { const st = {}; Object.keys(el).forEach(k => { if (!PS_SKIP.has(k) && !STYLE_SKIP.has(k)) st[k] = clone(el[k]); }); return st; }
+function psCount(id) { let n = 0; doc.pages.forEach(p => p.els.forEach(e => { if (e.pstyle === id) n++; })); return n; }
+function psHTML(el) { const L = doc.pstyles || []; return `<div class="psrow"><select id="psSel" title="문단 스타일 — 고르면 이 글에 그 모양을 적용"><option value="">문단 스타일 없음</option>${L.map(p => `<option value="${p.id}" ${el.pstyle === p.id ? 'selected' : ''}>${esc(p.name)} (${psCount(p.id)})</option>`).join('')}</select><button class="btn sm" id="psNew" title="지금 글 모양을 새 스타일로 저장">+ 저장</button><button class="btn sm ${el.pstyle ? 'primary' : ''}" id="psUpd" ${el.pstyle ? '' : 'disabled'} title="지금 글 모양을 이 스타일을 쓰는 모든 글(모든 쪽)에 반영">모두에 반영</button></div>`; }
+function psApply(el, ps) { Object.keys(pstyleOf(el)).forEach(k => { if (!(k in ps.st)) delete el[k]; }); Object.assign(el, clone(ps.st)); if (el.html) { delete el.html; delete el.htmlFor; } el.pstyle = ps.id; }
+document.addEventListener('change', e => {
+  if (e.target.id !== 'psSel') return; const el = selEls()[0]; if (!el || el.type !== 'text') return; const id = e.target.value;
+  if (!id) { delete el.pstyle; commit(); renderInspector(); return; } const ps = (doc.pstyles || []).find(p => p.id === id); if (!ps) return; psApply(el, ps); commit(); rerender(); toast(`"${ps.name}" 스타일을 적용했습니다`);
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest) return; if (e.target.closest('[data-dday]')) { openDday(); return; }
+  const el = selEls()[0]; if (!el || el.type !== 'text') return;
+  if (e.target.closest('#psNew')) { const nm = window.prompt('새 문단 스타일 이름 (예: 제목, 소제목, 본문, 강조)', (doc.pstyles || []).length ? '' : '제목'); if (!nm || !nm.trim()) return; doc.pstyles = doc.pstyles || []; const ps = { id: uid(), name: nm.trim(), st: pstyleOf(el) }; doc.pstyles.push(ps); el.pstyle = ps.id; commit(); renderInspector(); toast(`"${ps.name}" 스타일을 만들었습니다 — 다른 글을 고르고 목록에서 고르면 같은 모양이 됩니다`); }
+  if (e.target.closest('#psUpd')) { const ps = (doc.pstyles || []).find(p => p.id === el.pstyle); if (!ps) return; ps.st = pstyleOf(el); let n = 0; doc.pages.forEach(p => p.els.forEach(x => { if (x.pstyle === ps.id && x !== el) { psApply(x, ps); n++; } })); commit(); rerender(); toast(`"${ps.name}" 스타일을 ${n}개 글에 반영했습니다 (모든 쪽, Ctrl+Z로 되돌리기)`); }
+});
 
 /* ---- 도장 정보 (Visme 'Dynamic Fields'·Polotno 변수처럼): 한 번 저장하면 템플릿의 자리 표시(010-0000-0000, ○○시 ○○구 ○○로 00, ○○태권도)를 자동으로 채우고,
    정보가 바뀌면 지금 문서 안의 옛 값을 새 값으로 한꺼번에 바꿈. 두 PC 설정 동기화(naracal-dojang) ---- */
