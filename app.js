@@ -4497,7 +4497,7 @@ function renderCertSide(body) {
   const pv = $('#cprev'); if (pv) { const r = rows[certPrev]; const tmp = certPage(form, r || {}, certPrev); const bw = pv.clientWidth || 260, kk = bw / (doc.w * MM); pv.style.height = doc.h * MM * kk + 'px'; const draw = () => { pv.innerHTML = `<div style="transform:scale(${kk});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(doc.w, doc.h, tmp.els.map(e => Object.assign({}, e, { hidden: false })), '#ffffff')}</div>`; }; draw(); fitTextOffscreen(tmp.els).then(() => { if (document.body.contains(pv)) draw(); }); }
 }
 /* ---- 상장 모두 미리 보기 (만들기·출력 전에 실제 모습으로 확인 — 워드 '결과 미리 보기'의 큰 화면) ---- */
-let cpvIdx = -1;
+let cpvIdx = -1, cpvZoom = 1; /* cpvZoom: 화면에 꼭 맞춘 크기 대비 배율(1 = 맞춤) */
 async function openCertPreview(after) {
   if (!(await certNeedA4())) return; const hasFrame = await certEnsureFrame();
   const C = certState(), form = C.form, rows = certRows(form); if (!rows.length) { toast('명단에 이름이 없습니다', true); return; }
@@ -4509,18 +4509,31 @@ async function openCertPreview(after) {
   pages.forEach((p, i) => { const b = p.els.find(e => e.certKey === 'body'); if (b) { const lines = String(b.text).split('\n').length, bottom = b.y + lines * b.size * 0.3528 * (b.lh || 1.5); if (bottom > 219 * doc.h / 297) warns.push(`${rows[i].name}: 글이 아래 KTA 로고에 닿을 수 있습니다 (종목이 많음) — 크게 보기로 확인하세요`); } });
   const D_ = C.data[form], today = CERT_TODAY(), dateOld = (D_.common.date || '') !== today;
   const sheet = (p, w) => { const k = w / (doc.w * MM); return `<div class="cpvbox" style="width:${w}px;height:${doc.h * MM * k}px"><div style="transform:scale(${k});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(doc.w, doc.h, p.els, '#ffffff')}</div></div>`; };
+  /* 크게 보기: 창 안 남는 공간(.cpvstage)에 꼭 맞춘 뒤 cpvZoom 배율 — 글자는 HTML이라 확대해도 선명 */
+  const fitBig = keep => { const st = d.querySelector('#cpvStage'), box = st && st.querySelector('.cpvbox'); if (!box) return; const pw = doc.w * MM, ph = doc.h * MM, base = Math.max(0.05, Math.min((st.clientWidth - 16) / pw, (st.clientHeight - 16) / ph)), k = base * cpvZoom;
+    const fx = keep ? (st.scrollLeft + keep.x) / Math.max(1, st.scrollWidth) : 0, fy = keep ? (st.scrollTop + keep.y) / Math.max(1, st.scrollHeight) : 0;
+    box.style.width = pw * k + 'px'; box.style.height = ph * k + 'px'; box.firstElementChild.style.transform = `scale(${k})`; st.classList.toggle('zoomed', cpvZoom > 1.001);
+    if (keep) { st.scrollLeft = fx * st.scrollWidth - keep.x; st.scrollTop = fy * st.scrollHeight - keep.y; }
+    const zv = d.querySelector('#cpvZv'); if (zv) zv.textContent = cpvZoom > 1.001 ? Math.round(cpvZoom * 100) + '%' : '맞춤'; };
+  const zoomTo = (z, keep) => { cpvZoom = Math.max(1, Math.min(6, z)); fitBig(keep); };
   const draw = () => {
-    const big = cpvIdx >= 0, H = Math.min(innerHeight * 0.68, 760), bw = H * doc.w / doc.h;
+    const big = cpvIdx >= 0;
     d.innerHTML = `<div class="dhead"><h2>🔍 상장 미리 보기 <small>${rows.length}장 · ${doc.pages.some(p => p.cert && p.cert.form === form) ? '만들면 지금 만든 상장을 바꿉니다' : '아직 만들지 않았습니다'}</small></h2><div class="row" style="gap:6px">${big ? '<button class="btn sm" data-cpv="grid">▦ 모두 보기</button>' : ''}<button class="btn sm" data-close>닫기</button></div></div><div class="dbody">
       <div class="cpvinfo"><span>상장 날짜 <b class="${dateOld ? 'old' : ''}">${esc(D_.common.date || '(없음)')}</b></span>${dateOld ? `<button class="btn sm" data-cpv="today">오늘(${esc(today)})로</button>` : ''}${hasFrame ? '' : '<span class="nofr">⚠ 상장 틀이 없습니다</span><button class="btn sm primary" data-cpv="frame">📄 상장 틀 불러오기</button>'}</div>
       ${warns.length ? `<div class="ovfbar" style="display:block">⚠ ${warns.slice(0, 5).map(esc).join('<br>')}</div>` : ''}
-      ${big ? `<div class="cpvbig"><button class="btn icon cpvnav" data-cpvgo="-1" ${cpvIdx ? '' : 'disabled'}>‹</button>${sheet(pages[cpvIdx], bw)}<button class="btn icon cpvnav" data-cpvgo="1" ${cpvIdx < pages.length - 1 ? '' : 'disabled'}>›</button></div><p class="cpvcap"><b>${cpvIdx + 1} / ${pages.length}</b> · ${esc(rows[cpvIdx].name)} <span class="hint">(← → 키로 넘기기)</span></p>`
+      ${big ? `<div class="cpvbig"><button class="btn icon cpvnav" data-cpvgo="-1" ${cpvIdx ? '' : 'disabled'} title="앞 장 (←)">‹</button><div class="cpvstage" id="cpvStage"><div class="cpvpan">${sheet(pages[cpvIdx], doc.w * MM)}</div></div><button class="btn icon cpvnav" data-cpvgo="1" ${cpvIdx < pages.length - 1 ? '' : 'disabled'} title="다음 장 (→)">›</button></div>`
         : `<p class="hint" style="margin-top:0">한 장을 누르면 크게 봅니다. 고칠 곳이 있으면 닫고 ②·③에서 고친 뒤 다시 미리 보세요.</p><div class="cpvgrid">${pages.map((p, i) => `<button class="cpvcard" data-cpvi="${i}">${sheet(p, 170)}<span><b>${i + 1}</b> ${esc(rows[i].name)}${form === 'record' && rows[i].recs ? ` <small>${rows[i].recs.length}종목</small>` : ''}</span></button>`).join('')}</div>`}
-      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn" data-cpv="close">고치러 가기</button><button class="btn" data-cpv="make">🏅 이대로 ${pages.length}장 만들기</button><button class="btn primary" data-cpv="print">🖨 만들고 출력</button></div></div>`;
+      <div class="row cpvfoot">${big ? `<div class="cpvcap"><b>${cpvIdx + 1} / ${pages.length}</b> · ${esc(rows[cpvIdx].name)}<span class="cpvzoom"><button class="btn sm" data-cpvz="-1" title="축소 (−)">−</button><button class="btn sm" data-cpvz="0" id="cpvZv" title="화면에 맞춤 (0)">맞춤</button><button class="btn sm" data-cpvz="1" title="확대 (+)">＋</button></span><span class="hint">← → 넘기기 · + − 확대·축소 · 0 맞춤 · ${/Mac/.test(navigator.platform) ? '⌘' : 'Ctrl'}+휠 · 확대하면 끌어서 옮기기</span></div>` : ''}<span style="flex:1"></span><button class="btn" data-cpv="close">고치러 가기</button><button class="btn" data-cpv="make">🏅 이대로 ${pages.length}장 만들기</button><button class="btn primary" data-cpv="print">🖨 만들고 출력</button></div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
+    const st = d.querySelector('#cpvStage'); if (!st) return; fitBig(); requestAnimationFrame(() => fitBig());
+    st.addEventListener('wheel', e => { if (!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); const r = st.getBoundingClientRect(); zoomTo(cpvZoom * Math.exp(-e.deltaY * 0.0025), { x: e.clientX - r.left, y: e.clientY - r.top }); }, { passive: false }); /* 트랙패드 오므리기도 Ctrl+휠로 들어옴 */
+    st.onpointerdown = e => { if (cpvZoom <= 1.001 || e.button) return; const x0 = e.clientX, y0 = e.clientY, l0 = st.scrollLeft, t0 = st.scrollTop; st.setPointerCapture(e.pointerId); st.classList.add('grab');
+      st.onpointermove = ev => { st.scrollLeft = l0 - (ev.clientX - x0); st.scrollTop = t0 - (ev.clientY - y0); }; st.onpointerup = st.onpointercancel = () => { st.onpointermove = null; st.classList.remove('grab'); }; };
   };
+  if (!d._rsz) { d._rsz = () => { if (d.open && cpvIdx >= 0) fitBig(); }; addEventListener('resize', d._rsz); }
   d.onclick = async e => {
-    const c = e.target.closest('[data-cpvi]'); if (c) { cpvIdx = Number(c.dataset.cpvi); draw(); return; }
+    const z = e.target.closest('[data-cpvz]'); if (z) { const v = Number(z.dataset.cpvz), st = d.querySelector('#cpvStage'), mid = st ? { x: st.clientWidth / 2, y: st.clientHeight / 2 } : null; zoomTo(v ? cpvZoom * (v > 0 ? 1.25 : 0.8) : 1, v ? mid : null); return; }
+    const c = e.target.closest('[data-cpvi]'); if (c) { cpvIdx = Number(c.dataset.cpvi); cpvZoom = 1; draw(); return; }
     const g = e.target.closest('[data-cpvgo]'); if (g && !g.disabled) { cpvIdx = Math.max(0, Math.min(pages.length - 1, cpvIdx + Number(g.dataset.cpvgo))); draw(); return; }
     const b = e.target.closest('[data-cpv]'); if (!b) return; const k = b.dataset.cpv;
     if (k === 'grid') { cpvIdx = -1; draw(); } if (k === 'close') d.close();
@@ -4528,7 +4541,9 @@ async function openCertPreview(after) {
     if (k === 'frame') { d.close(); certLoadFrame(); return; }
     if (k === 'make' || k === 'print') { d.close(); await certMerge(); if (k === 'print' && doc.pages.some(p => p.cert)) openPrint('cert'); }
   };
-  d.onkeydown = e => { if (cpvIdx < 0) return; if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); cpvIdx = Math.max(0, Math.min(pages.length - 1, cpvIdx + (e.key === 'ArrowRight' ? 1 : -1))); draw(); } };
+  d.onkeydown = e => { if (cpvIdx < 0) return; const st = d.querySelector('#cpvStage'), mid = st ? { x: st.clientWidth / 2, y: st.clientHeight / 2 } : null;
+    if (e.key === '+' || e.key === '=' || (e.key === '-' || e.key === '_') || e.key === '0') { e.preventDefault(); zoomTo(e.key === '0' ? 1 : cpvZoom * (e.key === '-' || e.key === '_' ? 0.8 : 1.25), e.key === '0' ? null : mid); return; }
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); cpvIdx = Math.max(0, Math.min(pages.length - 1, cpvIdx + (e.key === 'ArrowRight' ? 1 : -1))); draw(); } };
   cpvIdx = -1; draw(); if (after) toast(after);
 }
 function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEach((r, i) => { if (!String(r.name || '').trim() && Object.values(r).some(v => String(v || '').trim())) w.push(`${i + 1}번 줄에 이름이 없습니다`); if (form === 'record' && String(r.name || '').trim() && !(Array.isArray(r.recs) && r.recs.length) && !(r.a1 || r.b1)) w.push(`${r.name}: 종목1 기록이 비었습니다`); }); return w.length ? `<div class="ovfbar" style="display:block">⚠ ${w.slice(0, 4).map(esc).join('<br>')}${w.length > 4 ? `<br>… ${w.length - 4}개 더` : ''}</div>` : ''; }
