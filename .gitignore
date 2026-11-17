@@ -29,3 +29,6 @@ _testlib
 !/og.png
 상장*
 _certtest*
+# 공방 내장 상장틀 (관장님 결정 2026-11-17 — 공개 사이트에 넣음)
+!assets/cert/*.pdf
+!assets/cert/*.jpg

@@ -4325,9 +4325,10 @@ const CERT_FORMS = {
     cols: [['name', '이름', 7], ['title', '상장 이름 (비우면 공통)', 8], ['line', '이름 아래 한 줄 (선택)', 12]] }
 };
 let certPrev = 0;
+const CERT_FRAME_JPG = 'assets/cert/naracha-cert-frame.jpg', CERT_FRAME_PDF = 'assets/cert/naracha-cert-frame.pdf'; /* 공방 내장 상장틀(A4, 일러스트 원본 PDF) — 관장님 결정 2026-11-17 */
 function certState() {
   if (!doc.cert) doc.cert = { form: 'record', printFrame: true, data: {}, layout: {} };
-  const C = doc.cert; C.data = C.data || {}; C.layout = C.layout || {};
+  const C = doc.cert; C.data = C.data || {}; C.layout = C.layout || {}; if (!C.frame) { C.frame = CERT_FRAME_JPG; C.framePdf = CERT_FRAME_PDF; } /* 틀은 기본으로 내장 틀 */
   Object.entries(CERT_FORMS).forEach(([k, f]) => { if (!C.data[k]) C.data[k] = { common: Object.fromEntries(f.common.map(([a, , v]) => [a, a === 'date' ? CERT_TODAY() : v])), body: f.body, rows: [] }; });
   return C;
 }
@@ -4383,8 +4384,8 @@ async function loadPdfJs() { await loadScript('https://cdnjs.cloudflare.com/ajax
 const framePdfCache = new Map();
 async function framePdfURL(ref, dpi) {
   const key = ref + '|' + Math.round(dpi); if (framePdfCache.has(key)) return framePdfCache.get(key);
-  const data = doc.assets[ref.slice(2)]; if (!data) return null; await loadPdfJs();
-  const bin = atob(data.slice(data.indexOf(',') + 1)), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  let bytes; if (String(ref).startsWith('a:')) { const data = doc.assets[ref.slice(2)]; if (!data) return null; const bin = atob(data.slice(data.indexOf(',') + 1)); bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); }
+  else { const r = await fetch(ref); if (!r.ok) return null; bytes = new Uint8Array(await r.arrayBuffer()); } await loadPdfJs();
   const pdf = await pdfjsLib.getDocument({ data: bytes, isEvalSupported: false }).promise, pg = await pdf.getPage(1), vp = pg.getViewport({ scale: dpi / 72 });
   const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
   await pg.render({ canvasContext: x, viewport: vp }).promise; const b = await new Promise(r => c.toBlob(r, 'image/png')); c.width = c.height = 0; try { pdf.destroy(); } catch (e) {}
@@ -4393,7 +4394,7 @@ async function framePdfURL(ref, dpi) {
 }
 /* 쪽들의 상장 틀을 잠깐 원본 PDF 고해상도 그림으로 바꿈 → 되돌리는 함수를 돌려줌 */
 async function swapPdfFrames(pages, dpi) {
-  const ids = []; for (const pg of pages) for (const e of (pg.els || [])) if (e.pdfSrc && !elHidden(e) && doc.assets[String(e.pdfSrc).slice(2)]) { try { const u = await framePdfURL(e.pdfSrc, Math.max(72, Math.min(600, dpi))); if (u) { ids.push(e.id); elSrcOv.set(e.id, u); } } catch (err) { console.warn('틀 PDF 그리기 실패', err); } }
+  const ids = []; for (const pg of pages) for (const e of (pg.els || [])) if (e.pdfSrc && !elHidden(e) && (!String(e.pdfSrc).startsWith('a:') || doc.assets[String(e.pdfSrc).slice(2)])) { try { const u = await framePdfURL(e.pdfSrc, Math.max(72, Math.min(600, dpi))); if (u) { ids.push(e.id); elSrcOv.set(e.id, u); } } catch (err) { console.warn('틀 PDF 그리기 실패', err); } }
   return () => ids.forEach(id => elSrcOv.delete(id));
 }
 /* 상장 틀 불러오기: PDF(첫 쪽, 약 300dpi)나 그림 → 문서 그림 + 이 PC 기억(다음 상장 문서에 자동) */
@@ -4419,7 +4420,7 @@ async function certLoadFrame() {
 }
 /* 이 PC에 기억된 상장 틀(원본 PDF 포함)을 지금 문서에 자동으로 (관장님: 불러온 틀이 바로 적용되게) */
 async function certEnsureFrame() {
-  const C = certState(); if (C.frame && doc.assets[C.frame.slice(2)]) return true;
+  const C = certState(); if (C.frame && (!C.frame.startsWith('a:') || doc.assets[C.frame.slice(2)])) return true; if (C.frame && C.frame.startsWith('a:')) { C.frame = CERT_FRAME_JPG; C.framePdf = CERT_FRAME_PDF; return true; }
   try { const fr = await store.idbGet('cert-frame'); if (fr && fr.url) { C.frame = addAsset(fr.url); C.framePdf = fr.pdf ? addAsset(fr.pdf) : undefined; doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { e.src = C.frame; e.pdfSrc = C.framePdf; } })); markDirty(); return true; } } catch (e) {}
   return false;
 }
@@ -4461,7 +4462,7 @@ function renderCertSide(body) {
   ${a4 && (doc.cert.frame || doc.pages.some(p => p.cert)) ? '' : `<div class="wz-card"><b>상장 만들기</b><p class="hint" style="margin:4px 0 8px">워드의 편지 병합처럼 양식은 한 번, 명단만 바꿔 여러 명의 상장을 한 번에 만듭니다.</p>${a4 ? '' : '<button class="btn primary full" data-cx="newdoc">A4 상장 문서 새로 만들기</button>'}</div>`}
   <h3>① 상장 틀 <small>배경</small></h3>
   <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm ${C.frame ? '' : 'primary'}" data-cx="frame">${C.frame ? '틀 바꾸기' : '📄 상장 틀 불러오기 (PDF·그림)'}</button>${C.frame ? `<label class="chk" title="틀이 미리 인쇄된 상장 용지에 찍을 때는 끄세요"><input type="checkbox" data-cx="printFrame" ${C.printFrame !== false ? 'checked' : ''}> 틀도 함께 인쇄</label>` : ''}</div>
-  ${C.frame ? (C.framePdf ? '<p class="hint">원본 PDF 틀 — 출력·PDF 때 원본 선 그대로 다시 그립니다.</p>' : '<p class="hint" style="color:#b3261e">그림으로 바꾼 틀입니다. "틀 바꾸기"로 원본 PDF를 다시 불러오면 가는 선까지 선명하게 출력됩니다.</p>') : '<p class="hint">한 번 불러오면 이 PC가 기억해 어느 상장 문서에도 자동으로 들어갑니다. 틀은 이 PC와 관장님 드라이브(비공개)에만 보관되고 공개 사이트에는 올리지 않습니다 (관장 직인).</p>'}
+  ${C.frame === CERT_FRAME_JPG ? '<p class="hint">나라차 상장틀(A4, 원본 PDF)이 기본으로 들어갑니다 — 출력·PDF 때 원본 선 그대로. 다른 틀은 "틀 바꾸기".</p>' : C.frame ? (C.framePdf ? '<p class="hint">원본 PDF 틀 — 출력·PDF 때 원본 선 그대로 다시 그립니다. <button class="btn sm" data-cx="framedef">기본 나라차 틀로</button></p>' : '<p class="hint" style="color:#b3261e">그림으로 바꾼 틀입니다. "틀 바꾸기"로 원본 PDF를 다시 불러오면 가는 선까지 선명하게 출력됩니다.</p>') : '<p class="hint">한 번 불러오면 이 PC가 기억해 어느 상장 문서에도 자동으로 들어갑니다. 틀은 이 PC와 관장님 드라이브(비공개)에만 보관되고 공개 사이트에는 올리지 않습니다 (관장 직인).</p>'}
   <h3>② 양식 <small>주 문서</small></h3>
   <div class="cformgrid">${Object.entries(CERT_FORMS).map(([kk, f]) => `<button class="cform ${kk === form ? 'on' : ''}" data-cform="${kk}"><b>${f.name}</b><small>${f.desc}</small></button>`).join('')}</div>
   <div class="ccommon">${F.common.map(([kk, l]) => `<label class="f"><span>${l} <em class="hint">모두 같음</em></span><input type="text" data-cc="${kk}" value="${esc(D.common[kk] || '')}"></label>`).join('')}
@@ -4537,6 +4538,7 @@ function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEa
     const nv = e.target.closest('[data-cnav]'); if (nv) { certPrev = (certPrev + Number(nv.dataset.cnav) + D.rows.length) % Math.max(1, D.rows.length); renderSide(); return; }
     const b = e.target.closest('[data-cx]'); if (!b || b.tagName === 'INPUT') return; const k = b.dataset.cx;
     if (k === 'newdoc') certNewDoc(); if (k === 'frame') certLoadFrame();
+    if (k === 'framedef') { C.frame = CERT_FRAME_JPG; C.framePdf = CERT_FRAME_PDF; doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { e.src = C.frame; e.pdfSrc = C.framePdf; } })); commit(); renderAll(); toast('기본 나라차 상장틀로 바꿨습니다'); }
     if (k === 'add') { D.rows.push({}); certPrev = D.rows.length - 1; markDirty(); renderSide(); setTimeout(() => { const n = sb().querySelector(`[data-cr="${certPrev}"][data-ck="name"]`); if (n) n.focus(); }, 0); }
     if (k === 'paste') { const d = $('#cpasteBox'); d.open = true; $('#cpaste').focus(); }
     if (k === 'pastego') { certPaste($('#cpaste').value); }
@@ -4610,53 +4612,92 @@ function openMeasImport() {
 /* ======================= 출력 (프린터로 바로) =======================
    윈도우·맥 모두 브라우저 인쇄 창을 씀. 기본은 '고화질 그림'(화면과 똑같이 — 글꼴·효과·그림이 프린터마다 달라지지 않음), 필요하면 '글자 선명(벡터)'.
    엡손 잉크젯: 배율 100%(실제 크기)·테두리 없음·용지 종류·품질 안내 */
-let prState = { pages: 'all', range: '', mode: 'img', dpi: 300, fit: 'safe', frame: true };
-const prOffset = () => { try { const o = JSON.parse(localStorage.getItem('naracal-print-offset') || '{}'); return { x: Number(o.x) || 0, y: Number(o.y) || 0 }; } catch (e) { return { x: 0, y: 0 }; } };
+/* 출력 설정: 이 PC에 기억. paper = 'doc'(문서 크기) | 'A4' | 'A3' | 'B5' | 'Letter', orient = 'auto'|'p'|'l', fit = 'fit'(용지에 맞춤)|'actual'(실제 크기 100%)|'custom'(배율), margin mm, ax·ay 정렬(0·0.5·1), dx·dy 위치 보정 mm */
+const PR_PAPERS = { A4: [210, 297], A3: [297, 420], B5: [182, 257], Letter: [215.9, 279.4] };
+let prState = Object.assign({ pages: 'all', range: '', mode: 'img', dpi: 300, frame: true, paper: 'A4', orient: 'auto', fit: 'fit', pct: 100, margin: 4, ax: 0.5, ay: 0.5, dx: 0, dy: 0, pv: 0 }, (() => { try { const o = JSON.parse(localStorage.getItem('naracal-print') || '{}'); delete o.pages; delete o.range; delete o.pv; return o; } catch (e) { return {}; } })());
+const prSave = () => { const o = Object.assign({}, prState); delete o.pages; delete o.range; delete o.pv; lsSet('naracal-print', o); };
 function prPages() {
   const n = doc.pages.length, S = prState; if (S.pages === 'cur') return [cur]; if (S.pages === 'sel') return [...pgSel].filter(i => i < n).sort((a, b) => a - b);
   if (S.pages === 'cert') return doc.pages.map((p, i) => p.cert ? i : -1).filter(i => i >= 0);
   if (S.pages === 'range') { const out = []; (S.range || '').split(',').forEach(p => { const m = p.trim().match(/^(\d+)(?:\s*[-~]\s*(\d+))?$/); if (!m) return; const a = Number(m[1]), b = Number(m[2] || m[1]); for (let i = Math.min(a, b); i <= Math.max(a, b); i++) if (i >= 1 && i <= n) out.push(i - 1); }); return [...new Set(out)]; }
   return doc.pages.map((_, i) => i).filter(i => !doc.pages[i].dlOff);
 }
+/* 종이 위 자리 계산 (mm) */
+function prLayout() {
+  const S = prState; let [pw, ph] = S.paper === 'doc' ? [doc.w, doc.h] : (PR_PAPERS[S.paper] || PR_PAPERS.A4);
+  const land = S.orient === 'l' || (S.orient === 'auto' && doc.w > doc.h); if (land !== pw > ph) [pw, ph] = [ph, pw];
+  const m = Math.max(0, Number(S.margin) || 0), bw = Math.max(1, pw - 2 * m), bh = Math.max(1, ph - 2 * m);
+  const k = S.fit === 'actual' ? 1 : S.fit === 'custom' ? Math.max(0.05, (Number(S.pct) || 100) / 100) : Math.min(bw / doc.w, bh / doc.h);
+  const w = doc.w * k, h = doc.h * k, x = m + (bw - w) * S.ax + (Number(S.dx) || 0), y = m + (bh - h) * S.ay + (Number(S.dy) || 0);
+  return { pw, ph, m, k, w, h, x, y, over: x < -0.1 || y < -0.1 || x + w > pw + 0.1 || y + h > ph + 0.1 };
+}
 function openPrint(pre) {
-  endEdit(); let d = $('#dlgPrint'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgPrint'; document.body.appendChild(d); }
+  endEdit(); let d = $('#dlgPrint'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgPrint'; d.className = 'wide'; document.body.appendChild(d); }
   const hasCert = doc.pages.some(p => p.cert), isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent), isEdge = /Edg\//.test(navigator.userAgent);
   prState.frame = !(doc.cert && doc.cert.printFrame === false); /* 상장 패널의 '틀도 함께 인쇄'와 같게 시작 */
-  if (pre === 'cert' && hasCert) prState.pages = 'cert'; else if (prState.pages === 'cert' && !hasCert) prState.pages = 'all'; if (prState.pages === 'sel' && pgSel.size < 2) prState.pages = 'all';
+  if (pre === 'cert' && hasCert) { prState.pages = 'cert'; if (Math.abs(doc.w - 210) < 1 && Math.abs(doc.h - 297) < 1) prState.paper = 'A4'; } else if (prState.pages === 'cert' && !hasCert) prState.pages = 'all';
+  if (prState.pages === 'sel' && pgSel.size < 2) prState.pages = 'all'; prState.pv = 0;
+  const preset = k => { const S = prState; if (k === 'safe') Object.assign(S, { fit: 'fit', margin: 4, ax: 0.5, ay: 0.5, dx: 0, dy: 0 }); if (k === 'full') Object.assign(S, { fit: 'fit', margin: 0, ax: 0.5, ay: 0.5, dx: 0, dy: 0 }); if (k === 'exact') Object.assign(S, { fit: 'actual', margin: 0, ax: 0.5, ay: 0.5 }); };
   const draw = () => {
-    const S = prState, list = prPages(), C = doc.cert;
-    d.innerHTML = `<div class="dhead"><h2>🖨 출력</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody prdlg">
-      <div class="grid2"><label class="f"><span>출력할 쪽</span><select id="prPg">${[['all', `모든 쪽${doc.pages.some(p => p.dlOff) ? ' (숨긴 쪽 빼고)' : ''}`], ['cur', `지금 쪽 (${cur + 1})`], ...(pgSel.size > 1 ? [['sel', `페이지 목록에서 고른 ${pgSel.size}쪽`]] : []), ...(hasCert ? [['cert', `상장 쪽만 (${doc.pages.filter(p => p.cert).length}장)`]] : []), ['range', '직접 입력']].map(([a, t]) => `<option value="${a}" ${S.pages === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-      ${S.pages === 'range' ? `<label class="f"><span>쪽 번호</span><input id="prRange" value="${esc(S.range)}" placeholder="예: 1-3, 5"></label>` : `<div class="prcount">${list.length}쪽 · 종이 ${Math.round(doc.w)}×${Math.round(doc.h)}mm</div>`}</div>
-      <div class="seg prmode">${[['img', '고화질 그림 (추천)', '화면과 똑같이 — 글꼴·효과·사진이 프린터·PC마다 달라지지 않음'], ['vec', '글자 선명 (벡터)', '작은 글자가 아주 또렷 — 효과가 많은 디자인은 그림 방식이 안전']].map(([a, t, ti]) => `<button data-prmode="${a}" aria-pressed="${S.mode === a}" title="${ti}">${t}</button>`).join('')}</div>
-      ${S.mode === 'img' ? `<div class="grid2"><label class="f"><span>품질</span><select id="prDpi"><option value="600" ${S.dpi === 600 ? 'selected' : ''}>최고 600dpi (가는 선·도장, 느림)</option><option value="300" ${S.dpi === 300 ? 'selected' : ''}>고품질 300dpi (상장·사진)</option><option value="200" ${S.dpi === 200 ? 'selected' : ''}>표준 200dpi (빠름·많은 쪽)</option></select></label><label class="f"><span>종이 가장자리</span><select id="prFit"><option value="safe" ${S.fit === 'safe' ? 'selected' : ''}>프린터 여백 안에 (96% — 잘리지 않음, 추천)</option><option value="full" ${S.fit === 'full' ? 'selected' : ''}>꽉 채움 — 프린터 '테두리 없음'을 켠 경우만</option><option value="exact" ${S.fit === 'exact' ? 'selected' : ''}>정확히 100% (틀이 인쇄된 상장 용지에 글자만)</option></select></label></div>
-      ${S.fit === 'exact' ? `<div class="grid2"><label class="f"><span>위치 보정 가로 (mm, + 오른쪽)</span><input type="number" step="0.5" id="prDx" value="${prOffset().x}"></label><label class="f"><span>위치 보정 세로 (mm, + 아래)</span><input type="number" step="0.5" id="prDy" value="${prOffset().y}"></label></div><p class="hint" style="margin-top:0">일반 용지에 1장 시험 인쇄 → 상장 용지와 겹쳐 빛에 비춰 보고, 어긋난 만큼 보정하세요 (이 PC에 기억).</p>` : ''}` : ''}
-      ${C && C.frame && list.some(i => doc.pages[i].cert) ? `<label class="chk"><input type="checkbox" id="prFrame" ${S.frame ? 'checked' : ''}> 상장 틀도 함께 출력 <small class="hint" style="margin:0">(틀이 인쇄된 상장 용지면 끄기)</small></label>` : ''}
-      <details class="fx prtip" open><summary><b>엡손 잉크젯 설정 (${isMac ? '맥' : '윈도우'})</b></summary>${isMac ? `<ol><li>인쇄 창의 <b>프린터</b>에서 EPSON을 고르고 <b>용지 크기: A4</b> — 꽉 채움이면 <b>A4 (테두리 없음)</b> + '인쇄 설정'에서 <b>확대량: 최소</b>.</li><li><b>배율 100%</b> (크롬은 '추가 설정 → 배율: 기본값', 사파리는 '크기 조절 100%').</li><li><b>인쇄 설정</b>(또는 '용지 처리/품질')에서 <b>용지 종류</b>: 상장지·두꺼운 무광지는 'Matte(무광) / 고급 무광지', 일반지는 '일반 용지' · <b>인쇄 품질: 높음(고품질)</b>.</li><li>크롬은 <b>배경 그래픽</b>을 켭니다(그림 방식은 꺼도 됨).</li></ol>` : `<ol><li>인쇄 창의 <b>${isEdge ? '프린터' : '대상'}</b>에서 EPSON 프린터를 고릅니다 (PDF로 저장 아님).</li><li><b>${isEdge ? '기타 설정' : '추가 설정'}</b> → <b>용지 크기 A4</b> · <b>배율: 기본값(100%)</b> · <b>여백: 없음</b> · <b>배경 그래픽</b> 체크.</li><li>꽉 채움(테두리 없음)은 <b>'시스템 대화 상자를 사용하여 인쇄'</b>(Ctrl+Shift+P) → <b>기본 설정</b> → <b>테두리 없음</b> 체크 + <b>확대량: 최소</b>, <b>용지 종류</b>: 상장지·두꺼운 무광지는 '고급 무광지(Matte)', 일반지는 '일반 용지' · <b>품질: 높음</b>.</li></ol>`}<p class="hint">테두리 없음이 안 되는 용지·프린터면 '프린터 여백 안에'를 고르세요 (가장자리가 잘리지 않음). 두꺼운 상장지는 프린터 뒤쪽 급지대에 한 장씩 넣는 것이 안전합니다.</p></details>
-      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:8px"><button class="btn primary" id="prGo" ${list.length ? '' : 'disabled'}>🖨 ${list.length}쪽 출력</button></div></div>`;
+    const S = prState, list = prPages(), L = prLayout(), C = doc.cert, pvI = list[Math.min(S.pv, list.length - 1)];
+    const PV = 340, sc = Math.min(PV / L.pw, (PV * 1.3) / L.ph), mmpx = sc; /* 미리 보기 1mm = sc px */
+    const keepVis = []; if (C) doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { keepVis.push(e.id); elVisOv.set(e.id, !!S.frame); } }));
+    let sheet = ''; try { if (pvI != null) { const kk = (L.w * mmpx) / (doc.w * MM); sheet = `<div class="prpage" style="left:${L.x * mmpx}px;top:${L.y * mmpx}px;width:${L.w * mmpx}px;height:${L.h * mmpx}px"><div style="transform:scale(${kk});transform-origin:0 0;position:absolute;left:0;top:0">${sheetHTML(doc.pages[pvI], 'thumb')}</div></div>`; } } finally { keepVis.forEach(id => elVisOv.delete(id)); }
+    const seg = (key, opts) => `<div class="seg">${opts.map(([v, t, ti]) => `<button data-pk="${key}" data-pv="${v}" aria-pressed="${String(S[key]) === String(v)}" ${ti ? `title="${ti}"` : ''}>${t}</button>`).join('')}</div>`;
+    d.innerHTML = `<div class="dhead"><h2>🖨 출력 <small>${list.length}쪽 · ${esc(S.paper === 'doc' ? '문서 크기' : S.paper)} ${L.pw > L.ph ? '가로' : '세로'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody prdlg2">
+      <div class="prpv"><div class="prpaper" style="width:${L.pw * mmpx}px;height:${L.ph * mmpx}px">${S.fit !== 'actual' || S.margin ? `<div class="prmargin" style="inset:${3 * mmpx}px" title="보통 프린터가 못 찍는 가장자리(약 3mm) — 테두리 없음이 아니면 이 밖은 잘릴 수 있음"></div>` : ''}${sheet}</div>
+        <div class="prpvnav">${list.length > 1 ? `<button class="btn sm icon" data-prnav="-1" ${S.pv ? '' : 'disabled'}>‹</button>` : ''}<span>${pvI != null ? `${S.pv + 1} / ${list.length}쪽 (문서 ${pvI + 1}쪽)` : '출력할 쪽이 없습니다'}</span>${list.length > 1 ? `<button class="btn sm icon" data-prnav="1" ${S.pv < list.length - 1 ? '' : 'disabled'}>›</button>` : ''}</div>
+        <p class="hint prsize">디자인 ${Math.round(doc.w)}×${Math.round(doc.h)}mm → 종이에 <b>${Math.round(L.w * 10) / 10}×${Math.round(L.h * 10) / 10}mm (${Math.round(L.k * 1000) / 10}%)</b>${L.over ? ' · <b style="color:#b3261e">종이 밖으로 나갑니다</b>' : ''}</p></div>
+      <div class="prset">
+        <div class="grid2"><label class="f"><span>출력할 쪽</span><select id="prPg">${[['all', `모든 쪽${doc.pages.some(p => p.dlOff) ? ' (숨긴 쪽 빼고)' : ''}`], ['cur', `지금 쪽 (${cur + 1})`], ...(pgSel.size > 1 ? [['sel', `고른 ${pgSel.size}쪽`]] : []), ...(hasCert ? [['cert', `상장 쪽만 (${doc.pages.filter(p => p.cert).length}장)`]] : []), ['range', '직접 입력']].map(([a, t]) => `<option value="${a}" ${S.pages === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        ${S.pages === 'range' ? `<label class="f"><span>쪽 번호</span><input id="prRange" value="${esc(S.range)}" placeholder="예: 1-3, 5"></label>` : `<label class="f"><span>용지</span><select id="prPaper">${[['A4', 'A4 (210×297)'], ['A3', 'A3 (297×420)'], ['B5', 'B5 (182×257)'], ['Letter', 'Letter'], ['doc', `문서 크기 (${Math.round(doc.w)}×${Math.round(doc.h)})`]].map(([a, t]) => `<option value="${a}" ${S.paper === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`}</div>
+        <div class="prrow"><span>빠른 설정</span><div class="row" style="gap:4px;flex-wrap:wrap"><button class="btn sm" data-prset="safe" title="프린터가 못 찍는 가장자리를 피해 여백 4mm 안에 맞춤">여백 안에 맞춤 (추천)</button><button class="btn sm" data-prset="full" title="프린터에서 '테두리 없음'을 켠 경우">꽉 채움 (테두리 없음)</button><button class="btn sm" data-prset="exact" title="틀이 인쇄된 상장 용지에 글자만 — 크기 그대로">실제 크기 100%</button></div></div>
+        <div class="prrow"><span>방향</span>${seg('orient', [['auto', '자동'], ['p', '세로'], ['l', '가로']])}</div>
+        <div class="prrow"><span>크기</span>${seg('fit', [['fit', '용지에 맞춤'], ['actual', '실제 크기'], ['custom', '배율']])}${S.fit === 'custom' ? `<input type="number" id="prPct" min="5" max="400" step="1" value="${S.pct}" style="width:64px"> %` : ''}</div>
+        <div class="prrow"><span>여백</span><input type="range" id="prMargin" min="0" max="25" step="0.5" value="${S.margin}"><b>${S.margin}mm</b></div>
+        <div class="prrow"><span>정렬</span><div class="rsanchor">${[0, 0.5, 1].map(y => [0, 0.5, 1].map(x => `<button type="button" data-pra="${x},${y}" class="${S.ax === x && S.ay === y ? 'on' : ''}"></button>`).join('')).join('')}</div><small class="hint" style="margin:0">종이 안 어디에 둘지</small></div>
+        <div class="prrow"><span>위치 보정</span><label>가로 <input type="number" id="prDx" step="0.5" value="${S.dx}" style="width:58px">mm</label><label>세로 <input type="number" id="prDy" step="0.5" value="${S.dy}" style="width:58px">mm</label></div>
+        <div class="prrow"><span>방식</span>${seg('mode', [['img', '고화질 그림 (추천)', '화면과 똑같이 — PC·맥·프린터마다 같은 결과'], ['vec', '글자 선명 (벡터)', '종이 = 문서 크기일 때만, 위치 설정 없이']])}</div>
+        ${S.mode === 'img' ? `<div class="prrow"><span>품질</span><select id="prDpi"><option value="600" ${S.dpi === 600 ? 'selected' : ''}>최고 600dpi (가는 선·도장, 5쪽까지)</option><option value="300" ${S.dpi === 300 ? 'selected' : ''}>고품질 300dpi (상장·사진)</option><option value="200" ${S.dpi === 200 ? 'selected' : ''}>표준 200dpi (빠름)</option></select></div>` : ''}
+        ${C && C.frame && list.some(i => doc.pages[i].cert) ? `<label class="chk"><input type="checkbox" id="prFrame" ${S.frame ? 'checked' : ''}> 상장 틀도 함께 출력 <small class="hint" style="margin:0">(틀이 인쇄된 상장 용지면 끄기)</small></label>` : ''}
+        <details class="fx prtip"><summary><b>프린터 창에서 확인할 것 — 엡손 (${isMac ? '맥' : '윈도우'})</b></summary>${isMac
+          ? `<ol><li><b>프린터</b>: EPSON · <b>용지 크기: ${esc(S.paper === 'doc' ? '사용자 지정' : S.paper)}</b>${S.margin === 0 && S.fit !== 'actual' ? ' (테두리 없음)' : ''} · <b>배율 100%</b>.</li><li>'인쇄 설정'에서 <b>용지 종류</b>(상장지 = 고급 무광지/Matte, 일반지 = 일반 용지) · <b>품질: 높음</b>${S.margin === 0 && S.fit !== 'actual' ? ' · <b>확대량: 최소</b>' : ''}.</li></ol>`
+          : `<ol><li><b>${isEdge ? '프린터' : '대상'}</b>: EPSON (PDF로 저장 아님) · <b>용지 크기 ${esc(S.paper === 'doc' ? '사용자 지정' : S.paper)}</b> · <b>배율: 기본값(100%)</b> · <b>여백: 없음</b> · <b>배경 그래픽</b> 켬.</li><li>용지 종류·품질·테두리 없음은 <b>'시스템 대화 상자를 사용하여 인쇄'</b>(Ctrl+Shift+P) → <b>기본 설정</b>: 상장지 = 고급 무광지(Matte) · 품질 높음${S.margin === 0 && S.fit !== 'actual' ? ' · <b>테두리 없음 + 확대량 최소</b>' : ''}.</li></ol>`}<p class="hint">여기서 정한 여백·정렬·크기가 그대로 들어갑니다 — 프린터 창에서 배율을 바꾸지 마세요. 두꺼운 상장지는 뒤쪽 급지대에 한 장씩.</p></details>
+        <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn primary" id="prGo" ${list.length ? '' : 'disabled'}>🖨 ${list.length}쪽 출력</button></div>
+      </div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
   };
-  d.onchange = e => { const t = e.target; if (t.id === 'prDx' || t.id === 'prDy') { const o = prOffset(); o[t.id === 'prDx' ? 'x' : 'y'] = Number(t.value) || 0; lsSet('naracal-print-offset', o); return; } if (t.id === 'prPg') prState.pages = t.value; if (t.id === 'prRange') prState.range = t.value; if (t.id === 'prDpi') prState.dpi = Number(t.value); if (t.id === 'prFit') prState.fit = t.value; if (t.id === 'prFrame') { prState.frame = t.checked; if (doc.cert) { doc.cert.printFrame = t.checked; doc.pages.forEach(p => p.els.forEach(x => { if (x.certFrame) x.hidden = !t.checked; })); commit(); renderAll(); } if (!t.checked) prState.fit = 'exact'; } draw(); };
-  d.onclick = e => { const m = e.target.closest('[data-prmode]'); if (m) { prState.mode = m.dataset.prmode; draw(); return; } if (e.target.closest('#prGo')) { const list = prPages(); d.close(); runPrint(list); } };
+  d.oninput = e => { const t = e.target; if (t.id === 'prMargin') { prState.margin = Number(t.value); prSave(); draw(); } };
+  d.onchange = e => { const t = e.target, S = prState;
+    if (t.id === 'prPg') S.pages = t.value; if (t.id === 'prRange') S.range = t.value; if (t.id === 'prPaper') S.paper = t.value; if (t.id === 'prDpi') S.dpi = Number(t.value); if (t.id === 'prPct') S.pct = Number(t.value) || 100;
+    if (t.id === 'prDx') S.dx = Number(t.value) || 0; if (t.id === 'prDy') S.dy = Number(t.value) || 0;
+    if (t.id === 'prFrame') { S.frame = t.checked; if (doc.cert) { doc.cert.printFrame = t.checked; doc.pages.forEach(p => p.els.forEach(x => { if (x.certFrame) x.hidden = !t.checked; })); commit(); renderAll(); } if (!t.checked) preset('exact'); }
+    S.pv = 0; prSave(); draw(); };
+  d.onclick = e => {
+    const sb = e.target.closest('[data-pk]'); if (sb) { prState[sb.dataset.pk] = sb.dataset.pv; if (sb.dataset.pk === 'mode' && sb.dataset.pv === 'vec') prState.paper = 'doc'; prSave(); draw(); return; }
+    const pa = e.target.closest('[data-pra]'); if (pa) { const [x, y] = pa.dataset.pra.split(',').map(Number); prState.ax = x; prState.ay = y; prSave(); draw(); return; }
+    const ps = e.target.closest('[data-prset]'); if (ps) { preset(ps.dataset.prset); prSave(); draw(); return; }
+    const nv = e.target.closest('[data-prnav]'); if (nv && !nv.disabled) { prState.pv += Number(nv.dataset.prnav); draw(); return; }
+    if (e.target.closest('#prGo')) { const list = prPages(); d.close(); runPrint(list); }
+  };
   draw(); d.showModal();
 }
 async function runPrint(list) {
-  if (!list.length) return; const S = prState, C = doc.cert;
-  /* 상장 틀 출력 여부를 이번 출력에만 적용 */
-  const frIds = []; doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { frIds.push(e.id); elVisOv.set(e.id, !!S.frame); } }));
+  if (!list.length) return; const S = prState, L = prLayout();
+  const frIds = []; doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { frIds.push(e.id); elVisOv.set(e.id, !!S.frame); } })); /* 이번 출력에만 (문서는 그대로) */
   const restore = () => frIds.forEach(id => elVisOv.delete(id));
   if (S.mode === 'vec') { try { await printVector(list, { noBleed: true }); } finally { setTimeout(restore, 1500); } return; }
   let dpi = S.dpi; if (dpi > 300 && list.length > 5) { dpi = 300; toast('6쪽 이상은 300dpi로 출력합니다 (600dpi는 5쪽까지 — 엡손에는 300dpi로 충분)'); }
   const urls = []; try {
-    for (let i = 0; i < list.length; i++) { setStatus(`출력 준비 ${i + 1}/${list.length}쪽…`); const c = await renderPageCanvas(doc.pages[list[i]], dlDpi(dpi, 0), 'thumb', '#ffffff'); const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95)); urls.push(URL.createObjectURL(b)); c.width = c.height = 0; }
+    for (let i = 0; i < list.length; i++) { setStatus(`출력 준비 ${i + 1}/${list.length}쪽…`); const c = await renderPageCanvas(doc.pages[list[i]], dlDpi(dpi * Math.min(1, L.k) || dpi, 0), 'thumb', '#ffffff'); const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95)); urls.push(URL.createObjectURL(b)); c.width = c.height = 0; }
   } catch (e) { toast('출력 준비 중 문제가 생겼습니다: ' + e.message, true); urls.forEach(u => URL.revokeObjectURL(u)); restore(); setStatus(''); return; }
   restore(); setStatus('');
-  const k = S.fit === 'safe' ? 0.96 : 1, W = doc.w, H = doc.h, off = S.fit === 'exact' ? prOffset() : { x: 0, y: 0 }, f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'; document.body.appendChild(f);
-  const fd = f.contentDocument; fd.open(); fd.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(doc.name || '출력')}</title><style>@page{size:${W}mm ${H}mm;margin:0}html,body{margin:0;padding:0;background:#fff}.pg{width:${W}mm;height:calc(${H}mm - 0.5mm);display:flex;align-items:center;justify-content:center;overflow:hidden;break-after:page;page-break-after:always}.pg:last-child{break-after:auto;page-break-after:auto}img{width:${W * k}mm;height:${H * k}mm;display:block;transform:translate(${off.x}mm,${off.y}mm)}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>${urls.map(u => `<div class="pg"><img src="${u}"></div>`).join('')}</body></html>`); fd.close();
+  const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'; document.body.appendChild(f);
+  const fd = f.contentDocument; fd.open(); fd.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(doc.name || '출력')}</title><style>@page{size:${L.pw}mm ${L.ph}mm;margin:0}html,body{margin:0;padding:0;background:#fff}.pg{position:relative;width:${L.pw}mm;height:calc(${L.ph}mm - 0.5mm);overflow:hidden;break-after:page;page-break-after:always}.pg:last-child{break-after:auto;page-break-after:auto}img{position:absolute;left:${L.x}mm;top:${L.y}mm;width:${L.w}mm;height:${L.h}mm;display:block}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>${urls.map(u => `<div class="pg"><img src="${u}"></div>`).join('')}</body></html>`); fd.close();
   await Promise.all([...fd.images].map(im => im.complete ? null : new Promise(r => { im.onload = im.onerror = r; })));
   const cleanup = () => { setTimeout(() => { f.remove(); urls.forEach(u => URL.revokeObjectURL(u)); }, 1000); };
   f.contentWindow.addEventListener('afterprint', cleanup, { once: true }); setTimeout(cleanup, 600000);
-  f.contentWindow.focus(); f.contentWindow.print(); toast(`인쇄 창을 열었습니다 — ${list.length}쪽 · 배율 100%·용지 A4를 확인하세요`);
+  f.contentWindow.focus(); f.contentWindow.print(); toast(`프린터 창을 열었습니다 — ${list.length}쪽 · 용지 ${S.paper === 'doc' ? '사용자 지정' : S.paper} · 배율 100%로 두고 인쇄하세요`);
 }
 $('#btnPrint').onclick = () => openPrint();
 document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.code === 'KeyP' || (e.key || '').toLowerCase() === 'p')) { e.preventDefault(); e.stopPropagation(); /* 브라우저 기본 인쇄는 빈 장이 나오므로 늘 공방 출력 창으로 */ if (editing) endEdit(); document.querySelectorAll('dialog[open]').forEach(x => { if (x.id !== 'dlgPrint') x.close(); }); openPrint(); } }, true);
