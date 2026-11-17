@@ -64,7 +64,7 @@ NC.video = (function () {
       }
       if (P.top.length) layers.push({ cv: cvs[cvs.length - 1], ox: 0, oy: 0 });
       const tr = pg.vtrans || V.trans, turn = tr === 'none' ? 0 : Number(pg.vturn || V.turn);
-      scenes.push({ dur: Number(pg.vdur || V.dur), trans: tr, turn, layers, bg: pg.bg || '#ffffff', cam: typeof pg.vcam === 'string' ? (pg.vcam !== 'none' && pg.vcam ? { t: pg.vcam, a: Number(pg.vcamA || 0.06) } : null) : (has(pg.vcam) ? pg.vcam : null) });
+      scenes.push({ dur: Number(pg.vdur || V.dur), trans: tr, turn, layers, bg: pg.bg || '#ffffff', cam: typeof pg.vcam === 'string' ? (pg.vcam !== 'none' && pg.vcam ? { t: pg.vcam, a: Number(pg.vcamA || 0.06), p: pg.vcamP } : null) : (has(pg.vcam) ? Object.assign({}, pg.vcam, { p: pg.vcamP }) : null) });
     }
     if (!V.loop && scenes.length) scenes[scenes.length - 1].turn = 0; // 마지막 장면은 넘김 없이 끝
     const videos = []; scenes.forEach(sc => sc.layers.forEach(L => { if (L.vEl) videos.push(L.vEl); }));
@@ -127,7 +127,7 @@ NC.video = (function () {
     if (dx || dy || s !== 1 || sx !== 1 || rot) { x.translate(px + dx, py + dy); if (rot) x.rotate(rot); x.scale(s * sx, s); x.translate(-px, -py); }
     if (wipe < 1 || unwipe > 0) { const b = L.box; x.beginPath(); x.rect(b.x - 4 + (b.w + 8) * unwipe, b.y - 4, (b.w + 8) * (wipe - unwipe), b.h + 8); x.clip(); }
     if (L.kb) { // 사진 천천히 움직이기: 사진 상자 안에서 확대·이동
-      const b = L.kbox, u = clamp01(t / Math.max(0.1, D)), a = Number(L.kb.a || 0.12), k = L.kb.t;
+      const b = L.kbox, p0 = L.kb.p0 != null ? Number(L.kb.p0) : 0, p1 = L.kb.p1 != null ? Number(L.kb.p1) : 1, u = p0 + (p1 - p0) * clamp01(t / Math.max(0.1, D)), a = Number(L.kb.a || 0.12), k = L.kb.t; /* p0~p1: 장면을 나눈 조각이 움직임의 어느 구간인지(나눈 자리에서 이어짐) */
       const sc = k === 'out' ? 1 + a * (1 - u) : 1 + a * (k === 'in' ? u : 0.5), mx = (k === 'left' ? -1 : k === 'right' ? 1 : 0) * a * b.w / 2 * (u - 0.5), my = (k === 'up' ? -1 : k === 'down' ? 1 : 0) * a * b.h / 2 * (u - 0.5);
       x.beginPath(); x.rect(b.x, b.y, b.w, b.h); x.clip(); const kcx = b.x + b.w / 2, kcy = b.y + b.h / 2; x.translate(kcx + mx, kcy + my); x.scale(sc, sc); x.translate(-kcx, -kcy);
     }
@@ -146,7 +146,7 @@ NC.video = (function () {
   // 시각 T에 화면에 나오는 동영상 층들
   function activeVideos(V, T) { const { i, q } = at(V, T), A = V.scenes[i], out = []; A.layers.forEach(L => { if (L.vEl) out.push({ L, t: q }); }); if (q >= A.dur && A.turn) { const B = V.scenes[(i + 1) % V.scenes.length]; B.layers.forEach(L => { if (L.vEl) out.push({ L, t: 0 }); }); } return out; }
   // 미리보기: 재생 중이면 동영상도 재생(어긋나면 맞춤), 멈췄으면 그 시각으로 감기
-  function syncVideos(V, T, playing) { const act = new Set(); activeVideos(V, T).forEach(({ L, t }) => { const v = L.vEl, mt = mediaTime(L, t); act.add(v); if (playing) { if (Math.abs(v.currentTime - mt) > 0.25) v.currentTime = mt; if (v.paused) v.play().catch(() => {}); } else { if (!v.paused) v.pause(); if (Math.abs(v.currentTime - mt) > 0.004) v.currentTime = mt; } }); (V.videos || []).forEach(v => { if (!act.has(v) && !v.paused) v.pause(); }); }
+  function syncVideos(V, T, playing) { const act = new Set(); activeVideos(V, T).forEach(({ L, t }) => { const v = L.vEl, mt = mediaTime(L, t); act.add(v); if (playing) { const d = v.currentTime - mt; if (Math.abs(d) > 0.25) { v.currentTime = mt; v.playbackRate = 1; } else if (!v.seeking) v.playbackRate = Math.abs(d) > 0.03 ? Math.max(0.95, Math.min(1.05, 1 - d * 0.8)) : 1; if (v.paused) v.play().catch(() => {}); } else { if (!v.paused) v.pause(); if (v.playbackRate !== 1) v.playbackRate = 1; if (Math.abs(v.currentTime - mt) > 0.004) v.currentTime = mt; } }); (V.videos || []).forEach(v => { if (!act.has(v) && !v.paused) v.pause(); }); }
   // 저장: 프레임마다 정확한 시각으로 감고 기다림
   async function seekVideos(V, T) { await Promise.all(activeVideos(V, T).map(({ L, t }) => new Promise(res => { const v = L.vEl, mt = mediaTime(L, t); if (Math.abs(v.currentTime - mt) < 0.001 && v.readyState >= 2) { res(); return; } const done = () => { v.removeEventListener('seeked', done); clearTimeout(to); res(); }, to = setTimeout(done, 1500); v.addEventListener('seeked', done); v.currentTime = mt; }))); }
   // 글자 효과: 글자 층을 한 번만 그려 두고 글자·단어·줄 칸만 잘라 보여 줌
@@ -164,7 +164,7 @@ NC.video = (function () {
   // 한 장면을 장면 시각 t(초)에: 카메라(천천히 다가가기 등)를 건 뒤 층을 차례로
   function drawScene(x, sc, t, W, H) {
     x.save();
-    if (sc.cam) { const u = clamp01(t / Math.max(0.1, sc.dur + sc.turn)), a = Number(sc.cam.a || 0.06), k = sc.cam.t, s = k === 'out' ? 1 + a * (1 - u) : 1 + a * (k === 'in' ? u : 0.6), mx = (k === 'left' ? -1 : k === 'right' ? 1 : 0) * a * W * 0.5 * (u - 0.5); x.translate(W / 2 + mx, H / 2); x.scale(s, s); x.translate(-W / 2, -H / 2); }
+    if (sc.cam) { const P = Array.isArray(sc.cam.p) ? sc.cam.p : [0, 1], u = P[0] + (P[1] - P[0]) * clamp01(t / Math.max(0.1, sc.dur + sc.turn)), a = Number(sc.cam.a || 0.06), k = sc.cam.t, s = k === 'out' ? 1 + a * (1 - u) : 1 + a * (k === 'in' ? u : 0.6), mx = (k === 'left' ? -1 : k === 'right' ? 1 : 0) * a * W * 0.5 * (u - 0.5); x.translate(W / 2 + mx, H / 2); x.scale(s, s); x.translate(-W / 2, -H / 2); }
     sc.layers.forEach(L => drawLayer(x, L, t, sc.dur, W, H));
     x.restore();
   }
@@ -274,6 +274,8 @@ NC.video = (function () {
   function vkAt(vk, s) { if (s <= vk[0][0]) return vk[0][1]; for (let i = 1; i < vk.length; i++) if (s <= vk[i][0]) { const a = vk[i - 1], b = vk[i]; return a[1] + (b[1] - a[1]) * (s - a[0]) / Math.max(1e-6, b[0] - a[0]); } return vk[vk.length - 1][1]; }
   function envAt(v, t, total) { const end = vEnd(v, total), vol = v.vk && v.vk.length ? vkAt(v.vk, t - v.at) : v.vol == null ? 1 : Number(v.vol); let g = vol; if (v.fin > 0 && t < v.at + v.fin) g *= Math.max(0, (t - v.at) / v.fin); if (v.fout > 0 && t > end - v.fout) g *= Math.max(0, (end - t) / v.fout); return g; }
   // 미리보기·실시간 녹화: 짧은 소리는 버퍼로, 파일은 오디오 플레이어로 (몇 시간짜리도 바로 재생)
+  // 반복 소리의 원본 위치: 처음엔 off부터 끝까지, 그다음부터는 off~끝을 되풀이 (저장 astream.bufferReader·reader의 loopFrom과 같은 규칙)
+  const loopPos = (p, o0, D) => p < D ? p : o0 + ((p - o0) % Math.max(0.05, D - o0));
   function playVoices(ac, dest, voices, T0, when, total) {
     const stops = [];
     (voices || []).forEach(v => {
@@ -284,11 +286,17 @@ NC.video = (function () {
       g.gain.setValueAtTime(envAt(v, t1, total), at(t1)); [...ks].filter(t => t > t1 && t <= end).sort((a, b) => a - b).forEach(t => g.gain.linearRampToValueAtTime(envAt(v, t, total), at(t)));
       g.connect(dest);
       const startAt = Math.max(when, at(v.at)), pos = Number(v.off || 0) + Math.max(0, T0 - v.at), dur = end - Math.max(T0, v.at);
-      if (v.buf) { const s2 = ac.createBufferSource(); s2.buffer = v.buf; s2.loop = !!v.loop && v.buf.duration < dur + pos; if (s2.loop) { s2.loopStart = Math.min(Number(v.off || 0), v.buf.duration - 0.05); s2.loopEnd = v.buf.duration; } s2.connect(g); s2.start(startAt, s2.loop ? pos % v.buf.duration : Math.min(pos, v.buf.duration), s2.loop ? undefined : dur); stops.push(() => { try { s2.stop(); } catch (e) {} g.disconnect(); }); }
-      else if (v.url) { const el = new Audio(); el.src = v.url; el.preload = 'auto'; el.loop = !!v.loop; const node = ac.createMediaElementSource(el); node.connect(g); let tm = 0, tm2 = 0;
-        const go = () => { try { el.currentTime = pos; } catch (e) {} el.play().catch(() => {}); tm2 = setTimeout(() => el.pause(), dur * 1000); };
+      if (v.buf) { const s2 = ac.createBufferSource(); s2.buffer = v.buf; s2.loop = !!v.loop && v.buf.duration < dur + pos; if (s2.loop) { s2.loopStart = Math.min(Number(v.off || 0), v.buf.duration - 0.05); s2.loopEnd = v.buf.duration; } s2.connect(g); s2.start(startAt, s2.loop ? loopPos(pos, Number(v.off || 0), v.buf.duration) : Math.min(pos, v.buf.duration), s2.loop ? undefined : dur); stops.push(() => { try { s2.stop(); } catch (e) {} g.disconnect(); }); }
+      else if (v.url) {
+        /* 파일 소리(긴 m4a·mp3): ① 파일이 늦게 열리면 늦은 만큼 앞으로 가서 시작 ② 0.5초마다 '지금 있어야 할 곳'과 비교 —
+           조금 어긋나면 재생 속도를 살짝(±3%) 바꿔 따라잡고, 많이 어긋나면 그 자리로 옮김 ③ 반복은 원본 '시작 위치(off)'로 돌아감(저장본과 같게) */
+        const el = new Audio(); el.src = v.url; el.preload = 'auto'; el.loop = false; const node = ac.createMediaElementSource(el); node.connect(g); let tm = 0, tm2 = 0, iv = 0, done = false;
+        const o0 = Number(v.off || 0), want = () => { const p2 = pos + Math.max(0, ac.currentTime - startAt), D = el.duration; return v.loop && isFinite(D) && D > o0 + 0.05 ? loopPos(p2, o0, D) : p2; };
+        const fix = () => { if (done || el.paused || el.seeking) return; const d = el.currentTime - want(); if (Math.abs(d) > 0.25) { try { el.currentTime = want() + 0.03; } catch (e) {} el.playbackRate = 1; } else el.playbackRate = Math.abs(d) > 0.02 ? Math.max(0.97, Math.min(1.03, 1 - d * 0.6)) : 1; };
+        const go = () => { if (done) return; try { el.currentTime = want(); } catch (e) {} el.play().catch(() => {}); clearInterval(iv); iv = setInterval(fix, 500); clearTimeout(tm2); tm2 = setTimeout(() => { done = true; el.pause(); clearInterval(iv); }, Math.max(0, (startAt + dur - ac.currentTime) * 1000)); };
+        el.addEventListener('ended', () => { if (!done && v.loop) { try { el.currentTime = want(); } catch (e) {} el.play().catch(() => {}); } });
         el.addEventListener('loadedmetadata', () => { const wait = Math.max(0, (startAt - ac.currentTime) * 1000); tm = setTimeout(go, wait); }, { once: true });
-        stops.push(() => { clearTimeout(tm); clearTimeout(tm2); el.pause(); el.removeAttribute('src'); try { node.disconnect(); } catch (e) {} g.disconnect(); }); }
+        stops.push(() => { done = true; clearTimeout(tm); clearTimeout(tm2); clearInterval(iv); el.pause(); el.removeAttribute('src'); try { el.load(); } catch (e) {} try { node.disconnect(); } catch (e) {} g.disconnect(); }); }
     });
     return { stop() { stops.forEach(f => f()); } };
   }
