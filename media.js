@@ -53,9 +53,11 @@ NC.media = (function () {
   }
   async function has(id) { return !!(await tx('readonly', s => s.get(id))); }
   // 다른 PC에서: 같은 id로 이 PC의 파일을 다시 연결
-  async function relink(id, accept) {
-    if (window.showOpenFilePicker) { const [h] = await window.showOpenFilePicker({ multiple: false }); return addHandle(h, id); }
-    return new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.accept = accept || ''; i.onchange = async () => res(await addFile(i.files[0], id)); i.click(); });
+  // ok(이름) → false면 연결하지 않고 AbortError (이름이 다를 때 묻고 '취소'하면 그대로 둠)
+  const abort = () => { const e = new Error('취소'); e.name = 'AbortError'; return e; };
+  async function relink(id, accept, ok) {
+    if (window.showOpenFilePicker) { const [h] = await window.showOpenFilePicker({ multiple: false }); if (ok && !(await ok(h.name))) throw abort(); return addHandle(h, id); }
+    return new Promise((res, rej) => { const i = document.createElement('input'); i.type = 'file'; i.accept = accept || ''; i.onchange = async () => { const f = i.files[0]; if (!f) { rej(abort()); return; } try { if (ok && !(await ok(f.name))) { rej(abort()); return; } res(await addFile(f, id)); } catch (e) { rej(e); } }; i.click(); });
   }
 
   /* ---------- ② 기본 소리 (합성) ---------- */
