@@ -1240,7 +1240,7 @@ dialog.cpvdlg .dbody{flex:1;min-height:0;max-height:none;overflow:hidden;display
 body.tl-focus #focusOut{display:inline-flex}
 
 /* 2026-11-18 전문가 점검: 끌기점 잡는 곳 넓게·좁은 위 막대·어두운 곳 초점·상장 빠른 길·미리 보기 크게 */
-.ovl .h::after{content:'';position:absolute;inset:-7px}
+.ovl .h::after{content:'';position:absolute;inset:calc(-7px / var(--k, 1))}
 @media (max-width:1050px){.topbar .btn:not(#btnExport){font-size:0;gap:0;padding:6px 7px}.topbar .brand>span:not(.logo){display:none}.topbar input.pname{width:110px}#status{display:none}.topbar{overflow:hidden;min-width:0}}
 .rail button:focus-visible,#vtl :focus-visible{outline:2px solid #ffd54a;outline-offset:1px}
 @media (max-height:820px){.rail button span{font-size:11px}}
@@ -1301,3 +1301,20 @@ body.tl-focus #focusOut{display:inline-flex}
 .vprev-tag{display:none;position:absolute;left:0;bottom:100%;margin-bottom:6px;z-index:5;pointer-events:none;background:#ff4d6d;color:#fff;font:700 12px/1 var(--font-ui);padding:5px 9px;border-radius:7px;white-space:nowrap}
 .vprev:not([hidden])+.vprev-tag{display:block}
 .stage.pgm-on .canvas-wrap{margin-left:16px;margin-right:16px}
+.tl-au .tl-duck{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,rgba(0,0,0,.34) 0 5px,rgba(0,0,0,.18) 5px 10px);border-left:1px solid rgba(255,255,255,.35);border-right:1px solid rgba(255,255,255,.35);pointer-events:none;z-index:1}
+/* 글 편집 중에는 손잡이 잡는 범위를 보이는 네모만큼만 (글 가장자리를 눌러 글자를 고를 수 있게) */
+.canvas-wrap:has(.el-text.editing) .ovl .h::after{inset:calc(-1px / var(--k, 1))}
+/* 작은 요소: 모서리 손잡이를 바깥으로 밀어 가운데를 잡을 수 있게 */
+.ovl .sel.tiny .h::after{inset:calc(-3px / var(--k, 1))}
+.ovl .sel.tiny .h.nw{margin:calc(-13px / var(--k)) 0 0 calc(-13px / var(--k))}.ovl .sel.tiny .h.ne{margin:calc(-13px / var(--k)) 0 0 calc(4px / var(--k))}
+.ovl .sel.tiny .h.se{margin:calc(4px / var(--k)) 0 0 calc(4px / var(--k))}.ovl .sel.tiny .h.sw{margin:calc(4px / var(--k)) 0 0 calc(-13px / var(--k))}
+.ovl .sel.tiny .h.n{margin-top:calc(-13px / var(--k))}.ovl .sel.tiny .h.s{margin-top:calc(4px / var(--k))}.ovl .sel.tiny .h.e{margin-left:calc(4px / var(--k))}.ovl .sel.tiny .h.w{margin-left:calc(-13px / var(--k))}
+/* 알림이 아래 단추를 가리지 않게 (되돌리기 단추만 눌림) */
+.toast{pointer-events:none}.toast button,.toast a{pointer-events:auto}
+/* 페이지 패널 단추 줄은 늘 보이게 */
+.sidebody .pgbar{position:sticky;top:-12px;z-index:3;background:var(--ui-panel);padding:8px 0 6px;margin-top:-8px}
+/* 위 막대가 창보다 넓을 때 (app.js fitTopbar) */
+.topbar{min-width:0}.topbar .grow{min-width:0}
+.topbar.t1 :is(#btnOpen,#btnResize,#btnHoliday,#btnFonts,#btnPrint){font-size:0;gap:0;padding:6px 7px}
+.topbar.t2 .btn:not(#btnExport){font-size:0;gap:0;padding:6px 7px}.topbar.t2 .brand>span:not(.logo){display:none}.topbar.t2 input.pname{min-width:110px;width:140px}
+.topbar.t3 #status{display:none}.topbar.t3 #btnExport{font-size:0;gap:0;padding:6px 9px}.topbar.t3 input.pname{min-width:80px;width:100px}
