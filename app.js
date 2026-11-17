@@ -1666,18 +1666,27 @@ function addSfx(ref, name, quiet) {
 
 // 영상 편집 단축키 (프리미어·캡컷·필모라와 같은 키). 타임라인이 열려 있을 때만, 글자 입력 중에는 동작하지 않음
 const TL_KEYS = [['Space', '재생 / 멈춤'], ['K', '멈춤'], ['L', '재생'], ['J', '1초 뒤로'], ['← →', '한 프레임 뒤로 / 앞으로'], ['Shift + ← →', '1초 뒤로 / 앞으로'], ['↑ ↓', '앞 장면 / 다음 장면으로'], ['Home / End', '처음 / 끝으로'],
-  ['B  /  S  /  Ctrl + B', '재생 헤드에서 자르기 (Ctrl + K도 됨)'], ['Shift + Ctrl + B', '모두 자르기: 재생 헤드를 지나는 장면·자막·소리를 한 번에'], ['Q', '장면 앞부분을 재생 헤드까지 잘라내기'], ['W', '장면 뒷부분을 재생 헤드부터 잘라내기'], [';  /  \'', '앞 · 다음 편집점으로 (장면 경계와 클립 시작·끝)'], ['Alt + [  /  Alt + ]', '재생 헤드 앞 · 뒤 잘라내기 (Q · W와 같음, 파이널컷 방식)'], ['Delete', '고른 클립 지우기 · 장면을 고르면 리플 삭제(뒤 장면이 당겨지고, 그 장면에 붙은 자막·소리도 함께)'], ['Shift + Delete', '장면을 빈 틈으로 바꾸기 (길이·뒤 위치는 그대로)'], ['N', '스냅 켜기 / 끄기 (끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙기)'], ['M', '마커 넣기 (재생 중에도 · 두 번 눌러 이름 바꾸기·지우기)'], ['Ctrl + ;  /  Ctrl + \'', '앞 · 다음 마커로'], ['V', '고른 클립 끄기 / 켜기 (지우지 않고 미리보기·저장에서 빼기)'], ['Ctrl + Z', '되돌리기'], ['Ctrl + Shift + Z', '다시'],
+  ['B  /  S  /  Ctrl + B', '재생 헤드에서 자르기 (Ctrl + K도 됨)'], ['Alt + F', '정지 화면 넣기 (파이널컷 ⌥F)'], ['Control + D  /  Alt + D', '고른 장면·클립의 길이를 숫자로'], ['Control + =  /  −   (Alt + = / −)', '고른 소리 음량 1dB 올리기 / 내리기'], ['Control + Shift + S  (Alt + Shift + S)', '동영상 소리 분리 (따로 트랙으로)'], ['Shift + N', '동영상 속도 보통(1배)으로'], ['Alt + W', '빈 장면 끼워 넣기'], ['Alt + 끌기', '클립 복제'], ['Shift + Ctrl + B', '모두 자르기: 재생 헤드를 지나는 장면·자막·소리를 한 번에'], ['Q', '장면 앞부분을 재생 헤드까지 잘라내기'], ['W', '장면 뒷부분을 재생 헤드부터 잘라내기'], [';  /  \'', '앞 · 다음 편집점으로 (장면 경계와 클립 시작·끝)'], ['Alt + [  /  Alt + ]', '재생 헤드 앞 · 뒤 잘라내기 (Q · W와 같음, 파이널컷 방식)'], ['Delete', '고른 클립 지우기 · 장면을 고르면 리플 삭제(뒤 장면이 당겨지고, 그 장면에 붙은 자막·소리도 함께)'], ['Shift + Delete', '장면을 빈 틈으로 바꾸기 (길이·뒤 위치는 그대로)'], ['N', '스냅 켜기 / 끄기 (끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙기)'], ['M', '마커 넣기 (재생 중에도 · 두 번 눌러 이름 바꾸기·지우기)'], ['Ctrl + ;  /  Ctrl + \'', '앞 · 다음 마커로'], ['V', '고른 클립 끄기 / 켜기 (지우지 않고 미리보기·저장에서 빼기)'], ['Ctrl + Z', '되돌리기'], ['Ctrl + Shift + Z', '다시'],
   ['T', '재생 위치에 글자 넣기'], ['C', '재생 위치에 자막 넣기'], ['R', '음성 녹음 시작 / 멈춤'], ['Ctrl + =  /  Ctrl + −', '타임라인 늘리기 / 줄이기'], ['Shift + Z', '타임라인 전체 보기'], ['F', '크게 미리보기'], ['Ctrl + E', '내보내기 (MP4)'], ['Esc', '미리보기 닫고 편집으로'], ['?', '단축키 목록']];
 document.addEventListener('keydown', e => {
   if (!tlOn() || editing || $('#cellEd') || $('#tlMenu') || $('#trPop') || $('#itPop') || $('#dlPanel') || document.querySelector('.fmenu, [role=menu]') || e.isComposing || e.keyCode === 229 || document.querySelector('dialog[open]') || (e.target.matches && e.target.matches('input,textarea,select,[contenteditable="true"]'))) return;
   if (cellSel && !(e.ctrlKey || e.metaKey)) return;  // 달력 칸을 고른 채 바로 쓰는 글자(한글 ㄱ=R 등)를 영상 단축키로 가로채지 않음
-  if (sideTab !== 'video' && !(e.target.closest && e.target.closest('#vtl')) && !(e.ctrlKey || e.metaKey) && (/^Key[TCRQWJKLFNMV]$/.test(e.code) || ['Space', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code))) return;
+  if (sideTab !== 'video' && !(e.target.closest && e.target.closest('#vtl')) && !(e.ctrlKey || e.metaKey) && (/^Key[TCRQWJKLFNMVBSD]$/.test(e.code) || ['Space', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code))) return;
   const mod = e.ctrlKey || e.metaKey, k = e.key, c = e.code, fps = Number(vset().fps || 30), stop = () => { e.preventDefault(); e.stopImmediatePropagation(); };
   const prevVisible = $('#vprev') && !$('#vprev').hidden, noSel = !sel.length || prevVisible;
   if (c === 'Space' && !mod) { stop(); if (!e.repeat) tl.playing ? tlPause() : tlPlay(); return; }
   if (mod && !e.altKey && (c === 'KeyB' || c === 'KeyK')) { stop(); if (e.shiftKey) tlBladeAll(); else tlSplit(); return; }
   if (mod && (c === 'Semicolon' || c === 'Quote')) { stop(); const ts = (doc.markers || []).map(m => Number(m.t)).sort((a, b) => a - b), to = c === 'Semicolon' ? ts.filter(v => v < tl.T - 0.01).pop() : ts.find(v => v > tl.T + 0.01); if (to != null) { tlPause(); tlSeek(to); } else toast(c === 'Semicolon' ? '앞쪽에 마커가 없습니다' : '뒤쪽에 마커가 없습니다'); return; }
   if (mod && c === 'KeyE') { stop(); tlPause(); openVideoMaker(); return; }
+  { /* 파이널컷 키: Control(맥) 또는 Alt 조합 — ⌘ 조합(브라우저·디자인 단축키)과 겹치지 않게 */
+    const fcp = !e.metaKey && ((IS_MAC && e.ctrlKey && !e.altKey) || (e.altKey && !e.ctrlKey));
+    const kPlus = c === 'Equal' || c === 'NumpadAdd' || k === '=' || k === '+' || k === '≠', kMinus = c === 'Minus' || c === 'NumpadSubtract' || k === '-' || k === '–';  /* 자판 자리(code)가 없는 입력도 글자로 알아봄 */
+    if (fcp && !e.shiftKey && (kPlus || kMinus)) { stop(); tlVolStep(kPlus ? 1 : -1); return; }  /* Control+= / − : 음량 1dB */
+    if (fcp && !e.shiftKey && c === 'KeyD') { stop(); tlSetDuration(); return; }  /* Control+D : 길이 입력 */
+    if (fcp && e.shiftKey && c === 'KeyS') { stop(); tlDetachAudio(); return; }  /* Control+Shift+S : 소리 분리 */
+    if (e.altKey && !mod && !e.shiftKey && c === 'KeyF') { stop(); tlFreeze(); return; }  /* ⌥F : 정지 화면 */
+    if (e.altKey && !mod && !e.shiftKey && c === 'KeyW') { stop(); $('#tlScene').click(); return; }  /* ⌥W : 빈 장면 끼워 넣기 */
+  }
   if (mod && (k === '=' || k === '+' || c === 'Equal')) { stop(); tl.pxs = Math.min(400, tl.pxs * 1.25); renderTimeline(); return; }
   if (mod && (k === '-' || c === 'Minus')) { stop(); tl.pxs = Math.max(3, tl.pxs / 1.25); renderTimeline(); return; }
   if (e.altKey && !mod && (c === 'BracketLeft' || c === 'BracketRight')) { stop(); tlTrim(c === 'BracketLeft' ? 'head' : 'tail'); return; }  /* 파이널컷 Option+[ / ] = 앞·뒤 잘라내기 (Q·W와 같음) */
@@ -1686,6 +1695,7 @@ document.addEventListener('keydown', e => {
   if (k === '?' || (e.shiftKey && c === 'Slash')) { stop(); tlKeysHelp(); return; }
   if (e.shiftKey && c === 'KeyZ') { stop(); tl.fit = true; renderTimeline(); return; }
   if ((k === 'Delete' || k === 'Backspace') && e.shiftKey && tl.selScene && noSel) { stop(); tlDeleteScene(true); return; }  /* Shift+Delete = 빈 틈으로 */
+  if (c === 'KeyN' && e.shiftKey) { stop(); tlSpeedNormal(); return; }  /* Shift+N : 보통 속도 (파이널컷) */
   if (e.shiftKey) { if ((k === 'ArrowLeft' || k === 'ArrowRight') && noSel) { stop(); tlSeek(tl.T + (k === 'ArrowLeft' ? -1 : 1)); } return; }
   if ((k === 'ArrowLeft' || k === 'ArrowRight') && noSel) { stop(); tlPause(); tlSeek(tl.T + (k === 'ArrowLeft' ? -1 : 1) / fps); return; }
   if ((c === 'Semicolon' || c === 'Quote') && noSel) { stop(); const { list, total } = tlScenes(), pts = [0, total]; list.forEach(q => pts.push(q.t0, q.t0 + q.dur)); tracks().forEach(t => (t.items || []).forEach(it => { const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3); pts.push(Number(it.at || 0), Number(it.at || 0) + d); })); const u = [...new Set(pts.map(v => Math.round(v * 1000) / 1000))].sort((a, b) => a - b); const to = c === 'Semicolon' ? u.filter(v => v < tl.T - 0.01).pop() : u.find(v => v > tl.T + 0.01); if (to != null) { tlPause(); tlSeek(to); } return; }  /* 파이널컷 ; ' = 앞·다음 편집점(장면 경계와 클립 끝) */
@@ -1769,6 +1779,76 @@ function splitItem(t, it, q) {
   if (t.type === 'audio') { it2.off = Math.round((Number(it.off || 0) + q) * 100) / 100; if (it.vk && it.vk.length) { const vq = Math.round(VIDEO.vkAt(it.vk, q) * 1000) / 1000; it2.vk = [[0, vq]].concat(it.vk.filter(k => k[0] > q).map(k => [Math.round((k[0] - q) * 100) / 100, k[1]])); it.vk = it.vk.filter(k => k[0] < q).concat([[q, vq]]); } }
   if (t.type === 'audio') { it.fout = 0; it2.fin = 0; } else { it.fo = 0; it2.fi = 0; }  /* 자른 자리는 이어지게 (서서히 없음) */
   it.dur = q; t.items.splice(t.items.indexOf(it) + 1, 0, it2); return it2;
+}
+// ---- 파이널컷 방식 기능 ----
+// 고른 소리(조각·배경 음악·고른 동영상)의 음량을 dB 단위로 (Control+= / −)
+function tlVolStep(db) {
+  let o = null, def = 1, nm = '', kind = '';
+  if (tl.selAu && doc.audio) { o = doc.audio; def = 0.8; nm = '배경 음악'; kind = 'bg'; }
+  else if (tl.selIt) { for (const t of tracks()) { if (t.type !== 'audio') continue; const it = (t.items || []).find(q => q.id === tl.selIt); if (it) { o = it; nm = it.name || '소리'; kind = 'it'; } } }
+  if (!o && sel.length === 1) { const el = find(sel[0]); if (el && el.type === 'video') { o = el; nm = '동영상 소리'; kind = 'el'; } }
+  if (!o) { toast('음량을 바꿀 소리 조각·배경 음악·동영상을 먼저 고르세요', true); return; }
+  const f = Math.pow(10, db / 20), cap = v => Math.max(0, Math.min(2, Math.round((v <= 0 && db > 0 ? 0.05 : v * f) * 1000) / 1000));
+  if (o.vk && o.vk.length) o.vk = o.vk.map(k => [k[0], cap(k[1])]);
+  o.vol = cap(o.vol == null ? def : Number(o.vol)); if (kind === 'el' && o.vol > 0) delete o.mute;
+  commit(); renderTimeline(); if (kind === 'bg' && sideTab === 'video') renderSide(); if (kind === 'el') renderInspector();
+  toast(`${nm} 음량 ${vkDb(o.vk && o.vk.length ? o.vk[0][1] : o.vol)}`); if (tl.playing) { tlPause(); tlPlay(); }
+}
+// 길이를 숫자로 (Control+D): 고른 클립, 없으면 지금 장면
+function tlSetDuration() {
+  let it = null, tr = null; if (tl.selIt) for (const t of tracks()) { const q = (t.items || []).find(z => z.id === tl.selIt); if (q) { it = q; tr = t; } }
+  const { list } = tlScenes(), x = it ? null : (list.find(s2 => s2.i === cur) || list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur + s2.turn)); if (!it && !x) return;
+  const d0 = it ? (tr.type === 'audio' ? itemDur(it) : Number(it.dur || 3)) : x.dur;
+  const v = window.prompt(`${it ? `'${it.name || (it.text ? String(it.text).slice(0, 12) : '') || '클립'}'` : `${x.i + 1}번 장면`}의 길이(초)를 넣으세요 — 지금 ${d0}초`, String(d0)); if (v == null) return;
+  let n = tlFrame(Number(String(v).trim().replace(',', '.'))); if (!(n >= 0.2)) { toast('0.2초보다 긴 숫자를 넣으세요', true); return; }
+  if (it) { if (tr.type === 'audio' && Number(it.full) > 0) n = Math.min(n, Math.round((Number(it.full) - Number(it.off || 0)) * 100) / 100); it.dur = n; }
+  else { tlRipple(x.t0 + x.dur, n - x.dur); x.pg.vdur = n; }
+  commit(); renderTimeline(); renderInspector(); toastUndo(`길이를 ${n}초로 바꿨습니다`);
+}
+// 동영상 소리 분리 (Control+Shift+S): 소리를 오디오 트랙 조각으로 떼어 내고 동영상은 소리 끔 → 따로 끌기·늘리기(J·L 컷)·음량 선
+function tlDetachAudio() {
+  const { list } = tlScenes(); let el = sel.length === 1 ? find(sel[0]) : null, x = null;
+  if (el && el.type === 'video') x = list.find(s2 => s2.i === cur);
+  else { x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur + s2.turn) || list.find(s2 => s2.i === cur); el = x ? x.pg.els.find(q => q.type === 'video' && !q.hidden) : null; }
+  if (!el || el.type !== 'video' || !x) { toast('소리를 분리할 동영상을 고르거나, 동영상이 있는 장면에 재생 헤드를 두세요', true); return; }
+  if (el.mute) { toast('이 동영상은 이미 소리가 꺼져 있습니다 (이미 분리했거나 소리 끄기)', true); return; }
+  if (Number(el.speed || 1) !== 1) { toast('속도를 바꾼 동영상은 소리를 분리할 수 없습니다 — Shift+N으로 보통 속도로 한 뒤 분리하세요', true); return; }
+  const d0 = el.anim ? Math.max(0, Number(el.anim.d || 0)) : 0, tin = Number(el.tin || 0), tout = Number(el.tout || el.dur || 0), len = Math.max(0.05, Math.min(tout - tin, x.dur - d0));
+  const m = (doc.media || {})[String(el.src).slice(2)], nm = (m && m.name ? m.name.replace(/\.[^.]+$/, '') : '동영상') + ' 소리';
+  const TR = tracks(); let t = TR.find(z => z.type === 'audio' && z.name === '동영상 소리'); if (!t) { t = { id: uid(), type: 'audio', name: '동영상 소리', items: [] }; TR.push(t); }
+  const it = { id: uid(), ref: el.src, name: nm, at: tlFrame(x.t0 + d0), off: tin, dur: Math.round(len * 100) / 100, full: Number(el.dur || tout), vol: el.vol == null ? 1 : el.vol };
+  t.items.push(it); el.mute = true; tl.selIt = it.id; tl.selTr = t.id; commit(); renderAll(); renderTimeline();
+  toastUndo(`'${nm}'을 떼어 '동영상 소리' 트랙에 놓았습니다 — 끝을 끌어 다음 장면까지 늘리거나 음량·페이드를 따로 조절하세요`);
+}
+// 보통 속도로 (Shift+N)
+function tlSpeedNormal() {
+  let el = sel.length === 1 ? find(sel[0]) : null; if (!el || el.type !== 'video') { const x = tlSceneAt(tl.T); el = x ? x.pg.els.find(q => q.type === 'video' && Number(q.speed || 1) !== 1) : null; }
+  if (!el || el.type !== 'video') { toast('속도를 바꾼 동영상이 없습니다', true); return; }
+  if (Number(el.speed || 1) === 1) { toast('이미 보통 속도(1배)입니다'); return; }
+  delete el.speed; commit(); renderAll(); renderTimeline(); toastUndo('동영상을 보통 속도(1배)로 되돌렸습니다');
+}
+// 정지 화면 (⌥F): 재생 헤드의 화면을 그림으로 떠서 2초짜리 장면으로 끼워 넣음 (움직임·동영상·넘김 중이 아닌 화면 그대로, 자막·로고는 빼고)
+async function tlFreeze() {
+  if (videoNeedsGate()) { openVideoGate(); return; }
+  tlPause(); const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur);
+  if (!x) { toast('장면 안에 재생 헤드를 두고 누르세요 (넘김 구간에서는 넣을 수 없습니다)', true); return; }
+  if (tlFreeze.busy) return; tlFreeze.busy = true;
+  try {
+    const T = tl.T, V = await tlEnsureV(); if (V.videos && V.videos.length) { try { await VIDEO.seekVideos(V, T); } catch (e) {} }
+    const c = document.createElement('canvas'); c.width = V.W; c.height = V.H; const caps = V.captions, ovs = V.overlays; V.captions = []; V.overlays = [];
+    try { VIDEO.drawAt(c.getContext('2d'), V, Math.min(T, V.total - 0.001)); } finally { V.captions = caps; V.overlays = ovs; }
+    const ref = addAsset(c.toDataURL('image/jpeg', 0.92)); c.width = c.height = 0;
+    const q = tlFrame(T - x.t0), HOLD = 2, h0 = hptr, i0 = x.i, still = newPage(x.pg.bg);
+    still.els = [{ id: uid(), type: 'image', src: ref, x: 0, y: 0, w: doc.w, h: doc.h, rot: 0, fit: 'cover', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '정지 화면' }];
+    still.vdur = HOLD; still.vtrans = 'none'; still.vsplit = true; still.label = '정지 화면';
+    let at = i0;  /* 장면 맨 앞이면 그 장면 앞에 */
+    if (q >= 0.3 && x.dur - q < 0.3) { at = i0 + 1; still.vtrans = x.pg.vtrans; if (x.pg.vturn != null) still.vturn = x.pg.vturn; if (x.pg.vdir) still.vdir = x.pg.vdir; if (!x.pg.vsplit) delete still.vsplit; x.pg.vtrans = 'none'; x.pg.vsplit = true; }  /* 맨 뒤: 뒤에 넣고 넘김은 정지 화면 다음으로 */
+    else if (q >= 0.3) { tlSplitScene(true); at = i0 + 1; }  /* 가운데: 장면을 나누고 그 사이에 */
+    tlRipple(x.t0 + q, HOLD); doc.pages.splice(at, 0, still); commit();
+    while (hptr > h0 + 1) { hist.splice(hptr - 1, 1); histMeta.splice(hptr - 1, 1); hptr--; }  /* 나누기 + 넣기를 되돌리기 한 번으로 */
+    goto(at); renderTimeline(); tlSeek(x.t0 + q + 0.02, false); renderTimeline();
+    toastUndo(`${fmtTC(T).slice(3)}에 정지 화면 ${HOLD}초를 넣었습니다 — 오른쪽 끝을 끌거나 Control+D로 길이를 바꾸세요`);
+  } catch (e) { toast('정지 화면을 만들지 못했습니다: ' + e.message, true); } finally { tlFreeze.busy = false; }
 }
 function tlBladeAll() {
   if (videoNeedsGate()) { openVideoGate(); return; }
@@ -1921,7 +2001,7 @@ function fadeDrag(e, host, which) {
 function vkHTML(o, d, px, def) {
   const W = Math.max(18, d * px), vk = (o.vk || []).filter(k => k[0] >= 0 && k[0] <= d);
   const pts = [[0, vkVal(o, 0, def)], ...vk, [d, vkVal(o, d, def)]], poly = pts.map(([q, v]) => `${(q * px).toFixed(1)},${(vkY(v) * 100).toFixed(2)}`).join(' ');
-  return `<div class="tl-vk"><svg viewBox="0 0 ${W.toFixed(1)} 100" preserveAspectRatio="none"><polyline class="ln" points="${poly}"/><polyline class="hit" data-vline="1" points="${poly}"><title>음량 ${vkDb(vkVal(o, 0, def))} — 위아래로 끌어 음량 · 눌러서 점 찍기(그 점부터 따로 조절) · Alt+눌러 처음대로</title></polyline></svg>${vk.map(k => `<i data-vkp="${(o.vk || []).indexOf(k)}" style="left:${k[0] * px}px;top:${vkY(k[1]) * 100}%" title="${vkDb(k[1])} — 끌어 옮기기 · 두 번 눌러 지우기"></i>`).join('')}</div>`;
+  return `<div class="tl-vk"><svg viewBox="0 0 ${W.toFixed(1)} 100" preserveAspectRatio="none"><polyline class="ln" points="${poly}"/><polyline class="hit" data-vline="1" points="${poly}"><title>음량 ${vkDb(vkVal(o, 0, def))} — 위아래로 끌기: 음량 · ⌘/Ctrl(또는 Shift)+끌기: 곱게 · ⌥(Alt)+누르기: 점 찍기 · ⌥+Shift+누르기: 처음대로 · Control+= / −(또는 Alt+= / −): 1dB씩</title></polyline></svg>${vk.map(k => `<i data-vkp="${(o.vk || []).indexOf(k)}" style="left:${k[0] * px}px;top:${vkY(k[1]) * 100}%" title="${vkDb(k[1])} — 끌어 옮기기 · 두 번 눌러 지우기"></i>`).join('')}</div>`;
 }
 // 음량 선·점 끌기: 끄는 동안 옆에 dB 표시, 놓으면 실행 취소 한 단계
 function vkDrag(e, host, vp) {
@@ -1933,20 +2013,18 @@ function vkDrag(e, host, vp) {
   let tip = document.getElementById('vkTip'); if (!tip) { tip = document.createElement('div'); tip.id = 'vkTip'; tip.hidden = true; document.body.appendChild(tip); }
   const show = (ev, v) => { tip.textContent = vkDb(v); tip.style.left = ev.clientX + 14 + 'px'; tip.style.top = ev.clientY - 30 + 'px'; tip.hidden = false; };
   let moved = false, move;
-  if (e.altKey && !vp) { delete o.vk; delete o.vol; commit(); renderTimeline(); toast('음량을 처음대로 되돌렸습니다'); return; }
+  if (e.altKey && e.shiftKey && !vp) { delete o.vk; delete o.vol; commit(); renderTimeline(); if (isBg && sideTab === 'video') renderSide(); toast('음량을 처음대로 되돌렸습니다'); return; }
+  if (e.altKey && !vp) { /* 파이널컷: ⌥+누르기 = 그 자리에 음량 점(키프레임) */ const s1 = Math.round(s0 * 100) / 100; if (!vk0.some(k => Math.abs(k[0] - s1) * px < 7)) { const v = Math.round(vkVal({ vk: vk0, vol: vol0 }, s1, def) * 1000) / 1000; o.vk = vk0.concat([[s1, v]]).sort((p, q) => p[0] - q[0]); commit(); toast('음량 점을 찍었습니다 — 점이나 점 사이 선을 위아래로 끌어 그 구간만 조절 · 점을 두 번 누르면 지움'); } renderTimeline(); return; }
   if (vp) { const i = Number(vp.dataset.vkp), lo = i > 0 ? vk0[i - 1][0] + 0.05 : 0, hi = i < vk0.length - 1 ? vk0[i + 1][0] - 0.05 : d;
     move = ev => { const v = vkV(yAt(ev)); o.vk[i] = [Math.round(Math.max(lo, Math.min(hi, sAt(ev))) * 100) / 100, v]; show(ev, v); renderTimeline(); }; }
   else { // 선 끌기: 점이 없으면 조각 전체, 있으면 누른 곳 양옆 점(구간)을 함께 위아래로
     const a = vk0.reduce((r, k, j) => k[0] <= s0 ? j : r, -1), b = vk0.findIndex(k => k[0] > s0), dy0 = vkY(vkVal({ vk: vk0, vol: vol0 }, s0, def));
-    move = ev => { const dy = (ev.clientY - sy) / Math.max(box.height, 120) * (ev.shiftKey ? 0.2 : 1); /* 트랙이 낮아도 곱게: 120px에 전체 범위 */ if (!vk0.length) { o.vol = vkV(dy0 + dy); show(ev, o.vol); } else { o.vk = vk0.map(k => k.slice()); [a, b].filter(j => j >= 0).forEach(j => { o.vk[j][1] = vkV(vkY(vk0[j][1]) + dy); }); show(ev, VIDEO.vkAt(o.vk, s0)); } renderTimeline(); }; }
+    move = ev => { const dy = (ev.clientY - sy) / Math.max(box.height, 120) * ((ev.shiftKey || ev.metaKey || ev.ctrlKey) ? 0.2 : 1);  /* ⌘·Ctrl·Shift = 곱게 */ /* 트랙이 낮아도 곱게: 120px에 전체 범위 */ if (!vk0.length) { o.vol = vkV(dy0 + dy); show(ev, o.vol); } else { o.vk = vk0.map(k => k.slice()); [a, b].filter(j => j >= 0).forEach(j => { o.vk[j][1] = vkV(vkY(vk0[j][1]) + dy); }); show(ev, VIDEO.vkAt(o.vk, s0)); } renderTimeline(); }; }
   const mv = ev => { if (Math.abs(ev.clientX - sx) > 3 || Math.abs(ev.clientY - sy) > 2) moved = true; if (moved) move(ev); };
   const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); tip.hidden = true;
     if (vp && !moved) { const i = Number(vp.dataset.vkp), now = performance.now(), L = tl._vkLast; if (L && L.o === o && L.i === i && now - L.t < 450) { o.vk.splice(i, 1); if (!o.vk.length) delete o.vk; tl._vkLast = null; commit(); renderTimeline(); toast('음량 점을 지웠습니다'); return; } tl._vkLast = { o, i, t: now }; }
     if (moved) commit();
-    else if (!vp) { // 눌러서 점 찍기 (가까운 점이 이미 있으면 그대로)
-      const s1 = Math.round(s0 * 100) / 100, near = vk0.some(k => Math.abs(k[0] - s1) * px < 7);
-      if (!near) { const v = Math.round(vkVal({ vk: vk0, vol: vol0 }, s1, def) * 1000) / 1000; o.vk = vk0.concat([[s1, v]]).sort((p, q) => p[0] - q[0]); commit(); toast('음량 점을 찍었습니다 — 점이나 점 사이 선을 위아래로 끌어 그 구간만 조절하세요'); }
-    }
+    /* 그냥 누르기는 고르기만 — 점은 ⌥(Alt)+누르기 (파이널컷과 같음, 실수로 점이 생기지 않게) */
     renderTimeline(); if (isBg && sideTab === 'video') renderSide(); if (moved && tl.playing) { tlPause(); tlPlay(); } };
   window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
 }
@@ -2108,11 +2186,12 @@ function tlWire() {
     else if (au) { if (au.classList.contains('miss')) { relinkMedia(doc.audio.src); return; } tl.selAu = true; const s0 = Number(doc.audio.start || 0); move = ev => { doc.audio.start = Math.max(0, Math.round((s0 + (ev.clientX - sx) / tl.pxs) * 10) / 10); renderTimeline(); }; up = () => { if (moved) commit(); }; }
     else if (itEl) { // 트랙 클립: 끌어 옮기기(오디오는 위아래 트랙으로도), 오른쪽 끝은 길이
       const tr0 = tracks().find(q => q.id === itEl.dataset.tid), it = tr0.items.find(q => q.id === itEl.dataset.it), a0 = it.at, d0 = tr0.type === 'audio' ? itemDur(it) : Number(it.dur || 3), edge = t.closest('[data-ir]'), ledge = t.closest('[data-il]'), o0 = Number(it.off || 0), full = Number(it.full || 0), vk0 = it.vk ? it.vk.map(k => k.slice()) : null; let owner = tr0;
+      let dupIt = null; if (e.altKey && !edge && !ledge) { dupIt = clone(it); dupIt.id = uid(); tr0.items.splice(tr0.items.indexOf(it) + 1, 0, dupIt); }  /* 파이널컷 ⌥+끌기: 제자리에 사본을 남기고 끄는 것을 옮김 */
       const sPts = tlSnapPts(it.id);
       move = ev => { let dt = (ev.clientX - sx) / tl.pxs; tl.snapT = null;
         { const cands = ledge ? [a0] : edge ? [a0 + d0] : [a0, a0 + d0]; let best = null; cands.forEach(c => { const v = tlSnapTo(c + dt, sPts); if (v != null && (best == null || Math.abs(v - c - dt) < Math.abs(best.v - best.c - dt))) best = { v, c }; }); if (best) { dt = best.v - best.c; tl.snapT = best.v; } else if (!ledge && !edge) dt = tlFrame(a0 + dt) - a0; }
         if (ledge) { let d = Math.max(-a0, Math.min(d0 - 0.2, dt)); if (tr0.type === 'audio') d = Math.max(-o0, d); it.at = Math.round((a0 + d) * 100) / 100; it.dur = Math.round((d0 - d) * 100) / 100; if (tr0.type === 'audio') { it.off = Math.round((o0 + d) * 100) / 100; if (vk0) it.vk = vk0.map(k => [Math.round((k[0] - d) * 100) / 100, k[1]]); } } else if (edge) { it.dur = Math.max(0.2, Math.round((d0 + dt) * 100) / 100); if (tr0.type === 'audio' && full) it.dur = Math.min(it.dur, Math.round((full - o0) * 100) / 100); } else { it.at = Math.max(0, Math.round((a0 + dt) * 1000) / 1000); if (tr0.type === 'audio') { const row = document.elementsFromPoint(ev.clientX, ev.clientY).map(n => n.closest && n.closest('[data-row]')).find(Boolean), dst = row && tracks().find(q => q.id === row.dataset.row); if (dst && dst !== owner && dst.type === 'audio') { owner.items = owner.items.filter(q => q !== it); dst.items.push(it); owner = dst; itEl.dataset.tid = dst.id; } } } renderTimeline(); };
-      up = () => { tl.snapT = null; tl.selIt = it.id; tl.selTr = itEl.dataset.tid; if (moved) { commit(); tl.lastClk = null; } else { const now = Date.now(), dbl = tl.lastClk && tl.lastClk.id === it.id && now - tl.lastClk.t < 450; tl.lastClk = dbl ? null : { id: it.id, t: now }; /* 한 번 누를 때 타임라인을 다시 그려 브라우저 dblclick이 끊기므로 직접 셈 */ if (dbl && tr0.type !== 'audio') { renderTimeline(); openItemPop(tr0, it); return; } if (tl.T < it.at - 1e-6 || tl.T > it.at + d0 + 1e-6) tlSeek(it.at, false); if (tr0.type === 'audio') previewSound(it.ref, null, Number(it.off || 0), 8); } renderTimeline(); }; }
+      up = () => { tl.snapT = null; tl.selIt = it.id; tl.selTr = itEl.dataset.tid; if (dupIt && !moved) { const ow = tracks().find(q => (q.items || []).includes(dupIt)); if (ow) ow.items.splice(ow.items.indexOf(dupIt), 1); dupIt = null; } if (moved) { commit(); tl.lastClk = null; if (dupIt) toast('클립을 복제했습니다'); } else { const now = Date.now(), dbl = tl.lastClk && tl.lastClk.id === it.id && now - tl.lastClk.t < 450; tl.lastClk = dbl ? null : { id: it.id, t: now }; /* 한 번 누를 때 타임라인을 다시 그려 브라우저 dblclick이 끊기므로 직접 셈 */ if (dbl && tr0.type !== 'audio') { renderTimeline(); openItemPop(tr0, it); return; } if (tl.T < it.at - 1e-6 || tl.T > it.at + d0 + 1e-6) tlSeek(it.at, false); if (tr0.type === 'audio') previewSound(it.ref, null, Number(it.off || 0), 8); } renderTimeline(); }; }
     else if (clip) { const k0 = Number(clip.dataset.k); move = ev => { if (Math.abs(ev.clientX - sx) > 6) clip.style.transform = `translateX(${ev.clientX - sx}px)`; }; up = ev => { const { list } = tlScenes(), x = tAt(ev); if (moved && Math.abs(ev.clientX - sx) > 12) { let k1 = list.findIndex(s2 => x < s2.t0 + (s2.dur + s2.turn) / 2); if (k1 < 0) k1 = list.length; if (k1 > k0) k1 = Math.max(k0, k1 - 1);  /* 뒤로 옮길 때는 빠진 자리만큼 한 칸 당김 */ const from = list[k0].i, to = list[k1].i; if (from !== to) { const snap = tlConnSnap(); const [pg] = doc.pages.splice(from, 1); doc.pages.splice(to, 0, pg); snap(); commit(); goto(to);  /* 붙은 자막·소리도 장면과 함께 */ } renderTimeline(); } else { const i = Number(clip.dataset.ci); if (i !== cur) goto(i); tl.selScene = true; tlSeek(Math.max(tl.T, list[k0].t0) < list[k0].t0 + list[k0].dur && tl.T >= list[k0].t0 ? tl.T : list[k0].t0, false); renderTimeline(); } }; }
     else { tlSeek(tAt(e)); move = ev => tlSeek(tAt(ev)); }
     const mv = ev => { if (Math.abs(ev.clientX - sx) > 3) moved = true; if (move && moved) move(ev); };
@@ -2969,6 +3048,7 @@ function renderInspector() {
     <div class="grid2">${F('속도', 'speed', String(el.speed || 1), { type: 'select', options: [['0.25', '0.25배 (아주 느리게)'], ['0.5', '0.5배 (슬로모션)'], ['0.75', '0.75배'], ['1', '1배 (보통)'], ['1.5', '1.5배'], ['2', '2배 (빠르게)'], ['4', '4배']] })}<p class="hint" style="margin:18px 0 0">${Number(el.speed || 1) !== 1 ? '속도를 바꾼 동영상은 소리를 빼고 넣습니다' : '느리게 하면 같은 구간이 더 길게 보입니다'}</p></div>
     <div class="grid3">${F('소리 끄기', 'mute', !!el.mute, { type: 'check' })}${F('반복', 'loop', !!el.loop, { type: 'check' })}${F('둥근 모서리', 'radius', el.radius || 0, { type: 'number', step: 0.5 })}</div>
     <div class="row" style="gap:6px"><button class="btn sm" id="vFitScene">장면 길이를 구간에 맞추기</button><button class="btn sm" id="vRelink">원본 다시 연결</button></div>
+    <div class="row" style="gap:6px;margin-top:6px"><button class="btn sm" id="vDetach" title="소리를 따로 오디오 트랙으로 떼어 냅니다 — 다음 장면까지 늘리거나(J·L 컷) 음량을 따로 조절 (Control+Shift+S)">소리 분리</button><button class="btn sm" id="vFreezeBtn" title="재생 헤드의 화면을 2초 멈춘 장면으로 넣습니다 (Alt+F)">정지 화면 넣기</button></div>
     <details class="fx" ${el.fx && Object.keys(el.fx).length ? 'open' : ''}><summary><span class="chk">색 보정 (밝기·대비·채도)</span></summary><div class="tstyles sm">${FX.IMG_PRESETS.map(([id, n]) => `<button class="tsb" data-imgpreset="${id}"><span>${n}</span></button>`).join('')}</div><div class="grid2 sls">${F('밝기', 'fx.bri', (el.fx || {}).bri == null ? 100 : el.fx.bri, { type: 'slider', min: 20, max: 200, step: 1, unit: '%', def: 100 })}${F('대비', 'fx.con', (el.fx || {}).con == null ? 100 : el.fx.con, { type: 'slider', min: 20, max: 200, step: 1, unit: '%', def: 100 })}${F('채도', 'fx.sat', (el.fx || {}).sat == null ? 100 : el.fx.sat, { type: 'slider', min: 0, max: 250, step: 1, unit: '%', def: 100 })}${F('색조', 'fx.hue', (el.fx || {}).hue || 0, { type: 'slider', min: 0, max: 360, step: 1, unit: '°', def: 0 })}</div></details>` + geo;
   } else if (el.type === 'path' && el.d) {
     h += `<h3>벡터 모양</h3>${fillBlock}${(el.fillType || 'solid') === 'solid' ? `${F('채우기 색', 'fill', el.fill || '#FFE89A', { type: 'color' })}<button class="btn sm" data-set="fill:">채우기 없음</button>` : el.fillType === 'raw' ? '<p class="hint" style="margin:2px 0 8px">원래 그라데이션을 쓰고 있습니다. 단색·그라데이션을 고르면 바뀝니다.</p>' : ''}
@@ -3034,6 +3114,8 @@ function renderInspector() {
     if (e.target.closest('#iAnimPlay')) { openVideoPlayer(true); return; }
     if (e.target.closest('#vFitScene')) { page().vdur = Math.max(0.5, Math.round(((Number(el.tout || el.dur || 0) - Number(el.tin || 0)) / Math.max(0.1, Number(el.speed || 1)) + (el.anim ? Number(el.anim.d || 0) : 0)) * 10) / 10); commit(); renderAll(); toast(`장면 길이를 ${page().vdur}초로 맞췄습니다`); return; }
     if (e.target.closest('#vRelink')) { relinkMedia(el.src); return; }
+    if (e.target.closest('#vDetach')) { tlDetachAudio(); return; }
+    if (e.target.closest('#vFreezeBtn')) { if (!tl.open) tlShow(true); tlFreeze(); return; }
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.tfi) { toggleFmt(b.dataset.tfi); if (!editing) return; b.classList.toggle('on'); return; }
     if (b.dataset.tfi2) { const k = b.dataset.tfi2; selEls().forEach(x => { if (x.type === 'text') x[k] = !x[k]; }); commit(); rerender(); return; }
