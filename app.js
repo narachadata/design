@@ -16,7 +16,9 @@ const SWATCH = ['#1a1a1a', '#ffffff', '#1E2B5A', '#2F5BEA', '#E0564B', '#FFE89A'
 /* ---------- 문서 모델 ---------- */
 let doc, cur = 0, sel = [], zoom = 0, hist = [], hptr = -1, editing = null, selDay = null, clip = null, lastTextStyle = null, tool = 'select';
 function newPage(bg) { return { id: uid(), bg: bg || '#ffffff', els: [], label: '' }; }
-function newDoc(sz) { sz = sz || SIZES[0]; return { v: 2, name: '새 디자인', w: sz[2], h: sz[3], bleed: 0, cropMarks: false, pages: [newPage()], assets: {}, fonts: [], holidays: {}, showHolidays: true, calendar: Object.assign(clone(window.NARACAL_DEFAULTS), { theme: Object.assign({ id: 'classic' }, window.NARACAL_DEFAULTS.theme) }), rules: clone(window.NARACAL_DEFAULTS.rules), updatedAt: Date.now() }; }
+function newDoc(sz) { sz = sz || SIZES[0]; return { v: 2, name: '새 디자인', w: sz[2], h: sz[3], bleed: 0, cropMarks: false, pages: [newPage()], assets: {}, fonts: [], holidays: {}, showHolidays: true, calendar: Object.assign(clone(window.NARACAL_DEFAULTS), { theme: Object.assign({ id: 'classic' }, window.NARACAL_DEFAULTS.theme) }), rules: clone(savedRules() || window.NARACAL_DEFAULTS.rules), updatedAt: Date.now() }; }
+/* 도장 기본 행사 목록(반복 일정 규칙): 한 번 저장하면 새 문서·다음 해 달력에 그대로 (두 PC 설정 동기화) */
+function savedRules() { try { const v = JSON.parse(localStorage.getItem('naracal-rules-saved') || 'null'); return Array.isArray(v) && v.length ? v : null; } catch (e) { return null; } }
 const page = () => doc.pages[cur];
 const find = id => page().els.find(e => e.id === id);
 const selEls = () => sel.map(find).filter(Boolean);
@@ -300,7 +302,34 @@ function chartSVG(el) {
 }
 function sheetHTML(pg, mode) {
   const b = mode === 'print' ? (doc.bleed || 0) : 0;
-  return `<div class="sheet${mode === 'print' ? ' print' : ''}" style="--pw:${doc.w};--ph:${doc.h};--b:${b}mm"><div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, mode, true)).join('')}</div>${(b > 0 && doc.cropMarks) ? marks(b) : ''}</div>`;
+  return bookTokens(pg, `<div class="sheet${mode === 'print' ? ' print' : ''}" style="--pw:${doc.w};--ph:${doc.h};--b:${b}mm"><div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, mode, true)).join('')}${masterHTML(pg)}</div>${(b > 0 && doc.cropMarks) ? marks(b) : ''}</div>`);
+}
+/* ---- 책자 (인디자인·쿽 참고): 공통 머리글·바닥글·자동 쪽 번호(마스터 페이지), 여백·단 안내선, 펼침면, 목차, 중철 소책자 인쇄 ----
+   doc.book = { on, start(시작 번호), skip(앞 몇 쪽은 번호 없음 — 표지), facing(펼침면: 홀수 쪽=오른쪽), pos('outer'|'center'|'inner'), style('n'|'dash'|'p'|'total'), size, color, font, margin, header, footer, guides, mg:{top,bottom,inner,outer}, cols, gutter }
+   pg.noMaster = 이 쪽만 머리글·바닥글·번호 빼기. 글 상자 안의 {쪽}·{전체쪽}은 그 쪽 번호로 바뀜 */
+const BOOK_DEF = { on: false, start: 1, skip: 1, facing: true, pos: 'outer', style: 'n', size: 9, color: '#666666', font: 'Pretendard', margin: 8, header: '', footer: '', guides: false, mg: { top: 15, bottom: 18, inner: 18, outer: 13 }, cols: 1, gutter: 5 };
+function book() { if (!doc.book) doc.book = clone(BOOK_DEF); return Object.assign({}, BOOK_DEF, doc.book, { mg: Object.assign({}, BOOK_DEF.mg, doc.book.mg || {}) }); }
+function bookNum(i) { const B = book(); return i < (Number(B.skip) || 0) ? null : i - (Number(B.skip) || 0) + (Number(B.start) || 1); }
+function bookTotal() { const B = book(); return Math.max(0, doc.pages.length - (Number(B.skip) || 0)); }
+function isRightPage(i) { const B = book(); if (!B.facing) return true; return i % 2 === 0; } /* 펼침면: 1쪽(표지)은 오른쪽, 그다음부터 왼·오른쪽 번갈아 */
+function bookTokens(pg, html) { if (html.indexOf('{쪽}') < 0 && html.indexOf('{전체쪽}') < 0) return html; const i = doc.pages.indexOf(pg); const n = i < 0 ? '' : (bookNum(i) == null ? i + 1 : bookNum(i)); return html.split('{쪽}').join(String(n)).split('{전체쪽}').join(String(bookTotal())); }
+function masterHTML(pg) {
+  if (!doc.book || !doc.book.on) return ''; const B = book(), i = doc.pages.indexOf(pg); if (i < 0 || pg.noMaster) return ''; const n = bookNum(i); if (n == null) return '';
+  const right = isRightPage(i), outer = right ? 'right' : 'left', inner = right ? 'left' : 'right', al = B.pos === 'center' ? 'center' : B.pos === 'inner' ? inner : outer;
+  const num = { n: String(n), dash: `- ${n} -`, p: `p.${n}`, total: `${n} / ${bookTotal()}` }[B.style] || String(n), m = Number(B.margin) || 8;
+  const st = (pos, a) => `position:absolute;left:${m}mm;right:${m}mm;${pos};text-align:${a};font-family:'${esc(B.font)}';font-size:${Number(B.size) || 9}pt;color:${esc(B.color)};line-height:1.2;white-space:nowrap;overflow:hidden;pointer-events:none;z-index:50`;
+  let h = '';
+  if (B.header) h += `<div class="mst" style="${st(`top:${m * 0.7}mm`, al === 'center' ? 'center' : outer)}">${esc(B.header)}</div>`;
+  h += `<div class="mst" style="${st(`bottom:${m * 0.7}mm`, al)}">${esc(num)}</div>`;
+  if (B.footer) h += `<div class="mst" style="${st(`bottom:${m * 0.7}mm`, al === 'center' ? inner : al === outer ? inner : outer)}">${esc(B.footer)}</div>`;
+  return h;
+}
+function bookGuidesHTML() {
+  if (!doc.book || !doc.book.guides) return ''; const B = book(), right = isRightPage(cur), L = right ? B.mg.inner : B.mg.outer, R = right ? B.mg.outer : B.mg.inner, T = B.mg.top, Bo = B.mg.bottom;
+  const W = doc.w - L - R, cols = Math.max(1, Number(B.cols) || 1), g = Number(B.gutter) || 0, cw = (W - g * (cols - 1)) / cols;
+  let h = `<div class="bk-mg" style="left:${L}mm;top:${T}mm;width:${W}mm;height:${doc.h - T - Bo}mm" title="여백 안내선 (책자 설정)"></div>`;
+  for (let c = 1; c < cols; c++) { const x = L + c * cw + (c - 1) * g; h += `<div class="bk-col" style="left:${x}mm;top:${T}mm;width:${g}mm;height:${doc.h - T - Bo}mm"></div>`; }
+  return h;
 }
 function marks(b) { const L = Math.max(0, b - 0.5), t = 0.15; return `<div class="marks">${[['left', 'top'], ['right', 'top'], ['left', 'bottom'], ['right', 'bottom']].map(([x, y]) => `<i style="${x}:0;${y}:${b}mm;width:${L}mm;height:${t}mm"></i><i style="${y}:0;${x}:${b}mm;height:${L}mm;width:${t}mm"></i>`).join('')}</div>`; }
 
@@ -310,7 +339,7 @@ function renderCanvas() {
   ensureLibFonts([page()]).then(n => { if (n && !editing) renderCanvas(); });
   const c = $('#canvas'); const pg = page();
   c.style.setProperty('--pw', doc.w); c.style.setProperty('--ph', doc.h); c.style.setProperty('--b', '0mm');
-  c.innerHTML = `<div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, 'edit')).join('')}</div>`;
+  c.innerHTML = bookTokens(pg, `<div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, 'edit')).join('')}${masterHTML(pg)}</div>`);
   pg.els.forEach(el => { if (el.type === 'text' && !isWarp(el)) { const d = c.querySelector(`[data-id="${el.id}"]`); if (d) { const hh = fitTextH(d, el, true); if (hh != null) el.h = hh; } } });
   renderGhost(); fitCanvas(); renderOverlay(); NC.live.paint();
   $('#pageLabel').textContent = `${cur + 1} / ${doc.pages.length}${pg.label ? ' · ' + pg.label : ''}`;
@@ -385,7 +414,7 @@ function renderOverlay(guides) {
   els.forEach(el => { const single = els.length === 1; h += `<div class="sel${single ? '' : ' multi'}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += (el.type === 'text' && !isWarp(el) ? ['nw', 'ne', 'e', 'se', 'sw', 'w'] : ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']).map(d => `<div class="h ${d}" data-h="${d}"></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; if (el.locked) h += `<button class="lockbadge" data-unlock="${el.id}" title="잠금 풀기 (Ctrl+L)">🔒 잠금 풀기</button>`; h += '</div>'; });
   if (els.length > 1) { const U = unionBox(els), bx = U.x, by = U.y, bw = U.w, bh = U.h; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm">${els.some(e => e.locked) ? '' : ['nw', 'ne', 'se', 'sw'].map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="함께 크기 조절 (비율 유지)"></div>`).join('')}</div>`; }
   (guides || []).forEach(g => { h += g.v != null ? `<div class="guide v" style="left:${g.v}mm"></div>` : `<div class="guide h" style="top:${g.h}mm"></div>`; });
-  h += calOverlay(); h += userGuidesHTML(); try { if (showRulers()) requestAnimationFrame(drawRulers); } catch (e) {} // 고른 요소 범위를 눈금자에 표시
+  h += calOverlay(); h += userGuidesHTML(); h += bookGuidesHTML(); try { if (showRulers()) requestAnimationFrame(drawRulers); } catch (e) {} // 고른 요소 범위를 눈금자에 표시
   // 인쇄 안내선: 도련(잘려 나가는 영역)·안전 여백(글자를 두지 않을 영역)
   if (showGuides() && Number(doc.bleed) > 0) { const b = Number(doc.bleed); h += `<div class="pg-bleed" style="left:${-b}mm;top:${-b}mm;width:${doc.w + 2 * b}mm;height:${doc.h + 2 * b}mm" title="도련 ${b}mm: 이 선까지 배경을 채우세요"></div><div class="pg-safe" style="left:${safeMM()}mm;top:${safeMM()}mm;width:${doc.w - 2 * safeMM()}mm;height:${doc.h - 2 * safeMM()}mm" title="안전 여백 ${safeMM()}mm: 글자·로고는 이 안쪽에"></div>`; }
   if (showGuides()) h += formatGuides();
@@ -2081,7 +2110,7 @@ function renderSide() {
   $('#sideTitle').textContent = (RAIL.find(r => r[0] === sideTab) || [])[1] || '';
   body.onclick = null; body.oninput = null; body.onchange = null;
   if (sideTab === 'pages') {
-    body.innerHTML = `<div class="row" style="margin-bottom:8px"><button class="btn sm" id="pgAdd">+ 새 페이지</button><button class="btn sm" id="pgDup">복제</button><button class="btn sm icon" id="pgUp" title="위로">↑</button><button class="btn sm icon" id="pgDown" title="아래로">↓</button><button class="btn sm danger" id="pgDel">삭제</button><button class="btn sm" id="pgGrid" title="모든 쪽을 한눈에 (여러 쪽 고르기·끌어서 순서 바꾸기)">모아 보기</button></div><div class="hint" id="pgSelInfo" style="margin:-2px 0 6px;min-height:0"></div><div id="thumbs"></div>`;
+    body.innerHTML = `<div class="row" style="margin-bottom:8px"><button class="btn sm" id="pgAdd">+ 새 페이지</button><button class="btn sm" id="pgDup">복제</button><button class="btn sm icon" id="pgUp" title="위로">↑</button><button class="btn sm icon" id="pgDown" title="아래로">↓</button><button class="btn sm danger" id="pgDel">삭제</button><button class="btn sm" id="pgGrid" title="모든 쪽을 한눈에 (여러 쪽 고르기·끌어서 순서 바꾸기)">모아 보기</button><button class="btn sm" data-book title="쪽 번호·머리글·여백·펼침면·목차·소책자 인쇄 (인디자인처럼)">📖 책자</button></div><div class="hint" id="pgSelInfo" style="margin:-2px 0 6px;min-height:0"></div><div id="thumbs"></div>`;
     renderThumbs();
     $('#thumbs').onclick = e => { const b = e.target.closest('.thumb'); if (!b) return; pgClick(Number(b.dataset.i), e); };
     $('#thumbs').ondblclick = e => { const b = e.target.closest('.thumb'); if (b) pageCmd('rename'); };
@@ -2127,7 +2156,7 @@ function renderSide() {
     renderElems();
   } else if (sideTab === 'text') {
     const rf = recentFonts();
-    body.innerHTML = `<h3>글자 추가</h3><div class="tile"><button data-add="text:h"><span class="t-h">제목</span></button><button data-add="text:s"><span class="t-s">부제목</span></button><button data-add="text:b">본문 글</button><button data-add="text:v"><span style="writing-mode:vertical-rl">세로</span></button></div>
+    body.innerHTML = `<button class="btn sm full" data-dojang style="margin-bottom:8px" title="전화·주소·도장 이름을 저장하면 템플릿에 자동으로 채움">🏠 도장 정보 (전화·주소 자동 채우기)</button><h3>글자 추가</h3><div class="tile"><button data-add="text:h"><span class="t-h">제목</span></button><button data-add="text:s"><span class="t-s">부제목</span></button><button data-add="text:b">본문 글</button><button data-add="text:v"><span style="writing-mode:vertical-rl">세로</span></button></div>
     <h3>스타일로 추가</h3><div class="tstyles">${FX.TEXT_PRESETS.map(p => `<button data-tstyle="${p.id}" class="tsb"><span style="${FX.textStyle(Object.assign({}, TEXT_DEF, { font: 'Jua', size: 18, weight: 800, align: 'center' }, p.st))}">${esc(p.name)}</span></button>`).join('')}</div>
     <h3>글꼴 조합</h3><div class="fontpairs">${[['Jua', 'Noto Sans KR', '귀엽고 또렷'], ['Black Han Sans', 'Pretendard', '강하고 현대적'], ['Gowun Batang', 'Gowun Dodum', '단정한 명조'], ['Do Hyeon', 'Nanum Gothic', '힘찬 고딕'], ['Nanum Brush Script', 'Noto Serif KR', '붓글씨 감성'], ['Dongle', 'Gaegu', '둥글둥글 손글씨']].map(([a, b, t]) => `<button class="fontpair" data-pair="${a}|${b}"><b style="font-family:'${a}'">${esc(a)}</b><span style="font-family:'${b}'">${esc(b)} · ${t}</span></button>`).join('')}</div>
     ${rf.length ? `<h3>최근 사용 글꼴</h3><div class="row">${rf.map(f => `<button class="btn sm" data-usefont="${esc(f)}" style="font-family:'${esc(f)}'">${esc(f)}</button>`).join('')}</div>` : ''}
@@ -2171,7 +2200,8 @@ function renderSide() {
     <div class="tile"><button data-pj="save"><svg class="ic" style="width:22px;height:22px"><use href="#i-save"/></svg>저장·동기화</button><button data-pj="open"><svg class="ic" style="width:22px;height:22px"><use href="#i-open"/></svg>열기</button><button data-pj="new"><svg class="ic" style="width:22px;height:22px"><use href="#i-new"/></svg>새 문서</button><button data-pj="down"><svg class="ic" style="width:22px;height:22px"><use href="#i-upload"/></svg>사본 내려받기</button></div>
     <h3>내보내기</h3><div class="tile"><button data-pj="pdf"><svg class="ic" style="width:22px;height:22px"><use href="#i-pdf"/></svg>PDF</button><button data-pj="png"><svg class="ic" style="width:22px;height:22px"><use href="#i-img"/></svg>현재 쪽 PNG</button></div>
     <h3>공휴일</h3><p class="hint">${Object.keys(doc.holidays).length ? '적용 연도: ' + Object.keys(doc.holidays).sort().map(y => `${y}년(${doc.holidays[y].length})`).join(', ') : '아직 없습니다.'}</p><button class="btn sm" data-pj="hol">공휴일 가져오기·편집</button>
-    <h3>반복 일정 규칙</h3><button class="btn sm" data-pj="rules">규칙 편집</button>`;
+    <h3>반복 일정 · 연간 행사</h3><button class="btn sm" data-pj="rules">목록 편집 (생일·기념일·심사일)</button>
+    <h3>도장 정보</h3><p class="hint">전화·주소·도장 이름을 저장하면 템플릿에 자동으로 들어가고, 바뀌면 한꺼번에 고칩니다.</p><button class="btn sm" data-dojang>🏠 도장 정보 편집</button>`;
     body.onclick = e => { const b = e.target.closest('[data-pj]'); if (!b) return; const k = b.dataset.pj; if (k === 'save') openSaveDialog(); if (k === 'open') $('#btnOpen').click(); if (k === 'new') $('#btnNew').click(); if (k === 'down') { gcAssets(); store.download(doc); } if (k === 'pdf') openDownload('pdfhq'); if (k === 'png') openDownload('png'); if (k === 'hol') openHoliday(); if (k === 'rules') openRules(); };
     body.oninput = e => { const t = e.target, k = t.dataset.k; if (!k) return; const v = t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) : t.value; doc[k.slice(4)] = v; if (k === 'doc.name') $('#pname').value = v; markDirty(); };
   } else if (sideTab === 'ai') {
@@ -2432,9 +2462,9 @@ function openTplPreview(t) {
     const ss = $('#tplSize'); if (ss) ss.onchange = () => { choice = ss.value; draw(); };
     if (t.theme) { $('#tplWizard').onclick = () => { d.close(); openWizard(doc.calendar.year, t.theme.id); }; const rb = $('#tplRetheme'); if (rb) rb.onclick = () => { doc.calendar.theme = clone(t.theme); const y = doc.calendar.year || 2027; const nrep = CAL.retheme(doc, uid, y); ensureAllHolidays(); commit(); renderAll(); d.close(); toast(`"${t.name}" 테마를 ${nrep}쪽에 적용했습니다`); }; return; }
     const ready = async pgs => { if (!t.lib) return true; try { setStatus('자료실 그림을 넣는 중…'); await NC.lib.materialize(pgs, addAsset); return true; } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return false; } finally { setStatus(''); } };
-    $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm(`현재 문서를 닫고 새 문서를 만들까요? (${keepNote()})`)) return; await keepCurrentDoc(); const pgs = tplPagesFor(t, S); const keepAssets = doc.assets; doc.assets = {}; if (!(await ready(pgs))) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = S.w; nd.h = S.h; nd.fmt = S.fmt || ''; nd.name = t.name; nd.pages = pgs; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; if (!S.screen && ['print', 'doc', 'cal', 'sign'].includes((FORMATS.find(f => f[0] === S.fmt) || [])[2])) nd.bleed = 3; doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)'); zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다 (${label(S)})`); };
+    $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm(`현재 문서를 닫고 새 문서를 만들까요? (${keepNote()})`)) return; await keepCurrentDoc(); const pgs = tplPagesFor(t, S); fillDojang(pgs); const keepAssets = doc.assets; doc.assets = {}; if (!(await ready(pgs))) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = S.w; nd.h = S.h; nd.fmt = S.fmt || ''; nd.name = t.name; nd.pages = pgs; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; if (!S.screen && ['print', 'doc', 'cal', 'sign'].includes((FORMATS.find(f => f[0] === S.fmt) || [])[2])) nd.bleed = 3; doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)'); zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다 (${label(S)})`); };
     // 지금 문서에 넣기: 늘 지금 문서 크기로 다시 짜서 넣음. 지금 쪽이 비어 있으면 그 쪽을 바꿈
-    $('#tplHere').onclick = async () => { const pg = tplPagesFor(t, docS); if (!(await ready(pg))) return; const emp = !page().els.length; doc.pages.splice(emp ? cur : cur + 1, emp ? 1 : 0, ...pg); const at = emp ? cur : cur + 1; commit(); goto(at); d.close(); toastUndo(emp ? `"${t.name}"을(를) 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`); };
+    $('#tplHere').onclick = async () => { const pg = tplPagesFor(t, docS); if (!(await ready(pg))) return; const nDj = fillDojang(pg); const emp = !page().els.length; doc.pages.splice(emp ? cur : cur + 1, emp ? 1 : 0, ...pg); const at = emp ? cur : cur + 1; commit(); goto(at); d.close(); toastUndo((emp ? `"${t.name}"을(를) 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`) + (nDj ? ` · 도장 정보 ${nDj}곳 채움` : '')); };
   };
   draw(); d.showModal();
 }
@@ -3290,10 +3320,39 @@ function renderHoliday() {
   $('#holClear').onclick = () => { delete doc.holidays[s.year]; s.list = []; commit(); rerender(); renderHoliday(); };
   $('#holApply').onclick = () => { doc.holidays[s.year] = (s.list || []).filter(h => h.date && h.name).sort((a, b) => a.date < b.date ? -1 : 1); commit(); rerender(); $('#dlgHoliday').close(); toast(`${s.year}년 공휴일 ${doc.holidays[s.year].length}개를 적용했습니다`); };
 }
+function parseRuleLines(txt) { /* "3/2 개학식", "3월 2일 개학", "매월 25일 원비 납부", "마지막 화요일 승급심사" → 규칙 */
+  const out = [], WD = '일월화수목금토', WK = { 첫째: '1', 둘째: '2', 셋째: '3', 넷째: '4', 마지막: 'last' };
+  String(txt || '').split(/\n/).map(l => l.trim()).filter(Boolean).forEach(l => {
+    let m;
+    if ((m = l.match(/^매월\s*(\d{1,2})\s*일?\s+(.+)$/))) out.push({ kind: 'date', m: 0, d: Number(m[1]), text: m[2].trim(), color: '' });
+    else if ((m = l.match(/^(\d{1,2})\s*(?:[\/.\-]|월\s*)\s*(\d{1,2})\s*일?\s+(.+)$/))) out.push({ kind: 'date', m: Number(m[1]), d: Number(m[2]), text: m[3].trim(), color: '' });
+    else if ((m = l.match(/^(?:매월\s*)?(첫째|둘째|셋째|넷째|마지막)\s*주?\s*([일월화수목금토])요?일?\s+(.+)$/))) out.push({ week: WK[m[1]], dow: WD.indexOf(m[2]), text: m[3].trim(), color: '' });
+  });
+  return out.filter(r => r.text && (r.kind !== 'date' || (r.d >= 1 && r.d <= 31 && r.m >= 0 && r.m <= 12)));
+}
 function openRules() {
-  let d = $('#dlgRules'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgRules'; d.innerHTML = `<div class="dhead"><h2>반복 일정 규칙</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="rulesBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
-  const row = (r, k) => `<div class="evrow" style="grid-template-columns:90px 90px 1fr 80px 28px;margin-bottom:4px"><select data-rk="week" data-r="${k}">${[['1', '첫째'], ['2', '둘째'], ['3', '셋째'], ['4', '넷째'], ['last', '마지막']].map(([v, t]) => `<option value="${v}" ${String(r.week) === v ? 'selected' : ''}>${t}</option>`).join('')}</select><select data-rk="dow" data-r="${k}">${CAL.WD.ko1.map((w, i) => `<option value="${i}" ${Number(r.dow) === i ? 'selected' : ''}>${w}요일</option>`).join('')}</select><input type="text" data-rk="text" data-r="${k}" value="${esc(r.text)}" placeholder="일정 내용"><select data-rk="color" data-r="${k}">${Object.entries(COLOR_NAMES).map(([c, t]) => `<option value="${c}" ${(r.color || '') === c ? 'selected' : ''}>${t}</option>`).join('')}</select><button class="x" data-rd="${k}">×</button></div>`;
-  const render = () => { $('#rulesBody').innerHTML = `<p class="hint">달력 요소의 "반복 일정 넣기"를 누르면 이 규칙대로 일정이 들어갑니다 (이미 같은 일정이 있으면 건너뜀).</p><div id="rulesList">${doc.rules.map(row).join('')}</div><button class="btn sm" id="ruleAdd">+ 규칙 추가</button>`; $('#ruleAdd').onclick = () => { doc.rules.push({ week: 'last', dow: 1, text: '', color: '' }); render(); }; $('#rulesList').oninput = e => { const t = e.target; if (t.dataset.r != null) { doc.rules[Number(t.dataset.r)][t.dataset.rk] = t.value; markDirty(); } }; $('#rulesList').onclick = e => { const b = e.target.closest('[data-rd]'); if (b) { doc.rules.splice(Number(b.dataset.rd), 1); markDirty(); render(); } }; };
+  let d = $('#dlgRules'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgRules'; d.className = 'wide'; d.innerHTML = `<div class="dhead"><h2>반복 일정 · 연간 행사</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="rulesBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
+  const colorSel = (r, k) => `<select data-rk="color" data-r="${k}">${Object.entries(COLOR_NAMES).map(([c, t]) => `<option value="${c}" ${(r.color || '') === c ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  const row = (r, k) => r.kind === 'date'
+    ? `<div class="evrow" style="grid-template-columns:90px 90px 1fr 80px 28px;margin-bottom:4px"><select data-rk="m" data-r="${k}"><option value="0" ${!Number(r.m) ? 'selected' : ''}>매월</option>${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${Number(r.m) === i + 1 ? 'selected' : ''}>매년 ${i + 1}월</option>`).join('')}</select><label class="rday"><input type="number" min="1" max="31" data-rk="d" data-r="${k}" value="${Number(r.d) || 1}">일</label><input type="text" data-rk="text" data-r="${k}" value="${esc(r.text)}" placeholder="예: 창립기념일, 원비 납부, 홍길동 생일">${colorSel(r, k)}<button class="x" data-rd="${k}">×</button></div>`
+    : `<div class="evrow" style="grid-template-columns:90px 90px 1fr 80px 28px;margin-bottom:4px"><select data-rk="week" data-r="${k}">${[['1', '첫째'], ['2', '둘째'], ['3', '셋째'], ['4', '넷째'], ['last', '마지막']].map(([v, t]) => `<option value="${v}" ${String(r.week) === v ? 'selected' : ''}>${t}</option>`).join('')}</select><select data-rk="dow" data-r="${k}">${CAL.WD.ko1.map((w, i) => `<option value="${i}" ${Number(r.dow) === i ? 'selected' : ''}>${w}요일</option>`).join('')}</select><input type="text" data-rk="text" data-r="${k}" value="${esc(r.text)}" placeholder="일정 내용">${colorSel(r, k)}<button class="x" data-rd="${k}">×</button></div>`;
+  const render = () => {
+    const wk = doc.rules.map((r, k) => [r, k]).filter(([r]) => r.kind !== 'date'), dt = doc.rules.map((r, k) => [r, k]).filter(([r]) => r.kind === 'date');
+    $('#rulesBody').innerHTML = `<p class="hint">달력 요소의 "반복 일정 넣기"(또는 "문서의 모든 달력에")를 누르면 이 목록대로 일정이 들어갑니다. 이미 같은 일정이 있으면 건너뜁니다.</p>
+    <h3>요일 규칙 <small>매월 몇째 주 무슨 요일</small></h3><div id="rulesList">${wk.map(([r, k]) => row(r, k)).join('') || '<p class="hint">없음</p>'}</div><button class="btn sm" data-radd="week">+ 요일 규칙</button>
+    <h3>날짜 규칙 <small>매년 같은 날 · 매월 같은 날 (생일·기념일·원비)</small></h3><div id="rulesList2">${dt.map(([r, k]) => row(r, k)).join('') || '<p class="hint">없음</p>'}</div><button class="btn sm" data-radd="date">+ 날짜 규칙</button>
+    <details class="fx" style="margin-top:10px"><summary><b>여러 줄 한 번에 붙여넣기</b> <small class="hint" style="margin:0">엑셀·메모에서 복사</small></summary><textarea id="rulePaste" rows="5" placeholder="3/2 개학식&#10;5월 5일 어린이날 행사&#10;매월 25일 원비 납부&#10;마지막 화요일 승급심사"></textarea><button class="btn sm" id="rulePasteGo">목록에 더하기</button></details>
+    <div class="row" style="margin-top:12px;gap:6px;flex-wrap:wrap"><button class="btn sm primary" id="ruleSave" title="새 문서·다음 해 달력에 이 목록이 자동으로 들어갑니다 (두 PC 설정 동기화)">⭐ 도장 기본 목록으로 저장</button><button class="btn sm" id="ruleLoad" ${savedRules() ? '' : 'disabled'}>저장된 목록 불러오기${savedRules() ? ` (${savedRules().length})` : ''}</button></div>`;
+  };
+  const B = $('#rulesBody');
+  B.oninput = e => { const t = e.target; if (t.dataset.r != null && t.dataset.rk) { doc.rules[Number(t.dataset.r)][t.dataset.rk] = t.value; markDirty(); } };
+  B.onclick = e => {
+    const x = e.target.closest('[data-rd]'); if (x) { doc.rules.splice(Number(x.dataset.rd), 1); markDirty(); render(); return; }
+    const a = e.target.closest('[data-radd]'); if (a) { doc.rules.push(a.dataset.radd === 'date' ? { kind: 'date', m: 0, d: 1, text: '', color: '' } : { week: 'last', dow: 1, text: '', color: '' }); markDirty(); render(); return; }
+    if (e.target.id === 'rulePasteGo') { const add = parseRuleLines($('#rulePaste').value), key = r => [r.kind || 'w', r.m, r.d, r.week, r.dow, r.text].join('|'), have = new Set(doc.rules.map(key)); const nw = add.filter(r => !have.has(key(r))); doc.rules.push(...nw); markDirty(); render(); toast(add.length ? `${nw.length}개를 더했습니다${add.length > nw.length ? ` (같은 것 ${add.length - nw.length}개 건너뜀)` : ''}` : '알아볼 수 있는 줄이 없습니다 — 예: 3/2 개학식, 매월 25일 원비', !add.length); return; }
+    if (e.target.id === 'ruleSave') { lsSet('naracal-rules-saved', doc.rules.filter(r => r.text)); render(); toast('도장 기본 목록으로 저장했습니다 — 새 문서·다음 해 달력에 자동으로 들어갑니다'); return; }
+    if (e.target.id === 'ruleLoad') { const sv = savedRules() || [], key = r => [r.kind || 'w', r.m, r.d, r.week, r.dow, r.text].join('|'), have = new Set(doc.rules.map(key)); const nw = sv.filter(r => !have.has(key(r))); doc.rules.push(...clone(nw)); markDirty(); render(); toast(`${nw.length}개를 불러왔습니다`); }
+  };
   render(); d.showModal();
 }
 
@@ -4111,6 +4170,106 @@ function findClick(e) {
   if (e.target.id === 'fAll') { slots.forEach(x => x.set(x.get().split(S.q).join(S.r))); commit(); renderAll(); toastUndo(`${cnt}곳을 바꿨습니다`); renderFindRes(); }
   if (e.target.id === 'fFont') { const a = $('#fFrom').value, b = $('#fTo').value; if (!a || a === b) return; let n = 0; doc.pages.forEach(p => p.els.forEach(el => { if (el.locked) return; if (el.type === 'text' && el.font === a) { el.font = b; n++; } if ((el.type === 'cal' || el.type === 'mini') && el.s) { if (el.s.fontNum === a) { el.s.fontNum = b; n++; } if (el.s.fontBody === a) { el.s.fontBody = b; n++; } } })); commit(); renderAll(); toast(`${n}곳의 글꼴을 바꿨습니다`); renderFindRes(); }
 }
+
+function openBook() {
+  let d = $('#dlgBook'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgBook'; d.className = 'wide'; document.body.appendChild(d); }
+  const B = book(), n = doc.pages.length, pad = (4 - n % 4) % 4;
+  const N = (k, t, v, o) => `<label class="f"><span>${t}</span><input type="number" data-bk="${k}" value="${v}" step="${(o && o.step) || 1}" min="${(o && o.min) || 0}"></label>`;
+  d.innerHTML = `<div class="dhead"><h2>📖 책자 만들기 <small>인디자인·쿽 방식</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody bookdlg">
+    <div class="bk-sec"><h3>1. 쪽 번호 · 머리글 · 바닥글 <small>모든 쪽에 공통 (마스터 페이지)</small></h3>
+      <label class="chk"><input type="checkbox" data-bk="on" ${B.on ? 'checked' : ''}> 쪽 번호·머리글·바닥글 넣기</label>
+      <div class="grid3">${N('skip', '번호 없는 앞쪽 (표지)', B.skip)}${N('start', '시작 번호', B.start, { min: 1 })}<label class="f"><span>번호 위치</span><select data-bk="pos">${[['outer', '바깥쪽 (책처럼)'], ['center', '가운데'], ['inner', '안쪽']].map(([a, t]) => `<option value="${a}" ${B.pos === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
+      <div class="grid3"><label class="f"><span>번호 모양</span><select data-bk="style">${[['n', '1'], ['dash', '- 1 -'], ['p', 'p.1'], ['total', '1 / 24']].map(([a, t]) => `<option value="${a}" ${B.style === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>${N('size', '글자 크기(pt)', B.size, { step: 0.5, min: 5 })}<label class="f"><span>색</span><input type="color" data-bk="color" value="${B.color}"></label></div>
+      <div class="grid2"><label class="f"><span>머리글 (위)</span><input type="text" data-bk="header" value="${esc(B.header)}" placeholder="예: 나라차태권도 2027 수련 안내"></label><label class="f"><span>바닥글 (아래, 번호 반대쪽)</span><input type="text" data-bk="footer" value="${esc(B.footer)}" placeholder="예: NARACHA TAEKWONDO"></label></div>
+      <div class="grid2">${N('margin', '종이 끝에서 거리(mm)', B.margin, { step: 0.5, min: 2 })}<label class="chk" style="margin-top:20px"><input type="checkbox" data-bk="facing" ${B.facing ? 'checked' : ''}> 펼침면 (홀수 쪽 오른쪽 · 짝수 쪽 왼쪽)</label></div>
+      <p class="hint">글 상자에 <b>{쪽}</b>·<b>{전체쪽}</b>을 쓰면 그 쪽 번호로 바뀝니다 (인디자인의 '현재 페이지 번호'). 한 쪽만 빼려면 그 쪽에서 아래 "이 쪽 번호 빼기".</p>
+      <label class="chk"><input type="checkbox" data-bkpg="noMaster" ${page().noMaster ? 'checked' : ''}> 지금 쪽(${cur + 1}쪽)은 번호·머리글·바닥글 빼기</label></div>
+    <div class="bk-sec"><h3>2. 여백 · 단 안내선 <small>화면에만 보이고 인쇄되지 않음</small></h3>
+      <label class="chk"><input type="checkbox" data-bk="guides" ${B.guides ? 'checked' : ''}> 여백·단 안내선 보기</label>
+      <div class="grid4">${N('mg.top', '위', B.mg.top, { step: 0.5 })}${N('mg.bottom', '아래', B.mg.bottom, { step: 0.5 })}${N('mg.inner', '안쪽(제본)', B.mg.inner, { step: 0.5 })}${N('mg.outer', '바깥쪽', B.mg.outer, { step: 0.5 })}</div>
+      <div class="grid2">${N('cols', '단 수', B.cols, { min: 1 })}${N('gutter', '단 사이(mm)', B.gutter, { step: 0.5 })}</div>
+      <p class="hint">제본(안쪽) 여백은 바깥쪽보다 넓게 두면 펼쳤을 때 글이 접힌 곳에 묻히지 않습니다.</p></div>
+    <div class="bk-sec"><h3>3. 보기 · 목차 · 인쇄</h3>
+      <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn" id="bkSpread">📖 펼침면으로 보기</button><button class="btn" id="bkToc" title="쪽 이름(페이지 목록에서 F2)으로 목차를 지금 쪽에 만듭니다">📑 목차 만들기 (지금 쪽에)</button><button class="btn primary" id="bkPrint" title="A4 한 장에 두 쪽씩, 접어서 스테이플러로 찍는 순서로 PDF">🖨 중철 소책자 인쇄 PDF</button></div>
+      <p class="hint" style="margin-top:8px">지금 ${n}쪽 — ${pad ? `<b style="color:#c0392b">중철 제본은 4의 배수여야 해서 빈 쪽 ${pad}장이 뒤에 붙습니다.</b> 쪽을 ${pad}장 더 만들거나 줄이면 깔끔합니다.` : '4의 배수라 중철 제본에 딱 맞습니다.'} 소책자 PDF는 종이 한 면에 두 쪽씩(${Math.round(doc.w * 2)}×${Math.round(doc.h)}mm) 들어가며, 양면 인쇄(짧은 쪽 넘김) 후 반으로 접으면 순서대로 됩니다.</p></div></div>`;
+  d.querySelector('[data-close]').onclick = () => d.close();
+  const upd = () => { commit(); renderAll(); };
+  d.oninput = d.onchange = e => {
+    const t = e.target; if (t.dataset.bkpg) { page().noMaster = t.checked; upd(); return; }
+    const k = t.dataset.bk; if (!k) return; if (!doc.book) doc.book = clone(BOOK_DEF);
+    let v = t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) : t.value; if (t.type === 'number' && t.value === '') return;
+    if (k.startsWith('mg.')) { doc.book.mg = Object.assign({}, BOOK_DEF.mg, doc.book.mg || {}); doc.book.mg[k.slice(3)] = v; } else doc.book[k] = v;
+    if (e.type === 'change' || t.type === 'checkbox' || t.tagName === 'SELECT') upd(); else { renderCanvas(); }
+  };
+  $('#bkSpread').onclick = () => openSpreads(); $('#bkToc').onclick = () => { d.close(); makeToc(); }; $('#bkPrint').onclick = () => bookletPdf();
+  d.showModal();
+}
+function openSpreads() {
+  let d = $('#dlgSpread'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgSpread'; d.className = 'wide'; document.body.appendChild(d); }
+  const B = book(), list = []; if (B.facing) { list.push([null, 0]); for (let i = 1; i < doc.pages.length; i += 2) list.push([i, i + 1 < doc.pages.length ? i + 1 : null]); } else doc.pages.forEach((_, i) => list.push([i]));
+  const h = 190, k = h / (doc.h * MM), w = doc.w * MM * k, cell = i => i == null ? `<div class="sp-pg sp-empty" style="width:${w}px;height:${h}px"></div>` : `<div class="sp-pg" data-spg="${i}" style="width:${w}px;height:${h}px" title="${i + 1}쪽으로 가기"><div style="transform:scale(${k});transform-origin:0 0;position:absolute;left:0;top:0">${sheetHTML(doc.pages[i], 'thumb')}</div></div>`;
+  d.innerHTML = `<div class="dhead"><h2>📖 펼침면 보기 <small>${doc.pages.length}쪽</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><p class="hint" style="margin-top:0">책을 펼쳤을 때처럼 두 쪽씩 봅니다. 누르면 그 쪽으로 갑니다.</p><div class="sp-grid">${list.map(pr => `<div class="sp-row">${pr.map(cell).join('')}<span class="sp-cap">${pr.filter(i => i != null).map(i => (bookNum(i) == null ? '표지' : bookNum(i))).join(' · ')}</span></div>`).join('')}</div></div>`;
+  d.querySelector('[data-close]').onclick = () => d.close();
+  d.onclick = e => { const p = e.target.closest('[data-spg]'); if (p) { d.close(); const b = $('#dlgBook'); if (b && b.open) b.close(); goto(Number(p.dataset.spg)); } };
+  d.showModal();
+}
+function makeToc() {
+  const B = book(), rows = doc.pages.map((p, i) => ({ i, t: (p.label || '').trim() })).filter(x => x.t && x.i !== cur && (!B.on || bookNum(x.i) != null)); /* 쪽 번호를 쓰면 번호 없는 표지는 목차에서 뺌 */
+  if (!rows.length) { toast('쪽 이름이 없습니다 — 페이지 목록에서 쪽을 고르고 F2(두 번 누르기)로 이름을 붙이면 목차가 됩니다', true); return; }
+  const k = docK(), size = Math.round(12 * k * 2) / 2, lh = 1.9, L = B.guides ? B.mg.outer : doc.w * 0.12, W = doc.w - L * 2, y0 = doc.h * 0.22;
+  const H = r1(rows.length * size * lh * 0.3528 + 4), g = uid();
+  const base = Object.assign({}, TEXT_DEF, { font: 'Pretendard', size, lh, color: '#1a1a1a', group: g });
+  const title = Object.assign({}, TEXT_DEF, { id: uid(), text: '차례', font: 'Pretendard', size: Math.round(size * 2), weight: 800, x: r1(L), y: r1(y0 - size * 2 * 0.3528 * 2.4), w: r1(W), h: r1(size * 2 * 0.3528 * 1.4), color: '#1a1a1a', group: g, name: '목차 제목' });
+  const left = Object.assign({}, base, { id: uid(), text: rows.map(x => x.t).join('\n'), x: r1(L), y: r1(y0), w: r1(W * 0.8), h: H, align: 'left', name: '목차 (쪽 이름)' });
+  const right = Object.assign({}, base, { id: uid(), text: rows.map(x => String(bookNum(x.i) == null ? x.i + 1 : bookNum(x.i))).join('\n'), x: r1(L + W * 0.8), y: r1(y0), w: r1(W * 0.2), h: H, align: 'right', weight: 600, name: '목차 (쪽 번호)' });
+  page().els.push(title, left, right); commit(); select([title.id, left.id, right.id]); rerender(); toast(`목차 ${rows.length}줄을 만들었습니다 — 쪽 이름을 바꾼 뒤 다시 만들면 됩니다 (Ctrl+Z로 되돌리기)`);
+}
+async function bookletPdf() {
+  try { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => window.jspdf); } catch (e) { toast('PDF 모듈을 불러오지 못했습니다 (인터넷 연결 확인)', true); return; }
+  endEdit(); const n0 = doc.pages.length, N = Math.ceil(n0 / 4) * 4, sides = []; for (let k = 0; k < N / 2; k += 2) { sides.push([N - 1 - k, k]); sides.push([k + 1, N - 2 - k]); }
+  const W = doc.w * 2, H = doc.h, dpi = dlDpi(200, 0), pdf = new jspdf.jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
+  pdf.setProperties({ title: (doc.name || '책자') + ' 소책자 인쇄', creator: '나라차 디자인 공방' });
+  try {
+    for (let s_ = 0; s_ < sides.length; s_++) {
+      setStatus(`소책자 ${s_ + 1}/${sides.length}면 그리는 중…`); if (s_) pdf.addPage([W, H], W > H ? 'landscape' : 'portrait');
+      for (let j = 0; j < 2; j++) { const idx = sides[s_][j]; if (idx >= n0) continue; const c = await renderPageCanvas(doc.pages[idx], dpi, 'thumb', '#ffffff'); pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', j * doc.w, 0, doc.w, doc.h, `b${s_}_${j}`, 'NONE'); c.width = c.height = 0; }
+    }
+    saveBlob(pdf.output('blob'), `${(doc.name || '책자').replace(/[\\/:*?"<>|]/g, '_')}_소책자인쇄_${N}쪽.pdf`);
+    toast(`소책자 PDF를 만들었습니다 — 종이 ${N / 4}장, 양면 인쇄(짧은 쪽으로 넘김) 후 반으로 접으세요${N > n0 ? ` (빈 쪽 ${N - n0}장 포함)` : ''}`);
+  } catch (e) { toast('소책자 PDF를 만들지 못했습니다: ' + e.message, true); } finally { setStatus(''); }
+}
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-book]')) openBook(); });
+
+/* ---- 도장 정보 (Visme 'Dynamic Fields'·Polotno 변수처럼): 한 번 저장하면 템플릿의 자리 표시(010-0000-0000, ○○시 ○○구 ○○로 00, ○○태권도)를 자동으로 채우고,
+   정보가 바뀌면 지금 문서 안의 옛 값을 새 값으로 한꺼번에 바꿈. 두 PC 설정 동기화(naracal-dojang) ---- */
+const DJ_FIELDS = [['name', '도장 이름', '예: 나라차태권도'], ['phone', '전화', '예: 031-000-0000'], ['addr', '주소', '예: 화성시 ○○로 00, 3층'], ['web', '홈페이지·밴드·카카오 채널', '예: band.us/...'], ['owner', '관장 이름', '예: 홍길동 관장']];
+function getDojang() { try { return JSON.parse(localStorage.getItem('naracal-dojang') || '{}') || {}; } catch (e) { return {}; } }
+function textEls(pages) { const out = []; pages.forEach(p => p.els.forEach(el => { if (el.type === 'text') out.push(el); })); return out; }
+function replAll(el, from, to) { if (!from || from === to) return 0; let n = 0; if (el.text && el.text.includes(from)) { n += el.text.split(from).length - 1; el.text = el.text.split(from).join(to); } if (el.html && el.html.includes(esc(from))) { el.html = el.html.split(esc(from)).join(esc(to)); if (el.htmlFor != null) el.htmlFor = el.text; } return n; }
+function fillDojang(pages, prev) {
+  const D = getDojang(); let n = 0;
+  textEls(pages).forEach(el => {
+    if (prev) DJ_FIELDS.forEach(([k]) => { if (prev[k] && D[k] && prev[k] !== D[k]) n += replAll(el, prev[k], D[k]); });
+    const t0 = el.text || '';
+    if (D.phone) (t0.match(/0\d{1,2}-0000-0000/g) || []).forEach(m => { n += replAll(el, m, D.phone); });
+    if (D.addr) (t0.match(/○○시 ○○구 ○○로 00(?:,? ?\d+층)?/g) || []).forEach(m => { n += replAll(el, m, D.addr); }); /* 템플릿의 ', 2층'까지 함께 */
+    if (D.name) n += replAll(el, '○○태권도', D.name);
+  });
+  return n;
+}
+function openDojang() {
+  let d = $('#dlgDojang'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgDojang'; document.body.appendChild(d); }
+  const D = getDojang();
+  d.innerHTML = `<div class="dhead"><h2>🏠 도장 정보</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="width:min(460px,90vw)"><p class="hint" style="margin-top:0">한 번 저장해 두면 템플릿을 넣을 때 전화·주소 자리(010-0000-0000, ○○시 ○○구 ○○로 00)를 자동으로 채웁니다. 정보가 바뀌면 여기서 고치고 저장하면 <b>지금 문서</b>의 옛 값도 새 값으로 바뀝니다.</p>
+    ${DJ_FIELDS.map(([k, t, ph]) => `<label class="f"><span>${t}</span><input type="text" data-dj="${k}" value="${esc(D[k] || '')}" placeholder="${ph}"></label>`).join('')}
+    <div class="row" style="justify-content:flex-end;gap:6px;margin-top:8px"><button class="btn" id="djFill">지금 문서에 채우기</button><button class="btn primary" id="djSave">저장</button></div></div>`;
+  d.querySelector('[data-close]').onclick = () => d.close();
+  const read = () => { const o = {}; d.querySelectorAll('[data-dj]').forEach(i => { o[i.dataset.dj] = i.value.trim(); }); return o; };
+  $('#djSave').onclick = () => { const prev = getDojang(), now = read(); lsSet('naracal-dojang', now); const n = fillDojang(doc.pages, prev); if (n) { commit(); rerender(); } d.close(); toast(n ? `저장했습니다 — 지금 문서에서 ${n}곳을 새 정보로 바꿨습니다` : '도장 정보를 저장했습니다 — 템플릿을 넣을 때 자동으로 채웁니다'); };
+  $('#djFill').onclick = () => { lsSet('naracal-dojang', read()); const n = fillDojang(doc.pages); if (n) { commit(); rerender(); } toast(n ? `${n}곳을 도장 정보로 채웠습니다 (Ctrl+Z로 되돌리기)` : '채울 자리(010-0000-0000, ○○시 ○○구 ○○로 00, ○○태권도)가 없습니다'); };
+  d.showModal();
+}
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-dojang]')) openDojang(); });
 
 /* ---- QR 코드 (Adobe Express처럼): 주소·글을 넣으면 선명한 SVG 그림 요소로. el.qr에 내용을 남겨 다시 고칠 수 있음 ---- */
 function qrSVG(text, color, bg) {
