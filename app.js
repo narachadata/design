@@ -252,8 +252,10 @@ function ensureHolidays(year, silent) { if (!year || doc.holidays[year] || !CAL.
 function ensureAllHolidays() { let n = 0; const ys = new Set(); doc.pages.forEach(p => p.els.forEach(el => { if (el.type === 'cal' || el.type === 'mini') ys.add(el.year); })); if (doc.calendar.year) ys.add(doc.calendar.year); ys.forEach(y => { if (ensureHolidays(y, true)) n++; }); return n; }
 
 /* ---------- 요소 HTML ---------- */
+const elSrcOv = new Map(), elVisOv = new Map(); /* 내보내기·출력 중에만 쓰는 임시 덮어쓰기 (문서를 고치지 않아 그사이 자동 저장돼도 안전) */
+const elHidden = el => elVisOv.has(el.id) ? !elVisOv.get(el.id) : !!el.hidden;
 function elHTML(el, mode, ext) {
-  if (el.hidden) return '';
+  if (elHidden(el)) return '';
   let { x, y, w, h } = el;
   if (ext && mode === 'print' && ((el.type === 'image' && el.fit !== 'contain' && !el.rot && (!el.clip || el.clip === 'none') && !el.radius && !el.borderW) || (el.type === 'shape' && el.kind === 'rect' && !el.radius && !el.strokeW && !el.rot))) { const b = doc.bleed || 0; if (x <= 0.3) { x -= b; w += b; } if (x + w >= doc.w - 0.3) w += b; if (y <= 0.3) { y -= b; h += b; } if (y + h >= doc.h - 0.3) h += b; }
   const tx = el.type === 'text' && !isWarp(el); /* 글 상자 크기 방식: 자동 높이(기본, min-height) · 고정(height) · 자동 너비(max-content) */
@@ -265,7 +267,7 @@ function elHTML(el, mode, ext) {
     return `<div class="el el-text${lock}" data-id="${el.id}" style="${base}${FX.textStyle(el)}">${el.html && el.htmlFor === el.text ? (el.valign && el.valign !== 'top' ? `<div class="txw">${el.html}</div>` : el.html) : esc(el.text)}</div>`;
   }
   if (el.type === 'image') {
-    const s = viewSrc(el, mode); const clip = FX.clipPath(el.clip, el.w * MM, el.h * MM); const z = el.zoom || 1;
+    const s = elSrcOv.get(el.id) || viewSrc(el, mode); const clip = FX.clipPath(el.clip, el.w * MM, el.h * MM); const z = el.zoom || 1;
     const sh = el.shadow ? `filter:drop-shadow(${el.shX || 0.8}mm ${el.shY || 0.8}mm ${el.shB || 0.8}mm ${FX.rgba(el.shC || '#000000', el.shA == null ? 0.3 : el.shA)});` : '';
     const inner = s ? `<img src="${s}" alt="" draggable="false" style="object-fit:${el.fit};object-position:${el.pos};transform:translate(${el.panX || 0}%,${el.panY || 0}%) scale(${z * (el.flip ? -1 : 1)},${z * (el.flipV ? -1 : 1)});${FX.imageFilter(el)}">${el.tint ? `<div class="tint" style="background:${el.tint};opacity:${el.tintA == null ? 0.4 : el.tintA};mix-blend-mode:${el.tintMode || 'multiply'}"></div>` : ''}` : (mode === 'edit' ? '<div style="font-size:3.5mm;color:rgba(0,0,0,.4);text-align:center;padding-top:35%">그림 없음<br>오른쪽에서 넣기</div>' : '');
     return `<div class="el el-image${lock}" data-id="${el.id}" style="${base}${blend}${sh}"><div class="imgclip" style="border-radius:${el.radius || 0}mm;${clip ? `clip-path:${clip};` : ''}${el.border ? `border:${el.borderW || 0.5}mm solid ${el.border};` : ''}${s ? '' : 'outline:0.4mm dashed rgba(0,0,0,.3);'}">${inner}</div></div>`;
@@ -314,11 +316,12 @@ function bookNum(i) { const B = book(); return i < (Number(B.skip) || 0) ? null 
 function bookTotal() { const B = book(); return Math.max(0, doc.pages.length - (Number(B.skip) || 0)); }
 function isRightPage(i) { const B = book(); if (!B.facing) return true; return i % 2 === 0; } /* 펼침면: 1쪽(표지)은 오른쪽, 그다음부터 왼·오른쪽 번갈아 */
 function ddayText(y, m, d) { const t = new Date(); t.setHours(0, 0, 0, 0); const n = Math.round((new Date(y, m - 1, d) - t) / 86400000); return n > 0 ? `D-${n}` : n === 0 ? 'D-DAY' : `D+${-n}`; }
+function pgIndex(pg) { let i = doc.pages.indexOf(pg); if (i < 0 && pg && pg.id) i = doc.pages.findIndex(p => p.id === pg.id); return i; } /* 쪽 사본(투명 PNG 등)도 원래 쪽 번호로 */
 function bookTokens(pg, html) {
   if (html.indexOf('{디데이:') >= 0 || html.indexOf('{남은날:') >= 0) html = html.replace(/\{(디데이|남은날):(\d{4})-(\d{1,2})-(\d{1,2})\}/g, (_, k, y, m, d) => k === '디데이' ? ddayText(+y, +m, +d) : String(Math.max(0, Math.round((new Date(+y, +m - 1, +d) - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000)))); /* D-day: 볼 때(내보낼 때) 날짜 기준으로 계산 */
-  if (html.indexOf('{쪽}') < 0 && html.indexOf('{전체쪽}') < 0) return html; const i = doc.pages.indexOf(pg); const n = i < 0 ? '' : (bookNum(i) == null ? i + 1 : bookNum(i)); return html.split('{쪽}').join(String(n)).split('{전체쪽}').join(String(bookTotal())); }
+  if (html.indexOf('{쪽}') < 0 && html.indexOf('{전체쪽}') < 0) return html; const i = pgIndex(pg); const n = i < 0 ? '' : (bookNum(i) == null ? i + 1 : bookNum(i)); return html.split('{쪽}').join(String(n)).split('{전체쪽}').join(String(bookTotal())); }
 function masterHTML(pg) {
-  if (!doc.book || !doc.book.on) return ''; const B = book(), i = doc.pages.indexOf(pg); if (i < 0 || pg.noMaster || pg.cert) return ''; /* 상장 쪽에는 쪽 번호·머리글 없음 */ const n = bookNum(i); if (n == null) return '';
+  if (!doc.book || !doc.book.on) return ''; const B = book(), i = pgIndex(pg); if (i < 0 || pg.noMaster || pg.cert) return ''; /* 상장 쪽에는 쪽 번호·머리글 없음 */ const n = bookNum(i); if (n == null) return '';
   const right = isRightPage(i), outer = right ? 'right' : 'left', inner = right ? 'left' : 'right', al = B.pos === 'center' ? 'center' : B.pos === 'inner' ? inner : outer;
   const num = { n: String(n), dash: `- ${n} -`, p: `p.${n}`, total: `${n} / ${bookTotal()}` }[B.style] || String(n), m = Number(B.margin) || 8;
   const st = (pos, a) => `position:absolute;left:${m}mm;right:${m}mm;${pos};text-align:${a};font-family:'${esc(B.font)}';font-size:${Number(B.size) || 9}pt;color:${esc(B.color)};line-height:1.2;white-space:nowrap;overflow:hidden;pointer-events:none;z-index:50`;
@@ -347,7 +350,7 @@ function autoWidth(d, el) { const nw = r1(d.offsetWidth / MM); if (Math.abs(nw -
 const fitCache = new Map();
 function autoFitText(d, el) {
   const key = [el.text, el.html, el.w, el.h, el.fitMax, el.font, el.lh, el.ls, el.weight, el.pad, el.cols, el.colGap].join('|'); if (fitCache.get(el.id) === key) return null;
-  const max = Number(el.fitMax) || el.size, base = clone(el), node = () => { const t = document.createElement('div'); t.innerHTML = elHTML(el, 'edit'); const n = t.firstElementChild; d.replaceWith(n); d = n; return n; };
+  const max = Number(el.fitMax) || el.size, base = clone(el), node = () => { const t = document.createElement('div'); t.innerHTML = bookTokens(page(), elHTML(el, 'edit')); const n = t.firstElementChild; d.replaceWith(n); d = n; return n; };
   const fits = sz => { scaleTextBy(el, base, sz / base.size); node(); const { ch, cw } = textContentH(d); return ch <= el.h + 0.2 && cw <= el.w + 0.6; };
   let best = 4;
   if (fits(max)) best = max; else { let lo = 4, hi = max; for (let i = 0; i < 9; i++) { const mid = (lo + hi) / 2; if (fits(mid)) { best = mid; lo = mid; } else hi = mid; } }
@@ -686,6 +689,7 @@ wrap.addEventListener('dblclick', e => {
 wrap.addEventListener('dblclick', e => { const dom = e.target.closest('.el-text'); if (dom && dom !== editing && !find(dom.dataset.id).locked && !dom.classList.contains('warp')) startEdit(dom, e); });
 function startEdit(dom, ev) {
   if (editing === dom) return;
+  { const el0 = find(dom.dataset.id); if (el0 && /\{(쪽|전체쪽|디데이:|남은날:)/.test(el0.text || '')) dom.innerHTML = el0.html && el0.htmlFor === el0.text ? el0.html : esc(el0.text); } /* 쪽 번호·D-day 자리는 원문으로 편집 */
   editing = dom; dom.contentEditable = 'true'; dom.classList.add('editing'); dom.focus(); try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
   // 누른 자리에 커서 (새 글 상자처럼 위치가 없으면 전체 선택)
   let r = ev && document.caretRangeFromPoint ? document.caretRangeFromPoint(ev.clientX, ev.clientY) : null;
@@ -2606,7 +2610,7 @@ function fszMenu(btn) {
 function scaleTextBy(el, o, k) {
   if (!(k > 0) || !isFinite(k)) return;
   const q = (v, n) => v == null ? v : Math.round(v * k * n) / n;
-  el.size = Math.max(1, q(o.size, 10));
+  el.size = Math.max(1, q(o.size, 10)); if (o.fitText && o.fitMax) el.fitMax = Math.max(1, q(o.fitMax, 10));
   ['strokeW', 'pad', 'shX', 'shY', 'shB', 'd3X', 'd3Y', 'glowB', 'bgR'].forEach(key => { if (typeof o[key] === 'number') el[key] = q(o[key], 100); });
   if (o.html) el.html = o.html.replace(/font-size:\s*([\d.]+)pt/g, (m, v) => `font-size:${Math.round(v * k * 10) / 10}pt`);
 }
@@ -2833,7 +2837,7 @@ function renderInspector() {
   ins.querySelectorAll('li[data-godate]').forEach(li => li.onclick = e => { if (e.target.closest('button')) return; selDay = Number(li.dataset.godate); rerender(); });
 }
 function openImgEditor(el) { const s = src(el.src); if (!s) return; NC.imgedit.open(s, url => { if (!el.srcOrig) el.srcOrig = el.src; el.src = addAsset(url); commit(); rerender(); toast('편집한 이미지를 넣었습니다'); }); }
-function setK(obj, k, v) { const ks = k.split('.'); let a = obj; for (let i = 0; i < ks.length - 1; i++) { if (a[ks[i]] == null) a[ks[i]] = ks[i + 1].match(/^\d+$/) ? [] : {}; a = a[ks[i]]; } a[ks[ks.length - 1]] = v; }
+function setK(obj, k, v) { if (k === 'size' && obj && obj.fitText && Number(v) > 0) { obj.fitMax = Number(v); fitCache.delete(obj.id); } /* 자동 맞춤 글자: 고른 크기가 새 최대 */ const ks = k.split('.'); let a = obj; for (let i = 0; i < ks.length - 1; i++) { if (a[ks[i]] == null) a[ks[i]] = ks[i + 1].match(/^\d+$/) ? [] : {}; a = a[ks[i]]; } a[ks[ks.length - 1]] = v; }
 $('#inspector').addEventListener('change', e => { const k = e.target.dataset.k; if (k === 'grp.w' || k === 'grp.h') { const ev = new Event('input', { bubbles: true }); ev.__apply = true; e.target.dispatchEvent(ev); } }, true);
 $('#inspector').addEventListener('input', e => {
   const t = e.target, k = t.dataset.k; if (!k) return;
@@ -3887,7 +3891,7 @@ const DL_FMTS = [['pdfhq', 'PDF (고화질)', '보관·인쇄에 알맞은 300dp
 // PDF 종류별 해상도·압축 품질
 const DL_PDF = { pdfhq: { dpi: 300, q: 0.92, bleed: false }, pdfweb: { dpi: 200, q: 0.88, bleed: false }, pdfprint: { dpi: 300, q: 1, bleed: true } }; // 인쇄소용: 투명 마스크가 생기지 않게 최고 화질 JPEG (크롬 PNG는 늘 투명 채널이 있어 인쇄소 점검에 '투명도'로 걸림)
 let dlState = { fmt: 'pdfhq', scale: 3, pages: 'all', range: '', merge: false, imgBleed: false };
-function loadScript(src, test) { if (test()) return Promise.resolve(); return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('모듈을 불러오지 못했습니다 (인터넷 필요)')); document.head.appendChild(s); }); }
+function loadScript(src, test, sri) { if (test()) return Promise.resolve(); return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; if (sri) { s.integrity = sri; s.crossOrigin = 'anonymous'; } /* 무결성 검사: CDN 파일이 바뀌면 실행하지 않음 (같은 주소의 관리프로그램 개인정보 보호) */ s.onload = res; s.onerror = () => rej(new Error('모듈을 불러오지 못했습니다 (인터넷 필요)')); document.head.appendChild(s); }); }
 function dlPages() {
   const n = doc.pages.length; if (dlState.pages === 'cur' || dlState.pages === 'sel') return [cur];
   if (dlState.pages === 'range') { const out = []; (dlState.range || '').split(',').forEach(p => { const m = p.trim().match(/^(\d+)(?:\s*[-~]\s*(\d+))?$/); if (!m) return; const a = Number(m[1]), b = Number(m[2] || m[1]); for (let i = Math.min(a, b); i <= Math.max(a, b); i++) if (i >= 1 && i <= n) out.push(i - 1); }); return [...new Set(out)]; }
@@ -4114,13 +4118,13 @@ async function setDpi(blob, dpi, type) {
     if (type === 'image/png' && u[12] === 0x49 && u[13] === 0x48) { const p = Math.round(d / 0.0254), c = new Uint8Array(21), v = new DataView(c.buffer); v.setUint32(0, 9); c.set([0x70, 0x48, 0x59, 0x73], 4); v.setUint32(8, p); v.setUint32(12, p); c[16] = 1; v.setUint32(17, CRC32(c.subarray(4, 17))); return new Blob([u.subarray(0, 33), c, u.subarray(33)], { type }); }
   } catch (e) {} return blob; }
 function saveBlob(b, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
-async function printVector(pages) {
-  const b = Math.max(0, Number(doc.bleed) || 0);
+async function printVector(pages, opt) {
+  const b = opt && opt.noBleed ? 0 : Math.max(0, Number(doc.bleed) || 0); /* 프린터 출력은 도련 없이 종이 크기 그대로 */
   $('#pageStyle').textContent = `@page{size:${doc.w + 2 * b}mm ${doc.h + 2 * b}mm;margin:0}`;
   $('#canvas').innerHTML = ''; const th = $('#thumbs'); if (th) th.innerHTML = '';  // SVG id 중복 방지
   // 브라우저 인쇄 PDF에는 재단 여백(슬러그)이 없어 재단선이 도련 위 그림에 찍히므로 끔. 파일 이름에 도련 포함을 표시
   const restoreF = await swapPdfFrames(pages.map(i => doc.pages[i]), 600); /* 상장 틀은 원본 PDF를 600dpi로 */
-  const keepMarks = doc.cropMarks; doc.cropMarks = false; const root = $('#printRoot'); try { root.innerHTML = pages.map(i => sheetHTML(doc.pages[i], 'print')).join(''); } finally { doc.cropMarks = keepMarks; restoreF(); }
+  const keepMarks = doc.cropMarks; doc.cropMarks = false; const root = $('#printRoot'); try { const keepBleed = doc.bleed; if (opt && opt.noBleed) doc.bleed = 0; try { root.innerHTML = pages.map(i => sheetHTML(doc.pages[i], 'print')).join(''); } finally { doc.bleed = keepBleed; } } finally { doc.cropMarks = keepMarks; restoreF(); }
   const keepTitle = document.title; document.title = `${(doc.name || 'design').replace(/[\\/:*?"<>|]/g, '_')}_인쇄용${b ? `_도련${b}mm` : ''}`; window.addEventListener('afterprint', () => { document.title = keepTitle; }, { once: true }); setTimeout(() => { document.title = keepTitle; }, 60000);
   setStatus('PDF 준비 중…'); await ensureLibFonts(pages.map(i => doc.pages[i]));
   // 실제로 쓰인 글꼴·굵기·기울임 조합을 모두 먼저 불러 둠 (300·800 같은 굵기가 대체 글꼴로 찍히지 않게)
@@ -4217,7 +4221,7 @@ function openBook() {
     <div class="bk-sec"><h3>1. 쪽 번호 · 머리글 · 바닥글 <small>모든 쪽에 공통 (마스터 페이지)</small></h3>
       <label class="chk"><input type="checkbox" data-bk="on" ${B.on ? 'checked' : ''}> 쪽 번호·머리글·바닥글 넣기</label>
       <div class="grid3">${N('skip', '번호 없는 앞쪽 (표지)', B.skip)}${N('start', '시작 번호', B.start, { min: 1 })}<label class="f"><span>번호 위치</span><select data-bk="pos">${[['outer', '바깥쪽 (책처럼)'], ['center', '가운데'], ['inner', '안쪽']].map(([a, t]) => `<option value="${a}" ${B.pos === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
-      <div class="grid3"><label class="f"><span>번호 모양</span><select data-bk="style">${[['n', '1'], ['dash', '- 1 -'], ['p', 'p.1'], ['total', '1 / 24']].map(([a, t]) => `<option value="${a}" ${B.style === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>${N('size', '글자 크기(pt)', B.size, { step: 0.5, min: 5 })}<label class="f"><span>색</span><input type="color" data-bk="color" value="${B.color}"></label></div>
+      <div class="grid3"><label class="f"><span>번호 모양</span><select data-bk="style">${[['n', '1'], ['dash', '- 1 -'], ['p', 'p.1'], ['total', '1 / 24']].map(([a, t]) => `<option value="${a}" ${B.style === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>${N('size', '글자 크기(pt)', B.size, { step: 0.5, min: 5 })}<label class="f"><span>색</span><input type="color" data-bk="color" value="${/^#[0-9a-f]{6}$/i.test(B.color) ? B.color : '#666666'}"></label></div>
       <div class="grid2"><label class="f"><span>머리글 (위)</span><input type="text" data-bk="header" value="${esc(B.header)}" placeholder="예: 나라차태권도 2027 수련 안내"></label><label class="f"><span>바닥글 (아래, 번호 반대쪽)</span><input type="text" data-bk="footer" value="${esc(B.footer)}" placeholder="예: NARACHA TAEKWONDO"></label></div>
       <div class="grid2">${N('margin', '종이 끝에서 거리(mm)', B.margin, { step: 0.5, min: 2 })}<label class="chk" style="margin-top:20px"><input type="checkbox" data-bk="facing" ${B.facing ? 'checked' : ''}> 펼침면 (홀수 쪽 오른쪽 · 짝수 쪽 왼쪽)</label></div>
       <p class="hint">글 상자에 <b>{쪽}</b>·<b>{전체쪽}</b>을 쓰면 그 쪽 번호로 바뀝니다 (인디자인의 '현재 페이지 번호'). 한 쪽만 빼려면 그 쪽에서 아래 "이 쪽 번호 빼기".</p>
@@ -4228,8 +4232,8 @@ function openBook() {
       <div class="grid2">${N('cols', '단 수', B.cols, { min: 1 })}${N('gutter', '단 사이(mm)', B.gutter, { step: 0.5 })}</div>
       <p class="hint">제본(안쪽) 여백은 바깥쪽보다 넓게 두면 펼쳤을 때 글이 접힌 곳에 묻히지 않습니다.</p></div>
     <div class="bk-sec"><h3>3. 보기 · 목차 · 인쇄</h3>
-      <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn" id="bkSpread">📖 펼침면으로 보기</button><button class="btn" id="bkToc" title="쪽 이름(페이지 목록에서 F2)으로 목차를 지금 쪽에 만듭니다">📑 목차 만들기 (지금 쪽에)</button><button class="btn primary" id="bkPrint" title="A4 한 장에 두 쪽씩, 접어서 스테이플러로 찍는 순서로 PDF">🖨 중철 소책자 인쇄 PDF</button></div>
-      <p class="hint" style="margin-top:8px">지금 ${n}쪽 — ${pad ? `<b style="color:#c0392b">중철 제본은 4의 배수여야 해서 빈 쪽 ${pad}장이 뒤에 붙습니다.</b> 쪽을 ${pad}장 더 만들거나 줄이면 깔끔합니다.` : '4의 배수라 중철 제본에 딱 맞습니다.'} 소책자 PDF는 종이 한 면에 두 쪽씩(${Math.round(doc.w * 2)}×${Math.round(doc.h)}mm) 들어가며, 양면 인쇄(짧은 쪽 넘김) 후 반으로 접으면 순서대로 됩니다.</p></div></div>`;
+      <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn" id="bkSpread">📖 펼침면으로 보기</button><button class="btn" id="bkToc" title="쪽 이름(페이지 목록에서 F2)으로 목차를 지금 쪽에 만듭니다">📑 목차 만들기 (지금 쪽에)</button><button class="btn primary" id="bkPrint" title="한 면에 두 쪽씩, 접어서 스테이플러로 찍는 순서로 PDF (원래 크기)">🖨 중철 소책자 PDF (원래 크기)</button><button class="btn" id="bkPrintA4" title="A4 프린터용 — 한 면(A4 가로)에 두 쪽씩 줄여서 (A5 크기 책자)">A4 용지에 맞춰 (A5 책자)</button></div>
+      <p class="hint" style="margin-top:8px">지금 ${n}쪽 — ${pad ? `<b style="color:#c0392b">중철 제본은 4의 배수여야 해서 빈 쪽 ${pad}장이 뒤에 붙습니다.</b> 쪽을 ${pad}장 더 만들거나 줄이면 깔끔합니다.` : '4의 배수라 중철 제본에 딱 맞습니다.'} 소책자 PDF는 종이 한 면에 두 쪽씩(${Math.round(doc.w * 2)}×${Math.round(doc.h)}mm${Math.abs(doc.w - 210) < 1 && Math.abs(doc.h - 297) < 1 ? ' = <b>A3 용지</b> — A4 프린터면 "A4 용지에 맞춰"' : ''}) 들어가며, 양면 인쇄(짧은 쪽 넘김) 후 반으로 접으면 순서대로 됩니다. 숨긴 쪽은 빠집니다.</p></div></div>`;
   d.querySelector('[data-close]').onclick = () => d.close();
   const upd = () => { commit(); renderAll(); };
   d.oninput = d.onchange = e => {
@@ -4239,7 +4243,7 @@ function openBook() {
     if (k.startsWith('mg.')) { doc.book.mg = Object.assign({}, BOOK_DEF.mg, doc.book.mg || {}); doc.book.mg[k.slice(3)] = v; } else doc.book[k] = v;
     if (e.type === 'change' || t.type === 'checkbox' || t.tagName === 'SELECT') upd(); else { renderCanvas(); }
   };
-  $('#bkSpread').onclick = () => openSpreads(); $('#bkToc').onclick = () => { d.close(); makeToc(); }; $('#bkPrint').onclick = () => bookletPdf();
+  $('#bkSpread').onclick = () => openSpreads(); $('#bkToc').onclick = () => { d.close(); makeToc(); }; $('#bkPrint').onclick = () => bookletPdf(); $('#bkPrintA4').onclick = () => bookletPdf({ a4: true });
   d.showModal();
 }
 function openSpreads() {
@@ -4262,17 +4266,18 @@ function makeToc() {
   const right = Object.assign({}, base, { id: uid(), text: rows.map(x => String(bookNum(x.i) == null ? x.i + 1 : bookNum(x.i))).join('\n'), x: r1(L + W * 0.8), y: r1(y0), w: r1(W * 0.2), h: H, align: 'right', weight: 600, name: '목차 (쪽 번호)' });
   page().els.push(title, left, right); commit(); select([title.id, left.id, right.id]); rerender(); toast(`목차 ${rows.length}줄을 만들었습니다 — 쪽 이름을 바꾼 뒤 다시 만들면 됩니다 (Ctrl+Z로 되돌리기)`);
 }
-async function bookletPdf() {
+async function bookletPdf(opt) {
   try { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => window.jspdf); } catch (e) { toast('PDF 모듈을 불러오지 못했습니다 (인터넷 연결 확인)', true); return; }
-  endEdit(); const n0 = doc.pages.length, N = Math.ceil(n0 / 4) * 4, sides = []; for (let k = 0; k < N / 2; k += 2) { sides.push([N - 1 - k, k]); sides.push([k + 1, N - 2 - k]); }
-  const W = doc.w * 2, H = doc.h, dpi = dlDpi(200, 0), pdf = new jspdf.jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
+  endEdit(); const fitA4 = !!(opt && opt.a4), plist = doc.pages.filter(p => !p.dlOff); /* 숨긴 쪽은 책자에서 뺌 (출력·다운로드와 같게) */
+  const n0 = plist.length, N = Math.ceil(n0 / 4) * 4, sides = []; for (let k = 0; k < N / 2; k += 2) { sides.push([N - 1 - k, k]); sides.push([k + 1, N - 2 - k]); }
+  const W = fitA4 ? 297 : doc.w * 2, H = fitA4 ? 210 : doc.h, sw = W / 2, sk = Math.min(sw / doc.w, H / doc.h), pw = doc.w * sk, ph = doc.h * sk, dpi = dlDpi(200, 0), pdf = new jspdf.jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
   pdf.setProperties({ title: (doc.name || '책자') + ' 소책자 인쇄', creator: '나라차 디자인 공방' });
   try {
     for (let s_ = 0; s_ < sides.length; s_++) {
       setStatus(`소책자 ${s_ + 1}/${sides.length}면 그리는 중…`); if (s_) pdf.addPage([W, H], W > H ? 'landscape' : 'portrait');
-      for (let j = 0; j < 2; j++) { const idx = sides[s_][j]; if (idx >= n0) continue; const c = await renderPageCanvas(doc.pages[idx], dpi, 'thumb', '#ffffff'); pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', j * doc.w, 0, doc.w, doc.h, `b${s_}_${j}`, 'NONE'); c.width = c.height = 0; }
+      for (let j = 0; j < 2; j++) { const idx = sides[s_][j]; if (idx >= n0) continue; const c = await renderPageCanvas(plist[idx], dpi, 'thumb', '#ffffff'); pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', j * sw + (sw - pw) / 2, (H - ph) / 2, pw, ph, `b${s_}_${j}`, 'NONE'); c.width = c.height = 0; }
     }
-    saveBlob(pdf.output('blob'), `${(doc.name || '책자').replace(/[\\/:*?"<>|]/g, '_')}_소책자인쇄_${N}쪽.pdf`);
+    saveBlob(pdf.output('blob'), `${(doc.name || '책자').replace(/[\\/:*?"<>|]/g, '_')}_소책자인쇄_${N}쪽${fitA4 ? '_A4' : ''}.pdf`);
     toast(`소책자 PDF를 만들었습니다 — 종이 ${N / 4}장, 양면 인쇄(짧은 쪽으로 넘김) 후 반으로 접으세요${N > n0 ? ` (빈 쪽 ${N - n0}장 포함)` : ''}`);
   } catch (e) { toast('소책자 PDF를 만들지 못했습니다: ' + e.message, true); } finally { setStatus(''); }
 }
@@ -4332,11 +4337,12 @@ function certRec(v, unit) { v = String(v || '').trim(); return /^\d+(\.\d+)?$/.t
 /* 한 사람의 상장 쪽 요소 (A4 210×297 기준 위치 → 문서 크기에 맞춰 비율) — 레이아웃 덮어쓰기(doc.cert.layout)가 있으면 그 위치·모양 */
 function certEls(form, r) {
   const C = certState(), D = C.data[form], F = CERT_FORMS[form], kx = doc.w / 210, ky = doc.h / 297, k = Math.min(kx, ky), out = [];
-  const T = (key, text, o) => { if (!String(text || '').trim()) return; const L = C.layout[form + ':' + key] || {}; const base = Object.assign({}, TEXT_DEF, { id: uid(), text, font: 'Noto Sans KR', size: 15, weight: 700, color: '#1a1a1a', align: 'center', lh: 1.45, ls: 0, name: '상장 · ' + o.label, certKey: key }, o, { x: r1(o.x * kx), y: r1(o.y * ky), w: r1(o.w * kx), h: r1((o.h || 8) * ky), size: Math.round(o.size * k * 2) / 2 });
-    delete base.label; if (base.fitText) base.fitMax = base.size; Object.assign(base, L); out.push(base); };
+  const recN = certRecN(form, r);
+  const T = (key, text, o) => { if (!String(text || '').trim()) return; const L = C.layout[form + ':' + key + (/^rec/.test(key) ? '@' + recN : '')] || {}; const base = Object.assign({}, TEXT_DEF, { id: uid(), text, font: 'Noto Sans KR', size: 15, weight: 700, color: '#1a1a1a', align: 'center', lh: 1.45, ls: 0, name: '상장 · ' + o.label, certKey: key }, o, { x: r1(o.x * kx), y: r1(o.y * ky), w: r1(o.w * kx), h: r1((o.h || 8) * ky), size: Math.round(o.size * k * 2) / 2 });
+    delete base.label; Object.assign(base, L); if (base.fitText) base.fitMax = Number(L.fitMax) || base.size; out.push(base); };
   const sans = 'Noto Sans KR', serif = 'Nanum Myeongjo', fill = t => String(t || '').replace(/\{([^{}\n]+)\}/g, (m, nm) => { const c = F.common.find(x => x[1].replace(/ \(.*\)$/, '') === nm.trim()); return c ? certVal(D, r, c[0]) : m; });
   /* 글꼴: 관장님 상장과 같게 나눔명조 — 제목(상장 이름)·이름·급수는 나눔명조 ExtraBold(800), 본문·기록·날짜는 보통(400) */
-  T('title', certVal(D, r, 'title'), { label: '상장 이름', x: 15, y: 108.5, w: 180, h: 22, size: 42, weight: 800, font: serif, ls: 0.06, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'bottom' }); /* 틀의 'THIS CERTIFICATE IS PRESENTED TO' 선(133.5mm) 바로 위에 앉게 (관장님) */
+  T('title', certVal(D, r, 'title'), { label: '상장 이름', x: 15, y: 105, w: 180, h: 22, size: 42, weight: 800, font: serif, ls: 0.06, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'bottom' }); /* 틀의 'THIS CERTIFICATE IS PRESENTED TO' 선(133.5mm) 위 약 6mm에 앉게 (관장님: 선 위에, 너무 내려오지 않게) */
   T('name', certVal(D, r, 'name'), { label: '이름', x: 30, y: 139, w: 150, h: 17, size: 34, weight: 800, font: serif, ls: 0.04, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
   let bodyY = 180, bodySz = 15;
   if (form === 'record') {
@@ -4346,11 +4352,11 @@ function certEls(form, r) {
     const n = recs.length, line = q => `${certRec(q.a, q.u != null ? q.u : u)} → ${certRec(q.b, q.u != null ? q.u : u)}`;
     if (n <= 3) { const cw = n === 1 ? 100 : n === 2 ? 78 : 58, gap = n === 3 ? 3 : 10, tw = n * cw + (n - 1) * gap;
       recs.forEach((q, i) => T('rec' + (i + 1), `${q.k}\n${line(q)}`, { label: '기록 ' + (i + 1), x: 105 - tw / 2 + i * (cw + gap), y: 159, w: cw, h: 14, size: n === 3 ? 15 : 16, font: serif, weight: 400, lh: 1.4 })); bodyY = 180; }
-    else { /* 표처럼 두 칸: 칸마다 종목 이름(오른쪽 맞춤) | 기록(왼쪽 맞춤) — 줄이 가지런하게 */
-      const rows_ = Math.ceil(n / 2), sz = 13, lh = 1.45, rowH = sz * 0.3528 * lh, cols_ = [recs.slice(0, rows_), recs.slice(rows_)];
-      cols_.forEach((list, c) => { if (!list.length) return; const x0 = c ? 108 : 18;
-        T('recN' + (c + 1), list.map(q => q.k).join('\n'), { label: `기록 ${c + 1}칸 종목`, x: x0, y: 158, w: 44, h: rowH * list.length, size: sz, font: serif, weight: 400, lh, align: 'right' });
-        T('recV' + (c + 1), list.map(line).join('\n'), { label: `기록 ${c + 1}칸 기록`, x: x0 + 46, y: 158, w: 38, h: rowH * list.length, size: sz, font: serif, weight: 400, lh, align: 'left' }); });
+    else { /* 표처럼: 4~6개 두 칸, 7개 이상 세 칸 — 칸마다 종목 이름(오른쪽 맞춤) | 기록(왼쪽 맞춤) */
+      const nc = n >= 7 ? 3 : 2, rows_ = Math.ceil(n / nc), sz = nc === 3 ? 11.5 : 13, lh = nc === 3 ? 1.4 : 1.45, rowH = sz * 0.3528 * lh, cw = 174 / nc, nw = nc === 3 ? 31 : 44, vw = cw - nw - 2;
+      for (let c = 0; c < nc; c++) { const list = recs.slice(c * rows_, (c + 1) * rows_); if (!list.length) continue; const x0 = 18 + c * cw;
+        T('recN' + (c + 1), list.map(q => q.k).join('\n'), { label: `기록 ${c + 1}칸 종목`, x: x0, y: 158, w: nw, h: rowH * list.length, size: sz, font: serif, weight: 400, lh, align: 'right' });
+        T('recV' + (c + 1), list.map(line).join('\n'), { label: `기록 ${c + 1}칸 기록`, x: x0 + nw + 2, y: 158, w: vw, h: rowH * list.length, size: sz, font: serif, weight: 400, lh, align: 'left' }); }
       bodyY = 158 + rows_ * rowH + 5; bodySz = 14; }
   } else if (form === 'grade') { T('grade', r.grade, { label: '급수', x: 40, y: 158, w: 130, h: 11, size: 24, weight: 800, font: serif }); bodyY = 182; }
   else if (form === 'free') { T('line', r.line, { label: '이름 아래 한 줄', x: 25, y: 160, w: 160, h: 9, size: 15, font: serif, weight: 400 }); }
@@ -4362,7 +4368,7 @@ function certEls(form, r) {
 function certPage(form, r, i) {
   const C = certState(), els = [];
   if (C.frame) els.push({ type: 'image', id: uid(), src: C.frame, pdfSrc: C.framePdf || undefined, x: 0, y: 0, w: doc.w, h: doc.h, rot: 0, fit: 'cover', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '상장 틀', locked: true, hidden: C.printFrame === false, certFrame: true });
-  return { id: uid(), bg: '#ffffff', els: els.concat(certEls(form, r)), label: `상장 ${i + 1} · ${r.name || ''}`, cert: { form, i } };
+  return { id: uid(), bg: '#ffffff', els: els.concat(certEls(form, r)), label: `상장 ${i + 1} · ${r.name || ''}`, cert: { form, i, n: certRecN(form, r) } };
 }
 /* 화면 밖에서 글자 크기 자동 맞춤을 미리 계산 (캔버스에 열지 않은 쪽도 PDF에서 이름이 넘치지 않게) */
 async function fitTextOffscreen(els) {
@@ -4372,14 +4378,14 @@ async function fitTextOffscreen(els) {
   try { list.forEach(el => { fitCache.delete(el.id); const t = document.createElement('div'); t.innerHTML = elHTML(el, 'edit'); const d = t.firstElementChild; box.firstChild.appendChild(d); autoFitText(d, el); }); } finally { box.remove(); }
 }
 function certRows(form) { return (certState().data[form].rows || []).filter(r => String(r.name || '').trim()); }
-async function loadPdfJs() { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', () => window.pdfjsLib); pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
+async function loadPdfJs() { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', () => window.pdfjsLib, 'sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e'); pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
 /* 원본 PDF 틀을 출력 해상도로 그림 (PNG — 가는 선이 JPEG처럼 번지지 않게). 최근 2개만 기억 */
 const framePdfCache = new Map();
 async function framePdfURL(ref, dpi) {
   const key = ref + '|' + Math.round(dpi); if (framePdfCache.has(key)) return framePdfCache.get(key);
   const data = doc.assets[ref.slice(2)]; if (!data) return null; await loadPdfJs();
   const bin = atob(data.slice(data.indexOf(',') + 1)), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const pdf = await pdfjsLib.getDocument({ data: bytes }).promise, pg = await pdf.getPage(1), vp = pg.getViewport({ scale: dpi / 72 });
+  const pdf = await pdfjsLib.getDocument({ data: bytes, isEvalSupported: false }).promise, pg = await pdf.getPage(1), vp = pg.getViewport({ scale: dpi / 72 });
   const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
   await pg.render({ canvasContext: x, viewport: vp }).promise; const b = await new Promise(r => c.toBlob(r, 'image/png')); c.width = c.height = 0; try { pdf.destroy(); } catch (e) {}
   const u = URL.createObjectURL(b); framePdfCache.set(key, u); while (framePdfCache.size > 2) { const k0 = framePdfCache.keys().next().value; URL.revokeObjectURL(framePdfCache.get(k0)); framePdfCache.delete(k0); }
@@ -4387,8 +4393,8 @@ async function framePdfURL(ref, dpi) {
 }
 /* 쪽들의 상장 틀을 잠깐 원본 PDF 고해상도 그림으로 바꿈 → 되돌리는 함수를 돌려줌 */
 async function swapPdfFrames(pages, dpi) {
-  const swaps = []; for (const pg of pages) for (const e of (pg.els || [])) if (e.pdfSrc && !e.hidden && doc.assets[String(e.pdfSrc).slice(2)]) { try { const u = await framePdfURL(e.pdfSrc, Math.max(72, Math.min(600, dpi))); if (u) { swaps.push([e, e.src]); e.src = u; } } catch (err) { console.warn('틀 PDF 그리기 실패', err); } }
-  return () => swaps.forEach(([e, s_]) => { e.src = s_; });
+  const ids = []; for (const pg of pages) for (const e of (pg.els || [])) if (e.pdfSrc && !elHidden(e) && doc.assets[String(e.pdfSrc).slice(2)]) { try { const u = await framePdfURL(e.pdfSrc, Math.max(72, Math.min(600, dpi))); if (u) { ids.push(e.id); elSrcOv.set(e.id, u); } } catch (err) { console.warn('틀 PDF 그리기 실패', err); } }
+  return () => ids.forEach(id => elSrcOv.delete(id));
 }
 /* 상장 틀 불러오기: PDF(첫 쪽, 약 300dpi)나 그림 → 문서 그림 + 이 PC 기억(다음 상장 문서에 자동) */
 async function certLoadFrame() {
@@ -4399,7 +4405,7 @@ async function certLoadFrame() {
       setStatus('상장 틀을 읽는 중…');
       if (/pdf$/i.test(f.type) || /\.pdf$/i.test(f.name)) {
         await loadPdfJs(); pdfUrl = await fileToDataURL(f); if (!/^data:application\/pdf/.test(pdfUrl)) pdfUrl = 'data:application/pdf;base64,' + pdfUrl.split(',')[1]; /* 원본 PDF 보관 — 출력·PDF 때 그 해상도로 다시 그려 가는 선까지 선명하게 */
-        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise, pg = await pdf.getPage(1), v1 = pg.getViewport({ scale: 1 });
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()), isEvalSupported: false }).promise /* 악성 PDF의 스크립트 실행 막기 (CVE-2024-4367) */, pg = await pdf.getPage(1), v1 = pg.getViewport({ scale: 1 });
         wmm = v1.width * 25.4 / 72; hmm = v1.height * 25.4 / 72; const sc = 2480 / Math.min(v1.width, v1.height) * (Math.min(v1.width, v1.height) / v1.width), vp = pg.getViewport({ scale: Math.min(sc, 6) });
         const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
         await pg.render({ canvasContext: x, viewport: vp }).promise; url = c.toDataURL('image/jpeg', 0.92); c.width = c.height = 0;
@@ -4411,36 +4417,51 @@ async function certLoadFrame() {
   };
   inp.click();
 }
-async function certNewDoc() {
-  if (doc.pages.some(p => p.els.length) && !window.confirm(`A4 상장 문서를 새로 만듭니다. 지금 문서를 닫을까요? (${keepNote()})`)) return;
+/* 이 PC에 기억된 상장 틀(원본 PDF 포함)을 지금 문서에 자동으로 (관장님: 불러온 틀이 바로 적용되게) */
+async function certEnsureFrame() {
+  const C = certState(); if (C.frame && doc.assets[C.frame.slice(2)]) return true;
+  try { const fr = await store.idbGet('cert-frame'); if (fr && fr.url) { C.frame = addAsset(fr.url); C.framePdf = fr.pdf ? addAsset(fr.pdf) : undefined; doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { e.src = C.frame; e.pdfSrc = C.framePdf; } })); markDirty(); return true; } } catch (e) {}
+  return false;
+}
+const certIsA4 = () => Math.abs(doc.w - 210) < 1 && Math.abs(doc.h - 297) < 1;
+/* 상장틀은 A4 — 문서가 A4가 아니면 명단·양식을 그대로 가지고 A4 상장 문서로 옮김 */
+async function certNeedA4() { if (certIsA4()) return true; /* 관장님: 상장은 무조건 A4 — 묻지 않고 명단·양식을 가지고 A4 상장 문서로 옮김 (지금 문서는 그대로 보관) */ const from = `${Math.round(doc.w)}×${Math.round(doc.h)}mm`; await certNewDoc(true); if (certIsA4()) toast(`상장은 A4라서 A4 상장 문서로 옮겨 만듭니다 (전에 열린 ${from} 문서는 그대로 보관)`); return certIsA4(); }
+async function certNewDoc(carry) {
+  if (!carry && doc.pages.some(p => p.els.length) && !window.confirm(`A4 상장 문서를 새로 만듭니다. 지금 문서를 닫을까요? (${keepNote()})`)) return;
+  const keepCert = carry && doc.cert ? clone(Object.assign({}, doc.cert, { frame: undefined, framePdf: undefined })) : null;
   await keepCurrentDoc(); await store.disconnect();
   const nd = newDoc(SIZES.find(s_ => s_[0] === 'a4p')); nd.fmt = 'a4p'; nd.name = `상장 ${new Date().getFullYear()}`; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.rules = doc.rules; nd.fonts = doc.fonts;
-  doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; certState();
+  doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; if (keepCert) doc.cert = keepCert; certState();
   try { const fr = await store.idbGet('cert-frame'); if (fr && fr.url) { doc.cert.frame = addAsset(fr.url); if (fr.pdf) doc.cert.framePdf = addAsset(fr.pdf); } } catch (e) {}
   commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다');
   zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); toast(doc.cert.frame ? 'A4 상장 문서를 만들었습니다 — 이 PC에 기억된 상장 틀을 넣었습니다' : 'A4 상장 문서를 만들었습니다 — ① 상장 틀을 불러오세요');
 }
 /* 병합 완료: 이 양식으로 만든 쪽을 지우고 명단대로 다시 만듦 (다른 쪽은 그대로) */
-async function certMerge() {
+async function certMerge(skipAsk) {
+  if (!(await certNeedA4())) return; await certEnsureFrame();
   const C = certState(), rows = certRows(C.form); if (!rows.length) { toast('명단에 이름이 없습니다', true); return; }
+  /* 상장 쪽에서 직접 고친 글이 있으면 다시 만들기 전에 확인 (고친 내용이 명단 내용으로 바뀜) */
+  if (!skipAsk) { const old = doc.pages.filter(p => p.cert && p.cert.form === C.form); let changed = 0; old.forEach(p => { const r = rows[p.cert.i]; if (!r) return; const fresh = certEls(C.form, r); if (p.els.some(e => e.certKey && fresh.some(f => f.certKey === e.certKey && f.text !== e.text))) changed++; }); if (changed && !window.confirm(`상장 쪽에서 직접 고친 글이 ${changed}장에 있습니다.\n다시 만들면 명단(③) 내용으로 바뀝니다. 계속할까요? (고친 내용은 ③ 명단에도 고쳐 두세요)`)) return; }
   const pages = rows.map((r, i) => certPage(C.form, r, i)); setStatus('이름 길이에 맞춰 글자 크기를 맞추는 중…'); await fitTextOffscreen(pages.flatMap(p => p.els)); setStatus(''); const keep = doc.pages.filter(p => !(p.cert && p.cert.form === C.form) && (p.els.length || p.cert));
   doc.pages = keep.concat(pages); cur = keep.length; sel = []; fitCache.clear(); commit(); renderAll();
   toastUndo(`상장 ${rows.length}장을 만들었습니다 — 쪽마다 고칠 수 있고, 다운로드에서 PDF로 한 번에 저장합니다`);
 }
+function certRecN(form, r) { return form === 'record' && r ? ((Array.isArray(r.recs) && r.recs.length) || [r.a1 || r.b1, r.a2 || r.b2].filter(Boolean).length) : 0; }
 /* 이 쪽에서 옮기거나 바꾼 글 상자 위치·모양을 양식에 기억 → 모든 상장에 (워드의 '주 문서 고치기') */
 function certSaveLayout() {
   const pg = page(); if (!pg.cert) { toast('상장 쪽에서 쓰세요', true); return; } const C = certState(), form = pg.cert.form; let n = 0;
-  pg.els.forEach(e => { if (!e.certKey) return; const L = {}; ['x', 'y', 'w', 'h', 'font', 'size', 'weight', 'color', 'align', 'lh', 'ls', 'italic', 'sizing', 'fitText', 'valign', 'strokeW', 'strokeC', 'shadow'].forEach(kk => { if (e[kk] !== undefined) L[kk] = clone(e[kk]); }); if (e.fitText) L.size = e.fitMax || e.size; C.layout[form + ':' + e.certKey] = L; n++; });
+  pg.els.forEach(e => { if (!e.certKey) return; const L = {}; ['x', 'y', 'w', 'h', 'font', 'size', 'weight', 'color', 'align', 'lh', 'ls', 'italic', 'sizing', 'fitText', 'valign', 'strokeW', 'strokeC', 'shadow'].forEach(kk => { if (e[kk] !== undefined) L[kk] = clone(e[kk]); }); if (e.fitText) { L.size = e.fitMax || e.size; L.fitMax = e.fitMax || e.size; } C.layout[form + ':' + e.certKey + (/^rec/.test(e.certKey) ? '@' + (pg.cert.n || 0) : '')] = L; n++; }); /* 기록 상자는 종목 수가 같은 상장끼리만 */
   commit(); certMerge(); toast(`이 쪽의 글 상자 ${n}개 위치·모양을 양식에 기억하고 모든 상장을 다시 만들었습니다`);
 }
 function renderCertSide(body) {
+  if (!certState().frame && !renderCertSide._tried) { renderCertSide._tried = true; certEnsureFrame().then(ok => { renderCertSide._tried = false; if (ok && sideTab === 'cert') { commit(); renderSide(); toast('이 PC에 기억된 상장 틀을 넣었습니다'); } }); }
   const C = certState(), form = C.form, F = CERT_FORMS[form], D = C.data[form], rows = D.rows, nOk = certRows(form).length, a4 = Math.abs(doc.w - 210) < 1 && Math.abs(doc.h - 297) < 1;
   const fieldChips = F.common.map(([, l]) => l.replace(/ \(.*\)$/, '')).filter(l => !/날짜|단위|종목/.test(l));
   body.innerHTML = `<div class="cert">
   ${a4 && (doc.cert.frame || doc.pages.some(p => p.cert)) ? '' : `<div class="wz-card"><b>상장 만들기</b><p class="hint" style="margin:4px 0 8px">워드의 편지 병합처럼 양식은 한 번, 명단만 바꿔 여러 명의 상장을 한 번에 만듭니다.</p>${a4 ? '' : '<button class="btn primary full" data-cx="newdoc">A4 상장 문서 새로 만들기</button>'}</div>`}
   <h3>① 상장 틀 <small>배경</small></h3>
   <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm ${C.frame ? '' : 'primary'}" data-cx="frame">${C.frame ? '틀 바꾸기' : '📄 상장 틀 불러오기 (PDF·그림)'}</button>${C.frame ? `<label class="chk" title="틀이 미리 인쇄된 상장 용지에 찍을 때는 끄세요"><input type="checkbox" data-cx="printFrame" ${C.printFrame !== false ? 'checked' : ''}> 틀도 함께 인쇄</label>` : ''}</div>
-  ${C.frame ? (C.framePdf ? '<p class="hint">원본 PDF 틀 — 출력·PDF 때 원본 선 그대로 다시 그립니다.</p>' : '<p class="hint" style="color:#b3261e">그림으로 바꾼 틀입니다. "틀 바꾸기"로 원본 PDF를 다시 불러오면 가는 선까지 선명하게 출력됩니다.</p>') : '<p class="hint">틀은 이 문서와 이 PC에만 보관됩니다 (관장 도장이 있어 인터넷에 올리지 않음).</p>'}
+  ${C.frame ? (C.framePdf ? '<p class="hint">원본 PDF 틀 — 출력·PDF 때 원본 선 그대로 다시 그립니다.</p>' : '<p class="hint" style="color:#b3261e">그림으로 바꾼 틀입니다. "틀 바꾸기"로 원본 PDF를 다시 불러오면 가는 선까지 선명하게 출력됩니다.</p>') : '<p class="hint">한 번 불러오면 이 PC가 기억해 어느 상장 문서에도 자동으로 들어갑니다. 틀은 이 PC와 관장님 드라이브(비공개)에만 보관되고 공개 사이트에는 올리지 않습니다 (관장 직인).</p>'}
   <h3>② 양식 <small>주 문서</small></h3>
   <div class="cformgrid">${Object.entries(CERT_FORMS).map(([kk, f]) => `<button class="cform ${kk === form ? 'on' : ''}" data-cform="${kk}"><b>${f.name}</b><small>${f.desc}</small></button>`).join('')}</div>
   <div class="ccommon">${F.common.map(([kk, l]) => `<label class="f"><span>${l} <em class="hint">모두 같음</em></span><input type="text" data-cc="${kk}" value="${esc(D.common[kk] || '')}"></label>`).join('')}
@@ -4464,16 +4485,20 @@ function renderCertSide(body) {
 /* ---- 상장 모두 미리 보기 (만들기·출력 전에 실제 모습으로 확인 — 워드 '결과 미리 보기'의 큰 화면) ---- */
 let cpvIdx = -1;
 async function openCertPreview(after) {
+  if (!(await certNeedA4())) return; const hasFrame = await certEnsureFrame();
   const C = certState(), form = C.form, rows = certRows(form); if (!rows.length) { toast('명단에 이름이 없습니다', true); return; }
   let d = $('#dlgCpv'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgCpv'; d.className = 'wide cpvdlg'; document.body.appendChild(d); }
   d.innerHTML = `<div class="dhead"><h2>🔍 상장 미리 보기 <small>${rows.length}장 · 아직 만들지 않았습니다</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><p class="hint">상장을 준비하는 중… (이름 길이에 맞춰 글자 크기를 맞춥니다)</p></div>`;
   d.querySelector('[data-close]').onclick = () => d.close(); d.showModal();
   const pages = rows.map((r, i) => certPage(form, r, i)); pages.forEach(p => p.els.forEach(e => { if (e.certFrame) e.hidden = false; })); await fitTextOffscreen(pages.flatMap(p => p.els));
   const warns = []; rows.forEach((r, i) => { if (form === 'record' && !(Array.isArray(r.recs) && r.recs.length) && !(r.a1 || r.b1)) warns.push(`${r.name}: 기록이 비었습니다`); });
+  pages.forEach((p, i) => { const b = p.els.find(e => e.certKey === 'body'); if (b) { const lines = String(b.text).split('\n').length, bottom = b.y + lines * b.size * 0.3528 * (b.lh || 1.5); if (bottom > 219 * doc.h / 297) warns.push(`${rows[i].name}: 글이 아래 KTA 로고에 닿을 수 있습니다 (종목이 많음) — 크게 보기로 확인하세요`); } });
+  const D_ = C.data[form], today = CERT_TODAY(), dateOld = (D_.common.date || '') !== today;
   const sheet = (p, w) => { const k = w / (doc.w * MM); return `<div class="cpvbox" style="width:${w}px;height:${doc.h * MM * k}px"><div style="transform:scale(${k});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(doc.w, doc.h, p.els, '#ffffff')}</div></div>`; };
   const draw = () => {
     const big = cpvIdx >= 0, H = Math.min(innerHeight * 0.68, 760), bw = H * doc.w / doc.h;
     d.innerHTML = `<div class="dhead"><h2>🔍 상장 미리 보기 <small>${rows.length}장 · ${doc.pages.some(p => p.cert && p.cert.form === form) ? '만들면 지금 만든 상장을 바꿉니다' : '아직 만들지 않았습니다'}</small></h2><div class="row" style="gap:6px">${big ? '<button class="btn sm" data-cpv="grid">▦ 모두 보기</button>' : ''}<button class="btn sm" data-close>닫기</button></div></div><div class="dbody">
+      <div class="cpvinfo"><span>상장 날짜 <b class="${dateOld ? 'old' : ''}">${esc(D_.common.date || '(없음)')}</b></span>${dateOld ? `<button class="btn sm" data-cpv="today">오늘(${esc(today)})로</button>` : ''}${hasFrame ? '' : '<span class="nofr">⚠ 상장 틀이 없습니다</span><button class="btn sm primary" data-cpv="frame">📄 상장 틀 불러오기</button>'}</div>
       ${warns.length ? `<div class="ovfbar" style="display:block">⚠ ${warns.slice(0, 5).map(esc).join('<br>')}</div>` : ''}
       ${big ? `<div class="cpvbig"><button class="btn icon cpvnav" data-cpvgo="-1" ${cpvIdx ? '' : 'disabled'}>‹</button>${sheet(pages[cpvIdx], bw)}<button class="btn icon cpvnav" data-cpvgo="1" ${cpvIdx < pages.length - 1 ? '' : 'disabled'}>›</button></div><p class="cpvcap"><b>${cpvIdx + 1} / ${pages.length}</b> · ${esc(rows[cpvIdx].name)} <span class="hint">(← → 키로 넘기기)</span></p>`
         : `<p class="hint" style="margin-top:0">한 장을 누르면 크게 봅니다. 고칠 곳이 있으면 닫고 ②·③에서 고친 뒤 다시 미리 보세요.</p><div class="cpvgrid">${pages.map((p, i) => `<button class="cpvcard" data-cpvi="${i}">${sheet(p, 170)}<span><b>${i + 1}</b> ${esc(rows[i].name)}${form === 'record' && rows[i].recs ? ` <small>${rows[i].recs.length}종목</small>` : ''}</span></button>`).join('')}</div>`}
@@ -4485,12 +4510,14 @@ async function openCertPreview(after) {
     const g = e.target.closest('[data-cpvgo]'); if (g && !g.disabled) { cpvIdx = Math.max(0, Math.min(pages.length - 1, cpvIdx + Number(g.dataset.cpvgo))); draw(); return; }
     const b = e.target.closest('[data-cpv]'); if (!b) return; const k = b.dataset.cpv;
     if (k === 'grid') { cpvIdx = -1; draw(); } if (k === 'close') d.close();
-    if (k === 'make' || k === 'print') { d.close(); await certMerge(); if (k === 'print') openPrint('cert'); }
+    if (k === 'today') { D_.common.date = CERT_TODAY(); markDirty(); d.close(); if (sideTab === 'cert') renderSide(); openCertPreview(); return; }
+    if (k === 'frame') { d.close(); certLoadFrame(); return; }
+    if (k === 'make' || k === 'print') { d.close(); await certMerge(); if (k === 'print' && doc.pages.some(p => p.cert)) openPrint('cert'); }
   };
   d.onkeydown = e => { if (cpvIdx < 0) return; if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); cpvIdx = Math.max(0, Math.min(pages.length - 1, cpvIdx + (e.key === 'ArrowRight' ? 1 : -1))); draw(); } };
   cpvIdx = -1; draw(); if (after) toast(after);
 }
-function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEach((r, i) => { if (!String(r.name || '').trim() && Object.values(r).some(v => String(v || '').trim())) w.push(`${i + 1}번 줄에 이름이 없습니다`); if (form === 'record' && String(r.name || '').trim() && !(r.a1 || r.b1)) w.push(`${r.name}: 종목1 기록이 비었습니다`); }); return w.length ? `<div class="ovfbar" style="display:block">⚠ ${w.slice(0, 4).map(esc).join('<br>')}${w.length > 4 ? `<br>… ${w.length - 4}개 더` : ''}</div>` : ''; }
+function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEach((r, i) => { if (!String(r.name || '').trim() && Object.values(r).some(v => String(v || '').trim())) w.push(`${i + 1}번 줄에 이름이 없습니다`); if (form === 'record' && String(r.name || '').trim() && !(Array.isArray(r.recs) && r.recs.length) && !(r.a1 || r.b1)) w.push(`${r.name}: 종목1 기록이 비었습니다`); }); return w.length ? `<div class="ovfbar" style="display:block">⚠ ${w.slice(0, 4).map(esc).join('<br>')}${w.length > 4 ? `<br>… ${w.length - 4}개 더` : ''}</div>` : ''; }
 (function () {
   const sb = () => $('#sidebody'), on = () => sideTab === 'cert';
   let tmr; const soon = () => { clearTimeout(tmr); tmr = setTimeout(() => { if (on()) { const a = document.activeElement, id = a && a.dataset ? JSON.stringify(a.dataset) : '', pos = a && a.selectionStart; markDirty(); renderSide(); if (id) { const n = [...sb().querySelectorAll('input,textarea')].find(x => JSON.stringify(x.dataset) === id); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} } } } }, 350); };
@@ -4525,7 +4552,7 @@ const MEAS_SEP = String.fromCharCode(1);
 function measLocal() { try { const v = JSON.parse(localStorage.getItem('naracha-meas') || 'null'); return v && v.map ? v : null; } catch (e) { return null; } }
 /* 재원생 판정 (관리프로그램 _measEnrolled와 같게 — 관리프로그램 작업방 확인): 명단 roster.list[].n 에 있고, 퇴관 quitMapAtt.map[이름](del:true가 아님)·휴관 closedMapAtt.map[이름]이 아님. st 꼬리표는 옛 표시라 보조로만 */
 function measEnrolledFn() { try { const a = JSON.parse(localStorage.getItem('naracha-att') || 'null'); const L = a && a.roster && a.roster.list; if (!Array.isArray(L) || !L.length) return null; const quit = (a.quitMapAtt && a.quitMapAtt.map) || {}, closed = (a.closedMapAtt && a.closedMapAtt.map) || {}; const live = new Set(L.filter(x => x && x.n && !(quit[x.n] && !quit[x.n].del) && !closed[x.n] && !/휴관|퇴관/.test(x.st || '')).map(x => x.n)); return nm => live.has(nm); } catch (e) { return null; } }
-function measSessions() { const m = measLocal(); if (!m) return null; const tomb = m.tomb || {}; return Object.values(m.map || {}).filter(s => s && s.kind && Array.isArray(s.rows) && !(tomb[s.id] > (s._t || 0))).sort((a, b) => (b.year + (b.half === 'H2' ? .5 : 0)) - (a.year + (a.half === 'H2' ? .5 : 0)) || (a.kind < b.kind ? -1 : 1)); }
+function measSessions() { const m = measLocal(); if (!m) return null; const tomb = m.tomb || {}; return Object.values(m.map || {}).filter(s => s && s.kind && Array.isArray(s.rows) && !(tomb[s.id] > (s._t || 0))).map(s => Object.assign({}, s, { year: Number(s.year) || 0 })).sort((a, b) => (b.year + (b.half === 'H2' ? .5 : 0)) - (a.year + (a.half === 'H2' ? .5 : 0)) || (a.kind < b.kind ? -1 : 1)); }
 const measSc = s => s.year + (s.half === 'H2' ? 0.5 : 0), measHalf = s => s.half === 'H2' ? '후반기' : '전반기'; /* 도장은 측정을 연도 + 전반기/후반기로만 구분 (관장님 결정) */
 function measCellV(row, cat, sub) { for (const k in (row.cells || {})) { const p = k.split(MEAS_SEP); if (p[0].indexOf(cat) >= 0 && (!sub || (p[1] || '').indexOf(sub) >= 0)) return row.cells[k]; } return ''; }
 function measCatTitle(kind, name) { let t = String(name).replace(/\s*\(.*\)\s*$/, ''); if (kind === '줄넘기') t = t.replace(/^엇걸어뛰기$/, '엇걸어 풀어뛰기').replace(/^(앞으로|뒤로)뛰기$/, '$1 뛰기'); return t + '왕'; }
@@ -4555,13 +4582,13 @@ function openMeasImport() {
     const people = Object.values(by).sort((a, b) => b.recs.length - a.recs.length || a.name.localeCompare(b.name, 'ko')), nOn = people.filter(p => !measImp.off[p.name]).length, kinds = [...new Set(picked.map(s => s.kind))];
     d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기 <small>관리프로그램 측정입력</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
       <p class="hint" style="margin-top:0">관리프로그램과 같은 계산: 같은 종류의 <b>직전 회차보다 기록이 오른 학생 중 나이 그룹별 1위</b>(14~19세는 청소년)', 지금 재원생만 (휴관·퇴관 제외)'. 한 학생이 여러 종목이면 <b>상장 한 장에 모두</b> 들어갑니다.</p>
-      <div class="msel"><label class="f"><span>연도</span><select id="mYear">${years.map(y => `<option value="${y}" ${y === measImp.year ? 'selected' : ''}>${y}년</option>`).join('')}</select></label>
+      <div class="msel"><label class="f"><span>연도</span><select id="mYear">${years.map(y => `<option value="${Number(y)}" ${y === measImp.year ? 'selected' : ''}>${Number(y)}년</option>`).join('')}</select></label>
       <div class="f"><span>반기</span><div class="seg">${[['H1', '전반기'], ['H2', '후반기']].map(([a, t]) => `<button data-mhalf="${a}" aria-pressed="${measImp.half === a}" ${all.some(s => s.year === measImp.year && (s.half === 'H2' ? 'H2' : 'H1') === a) ? '' : 'disabled title="이 반기 측정 자료가 없습니다"'}>${t}</button>`).join('')}</div></div>
       <div class="f"><span>종류 <small>둘 다 고르면 한 사람 한 장에 합침</small></span><div class="row" style="gap:12px">${['줄넘기', '체력'].map(kd => { const ss = all.find(s => s.year === measImp.year && (s.half === 'H2' ? 'H2' : 'H1') === measImp.half && s.kind === kd); return `<label class="chk" style="margin:0"><input type="checkbox" data-mkind="${kd}" ${measImp.kinds.includes(kd) ? 'checked' : ''} ${ss ? '' : 'disabled'}> ${kd} ${ss ? `<small class="hint" style="margin:0">${(ss.rows || []).length}명 측정</small>` : '<small class="hint" style="margin:0">자료 없음</small>'}</label>`; }).join('')}</div></div></div>
-      ${res.some(x => !x.r.prev) ? `<p class="hint" style="color:#b3261e">⚠ ${res.filter(x => !x.r.prev).map(x => `${x.s.year} ${measHalf(x.s)} ${x.s.kind}`).join(', ')}: 비교할 직전 회차가 없어 향상왕을 계산할 수 없습니다.</p>` : ''}
+      ${res.some(x => !x.r.prev) ? `<p class="hint" style="color:#b3261e">⚠ ${res.filter(x => !x.r.prev).map(x => esc(`${x.s.year} ${measHalf(x.s)} ${x.s.kind}`)).join(', ')}: 비교할 직전 회차가 없어 향상왕을 계산할 수 없습니다.</p>` : ''}
       <h3>향상왕 ${people.length}명 <small>${people.reduce((t, p) => t + p.recs.length, 0)}개 종목 · 체크를 풀면 빠짐</small></h3>
       <div class="mpeople">${people.map(p => `<label class="mper ${measImp.off[p.name] ? 'off' : ''}"><input type="checkbox" data-moff="${esc(p.name)}" ${measImp.off[p.name] ? '' : 'checked'}><b>${esc(p.name)}</b> <small>${esc(p.age === '청소년' ? '청소년' : p.age + '세')}</small><span>${p.recs.map(q => `${esc(q.k)} ${esc(q.a)}→${esc(q.b)}${esc(q.u)}`).join(' · ')}</span></label>`).join('') || '<p class="hint">향상왕이 없습니다</p>'}</div>
-      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="mReplace" checked> 지금 명단을 바꾸기 (끄면 뒤에 더함)</label><button class="btn" id="mGo" ${nOn ? '' : 'disabled'}>명단에 넣기</button><button class="btn primary" id="mGoMake" ${nOn ? '' : 'disabled'}>넣고 ${nOn}장 미리 보기</button></div></div>`;
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="mReplace" ${certState().data.record.rows.some(r => String(r.name || '').trim() && !(Array.isArray(r.recs) && r.recs.length)) ? '' : 'checked'}> 지금 명단을 바꾸기 (끄면 뒤에 더함 · Ctrl+Z로 되돌리기)</label><button class="btn" id="mGo" ${nOn ? '' : 'disabled'}>명단에 넣기</button><button class="btn primary" id="mGoMake" ${nOn ? '' : 'disabled'}>넣고 ${nOn}장 미리 보기</button></div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
     d.onclick = e => { const h = e.target.closest('[data-mhalf]'); if (h && !h.disabled) { measImp.half = h.dataset.mhalf; measImp.off = {}; draw(); } };
     d.onchange = e => { const t = e.target; if (t.id === 'mYear') { measImp.year = Number(t.value); const hs = all.filter(s => s.year === measImp.year).map(s => s.half === 'H2' ? 'H2' : 'H1'); if (!hs.includes(measImp.half)) measImp.half = hs[0]; measImp.off = {}; draw(); return; } if (t.dataset.mkind) { const kd = t.dataset.mkind; measImp.kinds = t.checked ? [...new Set(measImp.kinds.concat(kd))] : measImp.kinds.filter(x => x !== kd); measImp.off = {}; draw(); return; } if (t.dataset.moff) { if (t.checked) delete measImp.off[t.dataset.moff]; else measImp.off[t.dataset.moff] = 1; draw(); } };
@@ -4571,7 +4598,7 @@ function openMeasImport() {
       D.common.title = kinds.length === 1 ? `${kinds[0]} 향상왕` : '향상왕';
       D.common.event = `${s0.year}년${sameHalf ? ' ' + measHalf(s0) : ''} 나라차태권도 ${kinds.join('·')}측정`;
       const rows = people.filter(p => !measImp.off[p.name]).map(p => ({ name: p.name, recs: p.recs }));
-      D.rows = $('#mReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; markDirty(); d.close(); sideTab = 'cert'; renderRail(); renderSide();
+      D.rows = $('#mReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; commit(); d.close(); sideTab = 'cert'; renderRail(); renderSide();
       toast(`향상왕 ${rows.length}명을 명단에 넣었습니다 — 상장 이름·측정 이름·날짜를 확인하세요`);
       if (make) openCertPreview(doc.cert.frame ? '' : '상장 틀이 아직 없습니다 — ① 상장 틀을 불러오면 배경이 들어갑니다');
     };
@@ -4583,7 +4610,8 @@ function openMeasImport() {
 /* ======================= 출력 (프린터로 바로) =======================
    윈도우·맥 모두 브라우저 인쇄 창을 씀. 기본은 '고화질 그림'(화면과 똑같이 — 글꼴·효과·그림이 프린터마다 달라지지 않음), 필요하면 '글자 선명(벡터)'.
    엡손 잉크젯: 배율 100%(실제 크기)·테두리 없음·용지 종류·품질 안내 */
-let prState = { pages: 'all', range: '', mode: 'img', dpi: 300, fit: 'full', frame: true };
+let prState = { pages: 'all', range: '', mode: 'img', dpi: 300, fit: 'safe', frame: true };
+const prOffset = () => { try { const o = JSON.parse(localStorage.getItem('naracal-print-offset') || '{}'); return { x: Number(o.x) || 0, y: Number(o.y) || 0 }; } catch (e) { return { x: 0, y: 0 }; } };
 function prPages() {
   const n = doc.pages.length, S = prState; if (S.pages === 'cur') return [cur]; if (S.pages === 'sel') return [...pgSel].filter(i => i < n).sort((a, b) => a - b);
   if (S.pages === 'cert') return doc.pages.map((p, i) => p.cert ? i : -1).filter(i => i >= 0);
@@ -4592,7 +4620,8 @@ function prPages() {
 }
 function openPrint(pre) {
   endEdit(); let d = $('#dlgPrint'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgPrint'; document.body.appendChild(d); }
-  const hasCert = doc.pages.some(p => p.cert), isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  const hasCert = doc.pages.some(p => p.cert), isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent), isEdge = /Edg\//.test(navigator.userAgent);
+  prState.frame = !(doc.cert && doc.cert.printFrame === false); /* 상장 패널의 '틀도 함께 인쇄'와 같게 시작 */
   if (pre === 'cert' && hasCert) prState.pages = 'cert'; else if (prState.pages === 'cert' && !hasCert) prState.pages = 'all'; if (prState.pages === 'sel' && pgSel.size < 2) prState.pages = 'all';
   const draw = () => {
     const S = prState, list = prPages(), C = doc.cert;
@@ -4600,42 +4629,44 @@ function openPrint(pre) {
       <div class="grid2"><label class="f"><span>출력할 쪽</span><select id="prPg">${[['all', `모든 쪽${doc.pages.some(p => p.dlOff) ? ' (숨긴 쪽 빼고)' : ''}`], ['cur', `지금 쪽 (${cur + 1})`], ...(pgSel.size > 1 ? [['sel', `페이지 목록에서 고른 ${pgSel.size}쪽`]] : []), ...(hasCert ? [['cert', `상장 쪽만 (${doc.pages.filter(p => p.cert).length}장)`]] : []), ['range', '직접 입력']].map(([a, t]) => `<option value="${a}" ${S.pages === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       ${S.pages === 'range' ? `<label class="f"><span>쪽 번호</span><input id="prRange" value="${esc(S.range)}" placeholder="예: 1-3, 5"></label>` : `<div class="prcount">${list.length}쪽 · 종이 ${Math.round(doc.w)}×${Math.round(doc.h)}mm</div>`}</div>
       <div class="seg prmode">${[['img', '고화질 그림 (추천)', '화면과 똑같이 — 글꼴·효과·사진이 프린터·PC마다 달라지지 않음'], ['vec', '글자 선명 (벡터)', '작은 글자가 아주 또렷 — 효과가 많은 디자인은 그림 방식이 안전']].map(([a, t, ti]) => `<button data-prmode="${a}" aria-pressed="${S.mode === a}" title="${ti}">${t}</button>`).join('')}</div>
-      ${S.mode === 'img' ? `<div class="grid2"><label class="f"><span>품질</span><select id="prDpi"><option value="600" ${S.dpi === 600 ? 'selected' : ''}>최고 600dpi (가는 선·도장, 느림)</option><option value="300" ${S.dpi === 300 ? 'selected' : ''}>고품질 300dpi (상장·사진)</option><option value="200" ${S.dpi === 200 ? 'selected' : ''}>표준 200dpi (빠름·많은 쪽)</option></select></label><label class="f"><span>종이 가장자리</span><select id="prFit"><option value="full" ${S.fit === 'full' ? 'selected' : ''}>꽉 채움 (테두리 없음 인쇄)</option><option value="safe" ${S.fit === 'safe' ? 'selected' : ''}>프린터 여백 안에 (96%로 조금 작게)</option></select></label></div>` : ''}
+      ${S.mode === 'img' ? `<div class="grid2"><label class="f"><span>품질</span><select id="prDpi"><option value="600" ${S.dpi === 600 ? 'selected' : ''}>최고 600dpi (가는 선·도장, 느림)</option><option value="300" ${S.dpi === 300 ? 'selected' : ''}>고품질 300dpi (상장·사진)</option><option value="200" ${S.dpi === 200 ? 'selected' : ''}>표준 200dpi (빠름·많은 쪽)</option></select></label><label class="f"><span>종이 가장자리</span><select id="prFit"><option value="safe" ${S.fit === 'safe' ? 'selected' : ''}>프린터 여백 안에 (96% — 잘리지 않음, 추천)</option><option value="full" ${S.fit === 'full' ? 'selected' : ''}>꽉 채움 — 프린터 '테두리 없음'을 켠 경우만</option><option value="exact" ${S.fit === 'exact' ? 'selected' : ''}>정확히 100% (틀이 인쇄된 상장 용지에 글자만)</option></select></label></div>
+      ${S.fit === 'exact' ? `<div class="grid2"><label class="f"><span>위치 보정 가로 (mm, + 오른쪽)</span><input type="number" step="0.5" id="prDx" value="${prOffset().x}"></label><label class="f"><span>위치 보정 세로 (mm, + 아래)</span><input type="number" step="0.5" id="prDy" value="${prOffset().y}"></label></div><p class="hint" style="margin-top:0">일반 용지에 1장 시험 인쇄 → 상장 용지와 겹쳐 빛에 비춰 보고, 어긋난 만큼 보정하세요 (이 PC에 기억).</p>` : ''}` : ''}
       ${C && C.frame && list.some(i => doc.pages[i].cert) ? `<label class="chk"><input type="checkbox" id="prFrame" ${S.frame ? 'checked' : ''}> 상장 틀도 함께 출력 <small class="hint" style="margin:0">(틀이 인쇄된 상장 용지면 끄기)</small></label>` : ''}
-      <details class="fx prtip" open><summary><b>엡손 잉크젯 설정 (${isMac ? '맥' : '윈도우'})</b></summary>${isMac ? `<ol><li>인쇄 창의 <b>프린터</b>에서 EPSON을 고르고 <b>용지 크기: A4</b> — 꽉 채움이면 <b>A4 (테두리 없음)</b>.</li><li><b>배율 100%</b> (크롬은 '추가 설정 → 배율: 기본값', 사파리는 '크기 조절 100%').</li><li><b>인쇄 설정</b>(또는 '용지 처리/품질')에서 <b>용지 종류</b>: 상장지·두꺼운 무광지는 'Matte(무광) / 고급 무광지', 일반지는 '일반 용지' · <b>인쇄 품질: 높음(고품질)</b>.</li><li>크롬은 <b>배경 그래픽</b>을 켭니다(그림 방식은 꺼도 됨).</li></ol>` : `<ol><li>인쇄 창의 <b>대상</b>에서 EPSON 프린터를 고릅니다 (PDF로 저장 아님).</li><li><b>추가 설정</b> → <b>용지 크기 A4</b> · <b>배율: 기본값(100%)</b> · <b>여백: 없음</b> · <b>배경 그래픽</b> 체크.</li><li>꽉 채움(테두리 없음)은 <b>'시스템 대화 상자를 사용하여 인쇄'</b>(Ctrl+Shift+P) → <b>기본 설정</b> → <b>테두리 없음</b> 체크, <b>용지 종류</b>: 상장지·두꺼운 무광지는 '고급 무광지(Matte)', 일반지는 '일반 용지' · <b>품질: 높음</b>.</li></ol>`}<p class="hint">테두리 없음이 안 되는 용지·프린터면 '프린터 여백 안에'를 고르세요 (가장자리가 잘리지 않음). 두꺼운 상장지는 프린터 뒤쪽 급지대에 한 장씩 넣는 것이 안전합니다.</p></details>
+      <details class="fx prtip" open><summary><b>엡손 잉크젯 설정 (${isMac ? '맥' : '윈도우'})</b></summary>${isMac ? `<ol><li>인쇄 창의 <b>프린터</b>에서 EPSON을 고르고 <b>용지 크기: A4</b> — 꽉 채움이면 <b>A4 (테두리 없음)</b> + '인쇄 설정'에서 <b>확대량: 최소</b>.</li><li><b>배율 100%</b> (크롬은 '추가 설정 → 배율: 기본값', 사파리는 '크기 조절 100%').</li><li><b>인쇄 설정</b>(또는 '용지 처리/품질')에서 <b>용지 종류</b>: 상장지·두꺼운 무광지는 'Matte(무광) / 고급 무광지', 일반지는 '일반 용지' · <b>인쇄 품질: 높음(고품질)</b>.</li><li>크롬은 <b>배경 그래픽</b>을 켭니다(그림 방식은 꺼도 됨).</li></ol>` : `<ol><li>인쇄 창의 <b>${isEdge ? '프린터' : '대상'}</b>에서 EPSON 프린터를 고릅니다 (PDF로 저장 아님).</li><li><b>${isEdge ? '기타 설정' : '추가 설정'}</b> → <b>용지 크기 A4</b> · <b>배율: 기본값(100%)</b> · <b>여백: 없음</b> · <b>배경 그래픽</b> 체크.</li><li>꽉 채움(테두리 없음)은 <b>'시스템 대화 상자를 사용하여 인쇄'</b>(Ctrl+Shift+P) → <b>기본 설정</b> → <b>테두리 없음</b> 체크 + <b>확대량: 최소</b>, <b>용지 종류</b>: 상장지·두꺼운 무광지는 '고급 무광지(Matte)', 일반지는 '일반 용지' · <b>품질: 높음</b>.</li></ol>`}<p class="hint">테두리 없음이 안 되는 용지·프린터면 '프린터 여백 안에'를 고르세요 (가장자리가 잘리지 않음). 두꺼운 상장지는 프린터 뒤쪽 급지대에 한 장씩 넣는 것이 안전합니다.</p></details>
       <div class="row" style="justify-content:flex-end;gap:6px;margin-top:8px"><button class="btn primary" id="prGo" ${list.length ? '' : 'disabled'}>🖨 ${list.length}쪽 출력</button></div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
   };
-  d.onchange = e => { const t = e.target; if (t.id === 'prPg') prState.pages = t.value; if (t.id === 'prRange') prState.range = t.value; if (t.id === 'prDpi') prState.dpi = Number(t.value); if (t.id === 'prFit') prState.fit = t.value; if (t.id === 'prFrame') prState.frame = t.checked; draw(); };
+  d.onchange = e => { const t = e.target; if (t.id === 'prDx' || t.id === 'prDy') { const o = prOffset(); o[t.id === 'prDx' ? 'x' : 'y'] = Number(t.value) || 0; lsSet('naracal-print-offset', o); return; } if (t.id === 'prPg') prState.pages = t.value; if (t.id === 'prRange') prState.range = t.value; if (t.id === 'prDpi') prState.dpi = Number(t.value); if (t.id === 'prFit') prState.fit = t.value; if (t.id === 'prFrame') { prState.frame = t.checked; if (doc.cert) { doc.cert.printFrame = t.checked; doc.pages.forEach(p => p.els.forEach(x => { if (x.certFrame) x.hidden = !t.checked; })); commit(); renderAll(); } if (!t.checked) prState.fit = 'exact'; } draw(); };
   d.onclick = e => { const m = e.target.closest('[data-prmode]'); if (m) { prState.mode = m.dataset.prmode; draw(); return; } if (e.target.closest('#prGo')) { const list = prPages(); d.close(); runPrint(list); } };
   draw(); d.showModal();
 }
 async function runPrint(list) {
   if (!list.length) return; const S = prState, C = doc.cert;
   /* 상장 틀 출력 여부를 이번 출력에만 적용 */
-  const frames = []; doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { frames.push([e, e.hidden]); e.hidden = !S.frame || (C && C.printFrame === false && S.frame !== true); } }));
-  const restore = () => frames.forEach(([e, h]) => { e.hidden = h; });
-  if (S.mode === 'vec') { try { await printVector(list); } finally { setTimeout(restore, 1500); } return; }
+  const frIds = []; doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { frIds.push(e.id); elVisOv.set(e.id, !!S.frame); } }));
+  const restore = () => frIds.forEach(id => elVisOv.delete(id));
+  if (S.mode === 'vec') { try { await printVector(list, { noBleed: true }); } finally { setTimeout(restore, 1500); } return; }
+  let dpi = S.dpi; if (dpi > 300 && list.length > 5) { dpi = 300; toast('6쪽 이상은 300dpi로 출력합니다 (600dpi는 5쪽까지 — 엡손에는 300dpi로 충분)'); }
   const urls = []; try {
-    for (let i = 0; i < list.length; i++) { setStatus(`출력 준비 ${i + 1}/${list.length}쪽…`); const c = await renderPageCanvas(doc.pages[list[i]], dlDpi(S.dpi, 0), 'thumb', '#ffffff'); const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95)); urls.push(URL.createObjectURL(b)); c.width = c.height = 0; }
+    for (let i = 0; i < list.length; i++) { setStatus(`출력 준비 ${i + 1}/${list.length}쪽…`); const c = await renderPageCanvas(doc.pages[list[i]], dlDpi(dpi, 0), 'thumb', '#ffffff'); const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95)); urls.push(URL.createObjectURL(b)); c.width = c.height = 0; }
   } catch (e) { toast('출력 준비 중 문제가 생겼습니다: ' + e.message, true); urls.forEach(u => URL.revokeObjectURL(u)); restore(); setStatus(''); return; }
   restore(); setStatus('');
-  const k = S.fit === 'safe' ? 0.96 : 1, W = doc.w, H = doc.h, f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'; document.body.appendChild(f);
-  const fd = f.contentDocument; fd.open(); fd.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(doc.name || '출력')}</title><style>@page{size:${W}mm ${H}mm;margin:0}html,body{margin:0;padding:0;background:#fff}.pg{width:${W}mm;height:${H}mm;display:flex;align-items:center;justify-content:center;overflow:hidden;break-after:page;page-break-after:always}.pg:last-child{break-after:auto;page-break-after:auto}img{width:${W * k}mm;height:${H * k}mm;display:block}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>${urls.map(u => `<div class="pg"><img src="${u}"></div>`).join('')}</body></html>`); fd.close();
+  const k = S.fit === 'safe' ? 0.96 : 1, W = doc.w, H = doc.h, off = S.fit === 'exact' ? prOffset() : { x: 0, y: 0 }, f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'; document.body.appendChild(f);
+  const fd = f.contentDocument; fd.open(); fd.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(doc.name || '출력')}</title><style>@page{size:${W}mm ${H}mm;margin:0}html,body{margin:0;padding:0;background:#fff}.pg{width:${W}mm;height:calc(${H}mm - 0.5mm);display:flex;align-items:center;justify-content:center;overflow:hidden;break-after:page;page-break-after:always}.pg:last-child{break-after:auto;page-break-after:auto}img{width:${W * k}mm;height:${H * k}mm;display:block;transform:translate(${off.x}mm,${off.y}mm)}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>${urls.map(u => `<div class="pg"><img src="${u}"></div>`).join('')}</body></html>`); fd.close();
   await Promise.all([...fd.images].map(im => im.complete ? null : new Promise(r => { im.onload = im.onerror = r; })));
   const cleanup = () => { setTimeout(() => { f.remove(); urls.forEach(u => URL.revokeObjectURL(u)); }, 1000); };
   f.contentWindow.addEventListener('afterprint', cleanup, { once: true }); setTimeout(cleanup, 600000);
   f.contentWindow.focus(); f.contentWindow.print(); toast(`인쇄 창을 열었습니다 — ${list.length}쪽 · 배율 100%·용지 A4를 확인하세요`);
 }
 $('#btnPrint').onclick = () => openPrint();
-document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.code === 'KeyP' || (e.key || '').toLowerCase() === 'p') && !document.querySelector('dialog[open]') && !editing) { e.preventDefault(); e.stopPropagation(); openPrint(); } }, true);
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.code === 'KeyP' || (e.key || '').toLowerCase() === 'p')) { e.preventDefault(); e.stopPropagation(); /* 브라우저 기본 인쇄는 빈 장이 나오므로 늘 공방 출력 창으로 */ if (editing) endEdit(); document.querySelectorAll('dialog[open]').forEach(x => { if (x.id !== 'dlgPrint') x.close(); }); openPrint(); } }, true);
 
 /* 엑셀 붙여넣기: 첫 줄이 열 이름이면 이름으로, 아니면 열 순서대로 (at·atKey = 표 칸에 바로 붙여 넣은 자리부터) */
 function certPaste(txt, at, atKey) {
   const C = certState(), D = C.data[C.form], F = CERT_FORMS[C.form], lines = String(txt || '').replace(/\r/g, '').split('\n').filter(l => l.trim()); if (!lines.length) return;
   const cells = l => l.split('\t').map(x => x.trim()), first = cells(lines[0]), lab = c => c[1].replace(/ \(.*\)$/, '');
-  const byName = first.some(h => F.cols.some(c => lab(c) === h || c[1].startsWith(h)) || h === '이름');
-  let keys = byName ? first.map(h => (F.cols.find(c => lab(c) === h || c[1].startsWith(h)) || [])[0] || null) : F.cols.map(c => c[0]);
+  const byName = first.some(h => h && (F.cols.some(c => lab(c) === h || c[1].startsWith(h)) || h === '이름')); /* 빈 칸('')은 머리글 판정에서 뺌 — 종목2가 빈 사람이 머리글로 오인되지 않게 */
+  let keys = byName ? first.map(h => (h && F.cols.find(c => lab(c) === h || c[1].startsWith(h)) || [])[0] || null) : F.cols.map(c => c[0]);
   if (!byName && atKey) { const s0 = F.cols.findIndex(c => c[0] === atKey); keys = F.cols.slice(s0).map(c => c[0]); }
   const data = (byName ? lines.slice(1) : lines).map(cells); let i = at != null ? at : D.rows.length;
   data.forEach(c => { const r = D.rows[i] || {}; keys.forEach((kk, j) => { if (kk && c[j] != null && c[j] !== '') r[kk] = c[j]; }); D.rows[i] = r; i++; });
@@ -4657,7 +4688,7 @@ function openDday() {
   d.showModal();
 }
 /* ---- 문단 스타일 (인디자인 단락 스타일): 글 모양을 이름으로 저장 → 다른 글에 적용 → 한 곳을 고친 뒤 "모두에 반영"하면 문서 전체의 같은 스타일 글자가 함께 바뀜. doc.pstyles=[{id,name,st}], el.pstyle=id ---- */
-const PS_SKIP = new Set(['text', 'html', 'htmlFor', 'x', 'y', 'w', 'h', 'rot', 'id', 'type', 'name', 'group', 'locked', 'hidden', 'gen', 'pstyle', 'opacity', 'anim', 'animIn', 'animOut', 'qr']);
+const PS_SKIP = new Set(['text', 'html', 'htmlFor', 'x', 'y', 'w', 'h', 'rot', 'id', 'type', 'name', 'group', 'locked', 'hidden', 'gen', 'pstyle', 'opacity', 'anim', 'animIn', 'animOut', 'qr', 'certKey', 'certFrame', 'pgLock', 'sizing', 'fitText', 'fitMax', 'noEdit']);
 function pstyleOf(el) { const st = {}; Object.keys(el).forEach(k => { if (!PS_SKIP.has(k) && !STYLE_SKIP.has(k)) st[k] = clone(el[k]); }); return st; }
 function psCount(id) { let n = 0; doc.pages.forEach(p => p.els.forEach(e => { if (e.pstyle === id) n++; })); return n; }
 function psHTML(el) { const L = doc.pstyles || []; return `<div class="psrow"><select id="psSel" title="문단 스타일 — 고르면 이 글에 그 모양을 적용"><option value="">문단 스타일 없음</option>${L.map(p => `<option value="${p.id}" ${el.pstyle === p.id ? 'selected' : ''}>${esc(p.name)} (${psCount(p.id)})</option>`).join('')}</select><button class="btn sm" id="psNew" title="지금 글 모양을 새 스타일로 저장">+ 저장</button><button class="btn sm ${el.pstyle ? 'primary' : ''}" id="psUpd" ${el.pstyle ? '' : 'disabled'} title="지금 글 모양을 이 스타일을 쓰는 모든 글(모든 쪽)에 반영">모두에 반영</button></div>`; }
@@ -4670,7 +4701,7 @@ document.addEventListener('click', e => {
   if (!e.target.closest) return; if (e.target.closest('[data-dday]')) { openDday(); return; }
   const el = selEls()[0]; if (!el || el.type !== 'text') return;
   if (e.target.closest('#psNew')) { const nm = window.prompt('새 문단 스타일 이름 (예: 제목, 소제목, 본문, 강조)', (doc.pstyles || []).length ? '' : '제목'); if (!nm || !nm.trim()) return; doc.pstyles = doc.pstyles || []; const ps = { id: uid(), name: nm.trim(), st: pstyleOf(el) }; doc.pstyles.push(ps); el.pstyle = ps.id; commit(); renderInspector(); toast(`"${ps.name}" 스타일을 만들었습니다 — 다른 글을 고르고 목록에서 고르면 같은 모양이 됩니다`); }
-  if (e.target.closest('#psUpd')) { const ps = (doc.pstyles || []).find(p => p.id === el.pstyle); if (!ps) return; ps.st = pstyleOf(el); let n = 0; doc.pages.forEach(p => p.els.forEach(x => { if (x.pstyle === ps.id && x !== el) { psApply(x, ps); n++; } })); commit(); rerender(); toast(`"${ps.name}" 스타일을 ${n}개 글에 반영했습니다 (모든 쪽, Ctrl+Z로 되돌리기)`); }
+  if (e.target.closest('#psUpd')) { const ps = (doc.pstyles || []).find(p => p.id === el.pstyle); if (!ps) return; ps.st = pstyleOf(el); let n = 0; doc.pages.forEach(p => p.els.forEach(x => { if (x.pstyle === ps.id && x !== el && !x.locked) { psApply(x, ps); n++; } })); commit(); rerender(); toast(`"${ps.name}" 스타일을 ${n}개 글에 반영했습니다 (모든 쪽, Ctrl+Z로 되돌리기)`); }
 });
 
 /* ---- 도장 정보 (Visme 'Dynamic Fields'·Polotno 변수처럼): 한 번 저장하면 템플릿의 자리 표시(010-0000-0000, ○○시 ○○구 ○○로 00, ○○태권도)를 자동으로 채우고,
@@ -4678,7 +4709,10 @@ document.addEventListener('click', e => {
 const DJ_FIELDS = [['name', '도장 이름', '예: 나라차태권도'], ['phone', '전화', '예: 031-000-0000'], ['addr', '주소', '예: 화성시 ○○로 00, 3층'], ['web', '홈페이지·밴드·카카오 채널', '예: band.us/...'], ['owner', '관장 이름', '예: 홍길동 관장']];
 function getDojang() { try { return JSON.parse(localStorage.getItem('naracal-dojang') || '{}') || {}; } catch (e) { return {}; } }
 function textEls(pages) { const out = []; pages.forEach(p => p.els.forEach(el => { if (el.type === 'text') out.push(el); })); return out; }
-function replAll(el, from, to) { if (!from || from === to) return 0; let n = 0; if (el.text && el.text.includes(from)) { n += el.text.split(from).length - 1; el.text = el.text.split(from).join(to); } if (el.html && el.html.includes(esc(from))) { el.html = el.html.split(esc(from)).join(esc(to)); if (el.htmlFor != null) el.htmlFor = el.text; } return n; }
+function replAll(el, from, to) {
+  if (!from || from === to || String(from).trim().length < 3) return 0; let n = 0;
+  const sw = (t, f, g) => { if (!t || !t.includes(f)) return t; /* '나라차' → '나라차태권도'일 때 이미 '나라차태권도'인 곳은 그대로 */ return g.includes(f) ? t.split(g).map(p => { n += p.split(f).length - 1; return p.split(f).join(g); }).join(g) : (n += t.split(f).length - 1, t.split(f).join(g)); };
+  const t0 = el.text; el.text = sw(el.text, from, to); if (el.html) { const c0 = n; el.html = sw(el.html, esc(from), esc(to)); n = c0; if (el.htmlFor === t0) el.htmlFor = el.text; } return n; }
 function fillDojang(pages, prev) {
   const D = getDojang(); let n = 0;
   textEls(pages).forEach(el => {
@@ -4711,8 +4745,8 @@ function qrSVG(text, color, bg) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${N} ${N}" shape-rendering="crispEdges">${bg ? `<rect width="${N}" height="${N}" fill="${bg}"/>` : ''}<path d="${d}" fill="${color}"/></svg>`;
 }
 async function openQr(target) {
-  try { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', () => window.qrcode); window.qrcode.stringToBytes = window.qrcode.stringToBytesFuncs['UTF-8']; } catch (e) { toast('QR 모듈을 불러오지 못했습니다 (인터넷 연결 확인)', true); return; }
-  const S = Object.assign({ text: '', color: '#1E2B5A', bg: '#ffffff' }, target && target.qr); let d = $('#dlgQr');
+  try { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', () => window.qrcode, 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1'); window.qrcode.stringToBytes = window.qrcode.stringToBytesFuncs['UTF-8']; } catch (e) { toast('QR 모듈을 불러오지 못했습니다 (인터넷 연결 확인)', true); return; }
+  const S = Object.assign({ text: '', color: '#1E2B5A', bg: '#ffffff' }, target && target.qr); if (!/^#[0-9a-f]{6}$/i.test(S.color)) S.color = '#1E2B5A'; if (S.bg && !/^#[0-9a-f]{6}$/i.test(S.bg)) S.bg = '#ffffff'; let d = $('#dlgQr');
   if (!d) { d = document.createElement('dialog'); d.id = 'dlgQr'; document.body.appendChild(d); }
   d.innerHTML = `<div class="dhead"><h2>QR 코드 ${target ? '고치기' : '넣기'}</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><div class="qrgrid"><div>
     <label class="f"><span>연결할 주소 또는 글</span><textarea id="qrText" rows="3" placeholder="예: https://band.us/... · 신청서 주소 · 유튜브 영상 주소 · 전화 tel:0100000000">${esc(S.text)}</textarea></label>
@@ -5033,7 +5067,7 @@ $('#scroller').addEventListener('drop', async e => {
    stretch: 가로·세로를 따로 늘림 / keep: 크기는 그대로 두고 가운데로 옮김 */
 const MM_KEYS = ['strokeW', 'shX', 'shY', 'shB', 'glowB', 'd3X', 'd3Y', 'pad', 'bgR', 'borderW', 'radius'];
 function scaleProps(el, f) { /* 글자 크기·선 굵기·그림자 등 mm 값을 f배로 */
-  if (f === 1) return;
+  if (f === 1) return; if (el.fitText && el.fitMax) el.fitMax = Math.round(el.fitMax * f * 10) / 10;
   if (el.size) el.size = Math.round(el.size * f * 10) / 10;
   if (el.html) el.html = el.html.replace(/font-size:\s*([\d.]+)pt/g, (_, v) => 'font-size:' + Math.round(v * f * 2) / 2 + 'pt');
   MM_KEYS.forEach(k => { if (typeof el[k] === 'number' && el[k]) el[k] = Math.round(el[k] * f * 100) / 100; });
