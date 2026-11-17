@@ -195,11 +195,23 @@ NC.video = (function () {
     trans(x, ca, cb, p, A.trans, W, H, B.bg, Math.floor(T * 30), A.tdir); drawTracks(x, V, T); x.restore();
   }
   // 자막·오버레이 트랙 (장면 위에 영상 전체 시간 기준으로 겹침)
-  const CAP_STYLES = [['outline', '흰 글자 외곽선'], ['box', '검은 상자'], ['pop', '노란 강조'], ['karaoke', '단어씩 강조'], ['plain', '그림자만']];
+  const CAP_STYLES = [['outline', '흰 글자 외곽선'], ['box', '검은 상자'], ['pop', '노란 강조'], ['karaoke', '단어씩 강조'], ['plain', '그림자만'], ['title', '큰 제목'], ['lower', '하단 이름표']];
   function wrapText(x, text, maxW) { const out = []; String(text).split('\n').forEach(par => { let line = ''; par.split(/(\s+)/).forEach(w => { const t = line + w; if (x.measureText(t).width > maxW && line.trim()) { out.push(line.trim()); line = w.trim(); } else line = t; }); out.push(line.trim()); }); return out; }
+  // 큰 제목(가운데, 살짝 커지며 등장) · 하단 이름표(왼쪽 아래 띠가 밀려 들어옴 — 첫 줄 이름, 다음 줄 직함)
+  function drawTitle(x, c, u, d, W, H, sz, st) {
+    const fam = `"${c.font || 'Pretendard'}", "Pretendard", sans-serif`, ein = ease(clamp01(u / 0.45)), eout = clamp01((d - u) / 0.3);
+    if (st === 'title') { const S = sz * 1.9; x.font = `900 ${S}px ${fam}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round'; const lines = wrapText(x, c.text || '', W * 0.86), lh = S * 1.2, mid = c.pos === 'top' ? H * 0.22 : c.pos === 'bottom' ? H * 0.74 : H * 0.5, y0 = mid - (lines.length - 1) * lh / 2, sc = 0.9 + 0.1 * ein;
+      x.save(); x.globalAlpha *= Math.min(c.fi === 0 ? 1 : ein, c.fo === 0 ? 1 : eout); x.translate(W / 2, mid); x.scale(sc, sc); x.translate(-W / 2, -mid); lines.forEach((ln, i) => { const y = y0 + i * lh; x.lineWidth = S * 0.14; x.strokeStyle = 'rgba(0,0,0,.85)'; x.strokeText(ln, W / 2, y); x.fillStyle = '#fff'; x.fillText(ln, W / 2, y); }); x.restore(); return; }
+    const parts = String(c.text || '').split('\n'), rest = parts.slice(1).filter(Boolean), S1 = sz * 1.05, S2 = sz * 0.68, padX = S1 * 0.6, padY = S1 * 0.38, mx = W * 0.06;
+    x.textAlign = 'left'; x.textBaseline = 'alphabetic'; x.font = `800 ${S1}px ${fam}`; const w1 = x.measureText(parts[0] || '').width; x.font = `500 ${S2}px ${fam}`; const w2 = Math.max(0, ...rest.map(t => x.measureText(t).width));
+    const bw = Math.min(W * 0.88, Math.max(w1, w2) + padX * 2 + S1 * 0.25), bh = padY * 2 + S1 + rest.length * S2 * 1.3, by = (c.pos === 'top' ? H * 0.16 : c.pos === 'middle' ? H * 0.5 : (H > W * 1.3 ? H * 0.68 : H * 0.8)) - bh / 2, bx = mx - (c.fi === 0 ? 0 : 1 - ein) * (bw + mx);
+    x.save(); x.globalAlpha *= c.fo === 0 ? 1 : eout; x.fillStyle = 'rgba(20,27,58,.92)'; x.fillRect(bx, by, bw, bh); x.fillStyle = '#FFD34D'; x.fillRect(bx, by, S1 * 0.18, bh); x.beginPath(); x.rect(bx, by, bw, bh); x.clip();
+    x.fillStyle = '#fff'; x.font = `800 ${S1}px ${fam}`; x.fillText(parts[0] || '', bx + padX + S1 * 0.1, by + padY + S1 * 0.86); x.font = `500 ${S2}px ${fam}`; x.fillStyle = 'rgba(255,255,255,.88)'; rest.forEach((t, i) => x.fillText(t, bx + padX + S1 * 0.1, by + padY + S1 + S2 * 1.2 * (i + 1))); x.restore();
+  }
   function drawCaption(x, c, T, W, H) {
     const u = T - c.at, d = Number(c.dur || 2.5); if (u < 0 || u > d) return;
     const fade = Math.min(1, c.fi === 0 ? 1 : u / 0.18, c.fo === 0 ? 1 : (d - u) / 0.18), sz = Math.round(Math.min(W, H) * Number(c.size || 0.065)), st = c.style || 'outline';
+    if (st === 'title' || st === 'lower') { x.save(); drawTitle(x, c, u, d, W, H, sz, st); x.restore(); return; }
     x.save(); x.globalAlpha = Math.max(0, fade); x.font = `${c.weight || 800} ${sz}px "${c.font || 'Pretendard'}", "Pretendard", sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
     const lines = wrapText(x, c.text || '', W * 0.86), lh = sz * 1.25, y0 = (c.pos === 'top' ? H * 0.14 : c.pos === 'middle' ? H * 0.5 : (H > W * 1.3 ? H * 0.70 : H * 0.84)) - (lines.length - 1) * lh / 2; /* 세로(숏츠·릴스): 아래 앱 단추·설명 글(약 22%) 위로 */
     let wordIx = 0; const words = (c.text || '').split(/\s+/).filter(Boolean), shown = st === 'karaoke' ? Math.min(words.length, Math.floor(u / Math.max(0.15, d * 0.85 / Math.max(1, words.length))) + 1) : 1e9;

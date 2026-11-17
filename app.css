@@ -1324,3 +1324,6 @@ body:has(dialog[open]) #cellBar{display:none}
 dialog:focus{outline:none}
 /* 마법사: 왼쪽 설정 칸이 창 안에서 따로 스크롤 → 만들기 단추가 늘 아래에 보임 */
 @media (min-width:901px){.wz{grid-template-rows:minmax(0,1fr);height:78vh}.wz-side,.wz-main{min-height:0}}
+/* 훑어보기 선 · 범위 */
+.tl-skim{position:absolute;top:0;bottom:0;width:0;border-left:1px solid #ffd34d;z-index:5;pointer-events:none;box-shadow:0 0 0 .5px rgba(255,211,77,.5)}
+.tl-range{position:absolute;top:0;bottom:0;background:rgba(255,211,77,.13);border-left:2px solid #ffd34d;border-right:2px solid #ffd34d;z-index:3;pointer-events:none;box-sizing:border-box}
