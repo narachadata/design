@@ -3918,6 +3918,10 @@ async function runAI(fn) { const busy = $('#aiBusy'); const btns = $$('#aiBody b
 /* ---- 다운로드 (미리캔버스식): PNG · JPG · PDF(웹/인쇄) — 작업한 크기 그대로 바로 받기 ---- */
 const DL_FMTS = [['pdfhq', 'PDF (고화질)', '보관·인쇄에 알맞은 300dpi 문서', '권장'], ['jpg', 'JPG', '공유에 알맞은 이미지'], ['png', 'PNG', '압축 손실 없는 고품질 이미지'], ['pdfweb', 'PDF (가벼운 공유용)', '카톡·메일로 보내기 좋은 200dpi 문서'], ['pdfprint', 'PDF (인쇄소용)', '300dpi 최고 화질 · 도련·재단 상자 포함 (재단선은 선택)'], ['pdfvector', 'PDF (벡터 · 인쇄 창)', '글자가 가장 선명 · 브라우저 인쇄 창에서 "PDF로 저장"']];
 // PDF 종류별 해상도·압축 품질
+let dlTenth = false;
+const PDF_TENTH = (w, h) => w > 5080 || h > 5080; // PDF 쪽 한 변 200인치(5.08m) 한계
+// 대략적인 파일 크기(MB): 화소 수 × 화소당 바이트(사진·그림 섞인 디자인 기준 어림)
+const dlEstMB = (pxCount, fmt, q) => pxCount * (fmt === 'png' ? 2.2 : q >= 0.99 ? 1.1 : q >= 0.9 ? 0.55 : 0.4) / 1048576;
 const DL_PDF = { pdfhq: { dpi: 300, q: 0.92, bleed: false }, pdfweb: { dpi: 200, q: 0.88, bleed: false }, pdfprint: { dpi: 300, q: 1, bleed: true } }; // 인쇄소용: 투명 마스크가 생기지 않게 최고 화질 JPEG (크롬 PNG는 늘 투명 채널이 있어 인쇄소 점검에 '투명도'로 걸림)
 let dlState = { fmt: 'pdfhq', scale: 3, pages: 'all', range: '', merge: false, imgBleed: false };
 function loadScript(src, test, sri) { if (test()) return Promise.resolve(); return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; if (sri) { s.integrity = sri; s.crossOrigin = 'anonymous'; } /* 무결성 검사: CDN 파일이 바뀌면 실행하지 않음 (같은 주소의 관리프로그램 개인정보 보호) */ s.onload = res; s.onerror = () => rej(new Error('모듈을 불러오지 못했습니다 (인터넷 필요)')); document.head.appendChild(s); }); }
@@ -3927,7 +3931,7 @@ function dlPages() {
   const vis = doc.pages.map((_, i) => i).filter(i => !doc.pages[i].dlOff); return vis.length ? vis : doc.pages.map((_, i) => i); /* 숨긴 쪽(페이지 목록 오른쪽 버튼 → 숨기기)은 '모든 페이지'에서 뺌 */
 }
 // 캔버스 한계 안에서 쓸 수 있는 dpi
-function dlDpi(want, bleed) { const W = (doc.w + 2 * bleed) / 25.4, H = (doc.h + 2 * bleed) / 25.4; return Math.max(24, Math.min(want, 14000 / W, 14000 / H, Math.sqrt(120e6 / (W * H)))); }
+function dlDpi(want, bleed) { const W = (doc.w + 2 * bleed) / 25.4, H = (doc.h + 2 * bleed) / 25.4; return Math.max(24, Math.min(want, 16000 / W, 16000 / H, Math.sqrt(120e6 / (W * H)))); } /* 한 변 16,000px(크롬 한계 32,767의 절반 — 메모리 여유)·1.2억 화소 */
 function openDownload(fmt) {
   if (fmt) { dlState.fmt = fmt; dlState.userFmt = true; }
   const pxDoc = Math.abs(doc.w * 96 / 25.4 - Math.round(doc.w * 96 / 25.4)) < 0.05 && Math.abs(doc.h * 96 / 25.4 - Math.round(doc.h * 96 / 25.4)) < 0.05 && doc.w > 150; if (dlState.docKey !== doc.w + 'x' + doc.h) { dlState.docKey = doc.w + 'x' + doc.h; dlState.scale = pxDoc ? 1 : 3.125; if (!fmt) dlState.userFmt = false; /* 다른 문서로 바뀌면 그 문서에 맞는 기본 형식부터 */ if (!dlState.userFmt) dlState.fmt = pxDoc ? 'png' : Number(doc.bleed) > 0 ? 'pdfprint' : 'pdfhq'; } /* SNS·화면용(px) 문서는 PNG, 인쇄물은 PDF */
@@ -3954,7 +3958,7 @@ function renderDownload() {
   ${S.fmt === 'png' ? `<label class="chk"><input type="checkbox" id="dlTransp" ${S.transp ? 'checked' : ''}> 투명 배경 (쪽 배경색을 빼고 저장 — 로고·스티커용)</label>` : ''}
   ${img && n > 1 ? `<label class="chk"><input type="checkbox" id="dlMerge" ${S.merge ? 'checked' : ''}> 한 장의 이미지로 합치기 (세로로 이어 붙임)</label>` : ''}
   ${img && Number(doc.bleed) > 0 ? `<label class="chk"><input type="checkbox" id="dlImgBleed" ${S.imgBleed ? 'checked' : ''}> 도련 ${doc.bleed}mm 포함 (명함·스티커를 인쇄소에 이미지로 보낼 때)</label>` : ''}
-  <div class="dlinfo"><b>다운로드 정보</b><ul><li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${docSizeLabel(' × ')}${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${(px(doc.h + 2 * bleed) * (img && S.merge && n > 1 ? n : 1)).toLocaleString()} px · ${Math.round(dpi)}dpi${(img ? Math.round(dpi) < Math.round(96 * S.scale) - 1 : DL_PDF[S.fmt] && Math.round(dpi) < DL_PDF[S.fmt].dpi - 1) ? ' <b>(크기가 커서 브라우저 한계에 맞춰 낮춤)</b>' : ''}</li>` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
+  <div class="dlinfo"><b>다운로드 정보</b><ul><li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${docSizeLabel(' × ')}${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${(px(doc.h + 2 * bleed) * (img && S.merge && n > 1 ? n : 1)).toLocaleString()} px · ${Math.round(dpi)}dpi${(img ? Math.round(dpi) < Math.round(96 * S.scale) - 1 : DL_PDF[S.fmt] && Math.round(dpi) < DL_PDF[S.fmt].dpi - 1) ? (Math.max(doc.w, doc.h) >= 1500 ? ' <small>(현수막처럼 큰 인쇄물은 멀리서 보므로 60~100dpi면 충분)</small>' : ' <b>(크기가 커서 브라우저 한계에 맞춰 낮춤)</b>') : ''}</li>${(() => { const pc = px(doc.w + 2 * bleed) * px(doc.h + 2 * bleed) * n, f = img ? S.fmt : 'jpg', q = img ? 0.92 : DL_PDF[S.fmt].q, mb = dlEstMB(pc, f, q); return `<li>파일 크기 최대 약 ${mb < 1 ? '1MB' : mb < 10 ? mb.toFixed(1) + 'MB' : Math.round(mb) + 'MB'} <small>(사진이 적은 디자인은 훨씬 작아짐)</small>${mb > 300 ? ' <b>— 아주 클 수 있으니 인쇄소 웹하드로 보내거나 쪽을 나눠 받으세요</b>' : ''}</li>`; })()}${!img && DL_PDF[S.fmt] && PDF_TENTH(doc.w + 2 * bleed, doc.h + 2 * bleed) ? '<li><b>5.08m가 넘어 PDF를 1/10 크기로 만듭니다</b> — 인쇄소에 "1000% 확대 출력" 요청 (화질은 그대로)</li>' : ''}` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
   ${S.fmt === 'pdfprint' ? `<p class="hint" style="margin:6px 0 0">${bleed ? `도련 ${bleed}mm 포함 작업 사이즈${doc.cropMarks ? ' + 재단선(도련 바깥)' : ''}.` : '<b>도련이 0mm입니다.</b> 프로젝트 탭에서 도련을 넣으세요 (보통 1.5~3mm).'} 대부분의 인쇄소는 재단선 없는 작업 사이즈 파일을 받습니다.<br>이 PDF는 sRGB 그림(300dpi)으로 된 파일입니다. 인쇄소에 "sRGB 기준 CMYK 변환"을 요청하고, 밝은 파랑·초록은 탁해질 수 있으니 시안(교정쇄)으로 확인하세요. 명함처럼 작은 검정 글자가 많으면 "PDF (벡터)"가 더 선명합니다(검정 단색 처리 가능).</p>` : ''}${S.fmt === 'pdfweb' ? '<p class="hint" style="margin:6px 0 0">확대하거나 인쇄하면 글자가 덜 선명할 수 있습니다. 인쇄·보관용은 "PDF (고화질)"을 쓰세요.</p>' : ''}</div>
   <div id="dlWarn"></div><div class="dlprog" id="dlProg"></div>
   <button class="btn primary full" id="dlGo"><svg class="ic"><use href="#i-upload"/></svg>${S.fmt === 'pdfvector' ? '인쇄 창 열기' : '고해상도 다운로드'}</button>`;
@@ -4119,7 +4123,9 @@ async function runDownload() {
       const cfg = DL_PDF[S.fmt], bleed = cfg.bleed ? (Number(doc.bleed) || 0) : 0;
       // 재단선을 켜면 도련 바깥에 5mm 여백(슬러그)을 더 두고 그곳에 가는 선으로 그림
       const slug = cfg.bleed && doc.cropMarks ? 5 : 0;
-      const W = doc.w + 2 * (bleed + slug), H = doc.h + 2 * (bleed + slug), dpi = dlDpi(cfg.dpi, bleed);
+      const W0 = doc.w + 2 * (bleed + slug), H0 = doc.h + 2 * (bleed + slug), dpi = dlDpi(cfg.dpi, bleed);
+      /* PDF 쪽 한 변 한계 5.08m(200인치, 아크로뱃·인쇄소 프로그램) — 넘으면 1/10 크기로(현수막 관례, 인쇄소에서 1000% 확대). 그림 화소 수는 그대로라 화질은 같음 */
+      const SC = PDF_TENTH(W0, H0) ? 10 : 1, W = W0 / SC, H = H0 / SC, u = v => v / SC;
       const pdf = new jspdf.jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
       pdf.setProperties({ title: doc.name || 'design', creator: '나라차 디자인 공방' });
       const pt = v => v / 25.4 * 72;
@@ -4127,17 +4133,18 @@ async function runDownload() {
         say(`${i + 1}/${pages.length} 페이지 그리는 중…`);
         const c = await renderPageCanvas(doc.pages[pages[i]], dpi, bleed ? 'print' : 'thumb', '#ffffff');
         if (i) pdf.addPage([W, H], W > H ? 'landscape' : 'portrait');
-        if (cfg.png) pdf.addImage(c, 'PNG', slug, slug, doc.w + 2 * bleed, doc.h + 2 * bleed, `p${i}`, 'FAST');
-        else pdf.addImage(c.toDataURL('image/jpeg', cfg.q), 'JPEG', slug, slug, doc.w + 2 * bleed, doc.h + 2 * bleed, `p${i}`, 'NONE');
+        if (cfg.png) pdf.addImage(c, 'PNG', u(slug), u(slug), u(doc.w + 2 * bleed), u(doc.h + 2 * bleed), `p${i}`, 'FAST');
+        else pdf.addImage(c.toDataURL('image/jpeg', cfg.q), 'JPEG', u(slug), u(slug), u(doc.w + 2 * bleed), u(doc.h + 2 * bleed), `p${i}`, 'NONE');
         free(c);
-        if (slug) { try { pdf.setDrawColor(1, 1, 1, 1); } catch (e) { pdf.setDrawColor(0); } pdf.setLineWidth(0.09); const x0 = slug + bleed, y0 = slug + bleed, x1 = x0 + doc.w, y1 = y0 + doc.h, L = slug - 1, gap = bleed + 1;
+        if (slug) { try { pdf.setDrawColor(1, 1, 1, 1); } catch (e) { pdf.setDrawColor(0); } pdf.setLineWidth(u(0.09)); const x0 = u(slug + bleed), y0 = u(slug + bleed), x1 = x0 + u(doc.w), y1 = y0 + u(doc.h), L = u(slug - 1), gap = u(bleed + 1);
           [[x0, y0, -1, -1], [x1, y0, 1, -1], [x0, y1, -1, 1], [x1, y1, 1, 1]].forEach(([x, y, sx, sy]) => { pdf.line(x + sx * gap, y, x + sx * (gap + L), y); pdf.line(x, y + sy * gap, x, y + sy * (gap + L)); }); }
         // 인쇄소 프로그램이 읽는 재단·도련 영역 (pt, 왼쪽 아래 기준)
-        try { const pc = pdf.internal.getCurrentPageInfo().pageContext; if (bleed || slug) { pc.trimBox = { bottomLeftX: pt(slug + bleed), bottomLeftY: pt(slug + bleed), topRightX: pt(slug + bleed + doc.w), topRightY: pt(slug + bleed + doc.h) }; pc.bleedBox = { bottomLeftX: pt(slug), bottomLeftY: pt(slug), topRightX: pt(slug + 2 * bleed + doc.w), topRightY: pt(slug + 2 * bleed + doc.h) }; } } catch (e) {}
+        try { const pc = pdf.internal.getCurrentPageInfo().pageContext; if (bleed || slug) { pc.trimBox = { bottomLeftX: pt(u(slug + bleed)), bottomLeftY: pt(u(slug + bleed)), topRightX: pt(u(slug + bleed + doc.w)), topRightY: pt(u(slug + bleed + doc.h)) }; pc.bleedBox = { bottomLeftX: pt(u(slug)), bottomLeftY: pt(u(slug)), topRightX: pt(u(slug + 2 * bleed + doc.w)), topRightY: pt(u(slug + 2 * bleed + doc.h)) }; } } catch (e) {}
       }
-      saveBlob(pdf.output('blob'), `${base}${S.fmt === 'pdfprint' ? `_인쇄용_${doc.w}x${doc.h}mm${bleed ? `_도련${bleed}mm` : ''}` : S.fmt === 'pdfweb' ? '_공유용' : ''}.pdf`);
+      saveBlob(pdf.output('blob'), `${base}${S.fmt === 'pdfprint' ? `_인쇄용_${doc.w}x${doc.h}mm${bleed ? `_도련${bleed}mm` : ''}` : S.fmt === 'pdfweb' ? '_공유용' : ''}${SC > 1 ? '_1-10축소(1000%확대출력)' : ''}.pdf`);
+      if (SC > 1) dlTenth = true;
     }
-    prog.textContent = '다운로드했습니다'; toast(dlFallback ? `다운로드했습니다. ${dlFallback}쪽은 대체 방식으로 그려 일부 효과가 화면과 다를 수 있습니다 (Chrome·Edge 최신 버전 권장)` : '다운로드했습니다', !!dlFallback);
+    prog.textContent = '다운로드했습니다'; if (dlTenth) { dlTenth = false; toast('5.08m가 넘어 PDF를 1/10 크기로 만들었습니다 — 인쇄소에 "1000% 확대 출력"이라고 꼭 알려 주세요'); } else toast(dlFallback ? `다운로드했습니다. ${dlFallback}쪽은 대체 방식으로 그려 일부 효과가 화면과 다를 수 있습니다 (Chrome·Edge 최신 버전 권장)` : '다운로드했습니다', !!dlFallback);
   } catch (e) { prog.textContent = ''; toast('다운로드 실패: ' + e.message, true); } finally { go.disabled = false; }
 }
 // 여러 쪽을 한 장으로 합칠 때 브라우저 한계(한 변 32,000px·1억 화소) 안의 해상도
