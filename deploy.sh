@@ -11,7 +11,7 @@ git add -A
 if ! git config user.email >/dev/null; then echo "배포 멈춤: 이 폴더에 커밋 메일 주소가 없습니다. 한 번만 실행하세요 → git config user.email \"메일 주소\""; git reset -q; exit 1; fi
 git -c user.name=narachadata commit -q -m "${1:-업데이트} ($VER)
 
-Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>" || true
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" || true
 git push -q origin main
 echo "pushed $VER"
 for i in $(seq 1 30); do if curl -s "https://narachadata.github.io/design/version.json?t=$i" | grep -q "$VER"; then echo "live after $((i*10))s"; exit 0; fi; sleep 10; done

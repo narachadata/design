@@ -59,7 +59,7 @@ function gcAssets() { const used = new Set(); const walk = v => { if (typeof v =
 const HIST_LIVE = ['assets', 'fonts', 'name', 'docId', 'updatedAt'];
 function snapshot() { const keep = {}; HIST_LIVE.forEach(k => { keep[k] = doc[k]; delete doc[k]; }); const s = JSON.stringify(doc); Object.assign(doc, keep); return s; }
 let histMeta = [];  // 기록마다 그때 보던 쪽·선택
-function commit() { const s_ = snapshot(); if (hist[hptr] === s_) return; hist = hist.slice(0, hptr + 1); histMeta = histMeta.slice(0, hptr + 1); hist.push(s_); histMeta.push({ cur, sel: sel.slice(), rn: NC.live.rn }); if (hist.length > 120) { hist.shift(); histMeta.shift(); } hptr = hist.length - 1; markDirty(); }
+function commit() { tlTimingSnap = null; const s_ = snapshot(); if (hist[hptr] === s_) return; hist = hist.slice(0, hptr + 1); histMeta = histMeta.slice(0, hptr + 1); hist.push(s_); histMeta.push({ cur, sel: sel.slice(), rn: NC.live.rn }); if (hist.length > 120) { hist.shift(); histMeta.shift(); } hptr = hist.length - 1; markDirty(); }
 // 바로 앞 기록을 고쳐 씀 (그림 비율 맞춤처럼 한 동작의 뒷처리)
 function amendCommit() { if (hptr < 0) return commit(); hist[hptr] = snapshot(); histMeta[hptr].rn = NC.live.rn; markDirty(); }
 let nudgeTimer = null; function commitSoon() { clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { nudgeTimer = null; commit(); }, 450); }
@@ -167,6 +167,7 @@ async function loadDoc(j, from, quiet) {
   await registerDocFonts(); ensureAllHolidays();
   $('#pname').value = doc.name || '';
   hist.push(snapshot()); histMeta = [{ cur: 0, sel: [] }]; hptr = 0;
+  try { fixLunarHolidays(); } catch (e) {}
   renderAll(); if (from) toast(from);
   checkMedia(!quiet);
 }
@@ -248,6 +249,12 @@ function recentFonts() { try { return JSON.parse(localStorage.getItem('naracal-r
 function noteFont(fam) { if (!fam) return; const r = recentFonts().filter(f => f !== fam); r.unshift(fam); try { localStorage.setItem('naracal-recent-fonts', JSON.stringify(r.slice(0, 3))); } catch (e) {} }
 
 /* ---------- 공휴일 자동 적용 ---------- */
+/* 2027·2028 설날이 하루 일렀던 것(옛 공휴일 표)을 이미 만든 문서에서도 바로잡음: 그 설날 묶음(설날·연휴·대체 휴일)만 새 표로 바꾸고 직접 넣은 날은 그대로 */
+const LUNAR_FIX = { 2027: { bad: '2027-02-05', from: '2027-02-01', to: '2027-02-12' }, 2028: { bad: '2028-01-25', from: '2028-01-22', to: '2028-02-02' } };
+function fixLunarHolidays() { let fixed = [];
+  Object.entries(LUNAR_FIX).forEach(([y, f]) => { const H = doc.holidays && doc.holidays[y]; if (!Array.isArray(H) || !H.some(h => h && h.date === f.bad && /설날/.test(h.name || ''))) return;
+    const inR = h => h && h.date >= f.from && h.date <= f.to && /설날|대체/.test(h.name || ''); doc.holidays[y] = H.filter(h => !inR(h)).concat(CAL.autoHolidays(Number(y)).filter(inR)).sort((a, b) => a.date < b.date ? -1 : 1); fixed.push(y); });
+  if (fixed.length) { markDirty(); setTimeout(() => toast(`${fixed.join('·')}년 설날 날짜를 바로잡았습니다 (한국 음력 기준 — 2027년은 2/6~2/8 + 대체 휴일 2/9)`), 600); } }
 function ensureHolidays(year, silent) { if (!year || doc.holidays[year] || !CAL.canAuto(year)) return false; doc.holidays[year] = CAL.autoHolidays(year); markDirty(); if (!silent) toast(`${year}년 공휴일 ${doc.holidays[year].length}개를 자동으로 넣었습니다 (대체공휴일 포함)`); return true; }
 function ensureAllHolidays() { let n = 0; const ys = new Set(); doc.pages.forEach(p => p.els.forEach(el => { if (el.type === 'cal' || el.type === 'mini') ys.add(el.year); })); if (doc.calendar.year) ys.add(doc.calendar.year); ys.forEach(y => { if (ensureHolidays(y, true)) n++; }); return n; }
 
@@ -398,7 +405,9 @@ function renderGhost(light) {
 }
 let ghostRaf = 0;
 function ghostSoon() { if (ghostRaf) return; ghostRaf = requestAnimationFrame(() => { ghostRaf = 0; renderGhost(true); }); }
+let tbObs = null; function watchToolbar() { const tb = $('#stage .toolbar'); if (!tb || tbObs || !window.ResizeObserver) return; let h0 = tb.offsetHeight, raf = 0; tbObs = new ResizeObserver(() => { const h = tb.offsetHeight; if (Math.abs(h - h0) < 4) return; h0 = h; cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { if (!zoom) fitCanvas(); }); }); tbObs.observe(tb); }
 function fitCanvas() {
+  watchToolbar();
   // 위에 떠 있는 도구 막대와 아래 쪽 이동 막대에 페이지가 가리지 않게 그 높이만큼 비워 두고 맞춤
   const st = $('#stage'); st.classList.toggle('compact', st.clientHeight < 470); /* 낮은 작업 화면(노트북 + 큰 타임라인): 도구 막대를 아이콘 한 줄로 */
   const tb = st.querySelector('.toolbar'), top = tb ? tb.offsetTop + tb.offsetHeight + (st.classList.contains('compact') ? 6 : 14) : 24, bot = st.classList.contains('tlon') && $('#vtl') && !document.body.classList.contains('tl-wide') ? $('#vtl').offsetHeight + 18 : 64;
@@ -668,8 +677,7 @@ function dragMove(e) {
 function dimText(w, h) { const px = doc.fmt === 'px' || (doc.w > 150 && Math.abs(doc.w * 96 / 25.4 - Math.round(doc.w * 96 / 25.4)) < 0.05); return px ? `${Math.round(w * 96 / 25.4)} × ${Math.round(h * 96 / 25.4)} px` : `${r1(w)} × ${r1(h)} mm`; }
 function dragTip(e, txt) { let t = $('#dragTip'); if (!t) { t = document.createElement('div'); t.id = 'dragTip'; document.body.appendChild(t); } t.textContent = txt; t.style.left = (e.clientX + 16) + 'px'; t.style.top = (e.clientY + 18) + 'px'; t.hidden = false; }
 document.addEventListener('pointerup', e => {
-  { const t = $('#dragTip'); if (t) t.hidden = true; }
-  flushMove();
+  flushMove(); { const t = $('#dragTip'); if (t) t.hidden = true; } /* flushMove가 마지막 움직임에서 말풍선을 다시 띄우므로 그 뒤에 숨김 */
   if (pen) { const pts = pen.pts; pen = null; const pv = $('#ovl .penprev'); if (pv) pv.remove(); if (pts.length < 3) return; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); const x0 = Math.min(...xs) - 1, y0 = Math.min(...ys) - 1, w = Math.max(2, Math.max(...xs) - x0 + 1), h = Math.max(2, Math.max(...ys) - y0 + 1); const el = { id: uid(), type: 'path', pts: pts.map(p => [r1(p[0] - x0), r1(p[1] - y0)]), x: r1(x0), y: r1(y0), w: r1(w), h: r1(h), rot: 0, stroke: penStyle.stroke, strokeW: penStyle.strokeW, fill: '', closed: false, smooth: true, opacity: 1, name: '펜 선' }; page().els.push(el); commit(); select([el.id]); rerender(); return; }
   if (!drag) return; const d = drag; drag = null;
   if (d.kind === 'cells') { renderInspector(); showCellBar(); return; }
@@ -772,7 +780,7 @@ function showTextBar() {
 }
 let savedRange = null; function saveSel() { const s = getSelection(); if (s.rangeCount) savedRange = s.getRangeAt(0).cloneRange(); } function restoreSel() { if (!savedRange) return; const s = getSelection(); s.removeAllRanges(); s.addRange(savedRange); }
 function hideTextBar() { const b = $('#textBar'); if (b) b.hidden = true; }
-function placeTextBar() { const b = $('#textBar'); if (!b || !editing) return; const r = editing.getBoundingClientRect(); b.style.left = Math.max(8, Math.min(r.left, innerWidth - b.offsetWidth - 8)) + 'px'; b.style.top = Math.max(60, r.top - b.offsetHeight - 10) + 'px'; }
+function placeTextBar() { const b = $('#textBar'); if (!b || !editing) return; const r = editing.getBoundingClientRect(); b.style.left = Math.max(8, Math.min(r.left, innerWidth - b.offsetWidth - 8)) + 'px'; const tb = $('#stage .toolbar'), minTop = tb ? tb.getBoundingClientRect().bottom + 6 : 60, want = r.top - b.offsetHeight - 10; b.style.top = (want >= minTop ? want : Math.min(innerHeight - b.offsetHeight - 8, r.bottom + 10)) + 'px'; } /* 위 도구 막대와 겹치면 글 상자 아래로 */
 function updTextBar() { const b = $('#textBar'); if (!b || !editing) return; Object.entries(FMT_CMD).forEach(([k, c]) => { const x = b.querySelector(`[data-tf="${k}"]`); try { x.classList.toggle('on', document.queryCommandState(c)); } catch (e) {} }); $$('#inspector [data-tfi]').forEach(x => { try { x.classList.toggle('on', document.queryCommandState(FMT_CMD[x.dataset.tfi])); } catch (e) {} }); }
 document.addEventListener('selectionchange', () => { if (editing) updTextBar(); });
 // 편집 중이 아닐 때 Ctrl+B·I·U는 고른 글 상자 전체에
@@ -911,6 +919,16 @@ function pickCellPhoto() {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
   inp.onchange = async () => { const f = inp.files && inp.files[0]; if (!f) return; const url = await shrinkDataURL(await fileToDataURL(f), 900); cellSet({ img: addAsset(url) }); toast('칸에 사진을 넣었습니다 — 날짜·일정 글은 그대로 위에 보입니다 (빼기: 칸 도구 막대의 "사진 빼기")'); };
   inp.click();
+}
+/* 올린 사진: 긴 변 4000px(현수막 아니면 넉넉)·JPEG 0.9로 줄여 문서가 수십 MB가 되지 않게. 투명한 PNG·SVG·GIF는 그대로, 아이폰 HEIC는 안내 */
+async function imageFileToURL(f) {
+  if (/heic|heif/i.test(f.type) || /\.(heic|heif)$/i.test(f.name || '')) { toast(`'${f.name}'은 아이폰 HEIC 사진이라 윈도우 크롬에서 보이지 않을 수 있습니다 — 아이폰 설정 → 카메라 → 포맷 → '높은 호환성'으로 찍거나 JPG로 바꿔 올려 주세요`, true); }
+  const raw = await fileToDataURL(f); if (!/^image\/(jpeg|png|webp)$/i.test(f.type) || f.size < 1.5 * 1048576) return raw;
+  try { const bm = await createImageBitmap(f), L = Math.max(bm.width, bm.height), MAXL = 4000; let alpha = false;
+    if (/png|webp/i.test(f.type)) { const c0 = document.createElement('canvas'), k0 = Math.min(1, 256 / L); c0.width = Math.max(1, Math.round(bm.width * k0)); c0.height = Math.max(1, Math.round(bm.height * k0)); const x0 = c0.getContext('2d'); x0.drawImage(bm, 0, 0, c0.width, c0.height); const d = x0.getImageData(0, 0, c0.width, c0.height).data; for (let i = 3; i < d.length; i += 4) if (d[i] < 250) { alpha = true; break; } }
+    if (L <= MAXL && (alpha || f.type === 'image/jpeg')) { bm.close && bm.close(); return raw; }
+    const k = Math.min(1, MAXL / L), c = document.createElement('canvas'); c.width = Math.round(bm.width * k); c.height = Math.round(bm.height * k); const x = c.getContext('2d'); if (!alpha) { x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); } x.drawImage(bm, 0, 0, c.width, c.height); bm.close && bm.close();
+    const out = c.toDataURL(alpha ? 'image/png' : 'image/jpeg', 0.9); return out.length < raw.length ? out : raw; } catch (e) { return raw; }
 }
 function fileToDataURL(f) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); }); }
 function recentElems() { try { return JSON.parse(localStorage.getItem('naracal-recent-elems') || '[]'); } catch (e) { return []; } }
@@ -1342,9 +1360,9 @@ async function videoVoices(ps, total) {
   const out = [], miss = [];
   const add = async (ref, o, label) => { try { out.push(Object.assign(await voiceSrc(ref), o)); } catch (e) { miss.push(label + (e.code === 'perm' ? ' (허락 필요)' : '')); } };
   const A = doc.audio; if (A && A.src && !A.mute) await add(A.src, { at: Number(A.start || 0), off: Number(A.from || 0), vol: A.vol == null ? 0.8 : A.vol, vk: A.vk, fin: Number(A.fin || 0), fout: A.fout != null ? Number(A.fout) : (A.fade === false ? 0 : 2.5), loop: true }, '배경 음악');
-  for (const t of tracks()) { if (t.type !== 'audio' || t.mute) continue; for (const it of t.items || []) if (!it.dis) await add(it.ref, { at: Number(it.at || 0), off: Number(it.off || 0), len: it.dur ? Number(it.dur) : null, vol: it.vol == null ? 1 : it.vol, vk: it.vk, fin: Number(it.fin || 0), fout: Number(it.fout || 0) }, it.name || '소리'); }
+  for (const t of tracks()) { if (t.type !== 'audio' || t.mute) continue; for (const it of t.items || []) if (!it.dis) await add(it.ref, { at: Number(it.at || 0), off: Number(it.off || 0), len: it.dur ? Number(it.dur) : null, vol: it.vol == null ? 1 : it.vol, vk: it.vk, fin: Math.max(0.01, Number(it.fin || 0)), fout: Math.max(0.01, Number(it.fout || 0)) }, it.name || '소리'); }
   const { list } = VIDEO.timing(doc, ps);
-  for (const x of list) for (const el of x.pg.els) { if (el.type !== 'video' || el.hidden || el.mute) continue; if (NC.media.isLocal(el.src) && mediaMissing.has(el.src.slice(2))) continue; const d0 = el.anim ? Number(el.anim.d || 0) : 0, tin = Number(el.tin || 0), tout = Number(el.tout || el.dur || 0); try { const v = await voiceSrc(el.src); const info = v.blob ? await NC.astream.probe(v.blob).catch(() => null) : null; if (info && info.noAudio) continue; out.push(Object.assign(v, { at: x.t0 + d0, off: tin, len: Math.max(0.05, Math.min(tout - tin, x.dur - d0)), vol: el.vol == null ? 1 : el.vol })); } catch (e) {} }
+  for (const x of list) for (const el of x.pg.els) { if (el.type !== 'video' || el.hidden || el.mute) continue; if (NC.media.isLocal(el.src) && mediaMissing.has(el.src.slice(2))) continue; const d0 = el.anim ? Number(el.anim.d || 0) : 0, tin = Number(el.tin || 0), tout = Number(el.tout || el.dur || 0); try { const v = await voiceSrc(el.src); const info = v.blob ? await NC.astream.probe(v.blob).catch(() => null) : null; if (info && info.noAudio) continue; out.push(Object.assign(v, { at: x.t0 + d0, off: tin, len: Math.max(0.05, Math.min(tout - tin, x.dur - d0)), vol: el.vol == null ? 1 : el.vol, fin: 0.01, fout: 0.01 })); } catch (e) {} }
   if (miss.length) toast(`소리를 읽지 못한 것: ${miss.join(', ')} — 원본이 이 PC에 있는지 확인하세요`, true);
   out.miss = miss;  // 영상 저장 결과 줄에도 남김(알림은 곧 덮이므로)
   return out;
@@ -1352,7 +1370,7 @@ async function videoVoices(ps, total) {
 // 동영상 원본을 열어 <video>로 (이 PC에 원본이 없으면 검은 화면 + 안내)
 const vEls = new Map();
 async function openVideoEl(el) {
-  try { const u = await NC.media.urlOf(el.src, true, r => src(r)), key = u + '#' + (el.id || ''); /* 조각마다 따로(같은 원본을 나눈 조각들이 한 화면·넘김에 함께 나와도 각자 시각) */ if (vEls.has(key)) return vEls.get(key);
+  try { const u = await NC.media.urlOf(el.src, true, r => src(r)), pi = doc.pages.findIndex(p => (p.els || []).some(e => e.id === el.id)), same = pi >= 0 ? doc.pages[pi].els.filter(e => e.type === 'video' && e.src === el.src).length : 1, key = u + '#' + (pi < 0 ? el.id : (pi % 2) + (same > 1 ? '#' + el.id : '')); /* 같은 원본은 장면 홀짝으로 두 개만(나눈 조각이 30개여도 디코더 2개, 붙은 두 장면은 다른 요소라 넘김도 각자 시각). 한 장면에 같은 원본이 둘이면 따로 */ if (vEls.has(key)) return vEls.get(key);
     const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = u; v.crossOrigin = 'anonymous';
     await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('동영상을 열 수 없습니다')); setTimeout(res, 8000); }); vEls.set(key, v); return v;
   } catch (e) { toast(`동영상 '${el.name || ''}': ${e.message}`, true); return null; }
@@ -1362,6 +1380,7 @@ async function videoOverlays(V) {
   V.captions = []; V.overlays = [];
   for (const t of tracks()) { if (t.mute) continue;
     if (t.type === 'caption') (t.items || []).forEach(c => { if (!c.dis) V.captions.push(Object.assign({}, c)); });
+    if (t.type === 'caption') { const fams = [...new Set((t.items || []).map(c => `${c.weight || 800} 40px "${c.font || 'Pretendard'}"`))]; try { await Promise.all(fams.map(f => document.fonts.load(f))); } catch (e) {} } /* 자막 글꼴을 미리 불러와 저장 첫 프레임부터 그 글꼴로 */
     if (t.type === 'overlay') for (const o of t.items || []) { if (o.dis) continue; const img = new Image(); img.src = src(o.src); try { await img.decode(); } catch (e) {} V.overlays.push(Object.assign({}, o, { img })); }
   }
 }
@@ -1434,7 +1453,7 @@ function renderVideoSide(body) {
   body.innerHTML = head + `<div class="vd-pane">${h}</div>`;
   if (vTab === 'audio') renderMediaLib();
   if (vTab === 'tpl') requestAnimationFrame(() => fitBoxes(body, '.vt-th', 150));
-  const setV = (k, v) => { doc.video = Object.assign(vset(), { [k]: v }); commit(); renderSide(); renderTimeline(); };
+  const setV = (k, v) => { const f = () => { doc.video = Object.assign(vset(), { [k]: v }); }; if (['dur', 'trans', 'turn'].includes(k)) tlTiming(f); else f(); commit(); renderSide(); renderTimeline(); };
   const applyTo = (els, k, v) => { const defs = { anim: { d: 0, s: 0.8 }, animOut: { s: 0.6, at: 0 }, animLoop: { T: 1.2, a: 1 } }; els.forEach(el => { el[k] = Object.assign({}, defs[k], el[k] || {}, { t: v }); if (k === 'anim' && VIDEO.TEXT_ANIMS.some(x => x[0] === v) && el.type === 'text' && (!el.anim.s || el.anim.s < 1.2)) el.anim.s = Math.max(1.2, Math.min(4, (el.text || '').length * 0.06)); }); commit(); renderAll(); };
   body.onclick = async e => {
     const t = e.target;
@@ -1450,7 +1469,7 @@ function renderVideoSide(body) {
     const tf = t.closest('[data-tfx]'); if (tf) { const v = tf.dataset.tfx; if (selT.length) { applyTo(selT, 'anim', v); toast('글자 효과를 넣었습니다'); } else { const el = addText('h', { text: '제목을 입력하세요', noEdit: true }); el.anim = { t: v, d: 0.2, s: 1.4 }; commit(); renderAll(); } return; }
     const tlp = t.closest('[data-tloop]'); if (tlp) { const els = selAny.length ? selAny : []; if (!els.length) { toast('먼저 요소를 고르세요', true); return; } applyTo(els, 'animLoop', tlp.dataset.tloop); return; }
     const mf = t.closest('[data-mfx]'); if (mf) { if (!selAny.length) { toast('먼저 요소를 고르세요 (또는 아래 «차례로 나타나기»)', true); return; } const [k, v] = mf.dataset.mfx.split(':'); applyTo(selAny, k, v); return; }
-    const tx = t.closest('[data-trx]'); if (tx) { page().vtrans = tx.dataset.trx; delete page().vsplit; commit(); renderSide(); renderTimeline(); const { list } = tlScenes(), x = list.find(q => q.i === cur); if (x && x.turn && tlOn()) { tl.T = x.t0 + Math.max(0, x.dur - 0.3); tlPlay(); setTimeout(() => { if (tl.playing) tlPause(); }, (x.turn + 1.0) * 1000); } return; }
+    const tx = t.closest('[data-trx]'); if (tx) { tlTiming(() => { page().vtrans = tx.dataset.trx; }); delete page().vsplit; commit(); renderSide(); renderTimeline(); const { list } = tlScenes(), x = list.find(q => q.i === cur); if (x && x.turn && tlOn()) { tl.T = x.t0 + Math.max(0, x.dur - 0.3); tlPlay(); setTimeout(() => { if (tl.playing) tlPause(); }, (x.turn + 1.0) * 1000); } return; }
     const vtp = t.closest('[data-vtpl]'); if (vtp) { applyVideoTpl(vtp.dataset.vtpl); return; }
     const vts = t.closest('[data-vts]'); if (vts) { vtSize = vts.dataset.vts; renderSide(); return; }
     const vrs = t.closest('[data-vresp]'); if (vrs) { applyRespToVideo(vrs.dataset.vresp); return; }
@@ -1459,8 +1478,8 @@ function renderVideoSide(body) {
     else if (id === 'vdAutoAnim') { let n = 0; doc.pages.forEach(pg => { pg.els.forEach(el => { delete el.anim; }); n += VIDEO.autoAnimate(pg, doc.w, doc.h); }); commit(); renderAll(); toastUndo(`글자·사진·묶음 ${n}개에 '차례로 나타나기'를 넣었습니다`); }
     else if (id === 'vdCamAll') { doc.pages.forEach(pg => { if (!pg.vcam) pg.vcam = 'in'; }); commit(); renderAll(); toastUndo('모든 장면에 천천히 다가가는 카메라를 넣었습니다'); }
     else if (id === 'vdClrAnim') { doc.pages.forEach(pg => { delete pg.vcam; pg.els.forEach(el => { delete el.anim; delete el.animOut; delete el.animLoop; delete el.kb; }); }); commit(); renderAll(); toastUndo('모든 움직임을 뺐습니다'); }
-    else if (id === 'vdTrAll') { const pg = page(); let skip = 0; doc.pages.forEach(p2 => { if (p2.vsplit) { skip++; return; } p2.vtrans = pg.vtrans || V.trans; p2.vturn = pg.vturn; }); commit(); renderTimeline(); toastUndo(`모든 장면에 같은 넘김 효과를 넣었습니다${skip ? ` (장면을 나눈 자리 ${skip}곳은 그대로 이어짐)` : ''}`); }
-    else if (id === 'vdDurAll') { doc.pages.forEach(pg => { delete pg.vdur; delete pg.vtrans; delete pg.vturn; }); commit(); renderSide(); renderTimeline(); }
+    else if (id === 'vdTrAll') { const pg = page(); let skip = 0; tlTiming(() => doc.pages.forEach(p2 => { if (p2.vsplit) { skip++; return; } p2.vtrans = pg.vtrans || V.trans; p2.vturn = pg.vturn; })); commit(); renderTimeline(); toastUndo(`모든 장면에 같은 넘김 효과를 넣었습니다${skip ? ` (장면을 나눈 자리 ${skip}곳은 그대로 이어짐)` : ''}`); }
+    else if (id === 'vdDurAll') { tlTiming(() => doc.pages.forEach(pg => { delete pg.vdur; delete pg.vtrans; delete pg.vturn; })); commit(); renderSide(); renderTimeline(); }
     else if (id === 'vdMusicDel') { delete doc.audio; commit(); renderSide(); renderTimeline(); }
     else if (id === 'vdMusicLocal') pickMusicLocal();
     else if (id === 'vdSfxLocal') { try { const list = await NC.media.pick('audio'); list.forEach(m => { doc.media = Object.assign(doc.media || {}, { [m.id]: m }); addSfx('m:' + m.id, m.name.replace(/\.[^.]+$/, ''), true); }); commit(); renderTimeline(); } catch (err) { if (err.name !== 'AbortError') toast(err.message, true); } }
@@ -1475,7 +1494,7 @@ function renderVideoSide(body) {
     else if (['vdFrom', 'vdFin', 'vdFout'].includes(t.id)) { doc.audio[{ vdFrom: 'from', vdFin: 'fin', vdFout: 'fout' }[t.id]] = Math.max(0, Number(t.value) || 0); delete doc.audio.fade; commit(); renderTimeline(); }
     else if (t.id === 'vdVol' || t.id === 'vdPgTurn') { commit(); renderTimeline(); }
   };
-  body.oninput = e => { if (e.target.id === 'vdVol') { const A = doc.audio, nv = Number(e.target.value), ov = A.vol == null ? 0.8 : Number(A.vol); if (A.vk && A.vk.length && ov > 0) A.vk = A.vk.map(k => [k[0], Math.round(k[1] * nv / ov * 1000) / 1000]); A.vol = nv; $('#vdVolV').textContent = Math.round(nv * 100) + '%'; }  /* 음량 점이 있으면 점 전체를 같은 비율로 */ if (e.target.id === 'vdPgTurn') { page().vturn = Number(e.target.value); $('#vdTurnV').textContent = page().vturn + '초'; } };
+  body.oninput = e => { if (e.target.id === 'vdVol') { const A = doc.audio, nv = Number(e.target.value), ov = A.vol == null ? 0.8 : Number(A.vol); if (A.vk && A.vk.length && ov > 0) A.vk = A.vk.map(k => [k[0], Math.round(k[1] * nv / ov * 1000) / 1000]); A.vol = nv; $('#vdVolV').textContent = Math.round(nv * 100) + '%'; }  /* 음량 점이 있으면 점 전체를 같은 비율로 */ if (e.target.id === 'vdPgTurn') { tlTiming(() => { page().vturn = Number(e.target.value); }); $('#vdTurnV').textContent = page().vturn + '초'; } };
 }
 async function addVideoRef(ref, name) {
   try { const u = await NC.media.urlOf(ref, true), info = await videoInfo(u); const k = Math.min(doc.w * 0.8 / info.w, doc.h * 0.8 / info.h); addEl({ type: 'video', src: ref, poster: info.poster ? addAsset(info.poster) : '', name, w: Math.round(info.w * k * 10) / 10, h: Math.round(info.h * k * 10) / 10, x: 0, y: 0, rot: 0, opacity: 1, fit: 'cover', radius: 0, tin: 0, tout: Math.round(info.dur * 10) / 10, dur: info.dur, vol: 1, mute: false }); renderAll(); }
@@ -1502,7 +1521,7 @@ async function placeAudio(m) {
   doc.media = Object.assign(doc.media || {}, { [m.id]: m }); mediaMissing.delete(m.id);
   const TR = tracks(); let t = TR.find(x => x.id === tl.selTr && x.type === 'audio') || TR.find(x => x.type === 'audio'); if (!t) { t = { id: uid(), type: 'audio', name: '오디오 2', items: [] }; TR.push(t); }
   let dur = 0; try { const f = await NC.media.blobOf('m:' + m.id, true); dur = (await NC.astream.probe(f)).dur || 0; if (!dur) { const el = new Audio(); el.src = (await NC.media.file(m.id, true)).url; dur = await new Promise(r => { el.onloadedmetadata = () => r(el.duration || 0); el.onerror = () => r(0); }); } } catch (e) {}
-  t.items.push({ id: uid(), ref: 'm:' + m.id, name: m.name.replace(/\.[^.]+$/, ''), at: Math.round((tl.T || 0) * 10) / 10, vol: 1, dur: dur ? Math.round(dur * 100) / 100 : undefined, full: dur || undefined }); commit(); if (tlOn()) { tl.fit = true; renderTimeline(); } else { sideTab = 'video'; renderRail(); renderSide(); tlShow(true); }
+  t.items.push({ id: uid(), ref: 'm:' + m.id, name: m.name.replace(/\.[^.]+$/, ''), at: tlFrame(tl.T || 0), vol: 1, dur: dur ? Math.round(dur * 100) / 100 : undefined, full: dur || undefined }); commit(); if (tlOn()) { tl.fit = true; renderTimeline(); } else { sideTab = 'video'; renderRail(); renderSide(); tlShow(true); }
   toast(`'${m.name}' (${fmtTC(dur || 0).slice(0, 8)})을 ${t.name} 트랙에 넣었습니다 — 원본은 이 PC에만 있고, 필요한 부분만 읽습니다. ✂(Ctrl+B)로 자르세요.`);
 }
 // 동영상 크기·길이·첫 장면(편집 화면·썸네일용 작은 그림)
@@ -1589,7 +1608,7 @@ async function applyRespToVideo(id) {
 }
 function addSfx(ref, name, quiet) {
   const TR = tracks(); let t = TR.find(x => x.id === tl.selTr && x.type === 'audio') || TR.find(x => x.type === 'audio'); if (!t) { t = { id: uid(), type: 'audio', name: '효과음', items: [] }; TR.push(t); }
-  const at = Math.max(0, Math.round((tl.T || 0) * 10) / 10);
+  const at = Math.max(0, tlFrame(tl.T || 0));
   t.items.push({ id: uid(), ref, name, at, vol: 1 }); if (!quiet) { commit(); renderTimeline(); toast(`'${name}'을(를) ${t.name} 트랙 ${fmtT(at)}에 넣었습니다 — 타임라인에서 끌어 옮기세요`); }
 }
 
@@ -1669,6 +1688,9 @@ function tlMarkerEdit(m) { const v = window.prompt('마커 이름 (비우고 확
 function tlToggleClip() { for (const t of tracks()) { const it = (t.items || []).find(q => q.id === tl.selIt); if (it) { it.dis = !it.dis || undefined; commit(); renderTimeline(); toast(it.dis ? `'${it.name || it.text || '클립'}'을 껐습니다 — 미리보기·저장에서 빠짐 (V로 다시 켜기)` : '클립을 다시 켰습니다'); return; } } toast('켜고 끌 클립(자막·소리·오버레이)을 먼저 고르세요', true); }
 function tlRipple(cut, d) { if (d) tlRippleSnap(cut)(d); }
 // 연결된 클립(파이널컷 방식): 자막·소리·오버레이는 놓인 장면(주 줄거리 클립)에 붙어 있음 → 장면을 옮기거나 지우면 함께 따라감(지운 장면에 붙은 클립은 함께 지움)
+/* 장면 길이·넘김을 바꾸는 곳(속성·넘김 창·영상 설정)에서도 붙은 클립이 장면을 따라가게: 처음 바꿀 때 위치를 기억, commit 때 잊음 */
+let tlTimingSnap = null;
+function tlTiming(fn) { if (!tlTimingSnap) tlTimingSnap = tlConnSnap(); const r = fn(); tlTimingSnap(); return r; }
 function tlConnSnap() {
   const { list } = tlScenes(), recs = []; if (!list.length) return () => 0;
   const sceneAt = t => list.find(q => t >= q.t0 - 1e-6 && t < q.t0 + q.dur + q.turn - 1e-6) || list[list.length - 1];
@@ -1704,16 +1726,16 @@ function tlBladeAll() {
 function tlTrim(which) {
   if (videoNeedsGate()) { openVideoGate(); return; }
   const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { toast('장면 안에 재생 헤드를 두세요', true); return; }
-  const q = Math.round((tl.T - x.t0) * 10) / 10, pg = x.pg;
+  const q = tlFrame(tl.T - x.t0), pg = x.pg;
   if (which === 'tail' ? q < 0.3 : x.dur - q < 0.3) { toast('남는 길이가 너무 짧습니다', true); return; }  // 검사를 먼저: 실패하면 동영상 구간도 그대로
   pg.els.forEach(e => { if (e.type !== 'video') return; const d0 = e.anim ? Number(e.anim.d || 0) : 0, used = Math.max(0, q - d0), tin = Number(e.tin || 0), tout = Number(e.tout || e.dur || 0); if (which === 'tail') e.tout = Math.round(Math.min(tout, tin + used) * 100) / 100; else if (used) e.tin = Math.round(Math.min(tout - 0.1, tin + used) * 100) / 100; });
   if (which === 'tail') { tlRipple(x.t0 + x.dur, q - x.dur); pg.vdur = q; }
-  else { const rest = Math.round((x.dur - q) * 10) / 10; tlRipple(x.t0 + q, -q); pg.vdur = rest; pg.els.forEach(el => { if (el.anim) { const d = Number(el.anim.d || 0) - q; if (d + Number(el.anim.s || 0.8) <= 0) delete el.anim; else el.anim.d = Math.max(0, Math.round(d * 10) / 10); } }); tl.T = x.t0; }
+  else { const rest = tlFrame(x.dur - q); tlRipple(x.t0 + q, -q); pg.vdur = rest; pg.els.forEach(el => { if (el.anim) { const d = Number(el.anim.d || 0) - q; if (d + Number(el.anim.s || 0.8) <= 0) delete el.anim; else el.anim.d = Math.max(0, Math.round(d * 10) / 10); } }); tl.T = x.t0; }
   commit(); renderTimeline(); tlTimeLabel(); toastUndo(which === 'tail' ? `${x.i + 1}쪽 뒷부분을 잘라냈습니다 (${q}초 남음)` : `${x.i + 1}쪽 앞부분 ${q}초를 잘라냈습니다`);
 }
 function tlAddCaption() {
   const TR = tracks(); let t = TR.find(x => x.id === tl.selTr && x.type === 'caption') || TR.find(x => x.type === 'caption'); if (!t) { t = { id: uid(), type: 'caption', name: '자막 1', items: [] }; TR.push(t); }
-  const it = { id: uid(), text: '자막을 입력하세요', at: Math.round(tl.T * 10) / 10, dur: 2.5, style: 'outline', pos: 'bottom', size: 0.065 }; t.items.push(it); commit(); renderTimeline(); openItemPop(t, it);
+  const it = { id: uid(), text: '자막을 입력하세요', at: tlFrame(tl.T), dur: 2.5, style: 'outline', pos: 'bottom', size: 0.065 }; t.items.push(it); commit(); renderTimeline(); openItemPop(t, it);
 }
 // 단축키 목록 (? 키 또는 ⌨ 단추)
 function tlKeysHelp() {
@@ -1939,7 +1961,7 @@ function tlSplit() {
 function tlSplitScene(quiet) {
   if (videoNeedsGate()) { openVideoGate(); return; }
   const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { if (!quiet) toast('장면 안에 재생 위치를 두고 나누세요', true); return; }
-  const q = Math.round((tl.T - x.t0) * 10) / 10; if (q < 0.3 || x.dur - q < 0.3) { if (!quiet) toast('장면 끝에 너무 가깝습니다', true); return; }
+  const q = tlFrame(tl.T - x.t0); if (q < 0.3 || x.dur - q < 0.3) { if (!quiet) toast('장면 끝에 너무 가깝습니다', true); return; }
   const a = x.pg, b = clone(a); b.id = uid(); const gm = {}; b.els.forEach(e => { e.id = uid(); if (e.group) { gm[e.group] = gm[e.group] || uid(); e.group = gm[e.group]; } if (e.anim) { const d = Number(e.anim.d || 0) - q; if (d < 0) delete e.anim; else e.anim.d = d; } });  /* 이미 시작한 움직임은 끝난 모습으로 이어짐(뒤 조각에서 처음부터 다시 튀지 않게) */
   // 동영상: 앞 조각은 자른 지점에서 끝나고, 뒤 조각은 자른 지점부터 이어서 재생
   a.els.forEach((e, k) => { if (e.type !== 'video') return; const e2 = b.els[k], d0 = e.anim ? Number(e.anim.d || 0) : 0, used = Math.max(0, q - d0), tin = Number(e.tin || 0), tout = Number(e.tout || e.dur || 0); if (!used) return; const cut = Math.min(tout, tin + used); e.tout = Math.round(cut * 100) / 100; e2.tin = Math.round(cut * 100) / 100; e2.tout = tout; if (e2.anim) e2.anim.d = 0; });
@@ -1947,7 +1969,7 @@ function tlSplitScene(quiet) {
   const f = q / Math.max(0.1, x.dur), mid = (P0, P1) => Math.round((P0 + (P1 - P0) * f) * 1000) / 1000;
   a.els.forEach((e, k) => { if (!e.kb || !b.els[k] || !b.els[k].kb) return; const P0 = e.kb.p0 != null ? Number(e.kb.p0) : 0, P1 = e.kb.p1 != null ? Number(e.kb.p1) : 1, m = mid(P0, P1); e.kb.p0 = P0; e.kb.p1 = m; b.els[k].kb.p0 = m; b.els[k].kb.p1 = P1; });
   if (a.vcam && a.vcam !== 'none') { const CP = Array.isArray(a.vcamP) ? a.vcamP : [0, 1], m = mid(CP[0], CP[1]); a.vcamP = [CP[0], m]; b.vcamP = [m, CP[1]]; }
-  b.vdur = Math.round((x.dur - q) * 10) / 10; a.vdur = q; b.vtrans = a.vtrans; b.vturn = a.vturn; b.vsplit = a.vsplit; a.vtrans = 'none'; a.vsplit = true; /* 나눈 자리: '모든 장면에 같은 넘김'이 건드리지 않음 */ a.els.forEach(e => { delete e.animOut; });
+  b.vdur = tlFrame(x.dur - q); a.vdur = q; b.vtrans = a.vtrans; b.vturn = a.vturn; b.vsplit = a.vsplit; a.vtrans = 'none'; a.vsplit = true; /* 나눈 자리: '모든 장면에 같은 넘김'이 건드리지 않음 */ a.els.forEach(e => { delete e.animOut; });
   doc.pages.splice(x.i + 1, 0, b); commit(); goto(x.i + 1); renderTimeline(); if (!quiet) toastUndo(`${x.i + 1}쪽을 ${q}초에서 나눴습니다`);
 }
 function tlWire() {
@@ -1969,7 +1991,7 @@ function tlWire() {
     const m = t.closest('[data-mute]'); if (m) { if (!doc.audio) return; doc.audio.mute = !doc.audio.mute || undefined; commit(); renderTimeline(); if (tl.playing) { tlPause(); tlPlay(); } return; }
     const tm = t.closest('[data-tmute]'); if (tm) { const x = trk(tm.dataset.tmute); x.mute = !x.mute || undefined; commit(); renderTimeline(); if (tl.playing) { tlPause(); tlPlay(); } return; }
     const td = t.closest('[data-tdel]'); if (td) { const x = trk(td.dataset.tdel); if ((x.items || []).length && !window.confirm(`'${x.name}' 트랙과 안의 클립 ${x.items.length}개를 지울까요?`)) return; doc.tracks = tracks().filter(q => q !== x); commit(); renderTimeline(); toastUndo('트랙을 지웠습니다'); return; }
-    const tp = t.closest('[data-tplus]'); if (tp) { const x = trk(tp.dataset.tplus); if (x.type === 'caption') { const it = { id: uid(), text: '자막을 입력하세요', at: Math.round(tl.T * 10) / 10, dur: 2.5, style: 'outline', pos: 'bottom', size: 0.065 }; x.items.push(it); commit(); renderTimeline(); openItemPop(x, it); } else overlayMenu(x, tp); return; }
+    const tp = t.closest('[data-tplus]'); if (tp) { const x = trk(tp.dataset.tplus); if (x.type === 'caption') { const it = { id: uid(), text: '자막을 입력하세요', at: tlFrame(tl.T), dur: 2.5, style: 'outline', pos: 'bottom', size: 0.065 }; x.items.push(it); commit(); renderTimeline(); openItemPop(x, it); } else overlayMenu(x, tp); return; }
     if (t.closest('#tlAddTrack')) { trackMenu(t.closest('#tlAddTrack')); return; }
   });
   root.addEventListener('dblclick', e => { const vp = e.target.closest('[data-vkp]'); if (vp || e.target.closest('[data-vline]')) { if (vp) { const host = vp.closest('[data-it],#tlAu'), o = host.id === 'tlAu' ? doc.audio : (tracks().find(q => q.id === host.dataset.tid) || { items: [] }).items.find(q => q.id === host.dataset.it); if (o && o.vk) { o.vk.splice(Number(vp.dataset.vkp), 1); if (!o.vk.length) delete o.vk; commit(); renderTimeline(); toast('음량 점을 지웠습니다'); } } return; } const nm = e.target.closest('[data-tname]'); if (nm) { const x = tracks().find(q => q.id === nm.dataset.tname), v = window.prompt('트랙 이름', x.name); if (v && v.trim()) { x.name = v.trim(); commit(); renderTimeline(); } return; } const it = e.target.closest('[data-it]'); if (!it) return; const x = tracks().find(q => q.id === it.dataset.tid), item = x && x.items.find(q => q.id === it.dataset.it); if (!item) return; if (x.type === 'audio') toast('소리 조각은 한 번 누르면 앞부분을 들어 보고, 지우려면 Delete 키나 🗑 단추를 씁니다 · 흰 선을 위아래로 끌면 음량'); else openItemPop(x, item);  /* 두 번 눌러 바로 지우던 것(실수로 잃기 쉬움) */ });
@@ -1991,9 +2013,9 @@ function tlWire() {
     tl.selIt = null; tl.selAu = false; tl.selScene = false;
     if (tr) { up = () => openTransPop(Number(tr.dataset.tr), tr); }
     else if (lh) { /* 왼쪽 손잡이 = 앞부분 자르기·늘리기 (Q와 같게): 끈 만큼 동영상 시작(tin)과 글자·요소 등장 시각을 함께 당기고 장면 길이를 줄임. 왼쪽으로 끌면 앞을 늘림(동영상은 원본 앞쪽이 남은 만큼만) */
-      const pg = doc.pages[Number(lh.dataset.lh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(lh.dataset.lh)), rip = s0 ? tlRippleSnap(s0.t0 + s0.dur) : () => {};
+      const pg = doc.pages[Number(lh.dataset.lh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(lh.dataset.lh)), its0 = s0 ? tlRippleSnap(s0.t0) : null, rip = d => { if (!its0) return; its0(-dq); if (s0) tracks().forEach(tr => (tr.items || []).forEach(it => { if (Number(it.at) < s0.t0) it.at = s0.t0; })); }; /* 장면 안 클립(자막 등)도 잘라낸 만큼 당김 — 잘린 구간에 있던 것은 장면 시작에 붙임 */
       const base = pg.els.map(e => ({ e, tin: Number(e.tin || 0), tout: Number(e.tout || e.dur || 0), d: e.anim ? Number(e.anim.d || 0) : null })), vids = base.filter(b => b.e.type === 'video'), ext = vids.length ? Math.min(...vids.map(b => b.tin)) : 30;
-      let dq = 0; move = ev => { dq = Math.round(Math.max(-ext, Math.min(d0 - 0.5, (ev.clientX - sx) / tl.pxs)) * 10) / 10; pg.vdur = Math.round((d0 - dq) * 10) / 10;
+      let dq = 0; move = ev => { dq = tlFrame(Math.max(-ext, Math.min(d0 - 0.5, (ev.clientX - sx) / tl.pxs))); pg.vdur = tlFrame(d0 - dq);
         base.forEach(b => { if (b.e.type === 'video') b.e.tin = Math.round(Math.max(0, Math.min(b.tout - 0.1, b.tin + dq)) * 100) / 100; if (b.d != null && b.e.anim) b.e.anim.d = Math.max(0, Math.round((b.d - dq) * 10) / 10); });
         rip(pg.vdur - d0); renderTimeline(); };
       up = () => { if (!moved) return; base.forEach(b => { if (b.d != null && b.e.anim && b.d - dq + Number(b.e.anim.s || 0.8) <= 0) delete b.e.anim; }); commit(); if (dq) toastUndo(dq > 0 ? `${Number(lh.dataset.lh) + 1}쪽 앞부분 ${dq}초를 잘라냈습니다` : `${Number(lh.dataset.lh) + 1}쪽 앞부분을 ${-dq}초 늘렸습니다`); }; }
@@ -2036,7 +2058,7 @@ function overlayMenu(t, anchor) {
     let ref = k, name = (k.match(/brand-(\w+)/) || [0, '로고'])[1];
     if (k === 'upload') { const f = await new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.onchange = () => res(i.files[0]); i.click(); }); if (!f) return; ref = addAsset(await fileToDataURL(f)); name = f.name.replace(/\.[^.]+$/, ''); }
     else name = { 'brand-horizontal-white': '로고 (흰색)', 'brand-horizontal': '로고', 'brand-korean': '한글 로고', 'brand-hex': '심볼' }[k.slice(6)] || '로고';
-    const { total } = tlScenes(), at = Math.round(tl.T * 10) / 10, it = { id: uid(), src: ref, name, at, dur: Math.max(1, Math.round((total - at) * 10) / 10), pos: 'tr', scale: k.includes('hex') ? 0.08 : 0.16, opacity: 0.9 };
+    const { total } = tlScenes(), at = tlFrame(tl.T), it = { id: uid(), src: ref, name, at, dur: Math.max(1, Math.round((total - at) * 10) / 10), pos: 'tr', scale: k.includes('hex') ? 0.08 : 0.16, opacity: 0.9 };
     t.items.push(it); commit(); renderTimeline(); openItemPop(t, it);
   });
 }
@@ -2066,13 +2088,16 @@ async function tlRecord() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     const mime = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm'].find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
-    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined), chunks = [], at = Math.round(tl.T * 10) / 10, t0 = Date.now();
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined), chunks = [], ac = VIDEO.ctx(); let at = tlFrame(tl.T), off = 0, t0 = Date.now();
     rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
     rec.onstop = async () => { stream.getTracks().forEach(t => t.stop()); clearInterval(recState.iv); recState = null; b.classList.remove('rec'); $('#tlMsg').textContent = '';
-      const blob = new Blob(chunks, { type: (mime || 'audio/webm').split(';')[0] }), nm = `녹음 ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`, f = new File([blob], nm + (mime.includes('mp4') ? '.m4a' : '.webm'), { type: blob.type });
-      const m = await NC.media.addFile(f); doc.media = Object.assign(doc.media || {}, { [m.id]: m }); const TR = tracks(); let rt = TR.find(x => x.type === 'audio' && /녹음|음성/.test(x.name)); if (!rt) { rt = { id: uid(), type: 'audio', name: '음성 녹음', items: [] }; TR.push(rt); } rt.items.push({ id: uid(), ref: 'm:' + m.id, name: nm, at, vol: 1, dur: (Date.now() - t0) / 1000 }); commit(); renderTimeline(); toast('녹음을 넣었습니다 (원본은 이 PC에만)'); };
-    rec.start(); b.classList.add('rec'); recState = { rec, iv: setInterval(() => { $('#tlMsg').textContent = `● 녹음 중 ${((Date.now() - t0) / 1000).toFixed(0)}초 — 다시 누르면 멈춤`; }, 300) };
-    if (!tl.playing) tlPlay();
+      const blob = new Blob(chunks, { type: (mime || 'audio/webm').split(';')[0] }), nm = `녹음 ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`, f = new File([blob], nm + (mime.includes('mp4') ? '.m4a' : '.webm'), { type: blob.type });
+      const m = await NC.media.addFile(f); doc.media = Object.assign(doc.media || {}, { [m.id]: m }); const TR = tracks(); let rt = TR.find(x => x.type === 'audio' && /녹음|음성/.test(x.name)); if (!rt) { rt = { id: uid(), type: 'audio', name: '음성 녹음', items: [] }; TR.push(rt); } const full = (Date.now() - t0) / 1000; rt.items.push({ id: uid(), ref: 'm:' + m.id, name: nm, at, off: Math.round(off * 1000) / 1000, vol: 1, dur: Math.max(0.1, Math.round((full - off) * 100) / 100), full }); commit(); renderTimeline(); toast('녹음을 넣었습니다 (원본은 이 PC에만)'); };
+    /* 재생(미리보기 준비 포함)을 먼저 시작하고, 녹음이 시작된 순간의 타임라인 시각에 놓음 — 예전엔 준비 시간(1초 넘게)만큼 늦게 놓였음 */
+    if (!tl.playing) { await tlPlay(); } const T0 = tl.T;
+    rec.start(); t0 = Date.now(); const recAt = ac.currentTime - (tl.t0 || 0); /* 녹음 시작 순간의 타임라인 시각 */
+    if (tl.playing && isFinite(recAt)) { if (recAt < T0) { at = tlFrame(T0); off = T0 - recAt; } else at = tlFrame(recAt); } else at = tlFrame(T0);
+    b.classList.add('rec'); recState = { rec, iv: setInterval(() => { $('#tlMsg').textContent = `● 녹음 중 ${((Date.now() - t0) / 1000).toFixed(0)}초 — 다시 누르면 멈춤`; }, 300) };
   } catch (e) { toast('마이크를 쓸 수 없습니다: ' + e.message, true); }
 }
 // 넘김 효과 고르기 (◆ 누르면)
@@ -2083,8 +2108,8 @@ function openTransPop(i, anchor) {
   document.body.appendChild(m); m.style.left = Math.max(8, Math.min(innerWidth - 330, r.left - 150)) + 'px'; m.style.top = Math.max(8, r.top - m.offsetHeight - 8) + 'px';
   const close = () => { m.remove(); document.removeEventListener('pointerdown', out, true); }, out = e => { if (!m.contains(e.target)) close(); };
   setTimeout(() => document.addEventListener('pointerdown', out, true));
-  m.onclick = e => { const b = e.target.closest('[data-tv]'); if (b) { pg.vtrans = b.dataset.tv; delete pg.vsplit; commit(); renderTimeline(); m.querySelectorAll('[data-tv]').forEach(x => x.classList.toggle('on', x === b)); const { list } = tlScenes(), x = list.find(s2 => s2.i === i); if (x) { tl.T = x.t0 + Math.max(0, x.dur - 0.3); tlPlay(); setTimeout(() => { if (tl.playing && tl.T > x.t0 + x.dur + x.turn + 0.3) tlPause(); }, (x.turn + 0.9) * 1000); } return; } if (e.target.id === 'trAll') { doc.pages.forEach(p2 => { p2.vtrans = pg.vtrans || V.trans; p2.vturn = pg.vturn; }); commit(); renderTimeline(); toastUndo('모든 장면에 같은 넘김 효과를 넣었습니다'); close(); } if (e.target.id === 'trClose') close(); };
-  m.querySelector('#trTurn').oninput = e => { pg.vturn = Number(e.target.value); $('#trTv').textContent = pg.vturn + '초'; renderTimeline(); }; m.querySelector('#trTurn').onchange = () => commit();
+  m.onclick = e => { const b = e.target.closest('[data-tv]'); if (b) { tlTiming(() => { pg.vtrans = b.dataset.tv; }); delete pg.vsplit; commit(); renderTimeline(); m.querySelectorAll('[data-tv]').forEach(x => x.classList.toggle('on', x === b)); const { list } = tlScenes(), x = list.find(s2 => s2.i === i); if (x) { tl.T = x.t0 + Math.max(0, x.dur - 0.3); tlPlay(); setTimeout(() => { if (tl.playing && tl.T > x.t0 + x.dur + x.turn + 0.3) tlPause(); }, (x.turn + 0.9) * 1000); } return; } if (e.target.id === 'trAll') { let skip = 0; tlTiming(() => doc.pages.forEach(p2 => { if (p2.vsplit) { skip++; return; } p2.vtrans = pg.vtrans || V.trans; p2.vturn = pg.vturn; })); commit(); renderTimeline(); toastUndo(`모든 장면에 같은 넘김 효과를 넣었습니다${skip ? ` (장면을 나눈 자리 ${skip}곳은 그대로 이어짐)` : ''}`); close(); } if (e.target.id === 'trClose') close(); };
+  m.querySelector('#trTurn').oninput = e => { tlTiming(() => { pg.vturn = Number(e.target.value); }); $('#trTv').textContent = pg.vturn + '초'; renderTimeline(); }; m.querySelector('#trTurn').onchange = () => commit();
 }
 async function relinkMedia(ref) { if (!NC.media.isLocal(ref)) return; const id = ref.slice(2), m = (doc.media || {})[id]; try { const r = await NC.media.file(id, true); if (r.url) { mediaMissing.delete(id); toast('원본을 읽을 수 있게 됐습니다'); renderCanvas(); renderTimeline(); return; } if (!window.confirm(`이 PC에 원본 "${m ? m.name : ''}"이(가) 연결되어 있지 않습니다. 이 PC의 파일을 골라 다시 연결할까요?`)) return; await NC.media.relink(id); mediaMissing.delete(id); vEls.clear(); tl.Vkey = ''; toast('원본을 다시 연결했습니다'); renderCanvas(); renderTimeline(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } }
 // 미리보기 재생 (첫 장면부터, 또는 지금 쪽부터)
@@ -2244,7 +2269,7 @@ function renderSide() {
       const s = selEls(); if (s.length === 1 && s[0].type === 'image') { s[0].src = ref; commit(); rerender(); toast('그림을 바꿨습니다'); } else addImage(ref);
     };
     const ps = $('#photoSearch'); if (ps) imeSafe(ps, () => { photoQ = ps.value; const pos = ps.selectionStart; renderSide(); const n = $('#photoSearch'); n.focus(); n.setSelectionRange(pos, pos); });
-    $('#imgFile').onchange = async e => { for (const f of e.target.files) addImage(addAsset(await fileToDataURL(f))); e.target.value = ''; renderSide(); };
+    $('#imgFile').onchange = async e => { for (const f of e.target.files) addImage(addAsset(await imageFileToURL(f))); e.target.value = ''; renderSide(); };
     $('#imgAI').onclick = () => openAI('image');
   } else if (sideTab === 'upload') {
     const mine = Object.keys(doc.assets);
@@ -2252,7 +2277,7 @@ function renderSide() {
     <p class="hint">올린 이미지와 글꼴은 이 문서 파일 안에 함께 저장됩니다. 사진은 JPG, 투명 배경은 PNG를 권합니다.</p>
     <h3>내 이미지 (${mine.length})</h3>${mine.length ? `<div class="picker">${mine.map(k => `<button data-img="a:${k}" title="누르면 추가 · 끌어서 원하는 자리나 그림 위에 놓기 · 우클릭 삭제" data-del="${k}" draggable="true"><img src="${doc.assets[k]}" alt="" draggable="false"></button>`).join('')}</div>` : '<p class="hint">아직 없습니다.</p>'}
     <h3>내 글꼴 (${doc.fonts.length})</h3>${doc.fonts.length ? `<ul class="list">${doc.fonts.map((f, i) => `<li><span style="font-family:'${esc(f.family)}'">${esc(f.family)}</span><button class="x" data-delfont="${i}">×</button></li>`).join('')}</ul>` : '<p class="hint">아직 없습니다.</p>'}`;
-    $('#upImg').onchange = async e => { for (const f of e.target.files) addImage(addAsset(await fileToDataURL(f))); e.target.value = ''; renderSide(); };
+    $('#upImg').onchange = async e => { for (const f of e.target.files) addImage(addAsset(await imageFileToURL(f))); e.target.value = ''; renderSide(); };
     $('#upFont').onchange = async e => { const f = e.target.files[0]; if (!f) return; const data = await fileToDataURL(f); const family = f.name.replace(/\.(ttf|otf|woff2?)$/i, ''); try { const ff = new FontFace(family, `url(${data})`); await ff.load(); document.fonts.add(ff); doc.fonts.push({ family, data }); commit(); markDirty(); renderSide(); toast(`글꼴 "${family}"을 추가했습니다`); } catch (err) { toast('글꼴을 읽지 못했습니다', true); } };
     body.onclick = e => { const b = e.target.closest('[data-img]'); if (b) addImage(b.dataset.img); const d = e.target.closest('[data-delfont]'); if (d) { doc.fonts.splice(Number(d.dataset.delfont), 1); commit(); markDirty(); renderSide(); } };
     body.oncontextmenu = e => { const b = e.target.closest('[data-del]'); if (!b) return; e.preventDefault(); if (window.confirm('이 이미지를 보관함에서 지울까요? (페이지에 쓰인 곳은 비워집니다)')) { delete doc.assets[b.dataset.del]; commit(); markDirty(); renderAll(); } };
@@ -2346,7 +2371,7 @@ function renderElems() {
   const libEls = libElemItems(); const cats = NC.elems.cats.slice(0, 1).concat([['naracha', '나라차']], NC.elems.cats.slice(1));
   const qw = q.split(/\s+/).filter(Boolean), pool = libEls.concat(NC.elems.items), txtOf = i => (i.name + ' ' + i.kw).toLowerCase(), has = (i, w) => { const t = txtOf(i); return t.includes(w) || (EL_SYN[w] || []).some(x => t.includes(x)); }; let all = pool.filter(i => qw.every(w => has(i, w))); if (!all.length && qw.length > 1) { const hits = i => qw.filter(w => has(i, w)).length; all = pool.filter(i => hits(i) > 0).sort((a, b) => hits(b) - hits(a)); }  // 모든 낱말이 맞는 것이 없으면 맞는 낱말이 많은 순
   const recent = recentElems().map(getElem).filter(Boolean);
-  let h = `<div class="row" style="gap:6px;margin-bottom:6px"><label class="f" style="flex:1;margin:0"><input type="text" id="elSearch" placeholder="요소 검색 (예: 로고, 라차, 별, 말풍선)" value="${esc(elQ)}"></label><button class="btn sm" data-addmine title="내 PC의 PNG·SVG·JPG를 요소로 추가 (자료실에 보관돼 두 PC 모두에서 보임)">＋ 내 요소</button><button class="btn sm" data-addqr title="신청서·밴드·유튜브 주소를 QR 코드로 넣기">▦ QR</button><button class="btn sm" data-addcal title="한 달 달력 칸 넣기 (공휴일·일정·음력 표시)">📅 달력</button></div><div class="tcats" id="elcats">${cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+  let h = `<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:wrap"><label class="f" style="flex:1 1 100%;margin:0"><input type="text" id="elSearch" placeholder="요소 검색 (예: 로고, 라차, 별, 말풍선)" value="${esc(elQ)}"></label><button class="btn sm" data-addmine title="내 PC의 PNG·SVG·JPG를 요소로 추가 (자료실에 보관돼 두 PC 모두에서 보임)">＋ 내 요소</button><button class="btn sm" data-addqr title="신청서·밴드·유튜브 주소를 QR 코드로 넣기">▦ QR</button><button class="btn sm" data-addcal title="한 달 달력 칸 넣기 (공휴일·일정·음력 표시)">📅 달력</button></div><div class="tcats" id="elcats">${cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
   if (elCat === 'naracha' && !q) {
     h += libEls.length ? `<div class="row" style="margin:4px 0 2px;flex-wrap:wrap;gap:6px"><button class="btn sm primary" data-addmine>＋ 내 요소 추가</button><button class="btn sm ai" data-aistudio>✨ AI로 태권도 그림 만들기</button><button class="btn sm ai" data-racha>🐧 라차 동작 한 번에 만들기</button></div><p class="hint">사진 포즈는 배경을 지운 사람만 들어갑니다. 실루엣은 이미지 속성의 "색 입히기"로 색을 바꿀 수 있습니다. AI로 만든 그림은 우클릭으로 이름 바꾸기·삭제를 합니다.</p>` + LIB_ECATS.map(([k, t]) => { const list = libEls.filter(i => i.sub === k); return list.length ? `<h3>${t} <small>${list.length}</small></h3><div class="egrid">${list.map(elemCard).join('')}</div>` : (k === 'mine-el' ? `<h3>내 요소</h3><p class="hint">위의 <b>＋ 내 요소 추가</b>로 PNG·SVG를 올리면 여기에 모입니다 (자료실에 보관되어 두 PC 모두에서 보임).</p>` : ''); }).join('') + (NC.lib.ready ? '' : rachaBtn + libHint()) : rachaBtn + libHint();
   } else if (elCat === 'all' && !q) {
@@ -2703,7 +2728,7 @@ function renderInspector() {
     <h3>배경</h3><div class="swrow">${['#ffffff', '#FFE89A', '#E6EDF2', '#DDF3EA', '#FDE7E4', '#F0EBFB', '#1E2B5A', '#1a1a1a'].map(c => `<button class="swb" data-pgbg="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>
     <label class="f"><span>직접 고르기</span><input type="color" data-k="pg.bg" value="${/^#[0-9a-f]{6}$/i.test(pg.bg) ? pg.bg : '#ffffff'}"></label>
     <p class="hint">그라데이션·패턴 배경은 왼쪽 "배경" 메뉴에서 고릅니다. 요소를 누르면 그 요소의 속성이 여기에 나옵니다. 빈 곳을 끌면 여러 요소를 함께 고릅니다.</p>
-    <details class="fx pgvid" ${tlOn() || (doc.video && doc.video.isCopy) ? 'open' : ''}><summary><span class="anim-h"><svg class="ic"><use href="#i-video"/></svg>영상 장면 설정</span> <small class="hint" style="margin:0">영상으로 만들 때만</small></summary><div class="grid2">${F('보여 주는 시간', 'pg.vdur', pg.vdur || vset().dur, { type: 'slider', min: 1, max: 20, step: 0.5, unit: '초', def: vset().dur })}${F('다음으로 넘김', 'pg.vtrans', pg.vtrans || '', { type: 'select', options: [['', '기본 (' + VIDEO.TRANS.find(t => t[0] === vset().trans)[1] + ')']].concat(VIDEO.TRANS) })}</div><div class="grid2">${F('넘김 길이', 'pg.vturn', pg.vturn || vset().turn, { type: 'slider', min: 0.2, max: 2, step: 0.1, unit: '초', def: vset().turn })}${F('카메라', 'pg.vcam', pg.vcam || '', { type: 'select', options: [['', '없음']].concat(VIDEO.CAMS.slice(1)) })}</div><div class="row" style="gap:6px"><button class="btn sm" id="pgVplay"><svg class="ic"><use href="#i-play"/></svg>이 쪽부터 미리보기</button><button class="btn sm" id="pgVtab">영상 메뉴</button></div></details>
+    <details class="fx pgvid" ${tlOn() || (doc.video && doc.video.isCopy) ? 'open' : ''}><summary><span class="anim-h"><svg class="ic"><use href="#i-video"/></svg>영상 장면 설정</span> <small class="hint" style="margin:0">영상으로 만들 때만</small></summary><div class="grid2">${F('보여 주는 시간', 'pg.vdur', pg.vdur || vset().dur, { type: 'slider', min: 1, max: Math.max(20, Math.ceil(Number(pg.vdur || 0))), step: 0.5, unit: '초', def: vset().dur })}${F('다음으로 넘김', 'pg.vtrans', pg.vtrans || '', { type: 'select', options: [['', '기본 (' + VIDEO.TRANS.find(t => t[0] === vset().trans)[1] + ')']].concat(VIDEO.TRANS) })}</div><div class="grid2">${F('넘김 길이', 'pg.vturn', pg.vturn || vset().turn, { type: 'slider', min: 0.2, max: 2, step: 0.1, unit: '초', def: vset().turn })}${F('카메라', 'pg.vcam', pg.vcam || '', { type: 'select', options: [['', '없음']].concat(VIDEO.CAMS.slice(1)) })}</div><div class="row" style="gap:6px"><button class="btn sm" id="pgVplay"><svg class="ic"><use href="#i-play"/></svg>이 쪽부터 미리보기</button><button class="btn sm" id="pgVtab">영상 메뉴</button></div></details>
     <h3>단축키</h3><p class="hint">T 글자 추가 · P 펜 · Ctrl+D 복제 · Ctrl+G 그룹 · Ctrl+Z 취소 · 화살표 이동 · Delete 삭제 · Ctrl+휠 확대</p>`;
     ins.onclick = e => { if (e.target.closest('#pgVplay')) { openVideoPlayer(true); return; } if (e.target.closest('#pgVtab')) { sideTab = 'video'; renderRail(); renderSide(); return; } const b = e.target.closest('[data-pgbg]'); if (b) { pg.bg = b.dataset.pgbg; commit(); rerender(); } };
     return;
@@ -2713,7 +2738,7 @@ function renderInspector() {
     ins.innerHTML = `<h2>${els.length}개 선택${grouped ? ' <small>그룹</small>' : ''}</h2><div class="row"><button class="btn sm" id="mGroup">${grouped ? '그룹 해제' : '그룹으로 묶기'}</button><button class="btn sm" id="mLock">모두 잠금</button><button class="btn sm" id="mUnlock">잠금 해제</button></div>
     <h3>묶음 위치·크기 <small>mm</small></h3><div class="grid4">${(() => { const U9 = unionBox(els), bx = U9.x, by = U9.y, bw = U9.w, bh = U9.h; return F('X', 'grp.x', r1(bx), { type: 'number', step: 0.5 }) + F('Y', 'grp.y', r1(by), { type: 'number', step: 0.5 }) + F('너비', 'grp.w', r1(bw), { type: 'number', step: 0.5 }) + F('높이', 'grp.h', r1(bh), { type: 'number', step: 0.5 }); })()}</div>
     ${F('투명도', 'multi.opacity', els[0].opacity == null ? 1 : els[0].opacity, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 1 })}
-    ${texts.length ? `<h3>글자 ${texts.length}개 한꺼번에</h3><div class="row"><label class="f" style="flex:1;margin:0"><span>글꼴</span>${fontPicker('font', texts[0].font)}</label></div><div class="grid2">${F('크기(pt)', 'multi.size', texts[0].size, { type: 'number', step: 0.5 })}${F('색', 'multi.color', texts[0].color, { type: 'color' })}</div>` : ''}
+    ${texts.length ? `<h3>글자 ${texts.length}개 한꺼번에</h3><div class="row"><label class="f" style="flex:1;margin:0"><span>글꼴</span>${fontPicker('font', texts[0].font)}</label></div><div class="grid2">${F('크기(pt)', 'multi.size', texts.every(t => t.size === texts[0].size) ? texts[0].size : '', { type: 'number', step: 0.5 })}${texts.every(t => t.size === texts[0].size) ? '' : '<p class="hint" style="margin:-4px 0 6px">크기가 서로 다릅니다 — 숫자를 넣으면 모두 그 크기로(부분 서식도 같은 비율)</p>'}${F('색', 'multi.color', texts[0].color, { type: 'color' })}</div>` : ''}
     <p class="hint">도구 막대의 정렬·간격 균등 버튼으로 맞추고, 끌어서 함께 옮깁니다.</p>`;
     ins.onclick = e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.fp) { openFontPop(b); return; } if (b.id === 'mGroup') toggleGroup(); if (b.id === 'mLock') { els.forEach(x => x.locked = true); commit(); renderOverlay(); } if (b.id === 'mUnlock') { els.forEach(x => x.locked = false); commit(); renderOverlay(); } };
     return;
@@ -2878,7 +2903,7 @@ $('#inspector').addEventListener('input', e => {
   if (t.type === 'number' || t.type === 'range') { v = Number(v); if (t.dataset.scale) v = v / Number(t.dataset.scale); }
   if ((k === 'w' || k === 'h') && v < 1) return; if (k === 'year' && (v < 1900 || v > 2100)) return; if (k === 'size' && v < 1) return;
   syncCtl(t);
-  if (k.startsWith('pg.')) { page()[k.slice(3)] = v; renderCanvas(); return; }
+  if (k.startsWith('pg.')) { const kk = k.slice(3); if (['vdur', 'vturn', 'vtrans'].includes(kk)) tlTiming(() => { page()[kk] = v; }); else page()[kk] = v; renderCanvas(); if (['vdur', 'vturn', 'vtrans'].includes(kk) && tlOn()) renderTimeline(); return; }
   if ((k === 'grp.w' || k === 'grp.h') && !e.__apply) return; // 묶음 너비·높이는 다 친 뒤(Enter·칸 나가기)에만: 한 글자마다 줄이면 1mm로 망가짐
   if (k.startsWith('grp.')) { // 묶음 이동(X·Y) / 비율 유지 크기 조절(너비·높이)
     const els = selEls().filter(x => !x.locked); if (!els.length) return; const U9 = unionBox(els), bx = U9.x, by = U9.y, bw = U9.w, bh = U9.h; const kk = k.slice(4);
@@ -2983,7 +3008,7 @@ async function renderSaveDialog() {
     <h3>폴더 안의 문서 (${docs.length})</h3>
     ${docs.length ? `<ul class="list">${docs.map((x, i) => `<li data-doc="${i}" title="누르면 엽니다"><span>${esc(x.name.replace(/\.design\.json$/i, ''))}</span><small class="hint" style="margin:0">${when(x.lastModified)} · ${Math.max(1, Math.round(x.size / 1024)).toLocaleString()}KB</small>${st.handle && x.name === st.fileName && curIn ? '<b style="min-width:auto">작업 중</b>' : ''}</li>`).join('')}</ul>` : '<p class="hint">아직 문서가 없습니다.</p>'}
     <div class="row" style="margin-top:10px">${curIn ? '' : '<button class="btn primary" id="svIntoDir">지금 문서를 이 폴더에 저장</button>'}<button class="btn" id="svNow" ${st.handle ? '' : 'disabled'}>지금 저장</button><button class="btn" id="svOther">다른 위치의 파일 열기</button><button class="btn" id="svDown">내려받기 (JSON 사본)</button><button class="btn danger" id="svDiscDir">폴더 연결 해제</button></div>`
-  : `<p><b>지금 상태:</b> ${st.handle ? `파일 <code>${esc(st.fileName)}</code>에 연결되어 자동 저장 중입니다. 설정값(API 키 등)은 이 PC에만 있습니다.` : '브라우저 안에만 자동 저장되고 있습니다 (이 PC, 이 브라우저에서만 보임).'}</p>
+  : `<p><b>지금 상태:</b> ${st.handle ? `파일 <code>${esc(st.fileName)}</code>에 연결되어 자동 저장 중입니다.` : '브라우저 안에만 자동 저장되고 있습니다 (이 PC, 이 브라우저에서만 보임).'}</p>
     ${st.dir ? `<p class="hint">동기화 폴더 <b>${esc(st.dirName)}</b>가 연결되어 있지만 이 창에서 아직 허락하지 않았습니다.</p><div class="row"><button class="btn primary" id="svReDir">동기화 폴더 다시 연결</button></div>` : ''}
     <h3>여러 PC에서 쓰기 (구글 드라이브)</h3>
     <ol style="margin:0 0 10px 18px;line-height:1.7"><li>각 PC에 <b>Google Drive 데스크톱 앱</b>을 설치하고 같은 계정으로 로그인합니다.</li><li>아래 <b>"동기화 폴더 연결"</b>을 누르고 <b>내 드라이브 → 나라차디자인공방</b> 폴더를 고릅니다 (없으면 그 창에서 새 폴더로 만듭니다). Windows는 보통 <code>G:\\내 드라이브</code>, Mac은 Finder 왼쪽의 <code>Google Drive → 내 드라이브</code>입니다.</li><li>그러면 <b>설정값(API 키·모델·최근 사용 글꼴·요소·템플릿)</b>과 <b>모든 문서</b>가 그 폴더에 저장되고, 다른 PC에서 같은 폴더를 연결하면 그대로 이어집니다.</li><li>PC마다 처음 한 번만 연결하면 됩니다. 브라우저가 "방문할 때마다 허용"을 물으면 허용해 두면 편합니다.</li></ol>
@@ -3093,7 +3118,7 @@ async function createDesign(w, h, name, fmtId) {
   else if (inDir) setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)');
   else setStatus('브라우저에 저장됩니다 · 파일로 저장하려면 저장(Ctrl+S)');
   renderAll(); updateSaveBadge(); sideTab = 'tpl'; renderRail(); renderSide(); fitCanvas && fitCanvas();
-  toast(`${name} (${fmtLabel(['', '', '', w, h, 'mm'])}) 새 디자인을 만들었습니다`);
+  { const Fm = FORMATS.find(x => x[0] === fmtId); toast(`${name} (${Fm ? fmtLabel(Fm) : fmtLabel(['', '', '', w, h, 'mm'])}) 새 디자인을 만들었습니다`); }
 }
 
 /* ---- 내 드라이브: 폴더로 디자인 관리 (미리캔버스식) ---- */
@@ -4363,7 +4388,7 @@ $('#inspector').addEventListener('change', e => { const k = e.target.dataset && 
 document.addEventListener('change', e => { if (!e.target.matches || !e.target.matches('[data-tbauto]')) return; const el = selEls()[0]; if (!el) return; el.fitText = e.target.checked; if (el.fitText) el.fitMax = el.size; else if (el.fitMax) { scaleTextBy(el, clone(el), el.fitMax / el.size); delete el.fitMax; } fitCache.delete(el.id); commit(); rerender(); });
 
 /* ======================= 상장 (메일머지) =======================
-   워드 편지 병합(메일머지)처럼: ① 상장 틀(배경) ② 양식(본문·공통 내용 = 주 문서) ③ 명단(데이터 원본) ④ 결과 미리 보기(◀ 1/12 ▶) ⑤ 병합 완료(사람마다 한 쪽)
+   워드 편지 병합(메일머지)처럼: ① 상장 틀(배경) ② 양식(본문·공통 내용 = 주 문서) ③ 명단(데이터 원본) ④ 결과 미리 보기(◀ 1/12 ▶) ⑤ 만들기(사람마다 한 쪽)
    doc.cert = { frame:'a:..', form, printFrame, data:{ [form]:{ common:{}, rows:[] } }, layout:{ [칸 이름]:{x,y,w,h,font,size,weight,color,align,lh} } }
    만든 쪽은 pg.cert={form,i}. 틀은 관장님 도장이 있어 공개 저장소에 넣지 않고, 불러오면 이 문서와 이 PC(IndexedDB)에만 보관 */
 const CERT_TODAY = () => { const t = new Date(); return `${t.getFullYear()}년 ${t.getMonth() + 1}월 ${t.getDate()}일`; };
@@ -4491,7 +4516,7 @@ async function certNewDoc(carry) {
   commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다');
   zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); toast(doc.cert.frame ? 'A4 상장 문서를 만들었습니다 — 이 PC에 기억된 상장 틀을 넣었습니다' : 'A4 상장 문서를 만들었습니다 — ① 상장 틀을 불러오세요');
 }
-/* 병합 완료: 이 양식으로 만든 쪽을 지우고 명단대로 다시 만듦 (다른 쪽은 그대로) */
+/* 만들기: 이 양식으로 만든 쪽을 지우고 명단대로 다시 만듦 (다른 쪽은 그대로) */
 async function certMerge(skipAsk) {
   if (!(await certNeedA4())) return; await certEnsureFrame();
   const C = certState(), rows = certRows(C.form); if (!rows.length) { toast('명단에 이름이 없습니다', true); return; }
@@ -4502,7 +4527,7 @@ async function certMerge(skipAsk) {
   toastUndo(`상장 ${rows.length}장을 만들었습니다 — 쪽마다 고칠 수 있고, 다운로드에서 PDF로 한 번에 저장합니다`);
 }
 function certRecN(form, r) { return form === 'record' && r ? ((Array.isArray(r.recs) && r.recs.length) || [r.a1 || r.b1, r.a2 || r.b2].filter(Boolean).length) : 0; }
-/* 이 쪽에서 옮기거나 바꾼 글 상자 위치·모양을 양식에 기억 → 모든 상장에 (워드의 '주 문서 고치기') */
+/* 이 쪽에서 옮기거나 바꾼 글 상자 위치·모양을 양식에 기억 → 모든 상장에 (워드의 '양식 고치기') */
 function certSaveLayout() {
   const pg = page(); if (!pg.cert) { toast('상장 쪽에서 쓰세요', true); return; } const C = certState(), form = pg.cert.form; let n = 0;
   pg.els.forEach(e => { if (!e.certKey) return; const L = {}; ['x', 'y', 'w', 'h', 'font', 'size', 'weight', 'color', 'align', 'lh', 'ls', 'italic', 'sizing', 'fitText', 'valign', 'strokeW', 'strokeC', 'shadow'].forEach(kk => { if (e[kk] !== undefined) L[kk] = clone(e[kk]); }); if (e.fitText) { L.size = e.fitMax || e.size; L.fitMax = e.fitMax || e.size; } C.layout[form + ':' + e.certKey + (/^rec/.test(e.certKey) ? '@' + (pg.cert.n || 0) : '')] = L; n++; }); /* 기록 상자는 종목 수가 같은 상장끼리만 */
@@ -4513,11 +4538,12 @@ function renderCertSide(body) {
   const C = certState(), form = C.form, F = CERT_FORMS[form], D = C.data[form], rows = D.rows, nOk = certRows(form).length, a4 = Math.abs(doc.w - 210) < 1 && Math.abs(doc.h - 297) < 1;
   const fieldChips = F.common.map(([, l]) => l.replace(/ \(.*\)$/, '')).filter(l => !/날짜|단위|종목/.test(l));
   body.innerHTML = `<div class="cert">
-  ${a4 && (doc.cert.frame || doc.pages.some(p => p.cert)) ? '' : `<div class="wz-card"><b>상장 만들기</b><p class="hint" style="margin:4px 0 8px">워드의 편지 병합처럼 양식은 한 번, 명단만 바꿔 여러 명의 상장을 한 번에 만듭니다.</p>${a4 ? '' : '<button class="btn primary full" data-cx="newdoc">A4 상장 문서 새로 만들기</button>'}</div>`}
+  ${a4 && (doc.cert.frame || doc.pages.some(p => p.cert)) ? '' : `<div class="wz-card"><b>상장 만들기</b><p class="hint" style="margin:4px 0 8px">양식은 한 번만 정하고, 명단만 바꿔 여러 명의 상장을 한 번에 만듭니다.</p>${a4 ? '' : '<button class="btn primary full" data-cx="newdoc">A4 상장 문서 새로 만들기</button>'}</div>`}
+  ${form === 'record' ? '<div class="cquick"><b>빠른 길</b> 측정 가져오기 → 미리 보기 → 만들기·인쇄<button class="btn primary full" data-cx="meas" style="margin-top:6px">📥 측정에서 향상왕 상장 만들기</button></div>' : ''}
   <h3>① 상장 틀 <small>배경</small></h3>
   <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm ${C.frame ? '' : 'primary'}" data-cx="frame">${C.frame ? '틀 바꾸기' : '📄 상장 틀 불러오기 (PDF·그림)'}</button>${C.frame ? `<label class="chk" title="틀이 미리 인쇄된 상장 용지에 찍을 때는 끄세요"><input type="checkbox" data-cx="printFrame" ${C.printFrame !== false ? 'checked' : ''}> 틀도 함께 인쇄</label>` : ''}</div>
   ${C.frame === CERT_FRAME_JPG ? '<p class="hint">나라차 상장틀(A4, 원본 PDF)이 기본으로 들어갑니다 — 출력·PDF 때 원본 선 그대로. 다른 틀은 "틀 바꾸기".</p>' : C.frame ? (C.framePdf ? '<p class="hint">원본 PDF 틀 — 출력·PDF 때 원본 선 그대로 다시 그립니다. <button class="btn sm" data-cx="framedef">기본 나라차 틀로</button></p>' : '<p class="hint" style="color:#b3261e">그림으로 바꾼 틀입니다. "틀 바꾸기"로 원본 PDF를 다시 불러오면 가는 선까지 선명하게 출력됩니다.</p>') : '<p class="hint">한 번 불러오면 이 PC가 기억해 어느 상장 문서에도 자동으로 들어갑니다. 틀은 이 PC와 관장님 드라이브(비공개)에만 보관되고 공개 사이트에는 올리지 않습니다 (관장 직인).</p>'}
-  <h3>② 양식 <small>주 문서</small></h3>
+  <h3>② 양식 <small>상장 종류·글</small></h3>
   <div class="cformgrid">${Object.entries(CERT_FORMS).map(([kk, f]) => `<button class="cform ${kk === form ? 'on' : ''}" data-cform="${kk}"><b>${f.name}</b><small>${f.desc}</small></button>`).join('')}</div>
   <div class="ccommon">${F.common.map(([kk, l]) => `<label class="f"><span>${l} <em class="hint">모두 같음</em></span><input type="text" data-cc="${kk}" value="${esc(D.common[kk] || '')}"></label>`).join('')}
   <label class="f"><span>본문 <em class="hint">{ } 자리는 위 값으로 바뀜</em></span><textarea data-cbody rows="4">${esc(D.body)}</textarea></label>
@@ -4563,7 +4589,7 @@ async function openCertPreview(after) {
       <div class="cpvinfo"><span>상장 날짜 <b class="${dateOld ? 'old' : ''}">${esc(D_.common.date || '(없음)')}</b></span>${dateOld ? `<button class="btn sm" data-cpv="today">오늘(${esc(today)})로</button>` : ''}${hasFrame ? '' : '<span class="nofr">⚠ 상장 틀이 없습니다</span><button class="btn sm primary" data-cpv="frame">📄 상장 틀 불러오기</button>'}</div>
       ${warns.length ? `<div class="ovfbar" style="display:block">⚠ ${warns.slice(0, 5).map(esc).join('<br>')}</div>` : ''}
       ${big ? `<div class="cpvbig"><button class="btn icon cpvnav" data-cpvgo="-1" ${cpvIdx ? '' : 'disabled'} title="앞 장 (←)">‹</button><div class="cpvstage" id="cpvStage"><div class="cpvpan">${sheet(pages[cpvIdx], doc.w * MM)}</div></div><button class="btn icon cpvnav" data-cpvgo="1" ${cpvIdx < pages.length - 1 ? '' : 'disabled'} title="다음 장 (→)">›</button></div>`
-        : `<p class="hint" style="margin-top:0">한 장을 누르면 크게 봅니다. 고칠 곳이 있으면 닫고 ②·③에서 고친 뒤 다시 미리 보세요.</p><div class="cpvgrid">${pages.map((p, i) => `<button class="cpvcard" data-cpvi="${i}">${sheet(p, 170)}<span><b>${i + 1}</b> ${esc(rows[i].name)}${form === 'record' && rows[i].recs ? ` <small>${rows[i].recs.length}종목</small>` : ''}</span></button>`).join('')}</div>`}
+        : `<p class="hint" style="margin-top:0">한 장을 누르면 크게 봅니다. 고칠 곳이 있으면 닫고 ②·③에서 고친 뒤 다시 미리 보세요.</p><div class="cpvgrid">${pages.map((p, i) => `<button class="cpvcard" data-cpvi="${i}">${sheet(p, 230)}<span><b>${i + 1}</b> ${esc(rows[i].name)}${form === 'record' && rows[i].recs ? ` <small>${rows[i].recs.length}종목</small>` : ''}</span></button>`).join('')}</div>`}
       <div class="row cpvfoot">${big ? `<div class="cpvcap"><b>${cpvIdx + 1} / ${pages.length}</b> · ${esc(rows[cpvIdx].name)}<span class="cpvzoom"><button class="btn sm" data-cpvz="-1" title="축소 (−)">−</button><button class="btn sm" data-cpvz="0" id="cpvZv" title="화면에 맞춤 (0)">맞춤</button><button class="btn sm" data-cpvz="1" title="확대 (+)">＋</button></span><span class="hint">← → 넘기기 · + − 확대·축소 · 0 맞춤 · ${/Mac/.test(navigator.platform) ? '⌘' : 'Ctrl'}+휠 · 확대하면 끌어서 옮기기</span></div>` : ''}<span style="flex:1"></span><button class="btn" data-cpv="close">고치러 가기</button><button class="btn" data-cpv="make">🏅 이대로 ${pages.length}장 만들기</button><button class="btn primary" data-cpv="print">🖨 만들고 출력</button></div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
     const st = d.querySelector('#cpvStage'); if (!st) return; fitBig(); requestAnimationFrame(() => fitBig());
@@ -4644,7 +4670,7 @@ function measUnit(kind, name) { if (kind === '줄넘기') return '회'; if (/악
 function measImprove(s, all, enrolled) {
   const prev = all.filter(o => o.id !== s.id && o.kind === s.kind && measSc(o) < measSc(s)).sort((a, b) => measSc(b) - measSc(a))[0]; if (!prev) return { prev: null, wins: [] };
   const pBy = {}; (prev.rows || []).forEach(r => { pBy[r.name] = r; });
-  const cats = (s.cats || []).filter(c => !/비만도|종합|비고/.test(c.name) && (c.subs || []).some(su => (su.sub || su) === '기록'));
+  const cats = (s.cats || []).filter(c => !/비만도|종합|비고/.test(c.name) && (c.subs || []).some(su => (typeof su === 'string' ? su : su && su.sub) === '기록'));
   const wins = [];
   cats.forEach(cat => { const by = {}; (s.rows || []).forEach(r => { if (enrolled && !enrolled(r.name)) return; const pr = pBy[r.name]; if (!pr) return; const cv = parseFloat(measCellV(r, cat.name, '기록')), pv = parseFloat(measCellV(pr, cat.name, '기록')); if (isNaN(cv) || isNaN(pv)) return; const imp = cv - pv; if (imp <= 0) return; const n = parseFloat(r.age), age = n >= 14 && n <= 19 ? '청소년' : (r.age || '?'); if (!by[age] || imp > by[age].imp) by[age] = { age, name: r.name, prev: pv, cur: cv, imp, cat: cat.name }; });
     Object.values(by).forEach(w => wins.push(Object.assign(w, { kind: s.kind, k: measCatTitle(s.kind, w.cat), u: measUnit(s.kind, w.cat) }))); });
@@ -4670,7 +4696,7 @@ async function openMeasImport(again) {
     const by = {}; res.forEach(({ s, r }) => r.wins.forEach(w => { (by[w.name] = by[w.name] || { name: w.name, age: w.age, recs: [] }).recs.push({ k: w.k, a: String(w.prev), b: String(w.cur), u: w.u, kind: s.kind }); }));
     const people = Object.values(by).sort((a, b) => b.recs.length - a.recs.length || a.name.localeCompare(b.name, 'ko')), nOn = people.filter(p => !measImp.off[p.name]).length, kinds = [...new Set(picked.map(s => s.kind))];
     d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기 <small>${measSrv && measSrv.meas ? `관리프로그램 서버 최신 · ${new Date(measSrv.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 받음` : '이 브라우저에 남은 자료 (서버 연결 안 됨)'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
-      <p class="hint" style="margin-top:0">관리프로그램과 같은 계산: 같은 종류의 <b>직전 회차보다 기록이 오른 학생 중 나이 그룹별 1위</b>(14~19세는 청소년)', 지금 재원생만 (휴관·퇴관 제외)'. 한 학생이 여러 종목이면 <b>상장 한 장에 모두</b> 들어갑니다.</p>
+      <p class="hint" style="margin-top:0">관리프로그램과 같은 계산: 같은 종류의 <b>직전 회차보다 기록이 오른 학생 중 나이 그룹별 1위</b>(14~19세는 청소년), 지금 재원생만(휴관·퇴관 제외). 한 학생이 여러 종목이면 <b>상장 한 장에 모두</b> 들어갑니다.</p>
       <div class="msel"><label class="f"><span>연도</span><select id="mYear">${years.map(y => `<option value="${Number(y)}" ${y === measImp.year ? 'selected' : ''}>${Number(y)}년</option>`).join('')}</select></label>
       <div class="f"><span>반기</span><div class="seg">${[['H1', '전반기'], ['H2', '후반기']].map(([a, t]) => `<button data-mhalf="${a}" aria-pressed="${measImp.half === a}" ${all.some(s => s.year === measImp.year && (s.half === 'H2' ? 'H2' : 'H1') === a) ? '' : 'disabled title="이 반기 측정 자료가 없습니다"'}>${t}</button>`).join('')}</div></div>
       <div class="f"><span>종류 <small>둘 다 고르면 한 사람 한 장에 합침</small></span><div class="row" style="gap:12px">${['줄넘기', '체력'].map(kd => { const ss = all.find(s => s.year === measImp.year && (s.half === 'H2' ? 'H2' : 'H1') === measImp.half && s.kind === kd); return `<label class="chk" style="margin:0"><input type="checkbox" data-mkind="${kd}" ${measImp.kinds.includes(kd) ? 'checked' : ''} ${ss ? '' : 'disabled'}> ${kd} ${ss ? `<small class="hint" style="margin:0">${(ss.rows || []).length}명 측정</small>` : '<small class="hint" style="margin:0">자료 없음</small>'}</label>`; }).join('')}</div></div></div>
@@ -4685,7 +4711,7 @@ async function openMeasImport(again) {
       const C = certState(); C.form = 'record'; const D = C.data.record, s0 = picked[0];
       const sameHalf = picked.every(s => measSc(s) === measSc(s0));
       D.common.title = kinds.length === 1 ? `${kinds[0]} 향상왕` : '향상왕';
-      D.common.event = `${s0.year}년${sameHalf ? ' ' + measHalf(s0) : ''} 나라차태권도 ${kinds.join('·')}측정`;
+      D.common.event = `${s0.year}년${sameHalf ? ' ' + measHalf(s0) : ''} 나라차태권도 ${kinds.join('·')} 측정`;
       const rows = people.filter(p => !measImp.off[p.name]).map(p => ({ name: p.name, recs: p.recs }));
       D.rows = $('#mReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; commit(); d.close(); sideTab = 'cert'; renderRail(); renderSide();
       toast(`향상왕 ${rows.length}명을 명단에 넣었습니다 — 상장 이름·측정 이름·날짜를 확인하세요`);
@@ -4930,10 +4956,14 @@ function renderQbar() {
 })();
 
 /* ---- 우클릭 메뉴 ---- */
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const keyLabel = k => IS_MAC ? String(k).replace(/Ctrl\+Shift\+/g, '⇧⌘').replace(/Ctrl\+/g, '⌘').replace(/Alt\+/g, '⌥').replace(/Shift\+/g, '⇧') : k;
+/* 맥이면 풍선 도움말의 Ctrl+…도 ⌘로 (마우스를 올릴 때 바꿈) */
+if (IS_MAC) document.addEventListener('mouseover', e => { const t = e.target && e.target.closest && e.target.closest('[title*="Ctrl"]'); if (t) t.title = keyLabel(t.title).replace(/Ctrl·/g, '⌘·').replace(/Ctrl\//g, '⌘/'); }, true);
 function openCtx(ev, items) {
   $('#ctxMenu') && $('#ctxMenu').remove();
   const m = document.createElement('div'); m.id = 'ctxMenu'; m.className = 'fmenu ctx';
-  m.innerHTML = items.map(it => it === '-' ? '<hr>' : `<button data-ctx="${it[0]}" ${it[3] ? 'disabled' : ''}>${it[1]}${it[2] ? `<kbd>${it[2]}</kbd>` : ''}</button>`).join('');
+  m.innerHTML = items.map(it => it === '-' ? '<hr>' : `<button data-ctx="${it[0]}" ${it[3] ? 'disabled' : ''}>${it[1]}${it[2] ? `<kbd>${keyLabel(it[2])}</kbd>` : ''}</button>`).join('');
   document.body.appendChild(m); m.style.left = Math.min(ev.clientX, innerWidth - m.offsetWidth - 8) + 'px'; m.style.top = Math.min(ev.clientY, innerHeight - m.offsetHeight - 8) + 'px';
   const off = e2 => { if (!m.contains(e2.target)) close(); };
   const esc_ = e2 => { if (!document.body.contains(m)) return close(); if (e2.key === 'Escape') { e2.stopImmediatePropagation(); close(); } };
@@ -5178,7 +5208,7 @@ $('#scroller').addEventListener('drop', async e => {
   if (kind === 'el') { await insertElem(e.dataTransfer.getData('text/x-nc-el'), toMM(e)); return; } /* 요소 패널에서 끌어다 놓기 → 놓은 자리에 */
   const tgt = dropTarget(e), p = toMM(e), pg0 = page(); let refs = [];
   if (kind === 'img') { const v = e.dataTransfer.getData('text/x-nc-img'); const r = v.startsWith('lib|') ? await libInsert(v.slice(4)) : v; if (r) refs = [r]; }
-  else { const fs = [...e.dataTransfer.files].filter(f => /^image\//.test(f.type)); if (!fs.length) { toast('그림·동영상·소리 파일만 넣을 수 있습니다', true); return; } for (const f of fs) refs.push(addAsset(await fileToDataURL(f))); }
+  else { const fs = [...e.dataTransfer.files].filter(f => /^image\//.test(f.type)); if (!fs.length) { toast('그림·동영상·소리 파일만 넣을 수 있습니다', true); return; } for (const f of fs) refs.push(addAsset(await imageFileToURL(f))); }
   if (!refs.length || page() !== pg0) return;
   if (tgt && refs.length === 1 && pg0.els.includes(tgt)) { tgt.src = refs[0]; delete tgt.srcOrig; commit(); select([tgt.id]); rerender(); toast('그림을 바꿨습니다 (자리·크기·자르기는 그대로)'); return; }
   const ids = [];
