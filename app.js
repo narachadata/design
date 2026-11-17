@@ -59,7 +59,7 @@ function gcAssets() { const used = new Set(); const walk = v => { if (typeof v =
 const HIST_LIVE = ['assets', 'fonts', 'name', 'docId', 'updatedAt'];
 function snapshot() { const keep = {}; HIST_LIVE.forEach(k => { keep[k] = doc[k]; delete doc[k]; }); const s = JSON.stringify(doc); Object.assign(doc, keep); return s; }
 let histMeta = [];  // 기록마다 그때 보던 쪽·선택
-function commit() { tlTimingSnap = null; const s_ = snapshot(); if (hist[hptr] === s_) return; hist = hist.slice(0, hptr + 1); histMeta = histMeta.slice(0, hptr + 1); hist.push(s_); histMeta.push({ cur, sel: sel.slice(), rn: NC.live.rn }); if (hist.length > 120) { hist.shift(); histMeta.shift(); } hptr = hist.length - 1; markDirty(); if (tl.open && !tl.playing) pgmSoon(); }
+function commit() { tlTimingSnap = null; if (!certTplBusy && doc && doc.cert && doc.pages.some(p => p.certTpl)) { certTplBusy = true; try { certTplCommit(); } catch (e) { console.warn('상장 양식 반영 실패', e); } finally { certTplBusy = false; } } const s_ = snapshot(); if (hist[hptr] === s_) return; hist = hist.slice(0, hptr + 1); histMeta = histMeta.slice(0, hptr + 1); hist.push(s_); histMeta.push({ cur, sel: sel.slice(), rn: NC.live.rn }); if (hist.length > 120) { hist.shift(); histMeta.shift(); } hptr = hist.length - 1; markDirty(); if (tl.open && !tl.playing) pgmSoon(); }
 // 바로 앞 기록을 고쳐 씀 (그림 비율 맞춤처럼 한 동작의 뒷처리)
 function amendCommit() { if (hptr < 0) return commit(); hist[hptr] = snapshot(); histMeta[hptr].rn = NC.live.rn; markDirty(); }
 let nudgeTimer = null; function commitSoon() { clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { nudgeTimer = null; commit(); }, 450); }
@@ -388,6 +388,7 @@ function renderCanvas() {
   c.innerHTML = bookTokens(pg, `<div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, 'edit')).join('')}${masterHTML(pg)}</div>`);
   textOver.clear();
   pg.els.forEach(el => { if (el.type === 'text' && !isWarp(el)) { let d = c.querySelector(`[data-id="${el.id}"]`); if (!d) return; if (el.sizing === 'autow') autoWidth(d, el); if (el.fitText && el.sizing === 'fixed') d = autoFitText(d, el) || d; const hh = fitTextH(d, el, true); if (hh != null) el.h = hh; if (el.sizing === 'fixed' && textOverflows(d, el)) textOver.add(el.id); } });
+  if (pg.certTpl) { pg.els.forEach(el => { if (el.tplField) { const d9 = c.querySelector(`[data-id="${el.id}"]`); if (d9) d9.classList.add('tplf'); } }); }  /* 상장 양식: 사람마다 바뀌는 자리 */
   c.querySelectorAll('.el-cal .cell[data-day]').forEach(x => { const n = x.dataset.day && x.scrollHeight > x.clientHeight + 1; x.classList.toggle('ovf', !!n); if (n) x.title = '일정이 칸을 넘쳐 아래가 잘립니다 — 글자를 줄이거나 칸 높이를 늘리세요'; });  /* 달력 칸 넘침 표시(편집 화면에만) */
   renderGhost(); fitCanvas(); renderOverlay(); NC.live.paint();
   $('#pageLabel').textContent = `${cur + 1} / ${doc.pages.length}${pg.label ? ' · ' + pg.label : ''}`;
@@ -4803,12 +4804,14 @@ function certState() {
 function certVal(D, r, k) { const v = r && r[k] != null && String(r[k]).trim() !== '' ? String(r[k]).trim() : (D.common[k] || ''); return v; }
 function certRec(v, unit) { v = String(v || '').trim(); return /^\d+(\.\d+)?$/.test(v) ? v + (unit || '') : v; }
 /* 한 사람의 상장 쪽 요소 (A4 210×297 기준 위치 → 문서 크기에 맞춰 비율) — 레이아웃 덮어쓰기(doc.cert.layout)가 있으면 그 위치·모양 */
+const CERT_LP = ['x', 'y', 'w', 'h', 'font', 'size', 'weight', 'color', 'align', 'lh', 'ls', 'italic', 'sizing', 'fitText', 'valign', 'strokeW', 'strokeC', 'shadow'];  /* 양식에 기억하는 위치·모양 */
+function certLKey(form, key, n) { return form + ':' + key + (/^rec/.test(key) || (key === 'body' && form === 'record' && n >= 4) ? '@' + (n || 0) : ''); }
 function certEls(form, r) {
   const C = certState(), D = C.data[form], F = CERT_FORMS[form], kx = doc.w / 210, ky = doc.h / 297, k = Math.min(kx, ky), out = [];
   const recN = certRecN(form, r);
-  const T = (key, text, o) => { if (!String(text || '').trim()) return; const L = C.layout[form + ':' + key + (/^rec/.test(key) ? '@' + recN : '')] || {}; const base = Object.assign({}, TEXT_DEF, { id: uid(), text, font: 'Noto Sans KR', size: 15, weight: 700, color: '#1a1a1a', align: 'center', lh: 1.45, ls: 0, name: '상장 · ' + o.label, certKey: key }, o, { x: r1(o.x * kx), y: r1(o.y * ky), w: r1(o.w * kx), h: r1((o.h || 8) * ky), size: Math.round(o.size * k * 2) / 2 });
+  const T = (key, text, o) => { if (!String(text || '').trim()) return; const L = C.layout[certLKey(form, key, recN)] || {}; const base = Object.assign({}, TEXT_DEF, { id: uid(), text, font: 'Noto Sans KR', size: 15, weight: 700, color: '#1a1a1a', align: 'center', lh: 1.45, ls: 0, name: '상장 · ' + o.label, certKey: key }, o, { x: r1(o.x * kx), y: r1(o.y * ky), w: r1(o.w * kx), h: r1((o.h || 8) * ky), size: Math.round(o.size * k * 2) / 2 });
     delete base.label; Object.assign(base, L); if (base.fitText) base.fitMax = Number(L.fitMax) || base.size; out.push(base); };
-  const sans = 'Noto Sans KR', serif = 'Nanum Myeongjo', fill = t => String(t || '').replace(/\{([^{}\n]+)\}/g, (m, nm) => { const c = F.common.find(x => x[1].replace(/ \(.*\)$/, '') === nm.trim()); return c ? certVal(D, r, c[0]) : m; });
+  const sans = 'Noto Sans KR', serif = 'Nanum Myeongjo', fill = t => String(t || '').replace(/\{([^{}\n]+)\}/g, (m, nm) => { if (nm.trim() === '이름') return r && r.name ? String(r.name) : m; const c = F.common.find(x => x[1].replace(/ \(.*\)$/, '') === nm.trim()); return c ? certVal(D, r, c[0]) : m; });
   /* 글꼴: 관장님 상장과 같게 나눔명조 — 제목(상장 이름)·이름·급수는 나눔명조 ExtraBold(800), 본문·기록·날짜는 보통(400) */
   T('title', certVal(D, r, 'title'), { label: '상장 이름', x: 15, y: 105, w: 180, h: 22, size: 42, weight: 800, font: serif, ls: 0.06, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'bottom' }); /* 틀의 'THIS CERTIFICATE IS PRESENTED TO' 선(133.5mm) 위 약 6mm에 앉게 (관장님: 선 위에, 너무 내려오지 않게) */
   T('name', certVal(D, r, 'name'), { label: '이름', x: 30, y: 139, w: 150, h: 17, size: 34, weight: 800, font: serif, ls: 0.04, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
@@ -4929,11 +4932,70 @@ async function certMerge(skipAsk) {
   doc.pages = keep.concat(pages); cur = keep.length; sel = []; fitCache.clear(); commit(); renderAll();
   toastUndo(`상장 ${rows.length}장을 만들었습니다${C.serial && C.serial.on ? ` (${certNo(C, 0)} ~ ${certNo(C, rows.length - 1)}, 다음 번호 ${(Number(C.serial.start) || 1) + rows.length})` : ''} — 쪽마다 고칠 수 있고, 다운로드에서 PDF로 한 번에 저장합니다`);
 }
+/* ---- 상장 양식 쪽 (워드 메일 머지의 '주 문서') ----
+   명단을 넣으면 오른쪽에 양식이 보임: 모두 같은 글(상장 이름·본문·날짜)은 실제 글 그대로, 사람마다 바뀌는 글(이름·종목·기록 등)은 《이름》처럼 자리 표시.
+   이 쪽에서 글 상자를 옮기거나 크기·글꼴·줄 간격을 고치면 그 자리의 배치가 doc.cert.layout에 기억되고, 이미 만든 상장 전체에 바로 적용됨.
+   양식 쪽은 내려받기·인쇄·영상에서 빠짐(dlOff·vOff, p.cert가 아님). */
+let certTplBusy = false;
+const certTplField = (form, key, rows) => key === 'name' || key === 'no' || /^rec/.test(key) || key === 'grade' || key === 'note' || key === 'line' || rows.some(r => r && r[key] != null && String(r[key]).trim() !== '');
+function certTplRow(form, rows, n) {
+  const C = certState(), D = C.data[form], r0 = { name: '《이름》' };
+  if (form === 'record') { const meas = rows.some(r => Array.isArray(r.recs) && r.recs.length);
+    if (n == null) { const cnt = {}; rows.forEach(r => { const q = certRecN(form, r); if (q) cnt[q] = (cnt[q] || 0) + 1; }); n = Number((Object.entries(cnt).sort((a, b) => b[1] - a[1])[0] || [meas ? 1 : 2])[0]); }
+    r0.recs = Array.from({ length: n }, (_, i) => ({ k: meas ? `《종목${n > 1 ? ' ' + (i + 1) : ''}》` : (D.common['k' + (i + 1)] || `《종목 ${i + 1}》`), a: '《전》', b: '《후》', u: '' })); }
+  if (form === 'grade') { r0.grade = '《급수》'; r0.note = '《아래 작은 글》'; }
+  if (form === 'free') r0.line = '《이름 아래 한 줄》';
+  ['title', 'date'].forEach(k => { if (rows.some(r => r && r[k] != null && String(r[k]).trim() !== '')) r0[k] = k === 'title' ? '《상장 이름》' : '《날짜》'; });  /* 사람마다 따로 적은 값이 있을 때만 자리 표시 */
+  return r0;
+}
+function certTplPage(form, n) {
+  const C = certState(), rows = certRows(form), r0 = certTplRow(form, rows, n), els = [];
+  if (C.frame) els.push({ type: 'image', id: uid(), src: C.frame, pdfSrc: C.framePdf || undefined, x: 0, y: 0, w: doc.w, h: doc.h, rot: 0, fit: 'cover', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '상장 틀', locked: true, hidden: C.printFrame === false, certFrame: true });
+  const body = certEls(form, r0).concat(C.serial && C.serial.on ? [certSerialEl(C, form, 0)] : []); body.forEach(e => { if (certTplField(form, e.certKey, rows)) e.tplField = true; e.name = (e.name || '').replace('상장 · ', '양식 · '); });
+  return { id: uid(), bg: '#ffffff', els: els.concat(body), label: '상장 양식 · 자리 표시', certTpl: { form, n: certRecN(form, r0) }, dlOff: true, vOff: true };
+}
+/* 양식 쪽을 만들거나 새로 고쳐 그 쪽으로 감 */
+async function certShowTpl(quiet) {
+  if (!(await certNeedA4())) return; await certEnsureFrame();
+  const C = certState(), pg = certTplPage(C.form); let i = doc.pages.findIndex(p => p.certTpl);
+  if (i >= 0) { pg.id = doc.pages[i].id; doc.pages[i] = pg; } else if (doc.pages.length === 1 && !doc.pages[0].els.length && !doc.pages[0].cert) { doc.pages[0] = pg; i = 0; } else { i = doc.pages.findIndex(p => p.cert); if (i < 0) i = doc.pages.length; doc.pages.splice(i, 0, pg); }
+  certTplBusy = true; try { sel = []; cur = i; fitCache.clear(); commit(); } finally { certTplBusy = false; } renderAll();
+  if (!quiet) toast('상장 양식입니다 — 《 》는 사람마다 바뀌는 자리. 글 상자의 위치·크기·글꼴·줄 간격을 고치면 모든 상장에 바로 적용됩니다');
+}
+/* commit() 직전에 불림: 양식 쪽에서 고친 배치를 기억 → 만든 상장 전체에 적용 → 양식 쪽 글을 지금 명단·공통 값으로 새로 고침 */
+function certTplCommit() {
+  const ti = doc.pages.findIndex(p => p.certTpl); if (ti < 0 || !doc.cert) return; const C = certState(), tp = doc.pages[ti], form = tp.certTpl.form, n = tp.certTpl.n || 0;
+  if (form !== C.form) { const pg = certTplPage(C.form); pg.id = tp.id; doc.pages[ti] = pg; if (cur === ti) sel = []; return; }  /* 양식 종류를 바꿈 */
+  const rows = certRows(form), same = (a, b) => JSON.stringify(a) === JSON.stringify(b), val = (e, k) => k === 'size' && e.fitText ? (e.fitMax || e.size) : e[k];
+  const fresh = () => certEls(form, certTplRow(form, rows, n)).concat(C.serial && C.serial.on ? [certSerialEl(C, form, 0)] : []);
+  if (cur === ti) { /* 지금 고치는 쪽이 양식: 기본 배치와 달라진 상자만 기억 */
+    const gen = fresh(), changed = [];
+    tp.els.forEach(e => { if (!e.certKey) return; const g = gen.find(q => q.certKey === e.certKey); if (!g) return; if (CERT_LP.every(k => (k === 'h' && e.sizing !== 'fixed') || (k === 'w' && e.sizing === 'autow') || same(val(e, k), val(g, k)))) return;  /* 자동 높이·자동 너비는 글에 따라 저절로 바뀌므로 비교하지 않음 */ const L = {}; CERT_LP.forEach(k => { if (e[k] !== undefined) L[k] = clone(e[k]); }); if (e.fitText) { L.size = e.fitMax || e.size; L.fitMax = L.size; } C.layout[certLKey(form, e.certKey, n)] = L; changed.push(e.certKey); });
+    if (changed.length) {
+      /* 종목 수가 다른 상장: 기록 상자의 가로 배치는 종목 수마다 다르므로, 위아래 이동·글자 크기 비율·글꼴·굵기·색·줄 간격만 같이 */
+      const pristine = (m, fn) => { const keep = C.layout; C.layout = Object.fromEntries(Object.entries(keep).filter(([k]) => !k.startsWith(form + ':rec') && !k.startsWith(form + ':body@') && k !== form + ':body')); try { return fn(certEls(form, certTplRow(form, rows, m))); } finally { C.layout = keep; } };
+      const others = [...new Set(rows.map(r => certRecN(form, r)))].filter(m => m && m !== n), STY = ['font', 'weight', 'color', 'lh', 'ls', 'italic'];
+      const spread = (pick, srcKey) => { const L = C.layout[certLKey(form, srcKey, n)]; if (!L) return; const d0 = pristine(n, g => g.find(q => q.certKey === srcKey)); if (!d0) return; const dy = L.y - d0.y, ks = d0.size ? L.size / d0.size : 1;
+        others.forEach(m => { const outs = pristine(m, g => g.filter(pick).map(q => { const o = {}; CERT_LP.forEach(k => { if (q[k] !== undefined) o[k] = clone(q[k]); }); o.y = r1(q.y + dy); o.size = Math.round(q.size * ks * 2) / 2; STY.forEach(k => { if (L[k] !== undefined) o[k] = clone(L[k]); }); return [certLKey(form, q.certKey, m), o]; })); outs.forEach(([kk, o]) => { C.layout[kk] = o; }); /* pristine 안에서는 배치표가 임시 사본이라 밖에서 적음 */ }); };
+      const recCh = changed.find(k => /^rec/.test(k)); if (form === 'record' && recCh) spread(q => /^rec/.test(q.certKey), recCh);
+      if (form === 'record' && changed.includes('body')) spread(q => q.certKey === 'body', 'body');
+      /* 이미 만든 상장 전체에 (글은 그대로 두고 위치·모양만) */
+      const fit = []; doc.pages.forEach(p => { if (!p.cert || p.cert.form !== form) return; p.els.forEach(e => { if (!e.certKey) return; const L = C.layout[certLKey(form, e.certKey, p.cert.n || 0)]; if (!L) return; Object.assign(e, clone(L)); if (e.fitText) { e.fitMax = Number(L.fitMax) || L.size || e.fitMax; e.size = e.fitMax; fit.push(e); } fitCache.delete(e.id); }); });
+      if (fit.length) { clearTimeout(certTplCommit.tm); certTplCommit.tm = setTimeout(() => fitTextOffscreen(fit).then(() => markDirty()).catch(() => {}), 500); }
+      certTplCommit.n = doc.pages.filter(p => p.cert && p.cert.form === form).length; clearTimeout(certTplCommit.tt); certTplCommit.tt = setTimeout(() => toast(certTplCommit.n ? `양식을 고쳤습니다 — 상장 ${certTplCommit.n}장에 모두 적용했습니다` : '양식을 고쳤습니다 — \'상장 만들기\'를 누르면 이 배치로 만들어집니다'), 250);
+    }
+  }
+  /* 양식 쪽의 글·배치를 지금 값으로 (요소 번호는 그대로 — 고른 상태가 풀리지 않게) */
+  const gen2 = fresh(), old = tp.els, frame = old.find(e => e.certFrame), extra = old.filter(e => !e.certKey && !e.certFrame);
+  gen2.forEach(g => { const o = old.find(q => q.certKey === g.certKey); if (o) g.id = o.id; if (certTplField(form, g.certKey, rows)) g.tplField = true; g.name = (g.name || '').replace('상장 · ', '양식 · '); });
+  if (frame) frame.hidden = C.printFrame === false;
+  tp.els = (frame ? [frame] : []).concat(gen2, extra); if (cur === ti) sel = sel.filter(id => tp.els.some(e => e.id === id));
+}
 function certRecN(form, r) { return form === 'record' && r ? ((Array.isArray(r.recs) && r.recs.length) || [r.a1 || r.b1, r.a2 || r.b2].filter(Boolean).length) : 0; }
 /* 이 쪽에서 옮기거나 바꾼 글 상자 위치·모양을 양식에 기억 → 모든 상장에 (워드의 '양식 고치기') */
 function certSaveLayout() {
   const pg = page(); if (!pg.cert) { toast('상장 쪽에서 쓰세요', true); return; } const C = certState(), form = pg.cert.form; let n = 0;
-  pg.els.forEach(e => { if (!e.certKey) return; const L = {}; ['x', 'y', 'w', 'h', 'font', 'size', 'weight', 'color', 'align', 'lh', 'ls', 'italic', 'sizing', 'fitText', 'valign', 'strokeW', 'strokeC', 'shadow'].forEach(kk => { if (e[kk] !== undefined) L[kk] = clone(e[kk]); }); if (e.fitText) { L.size = e.fitMax || e.size; L.fitMax = e.fitMax || e.size; } C.layout[form + ':' + e.certKey + (/^rec/.test(e.certKey) ? '@' + (pg.cert.n || 0) : '')] = L; n++; }); /* 기록 상자는 종목 수가 같은 상장끼리만 */
+  pg.els.forEach(e => { if (!e.certKey) return; const L = {}; CERT_LP.forEach(kk => { if (e[kk] !== undefined) L[kk] = clone(e[kk]); }); if (e.fitText) { L.size = e.fitMax || e.size; L.fitMax = e.fitMax || e.size; } C.layout[certLKey(form, e.certKey, pg.cert.n || 0)] = L; n++; }); /* 기록 상자는 종목 수가 같은 상장끼리만 */
   commit(); certMerge(); toast(`이 쪽의 글 상자 ${n}개 위치·모양을 양식에 기억하고 모든 상장을 다시 만들었습니다`);
 }
 function renderCertSide(body) {
@@ -4950,7 +5012,9 @@ function renderCertSide(body) {
   <div class="cformgrid">${Object.entries(CERT_FORMS).map(([kk, f]) => `<button class="cform ${kk === form ? 'on' : ''}" data-cform="${kk}"><b>${f.name}</b><small>${f.desc}</small></button>`).join('')}</div>
   <div class="ccommon">${F.common.map(([kk, l]) => `<label class="f"><span>${l} <em class="hint">모두 같음</em></span><input type="text" data-cc="${kk}" value="${esc(D.common[kk] || '')}"></label>`).join('')}
   <label class="f"><span>본문 <em class="hint">{ } 자리는 위 값으로 바뀜</em></span><textarea data-cbody rows="4">${esc(D.body)}</textarea></label>
-  <div class="cchips">${fieldChips.map(l => `<button class="btn sm" data-cchip="${esc(l)}" title="본문에 넣기">{${esc(l)}}</button>`).join('')}<button class="btn sm" data-cx="bodyreset" title="처음 문구로">처음 문구</button></div></div>
+  <div class="cchips"><span class="cchips-l">자리 표시 넣기</span>${['이름'].concat(fieldChips).map(l => `<button class="btn sm cchip" data-cchip="${esc(l)}" title="누르면 본문의 커서 자리에 {${esc(l)}}가 들어갑니다 — 상장을 만들 때 ${l === '이름' ? '그 사람 이름' : '위에 적은 값'}으로 바뀝니다">{${esc(l)}}</button>`).join('')}</div>
+  <div class="row" style="justify-content:flex-end;margin-top:4px"><button class="btn sm" data-cx="bodyreset" title="본문을 이 양식의 처음(기본) 문구로 되돌립니다">↺ 본문을 기본 문구로 되돌리기</button></div>
+  <button class="btn full" data-cx="tpl" style="margin-top:8px" title="사람마다 바뀌는 자리(이름·기록 등)가 표시된 양식 — 여기서 위치·크기·간격을 고치면 모든 상장에 적용됩니다">📐 양식 보기·고치기 <small>(자리 표시 · 고치면 모든 상장에)</small></button></div>
   <h3>③ 명단 <small>${nOk}명 · 엑셀에서 붙여넣기 가능</small></h3>
   <div class="ctable-wrap"><table class="ctable"><tr><th>#</th>${F.cols.map(([, l]) => `<th title="${esc(l)}">${esc(l.replace(/ \(.*\)$/, ''))}</th>`).join('')}<th></th></tr>
   ${rows.map((r, i) => `<tr class="${i === certPrev ? 'cur' : ''}"><td class="ci" data-cpick="${i}" title="미리 보기">${i + 1}</td>${Array.isArray(r.recs) && r.recs.length && form === 'record' ? `<td><input data-cr="${i}" data-ck="name" value="${esc(r.name || '')}" style="width:7em"></td><td colspan="${F.cols.length - 1}" class="crecs" title="관리프로그램 측정에서 가져온 기록">${r.recs.map(q => `${esc(q.k)} ${esc(q.a)}→${esc(q.b)}${esc(q.u || '')}`).join(' · ')}</td>` : F.cols.map(([kk, , w]) => `<td><input data-cr="${i}" data-ck="${kk}" value="${esc(r[kk] || '')}" style="width:${w}em"></td>`).join('')}<td><button class="x" data-cdel="${i}" title="이 줄 지우기">×</button></td></tr>`).join('')}</table></div>
@@ -5043,7 +5107,7 @@ function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEa
     if (k === 'pastego') { certPaste($('#cpaste').value); }
     if (k === 'clear' && window.confirm(`명단 ${D.rows.length}줄을 비울까요?`)) { D.rows = []; certPrev = 0; markDirty(); renderSide(); }
     if (k === 'bodyreset') { D.body = F.body; markDirty(); renderSide(); }
-    if (k === 'merge') certMerge(); if (k === 'pdf') openDownload('pdfhq'); if (k === 'layout') certSaveLayout(); if (k === 'meas') openMeasImport(); if (k === 'preview') openCertPreview(); if (k === 'print') openPrint('cert');
+    if (k === 'tpl') certShowTpl(); if (k === 'merge') certMerge(); if (k === 'pdf') openDownload('pdfhq'); if (k === 'layout') certSaveLayout(); if (k === 'meas') openMeasImport(); if (k === 'preview') openCertPreview(); if (k === 'print') openPrint('cert');
     if (k === 'layoutreset') { Object.keys(C.layout).forEach(kk => { if (kk.startsWith(C.form + ':')) delete C.layout[kk]; }); certMerge(); }
   });
 })();
@@ -5119,6 +5183,7 @@ async function openMeasImport(again) {
       const rows = people.filter(p => !measImp.off[p.name]).map(p => ({ name: p.name, recs: p.recs }));
       D.rows = $('#mReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; commit(); d.close(); sideTab = 'cert'; renderRail(); renderSide();
       toast(`향상왕 ${rows.length}명을 명단에 넣었습니다 — 상장 이름·측정 이름·날짜를 확인하세요`);
+      await certShowTpl(true);  /* 오른쪽에 양식(자리 표시)을 보여 줌 */
       if (make) openCertPreview(doc.cert.frame ? '' : '상장 틀이 아직 없습니다 — ① 상장 틀을 불러오면 배경이 들어갑니다');
     };
     $('#mGo').onclick = () => go(false); $('#mGoMake').onclick = () => go(true);
