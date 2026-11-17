@@ -1234,3 +1234,11 @@ dialog.cpvdlg .dbody{flex:1;min-height:0;max-height:none;overflow:hidden;display
 .stage.compact .toolbar .tgroup{padding:0 2px}
 #focusOut{display:none;position:absolute;top:10px;right:12px;z-index:6;box-shadow:0 4px 14px rgba(16,24,40,.14)}
 body.tl-focus #focusOut{display:inline-flex}
+
+/* 2026-11-18 전문가 점검: 끌기점 잡는 곳 넓게·좁은 위 막대·어두운 곳 초점·상장 빠른 길·미리 보기 크게 */
+.ovl .h::after{content:'';position:absolute;inset:-7px}
+@media (max-width:1050px){.topbar .btn:not(#btnExport){font-size:0;gap:0;padding:6px 7px}.topbar .brand>span:not(.logo){display:none}.topbar input.pname{width:110px}#status{display:none}.topbar{overflow:hidden;min-width:0}}
+.rail button:focus-visible,#vtl :focus-visible{outline:2px solid #ffd54a;outline-offset:1px}
+@media (max-height:820px){.rail button span{font-size:11px}}
+.cquick{border:1px solid var(--ui-accent);background:var(--ui-accent-soft);border-radius:12px;padding:10px 12px;margin:0 0 10px;font-size:12.5px}.cquick b{display:block;margin-bottom:2px}
+.cpvdlg .cpvgrid{grid-template-columns:repeat(auto-fill,minmax(244px,1fr))}

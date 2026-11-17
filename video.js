@@ -190,7 +190,7 @@ NC.video = (function () {
     const u = T - c.at, d = Number(c.dur || 2.5); if (u < 0 || u > d) return;
     const fade = Math.min(1, u / 0.18, (d - u) / 0.18), sz = Math.round(Math.min(W, H) * Number(c.size || 0.065)), st = c.style || 'outline';
     x.save(); x.globalAlpha = Math.max(0, fade); x.font = `${c.weight || 800} ${sz}px "${c.font || 'Pretendard'}", "Pretendard", sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
-    const lines = wrapText(x, c.text || '', W * 0.86), lh = sz * 1.25, y0 = (c.pos === 'top' ? H * 0.14 : c.pos === 'middle' ? H * 0.5 : H * 0.84) - (lines.length - 1) * lh / 2;
+    const lines = wrapText(x, c.text || '', W * 0.86), lh = sz * 1.25, y0 = (c.pos === 'top' ? H * 0.14 : c.pos === 'middle' ? H * 0.5 : (H > W * 1.3 ? H * 0.70 : H * 0.84)) - (lines.length - 1) * lh / 2; /* 세로(숏츠·릴스): 아래 앱 단추·설명 글(약 22%) 위로 */
     let wordIx = 0; const words = (c.text || '').split(/\s+/).filter(Boolean), shown = st === 'karaoke' ? Math.min(words.length, Math.floor(u / Math.max(0.15, d * 0.85 / Math.max(1, words.length))) + 1) : 1e9;
     lines.forEach((ln, i) => {
       const y = y0 + i * lh, w = x.measureText(ln).width;
