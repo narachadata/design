@@ -2205,6 +2205,24 @@ function openVideoMaker() {
 }
 const RAIL = [['pages', '페이지', 'i-pages'], ['tpl', '템플릿', 'i-tpl'], ['news', '소식지', 'i-news'], ['cert', '상장', 'i-award'], ['video', '영상', 'i-video'], ['elems', '요소', 'i-elems'], ['text', '텍스트', 'i-text'], ['photo', '사진', 'i-img'], ['upload', '업로드', 'i-upload'], ['project', '프로젝트', 'i-folder'], ['ai', 'AI 도구', 'i-ai'], ['bg', '배경', 'i-bg'], ['theme', '테마', 'i-theme'], ['chart', '차트', 'i-chart'], ['layers', '레이어', 'i-layers']];
 function renderRail() { $('#rail').innerHTML = RAIL.map(([k, t, ic]) => `<button data-tab="${k}" aria-selected="${sideTab === k}" title="${t}"><svg class="ic"><use href="#${ic}"/></svg><span>${t}</span></button>`).join(''); $$('#rail button').forEach(b => b.onclick = () => { focusOut(); /* 영상 집중 보기에서 왼쪽 메뉴를 누르면 패널이 보이는 보기로 */ sideTab = b.dataset.tab; if (sideTab !== 'news' && newsMode) setNewsMode(false); renderRail(); renderSide(); if (sideTab === 'video') { if (!tlOn()) tlShow(true); } else if (tlOn() && tlOnlyVideo) { if (tl.playing) tlPause(); tlShow(false); } }); }
+/* TV 발표 화면 (캔바 '발표'처럼): 숨긴 쪽은 빼고 지금 쪽부터 화면 가득. ←/→/스페이스/누르기로 넘김, Esc 끝 */
+function openPresent(from) {
+  const list = doc.pages.map((p, i) => i).filter(i => !doc.pages[i].dlOff); if (!list.length) { toast('보여 줄 쪽이 없습니다', true); return; }
+  let k = Math.max(0, list.indexOf(from != null ? from : cur)); const box = document.createElement('div'); box.id = 'present'; box.tabIndex = -1;
+  box.innerHTML = '<div class="prs-stage"></div><div class="prs-bar"><button data-p="-1">‹</button><span></span><button data-p="1">›</button><button data-p="x">끝내기 (Esc)</button></div>'; document.body.appendChild(box);
+  const stage = box.querySelector('.prs-stage'), lab = box.querySelector('.prs-bar span');
+  const show = () => { const p = doc.pages[list[k]], W = box.clientWidth || innerWidth, H = box.clientHeight || innerHeight, pw = doc.w * MM, ph = doc.h * MM, z = Math.min(W / pw, H / ph);
+    stage.innerHTML = `<div style="width:${pw * z}px;height:${ph * z}px;overflow:hidden;position:relative"><div style="width:${pw}px;height:${ph}px;transform:scale(${z});transform-origin:0 0">${sheetHTML(p, 'thumb')}</div></div>`; lab.textContent = `${k + 1} / ${list.length}`; };
+  const go = d => { k = Math.max(0, Math.min(list.length - 1, k + d)); show(); };
+  let hideT = 0; const wake = () => { box.classList.add('awake'); clearTimeout(hideT); hideT = setTimeout(() => box.classList.remove('awake'), 2200); };
+  const end = () => { document.removeEventListener('keydown', key, true); removeEventListener('resize', show); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); box.remove(); goto(list[k]); };
+  const key = e => { if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(e.key)) { go(1); } else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(e.key)) { go(-1); } else if (e.key === 'Home') { k = 0; show(); } else if (e.key === 'End') { k = list.length - 1; show(); } else if (e.key === 'Escape') { end(); } else return; e.preventDefault(); e.stopPropagation(); };
+  document.addEventListener('keydown', key, true); addEventListener('resize', show);
+  box.onclick = e => { const b = e.target.closest('[data-p]'); if (b) { if (b.dataset.p === 'x') end(); else go(Number(b.dataset.p)); return; } go(e.clientX < innerWidth * 0.25 ? -1 : 1); };
+  box.onmousemove = wake; document.addEventListener('fullscreenchange', function fc() { if (!document.fullscreenElement && document.body.contains(box)) { document.removeEventListener('fullscreenchange', fc); } });
+  try { box.requestFullscreen && box.requestFullscreen().catch(() => {}); } catch (e) {}
+  show(); setTimeout(show, 120); wake(); box.focus();
+}
 function tmpSheet(w, h, els, bg) { const tmp = Object.assign({}, doc, { w, h, bleed: 0, cropMarks: false }); const saved = doc; doc = tmp; try { return sheetHTML({ id: 'tmp', bg: bg || '#ffffff', els }, 'thumb'); } finally { doc = saved; } }
 function fitBoxes(root, sel_, maxH) { root.querySelectorAll(sel_).forEach(bx => { const w = Number(bx.dataset.w), h = Number(bx.dataset.h), n = Number(bx.dataset.n) || 1; const bw = bx.clientWidth; if (!bw) return; const k = Math.min(bw / (w * MM * n + (n - 1) * 4), (maxH || 110) / (h * MM)); const total = w * MM * k * n + (n - 1) * 4; bx.querySelectorAll(':scope > .sheet').forEach((sh, i) => { sh.style.transform = `scale(${k})`; sh.style.left = ((bw - total) / 2 + i * (w * MM * k + 4)) + 'px'; }); bx.style.height = (h * MM * k) + 'px'; }); }
 function renderSide() {
@@ -2302,11 +2320,11 @@ function renderSide() {
     <h3>저장 · 동기화</h3>
     <p class="hint">${st.dir && st.handle ? `동기화 폴더 <b>${esc(st.dirName)}</b>의 <b>${esc(st.fileName)}</b>에 자동 저장 중 · 설정값도 함께 동기화` : st.handle ? `파일 <b>${esc(st.fileName)}</b>에 자동 저장 중` : '브라우저에만 자동 저장 중 (여러 PC에서 쓰려면 "저장·동기화"에서 구글 드라이브 폴더 연결)'}</p>
     <div class="tile"><button data-pj="save"><svg class="ic" style="width:22px;height:22px"><use href="#i-save"/></svg>저장·동기화</button><button data-pj="open"><svg class="ic" style="width:22px;height:22px"><use href="#i-open"/></svg>열기</button><button data-pj="new"><svg class="ic" style="width:22px;height:22px"><use href="#i-new"/></svg>새 문서</button><button data-pj="down"><svg class="ic" style="width:22px;height:22px"><use href="#i-upload"/></svg>사본 내려받기</button></div>
-    <h3>내보내기</h3><div class="tile"><button data-pj="pdf"><svg class="ic" style="width:22px;height:22px"><use href="#i-pdf"/></svg>PDF</button><button data-pj="png"><svg class="ic" style="width:22px;height:22px"><use href="#i-img"/></svg>현재 쪽 PNG</button></div>
+    <h3>내보내기</h3><div class="tile"><button data-pj="pdf"><svg class="ic" style="width:22px;height:22px"><use href="#i-pdf"/></svg>PDF</button><button data-pj="png"><svg class="ic" style="width:22px;height:22px"><use href="#i-img"/></svg>현재 쪽 PNG</button><button data-pj="present" title="도장 TV·빔프로젝터에 쪽을 화면 가득 (← → 넘김, Esc 끝)"><span style="font-size:20px;line-height:22px">📺</span>TV 발표</button></div>
     <h3>공휴일</h3><p class="hint">${Object.keys(doc.holidays).length ? '적용 연도: ' + Object.keys(doc.holidays).sort().map(y => `${y}년(${doc.holidays[y].length})`).join(', ') : '아직 없습니다.'}</p><button class="btn sm" data-pj="hol">공휴일 가져오기·편집</button>
     <h3>반복 일정 · 연간 행사</h3><button class="btn sm" data-pj="rules">목록 편집 (생일·기념일·심사일)</button>
     <h3>도장 정보</h3><p class="hint">전화·주소·도장 이름을 저장하면 템플릿에 자동으로 들어가고, 바뀌면 한꺼번에 고칩니다.</p><button class="btn sm" data-dojang>🏠 도장 정보 편집</button>`;
-    body.onclick = e => { const b = e.target.closest('[data-pj]'); if (!b) return; const k = b.dataset.pj; if (k === 'save') openSaveDialog(); if (k === 'open') $('#btnOpen').click(); if (k === 'new') $('#btnNew').click(); if (k === 'down') { gcAssets(); store.download(doc); } if (k === 'pdf') openDownload('pdfhq'); if (k === 'png') openDownload('png'); if (k === 'hol') openHoliday(); if (k === 'rules') openRules(); };
+    body.onclick = e => { const b = e.target.closest('[data-pj]'); if (!b) return; const k = b.dataset.pj; if (k === 'save') openSaveDialog(); if (k === 'open') $('#btnOpen').click(); if (k === 'new') $('#btnNew').click(); if (k === 'down') { gcAssets(); store.download(doc); } if (k === 'pdf') openDownload('pdfhq'); if (k === 'png') openDownload('png'); if (k === 'hol') openHoliday(); if (k === 'present') openPresent(); if (k === 'rules') openRules(); };
     body.oninput = e => { const t = e.target, k = t.dataset.k; if (!k) return; const v = t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) : t.value; doc[k.slice(4)] = v; if (k === 'doc.name') $('#pname').value = v; markDirty(); };
   } else if (sideTab === 'ai') {
     body.innerHTML = `<p class="hint">${chatMode() ? '지금 쓰는 채팅 요금제(Claude·Gemini·ChatGPT)로 씁니다 — 지시문을 복사해 채팅에 붙여 넣고, 받은 답·그림을 공방에 붙여 넣습니다. 방식은 "AI 설정"에서 바꿉니다.' : 'Claude가 문구와 이미지 프롬프트를 만들고, Gemini가 삽화를 그립니다. API 키는 "AI 설정"에 넣습니다.'}</p>
@@ -4475,10 +4493,18 @@ function certEls(form, r) {
   if (form === 'grade') T('note', r.note, { label: '작은 글', x: 24, y: 241, w: 90, h: 5, size: 9, font: serif, weight: 400, align: 'left' });
   return out;
 }
+/* 상장 번호: '제 2026-001 호' — 다음 번호는 PC끼리 동기화(naracal-cert-serial: 앞 글자별 마지막 번호) */
+function certNo(C, i) { const S = C.serial || {}; return `제 ${S.prefix || new Date().getFullYear()}-${String((Number(S.start) || 1) + i).padStart(3, '0')} 호`; }
+function certNextSerial(prefix) { try { const m = JSON.parse(localStorage.getItem('naracal-cert-serial') || '{}'); return (Number(m[prefix]) || 0) + 1; } catch (e) { return 1; } }
+function certSerialEl(C, form, i) { const L = C.layout[form + ':no'] || {}, kx = doc.w / 210, ky = doc.h / 297, k = Math.min(kx, ky); return Object.assign({}, TEXT_DEF, { id: uid(), text: certNo(C, i), font: 'Nanum Myeongjo', size: Math.round(11 * k * 2) / 2, weight: 400, color: '#1a1a1a', align: 'left', lh: 1.3, ls: 0.02, name: '상장 · 번호', certKey: 'no', x: r1(26 * kx), y: r1(30 * ky), w: r1(70 * kx), h: r1(6 * ky) }, L); }
+function certLogCSV() { const C = certState(), L = C.log || []; if (!L.length) { toast('아직 발급 기록이 없습니다 — 상장 번호를 켜고 상장을 만들면 쌓입니다', true); return; }
+  const q = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`, rows = [['번호', '이름', '상장', '날짜', '만든 때']].concat(L.map(x => [x.no, x.name, x.title, x.date, new Date(x.t).toLocaleString('ko-KR')]));
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv' })); a.download = `상장 발급 대장 ${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
 function certPage(form, r, i) {
   const C = certState(), els = [];
   if (C.frame) els.push({ type: 'image', id: uid(), src: C.frame, pdfSrc: C.framePdf || undefined, x: 0, y: 0, w: doc.w, h: doc.h, rot: 0, fit: 'cover', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '상장 틀', locked: true, hidden: C.printFrame === false, certFrame: true });
-  return { id: uid(), bg: '#ffffff', els: els.concat(certEls(form, r)), label: `상장 ${i + 1} · ${r.name || ''}`, cert: { form, i, n: certRecN(form, r) } };
+  const more = C.serial && C.serial.on ? [certSerialEl(C, form, i)] : [];
+  return { id: uid(), bg: '#ffffff', els: els.concat(certEls(form, r), more), label: `상장 ${i + 1} · ${r.name || ''}`, cert: { form, i, n: certRecN(form, r) } };
 }
 /* 화면 밖에서 글자 크기 자동 맞춤을 미리 계산 (캔버스에 열지 않은 쪽도 PDF에서 이름이 넘치지 않게) */
 async function fitTextOffscreen(els) {
@@ -4553,6 +4579,10 @@ async function certMerge(skipAsk) {
   /* 상장 쪽에서 직접 고친 글이 있으면 다시 만들기 전에 확인 (고친 내용이 명단 내용으로 바뀜) */
   if (!skipAsk) { const old = doc.pages.filter(p => p.cert && p.cert.form === C.form); let changed = 0; old.forEach(p => { const r = rows[p.cert.i]; if (!r) return; const fresh = certEls(C.form, r); if (p.els.some(e => e.certKey && fresh.some(f => f.certKey === e.certKey && f.text !== e.text))) changed++; }); if (changed && !window.confirm(`상장 쪽에서 직접 고친 글이 ${changed}장에 있습니다.\n다시 만들면 명단(③) 내용으로 바뀝니다. 계속할까요? (고친 내용은 ③ 명단에도 고쳐 두세요)`)) return; }
   const pages = rows.map((r, i) => certPage(C.form, r, i)); setStatus('이름 길이에 맞춰 글자 크기를 맞추는 중…'); await fitTextOffscreen(pages.flatMap(p => p.els)); setStatus(''); const keep = doc.pages.filter(p => !(p.cert && p.cert.form === C.form) && (p.els.length || p.cert));
+  if (C.serial && C.serial.on) { /* 발급 대장: 같은 번호는 새 내용으로 바꿈, 다음 번호 기억(다른 PC와 동기화) */
+    const D = C.data[C.form], now = Date.now(), ent = rows.map((r, i) => ({ no: certNo(C, i), name: r.name || '', title: certVal(D, r, 'title'), date: certVal(D, r, 'date'), t: now })), nos = new Set(ent.map(x => x.no));
+    C.log = (C.log || []).filter(x => !nos.has(x.no)).concat(ent).slice(-2000);
+    try { const P = C.serial.prefix || String(new Date().getFullYear()), m = JSON.parse(localStorage.getItem('naracal-cert-serial') || '{}'), last = (Number(C.serial.start) || 1) + rows.length - 1; if (!(Number(m[P]) >= last)) { m[P] = last; lsSet('naracal-cert-serial', m); } } catch (e) {} }
   doc.pages = keep.concat(pages); cur = keep.length; sel = []; fitCache.clear(); commit(); renderAll();
   toastUndo(`상장 ${rows.length}장을 만들었습니다 — 쪽마다 고칠 수 있고, 다운로드에서 PDF로 한 번에 저장합니다`);
 }
@@ -4588,6 +4618,7 @@ function renderCertSide(body) {
   ${nOk ? `<button class="btn sm full" data-cx="preview" style="margin-bottom:6px">🔍 모두 크게 미리 보기</button><div class="row cprevnav"><button class="btn sm icon" data-cnav="-1">‹</button><span>${Math.min(certPrev + 1, rows.length)} / ${rows.length} · <b>${esc((rows[certPrev] || {}).name || '(이름 없음)')}</b></span><button class="btn sm icon" data-cnav="1">›</button></div><div class="cprev" id="cprev"></div>${certWarn(form)}` : '<p class="hint">이름을 넣으면 여기에 상장이 보입니다.</p>'}
   <h3>⑤ 병합 완료</h3>
   <button class="btn primary full" data-cx="preview" ${nOk ? '' : 'disabled'}>🔍 ${nOk}장 모두 미리 보기</button>
+  <div class="cserial"><label class="chk"><input type="checkbox" data-cx="serialOn" ${C.serial && C.serial.on ? 'checked' : ''}> 상장 번호 넣기 <small class="hint">(${esc(certNo(Object.assign({}, C, { serial: Object.assign({ prefix: String(new Date().getFullYear()), start: 1 }, C.serial || {}) }), 0))} …)</small></label>${C.serial && C.serial.on ? `<div class="row" style="gap:6px"><label class="f" style="flex:1;margin:0"><span>앞 글자</span><input type="text" data-cser="prefix" value="${esc(C.serial.prefix || '')}"></label><label class="f" style="flex:1;margin:0"><span>시작 번호</span><input type="number" min="1" data-cser="start" value="${Number(C.serial.start) || 1}"></label></div><p class="hint" style="margin:4px 0 0">다음 번호는 다른 PC와 이어집니다. 번호 위치는 상장 쪽에서 옮긴 뒤 '양식에 기억'.</p>` : ''}${(C.log || []).length ? `<button class="btn sm" data-cx="certlog" style="margin-top:6px">📒 발급 대장 내려받기 (${C.log.length}건, 엑셀)</button>` : ''}</div>
   <button class="btn full" data-cx="merge" ${nOk ? '' : 'disabled'} style="margin-top:6px">🏅 상장 ${nOk}장 만들기</button>
   <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn sm primary" data-cx="print" ${doc.pages.some(p => p.cert) ? '' : 'disabled'}>🖨 바로 출력</button><button class="btn sm" data-cx="pdf" ${doc.pages.some(p => p.cert) ? '' : 'disabled'}>PDF로 저장</button><button class="btn sm" data-cx="layout" ${page().cert ? '' : 'disabled'} title="지금 상장 쪽에서 글 상자를 옮기거나 글꼴·크기를 바꾼 뒤 누르면, 모든 상장에 같은 배치로">이 쪽 배치를 모든 상장에</button>${Object.keys(C.layout).some(kk => kk.startsWith(form + ':')) ? '<button class="btn sm" data-cx="layoutreset">배치 처음대로</button>' : ''}</div>
   <p class="hint" style="margin-top:8px">이름이 길면 글자 크기가 저절로 줄어듭니다. 종목 2 기록이 없는 사람은 기록 1이 가운데로 옵니다(조건부 필드). 날짜·측정 이름처럼 모두 같은 값은 ②에서 한 번만 바꾸면 됩니다.</p></div>`;
@@ -4652,7 +4683,7 @@ function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEa
     if (t.dataset.cc) { D.common[t.dataset.cc] = t.value; soon(); } else if (t.hasAttribute('data-cbody')) { D.body = t.value; soon(); }
     else if (t.dataset.cr != null) { const i = Number(t.dataset.cr); D.rows[i] = D.rows[i] || {}; D.rows[i][t.dataset.ck] = t.value; certPrev = i; soon(); }
   });
-  document.addEventListener('change', e => { if (!on() || !sb().contains(e.target)) return; if (e.target.dataset.cx === 'printFrame') { const C = certState(); C.printFrame = e.target.checked; doc.pages.forEach(p => p.els.forEach(x => { if (x.certFrame) x.hidden = !C.printFrame; })); commit(); renderAll(); toast(C.printFrame ? '틀도 함께 인쇄합니다' : '글자만 인쇄합니다 (틀이 인쇄된 상장 용지에)'); } });
+  document.addEventListener('change', e => { if (!on() || !sb().contains(e.target)) return; if (e.target.dataset.cx === 'serialOn') { const C = certState(), P = (C.serial && C.serial.prefix) || String(new Date().getFullYear()); C.serial = Object.assign({ prefix: P, start: certNextSerial(P) }, C.serial || {}, { on: e.target.checked }); if (e.target.checked && C.serial.start < certNextSerial(C.serial.prefix)) C.serial.start = certNextSerial(C.serial.prefix); commit(); renderSide(); toast(e.target.checked ? `상장 번호를 ${certNo(C, 0)}부터 넣습니다 — '상장 만들기'를 누르면 들어갑니다` : '상장 번호를 넣지 않습니다'); return; } if (e.target.dataset.cser) { const C = certState(); C.serial = C.serial || {}; C.serial[e.target.dataset.cser] = e.target.dataset.cser === 'start' ? Math.max(1, Number(e.target.value) || 1) : e.target.value.trim(); commit(); renderSide(); return; } if (e.target.dataset.cx === 'printFrame') { const C = certState(); C.printFrame = e.target.checked; doc.pages.forEach(p => p.els.forEach(x => { if (x.certFrame) x.hidden = !C.printFrame; })); commit(); renderAll(); toast(C.printFrame ? '틀도 함께 인쇄합니다' : '글자만 인쇄합니다 (틀이 인쇄된 상장 용지에)'); } });
   document.addEventListener('paste', e => { if (!on() || !e.target.dataset || e.target.dataset.cr == null) return; const txt = (e.clipboardData || window.clipboardData).getData('text/plain'); if (!/[\t\n]/.test(txt.trim())) return; e.preventDefault(); certPaste(txt, Number(e.target.dataset.cr), e.target.dataset.ck); });
   document.addEventListener('click', e => {
     if (!on() || !e.target.closest || !sb().contains(e.target)) return; const C = certState(), D = C.data[C.form], F = CERT_FORMS[C.form];
@@ -4661,7 +4692,7 @@ function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEa
     const pk = e.target.closest('[data-cpick]'); if (pk) { certPrev = Number(pk.dataset.cpick); const i = doc.pages.findIndex(p => p.cert && p.cert.form === C.form && p.cert.i === certRows(C.form).indexOf(D.rows[certPrev])); if (i >= 0) goto(i); renderSide(); return; }
     const dl = e.target.closest('[data-cdel]'); if (dl) { D.rows.splice(Number(dl.dataset.cdel), 1); certPrev = Math.max(0, Math.min(certPrev, D.rows.length - 1)); markDirty(); renderSide(); return; }
     const nv = e.target.closest('[data-cnav]'); if (nv) { certPrev = (certPrev + Number(nv.dataset.cnav) + D.rows.length) % Math.max(1, D.rows.length); renderSide(); return; }
-    const b = e.target.closest('[data-cx]'); if (!b || b.tagName === 'INPUT') return; const k = b.dataset.cx;
+    const b = e.target.closest('[data-cx]'); if (!b || b.tagName === 'INPUT') return; const k = b.dataset.cx; if (k === 'certlog') { certLogCSV(); return; }
     if (k === 'newdoc') certNewDoc(); if (k === 'frame') certLoadFrame();
     if (k === 'framedef') { C.frame = CERT_FRAME_JPG; C.framePdf = CERT_FRAME_PDF; doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { e.src = C.frame; e.pdfSrc = C.framePdf; } })); commit(); renderAll(); toast('기본 나라차 상장틀로 바꿨습니다'); }
     if (k === 'add') { D.rows.push({}); certPrev = D.rows.length - 1; markDirty(); renderSide(); setTimeout(() => { const n = sb().querySelector(`[data-cr="${certPrev}"][data-ck="name"]`); if (n) n.focus(); }, 0); }
