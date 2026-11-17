@@ -53,9 +53,9 @@ NC.store = (function () {
   const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   // 저장본 계보: saveId(이번 저장) + lineage(최근 저장 id들). 다른 PC가 내 마지막 저장을 이어받았는지 판단에 씀
   Object.assign(state, { lastSaveId: '', lineage: [], seq: 0, conflict: false, retries: 0 });
-  function adopt(j) { state.lastSnap = 0; state.lastSaveId = (j && j.saveId) || ''; state.lineage = (j && j.lineage) || (state.lastSaveId ? [state.lastSaveId] : []); keepBase(); }
+  function adopt(j) { state.lastSnap = 0; state.lastSaveId = (j && j.saveId) || ''; state.lineage = (j && j.lineage) || (state.lastSaveId ? [state.lastSaveId] : []); keepBase(j && j.docId); }
   // 이 브라우저 작업의 바탕 판(마지막으로 이어받거나 저장한 saveId) — 다시 열 때 그사이 다른 PC가 저장했는지 알아보는 데 씀
-  function keepBase() { if (state.lastSaveId) idbSet('docBase', { saveId: state.lastSaveId, t: Date.now() }).catch(() => {}); }
+  function keepBase(docId) { if (state.lastSaveId) idbSet('docBase', { saveId: state.lastSaveId, docId: docId || '', t: Date.now() }).catch(() => {}); }
   // 파일 내용 j가 내 마지막 저장본을 이어받은 것인지 (아니면 서로 갈라진 것)
   function descends(j) { return !state.lastSaveId || ((j && j.lineage) || []).includes(state.lastSaveId); }
   async function readFile() {
@@ -66,17 +66,20 @@ NC.store = (function () {
     return j;
   }
   // 저장 전에 파일이 다른 PC에서 바뀌었는지 먼저 확인하고, 바뀌었으면 덮어쓰지 않고 { conflict } 를 돌려줌
+  // 파일 판 j에는 있는데 지금 문서에는 없는 요소가 있는가 (덮으면 사라질 작업)
+  function lostEls(j, doc) { const have = new Set(); (doc.pages || []).forEach(p => (p.els || []).forEach(e => have.add(e.id))); return (j.pages || []).some(p => (p.els || []).some(e => !have.has(e.id))); }
   async function writeFile(doc) {
     if (!state.handle || state.saving || state.conflict) return false;
     state.saving = true;
     try {
       const f0 = await state.handle.getFile();
-      if (state.lastMod && f0.lastModified > state.lastMod + 500) {
+      if (state.lastMod && f0.lastModified !== state.lastMod) { /* 시계가 어긋난 PC·늦게 도착한 판도 알아채도록 '달라졌으면' 내용 확인 */
         let j = null; try { j = JSON.parse(await f0.text()); } catch (e) {}
         if (!j) { /* 동기화 중이라 덜 받은 파일일 수 있음: 덮어쓰지 않고 잠시 뒤 다시. 4번째에 이 PC 작업을 충돌 사본으로 한 번 보관(예전엔 4번째에 덮어씀) */
           if (++state.retries === 4) { try { await writeCopy(doc, pcName() + ' 저장 대기'); } catch (e) {} }
           return { retry: true, held: state.retries >= 4 }; }
-        else if ((j.saveId || '') !== state.lastSaveId) { if (window.NC && NC.live && NC.live.peers() && j.docId && j.docId === doc.docId) adopt(j); else return { conflict: true, file: f0, data: j }; } // 실시간으로 같이 고치는 중이면 상대 저장본을 이어받아 그 다음 판으로 저장
+        else state.retries = 0;
+        if (j && (j.saveId || '') !== state.lastSaveId) { if (window.NC && NC.live && NC.live.peers() && j.docId && j.docId === doc.docId) { if (!descends(j) && lostEls(j, doc)) { try { await writeCopy(j, (j.savedBy || '다른 PC') + ' 저장본'); } catch (e) {} } adopt(j); } else return { conflict: true, file: f0, data: j }; } // 실시간으로 같이 고치는 중이면 상대 저장본을 이어받아 그 다음 판으로 저장
       }
       const seq = state.seq, saveId = rid(), lineage = [saveId].concat(state.lineage).slice(0, 60);
       if (!doc.docId) doc.docId = rid(); // 버전 기록을 묶는 문서 번호 (이름을 바꾸거나 옮겨도 그대로)
@@ -85,7 +88,7 @@ NC.store = (function () {
       await w.write(text);
       await w.close();
       if (Date.now() - (state.lastSnap || 0) > SNAP_EVERY) { state.lastSnap = Date.now(); snapshot(doc.docId, text).catch(() => {}); }
-      state.lastSaveId = saveId; state.lineage = lineage; state.retries = 0; keepBase();
+      state.lastSaveId = saveId; state.lineage = lineage; state.retries = 0; keepBase(doc.docId);
       const f = await state.handle.getFile(); state.lastMod = f.lastModified; if (state.seq === seq) state.dirty = false;
       return true;
     } finally { state.saving = false; }
@@ -93,11 +96,12 @@ NC.store = (function () {
   // 충돌 때 한쪽 내용을 따로 보관: 동기화 폴더가 있으면 그 안에 "충돌 사본" 파일로, 없으면 내려받기로
   async function writeCopy(data, label) {
     const t = new Date(), p2 = n => String(n).padStart(2, '0');
-    const stamp = `${p2(t.getMonth() + 1)}-${p2(t.getDate())} ${p2(t.getHours())}${p2(t.getMinutes())}`;
+    const stamp = `${p2(t.getMonth() + 1)}-${p2(t.getDate())} ${p2(t.getHours())}${p2(t.getMinutes())}${p2(t.getSeconds())}`;
     const base = (data.name || 'design').replace(/[\\/:*?"<>|]/g, '_').trim() || 'design';
-    const name = `${base} (충돌 사본 ${stamp} ${String(label || '').replace(/[\\/:*?"<>|]/g, '_')})`;
+    let name = `${base} (충돌 사본 ${stamp} ${String(label || '').replace(/[\\/:*?"<>|]/g, '_')})`;
     if (!state.dir) { try { await reconnectFolder(); } catch (e) {} } // 시작 직후(폴더 연결 전)에도 폴더에 보관
     if (state.dir && (await folderReady())) {
+      for (let n = 2, b0 = name; n < 50; n++) { try { await state.dir.getFileHandle(name + '.design.json'); name = `${b0} ${n}`; } catch (e) { break; } } /* 같은 초에 또 생겨도 앞 사본을 덮지 않게 */
       const h = await state.dir.getFileHandle(name + '.design.json', { create: true });
       const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign({}, data, { name, saveId: '', lineage: [], docId: rid() }))); await w.close();
       return name + '.design.json';
@@ -116,7 +120,7 @@ NC.store = (function () {
     let j = null; try { j = JSON.parse(text); } catch (e) {}
     if (j && j.assets && Object.keys(j.assets).length) { const ad = await d.getDirectoryHandle('그림', { create: true }); for (const [k, v] of Object.entries(j.assets)) { try { await ad.getFileHandle(k + '.txt'); } catch (e) { const fh = await ad.getFileHandle(k + '.txt', { create: true }); const ww = await fh.createWritable(); await ww.write(v); await ww.close(); } } j.assetRefs = Object.keys(j.assets); delete j.assets; text = JSON.stringify(j); }
     const h = await d.getFileHandle(`${stamp}_${clean(pcName())}${memo ? '_' + clean(memo) : ''}.json`, { create: true }); const w = await h.createWritable(); await w.write(text); await w.close();
-    const all = (await listSnapshots(docId)); for (const x of all.slice(SNAP_KEEP)) { try { await d.removeEntry(x.name); } catch (e) {} }
+    const all = (await listSnapshots(docId)); const days = new Set(); for (const x of all.slice(SNAP_KEEP)) { const day = new Date(x.time).toDateString(); if (x.memo || (Date.now() - x.time < 30 * 864e5 && !days.has(day))) { days.add(day); continue; } try { await d.removeEntry(x.name); } catch (e) {} } /* 메모 붙은 판과 최근 30일 하루 한 판은 남김 */
     return true;
   }
   async function listSnapshots(docId) {
@@ -137,7 +141,7 @@ NC.store = (function () {
     try {
       const p = await state.handle.queryPermission({ mode: 'read' }); if (p !== 'granted') return null;
       const f = await state.handle.getFile();
-      if (f.lastModified > state.lastMod + 500) { return { file: f, text: await f.text() }; }
+      if (f.lastModified !== state.lastMod) { return { file: f, text: await f.text() }; }
     } catch (e) {}
     return null;
   }
@@ -199,7 +203,7 @@ NC.store = (function () {
     let L = localSettings(), merged = false;
     if (!force && SYNC_KEYS.every(k => L[k] === state.setBase[k])) return false;
     const r = await readRemote();
-    if (r && r.f.lastModified > state.setMod + 500) { const m = mergeAll(L, state.setBase, r.vals); merged = SYNC_KEYS.some(k => m[k] !== L[k]); L = m; applyVals(L); }
+    if (r && r.f.lastModified !== state.setMod) { const B = Object.keys(state.setBase || {}).length ? state.setBase : (loadBase() || state.setBase); const m = mergeAll(L, B, r.vals); merged = SYNC_KEYS.some(k => m[k] !== L[k]); L = m; applyVals(L); }
     const h = await state.dir.getFileHandle(SET_FILE, { create: true });
     const w = await h.createWritable(); await w.write(JSON.stringify({ v: 1, updatedAt: Date.now(), savedBy: pcName(), values: L }, null, 1)); await w.close();
     state.setBase = L; state.setMod = (await h.getFile()).lastModified; saveBase();
