@@ -113,7 +113,7 @@
     T('1', 10, 78, 24, 16, { font: 'Montserrat', size: 36, weight: 800, lh: 1, color: NAVY, name: '월 숫자' }),
     T(`JANUARY ${y}`, 32, 86, 80, 6, { font: 'Montserrat', size: 7.5, weight: 700, ls: 0.25, color: '#666', name: '연월' }),
     M(y, 2, 176, 76, 40, 20),
-    C(y, 1, 10, 96, 204, 52, { wdLang: 'short', wdH: 4, wdSize: 6, daySize: 6, evSize: 5.5, cellPad: 0.6, rows: 'merge' }),
+    C(y, 1, 10, 96, 204, 52, { wdLang: 'short', wdH: 4, wdSize: 6.5, daySize: 7.5, evSize: 6, cellPad: 0.6, rows: 'merge' }),
   ], '사진 탁상 달력')]; } });
 
   /* ===== 리플렛·입간판·웹·영상 ===== */

@@ -1,4 +1,7 @@
 // 템플릿 3: 꼬리표(제작 형태·계절·연령·상황·직종) + 조합형 레이아웃 엔진으로 만드는 템플릿 100여 종
+const PTMM = 25.4 / 72; // 1pt = 0.3528mm
+// 제목: 상자 높이(mm)를 채우는 글자 크기(pt) + 길면 자동으로 줄이기(고정 상자). 예전엔 mm로 잡은 값을 pt로 써서 제목이 1/3 크기였음
+const fitT = (txt, bh, lh) => { const sz = Math.max(8, Math.round(bh / (String(txt || '').split('\n').length * lh) * 0.9 / PTMM)); return { size: sz, fitText: true, fitMax: sz, sizing: 'fixed' }; };
 (function () {
   const L = NC.tpl.list;
   const WHITE = '#ffffff', INK = '#1a1a1a';
@@ -59,7 +62,8 @@
     if (o.layout === 'band') {
       els.push(S('rect', 0, 0, w, h * 0.42, { fill: P_.fg, name: '상단 띠' }));
       els.push(T(c.eyebrow, m, m * 0.9, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3.6 * u, weight: 700, color: P_.ac, ls: 0.3 }));
-      els.push(T(c.title, m, m * 0.9 + 5 * u, w - 2 * m, h * 0.42 - m - 12 * u, { font: fT, size: (tall ? 17 : 14) * u, weight: 800, color: WHITE, lh: 1.08, name: '제목' }));
+      { const bh = h * 0.42 - m - 12 * u, nl = String(c.title).split('\n').length, sz = Math.round(bh / (nl * 1.08) * 0.9 / PTMM); /* 상자 높이(mm)를 글자 크기(pt)로 — 예전엔 mm 값을 pt로 써서 1/3 크기였음. 길면 자동으로 줄어듦 */
+        els.push(T(c.title, m, m * 0.9 + 5 * u, w - 2 * m, bh, { font: fT, size: sz, fitText: true, fitMax: sz, sizing: 'fixed', weight: 800, color: WHITE, lh: 1.08, name: '제목' })); }
       els.push(T(c.sub, m, h * 0.42 - 8 * u, w - 2 * m, 6 * u, { font: fB, size: 4.6 * u, weight: 500, color: '#e6e9f2', name: '부제' }));
       els.push(motif(0, w - m - 14 * u, m * 0.6, 14 * u)); els.push(motif(1, w - m - 30 * u, h * 0.42 - 12 * u, 9 * u));
       els.push(S('rect', m, h * 0.48, w - 2 * m, h * 0.3, { fill: P_.soft, radius: 2 * u, name: '안내 상자' }));
@@ -89,7 +93,7 @@
     if (o.layout === 'split') {
       els.push(S('rect', 0, 0, w * 0.5, h, { fill: P_.fg, name: '왼쪽 면' }));
       els.push(T(c.eyebrow, m, m, w * 0.5 - 2 * m, 4 * u, { font: 'Montserrat', size: 3.4 * u, weight: 700, color: P_.ac, ls: 0.3 }));
-      els.push(T(c.title, m, m + 6 * u, w * 0.5 - 1.5 * m, h * 0.5, { font: fT, size: (tall ? 15 : 12) * u, weight: 800, color: WHITE, lh: 1.08, name: '제목' }));
+      els.push(T(c.title, m, m + 6 * u, w * 0.5 - 1.5 * m, h * 0.5, Object.assign({ font: fT, weight: 800, color: WHITE, lh: 1.08, name: '제목' }, fitT(c.title, h * 0.5, 1.08))));
       els.push(T(c.sub, m, h - m - 10 * u, w * 0.5 - 2 * m, 8 * u, { font: fB, size: 4 * u, weight: 500, color: '#e6e9f2', lh: 1.4, name: '부제' }));
       els.push(motif(0, w * 0.5 + m, m, 18 * u));
       if (o.biz.illu && o.useIllu) els.push(I(o.biz.illu, w * 0.5 + m, h * 0.12, w * 0.5 - 2 * m, h * 0.42, { pos: '50% 100%', name: '삽화' }));
@@ -105,7 +109,7 @@
       els.push(T(c.eyebrow, m, h * 0.2, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3.4 * u, weight: 700, color: P_.ac, ls: 0.35, align: 'center' }));
       // 제목은 자리(높이 h*0.3)를 채우는 크기로 (작은 엽서에서 위아래가 비지 않게), 줄 길이도 넘지 않게
       const tl = c.title.split('\n'), tByH = (h * 0.3) / (tl.length * 1.1) * 0.9 / 0.3528, tByW = (w - 2 * m) * 0.92 / (Math.max(...tl.map(l => [...l].length)) * 0.95) / 0.3528, tSz = Math.min(tByH, tByW, (tall ? 16 : 13) * u * 1.7);
-      els.push(T(c.title, m, h * 0.2 + 6 * u, w - 2 * m, h * 0.3, { font: fT, size: Math.max((tall ? 16 : 13) * u, tSz), weight: 800, color: dark ? WHITE : P_.fg, lh: 1.1, align: 'center', valign: 'middle', name: '제목' }));
+      els.push(T(c.title, m, h * 0.2 + 6 * u, w - 2 * m, h * 0.3, Object.assign({ font: fT, weight: 800, color: dark ? WHITE : P_.fg, lh: 1.1, align: 'center', valign: 'middle', name: '제목' }, fitT(c.title, h * 0.3, 1.1))));
       els.push(S('line', w / 2 - 12 * u, h * 0.56, 24 * u, 1, { fill: P_.ac, stroke: P_.ac, strokeW: 0.4 * u }));
       els.push(T(c.sub, m, h * 0.58, w - 2 * m, 6 * u, { font: fB, size: 4.4 * u, weight: 600, color: dark ? WHITE : P_.fg, align: 'center', name: '부제' }));
       els.push(T(c.body, m + 6 * u, h * 0.65, w - 2 * m - 12 * u, h * 0.2, { font: fB, size: 3.9 * u, lh: 1.75, weight: 500, color: tx, align: 'center', name: '본문' }));
@@ -115,7 +119,7 @@
     if (o.layout === 'minimal') {
       els.push(S('rect', 0, 0, w, 1.2 * u, { fill: P_.ac }));
       els.push(T(c.eyebrow, m, m, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3.2 * u, weight: 700, color: P_.sub, ls: 0.35 }));
-      els.push(T(c.title, m, m + 7 * u, w - 2 * m, h * 0.4, { font: fT, size: (tall ? 20 : 15) * u, weight: 900, color: dark ? WHITE : P_.fg, lh: 1.02, ls: -0.02, name: '제목' }));
+      els.push(T(c.title, m, m + 7 * u, w - 2 * m, h * 0.4, Object.assign({ font: fT, weight: 900, color: dark ? WHITE : P_.fg, lh: 1.02, ls: -0.02, name: '제목' }, fitT(c.title, h * 0.4, 1.02))));
       els.push(T(c.sub, m, h * 0.56, w - 2 * m, 6 * u, { font: fB, size: 4.8 * u, weight: 600, color: P_.ac, name: '부제' }));
       els.push(T(c.body, m, h * 0.64, w * 0.62, h * 0.22, { font: fB, size: 4 * u, lh: 1.75, weight: 500, color: tx, name: '본문' }));
       els.push(motif(0, w - m - 22 * u, h * 0.62, 22 * u));
@@ -128,8 +132,9 @@
       // 나라차태권도 현수막: 왼쪽에 한글 로고를 세로 가운데로 두고 글은 그 오른쪽부터 (멀리서도 도장 이름이 먼저 보이게)
       const ours = o.biz.name === '나라차태권도', lgH = h * 0.42, lgW = ours ? lgH * 1.98 : 0, tx = ours ? w * 0.03 + lgW + w * 0.03 : w * 0.04, tw = w * 0.82 - tx;
       if (ours) { els.push(S('rect', tx - w * 0.015, h * 0.22, Math.max(1, h * 0.005), h * 0.56, { fill: P_.fg, name: '구분선', opacity: 0.3 })); els.push(I(isDark(P_.bg) ? 'asset:brand-korean-white' : 'asset:brand-korean', w * 0.03, (h - lgH) / 2, lgW, lgH, { name: '로고' })); }
-      els.push(T(c.title.replace('\n', ' '), tx, h * 0.17, tw, h * 0.4, { font: fT, size: h * 0.46, weight: 900, color: inkOn(P_.bg, P_.fg, 3), lh: 1, name: '제목' }));
-      els.push(T((c.sub + '   ' + (c.cta ? '☎ ' + PHONE : '')).trim(), tx, h * 0.62, tw, h * 0.22, { font: fB, size: h * 0.22, weight: 700, color: inkOn(P_.bg, P_.ac, 3), lh: 1, name: '부제' }));
+      { const ts = Math.round(h * 0.4 * 0.9 / PTMM), ss = Math.round(h * 0.22 * 0.8 / PTMM); /* 상자 높이에 맞춘 pt (길면 자동으로 줄어듦) */
+      els.push(T(c.title.replace('\n', ' '), tx, h * 0.17, tw, h * 0.4, { font: fT, size: ts, fitText: true, fitMax: ts, sizing: 'fixed', weight: 900, color: inkOn(P_.bg, P_.fg, 3), lh: 1, name: '제목' }));
+      els.push(T((c.sub + '   ' + (c.cta ? '☎ ' + PHONE : '')).trim(), tx, h * 0.62, tw, h * 0.22, { font: fB, size: ss, fitText: true, fitMax: ss, sizing: 'fixed', weight: 700, color: inkOn(P_.bg, P_.ac, 3), lh: 1, name: '부제' })); }
       els.push(motif(0, w * 0.84, h * 0.18, h * 0.6));
       return P(P_.bg, els, o.label);
     }
@@ -137,7 +142,7 @@
       els.push(S('ellipse', -w * 0.3, -h * 0.1, w * 1.1, w * 1.1, { fill: P_.bg2, name: '원' }));
       els.push(motif(0, w * 0.6, h * 0.08, w * 0.3));
       els.push(T(c.eyebrow, m, h * 0.32, w - 2 * m, 5 * u, { font: 'Montserrat', size: 4 * u, weight: 700, color: P_.ac, ls: 0.3 }));
-      els.push(T(c.title, m, h * 0.36, w - 2 * m, h * 0.22, { font: fT, size: 18 * u, weight: 800, color: dark ? WHITE : P_.fg, lh: 1.08, name: '제목' }));
+      els.push(T(c.title, m, h * 0.36, w - 2 * m, h * 0.22, Object.assign({ font: fT, weight: 800, color: dark ? WHITE : P_.fg, lh: 1.08, name: '제목' }, fitT(c.title, h * 0.22, 1.08))));
       els.push(T(c.sub, m, h * 0.6, w - 2 * m, 8 * u, { font: fB, size: 5.4 * u, weight: 600, color: sub, lh: 1.4, name: '부제' }));
       els.push(T(c.body, m, h * 0.68, w - 2 * m, h * 0.16, { font: fB, size: 4.6 * u, lh: 1.7, weight: 500, color: tx, name: '본문' }));
       if (c.cta) { els.push(S('pill', m, h * 0.87, w - 2 * m, 10 * u, { fill: P_.fg })); els.push(T(c.cta, m, h * 0.87 + 2.6 * u, w - 2 * m, 6 * u, { font: fB, size: 5 * u, weight: 700, color: inkOn(P_.fg, P_.ac, 3), align: 'center', name: '버튼' })); }

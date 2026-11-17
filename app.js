@@ -3951,6 +3951,8 @@ const _tm = document.createElement('canvas').getContext('2d');
 function textWidthMM(el) { _tm.font = `${el.italic ? 'italic ' : ''}${el.weight || 400} 100px "${el.font}", sans-serif`; const w = Math.max(...String(el.text || '').split('\n').map(l => _tm.measureText(l).width + (el.ls || 0) * 100 * l.length)); return w / 100 * el.size * 25.4 / 72; }
 // 인쇄(CMYK)로 거의 못 내는 선명한 RGB 색: 형광 초록·하늘·파랑 계열 (채도·명도가 모두 높은 색)
 function outOfGamut(c) { if (!/^#[0-9a-f]{6}$/i.test(c || '')) return false; const n = parseInt(c.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, bl = (n & 255) / 255, mx = Math.max(r, g, bl), mn = Math.min(r, g, bl), sat = mx ? (mx - mn) / mx : 0; if (sat < 0.8 || mx < 0.8) return false; let h = 0; const d = mx - mn; if (mx === r) h = ((g - bl) / d) % 6; else if (mx === g) h = (bl - r) / d + 2; else h = (r - g) / d + 4; h = (h * 60 + 360) % 360; return (h >= 75 && h <= 250) || (h >= 270 && h <= 320); }
+// 검정에 가까운데 순수 검정(#000000)이 아닌 색 (작은 글자는 인쇄 때 CMYK 4색으로 갈라져 번짐)
+function nearBlack(c) { if (!/^#[0-9a-f]{6}$/i.test(c || '')) return false; const n = parseInt(c.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, bl = n & 255; return n !== 0 && Math.max(r, g, bl) <= 72 && Math.max(r, g, bl) - Math.min(r, g, bl) <= 24; }
 function printIssues(pages) {
   const out = [], b = Number(doc.bleed) || 0;
   for (const pi of pages) { const bad = new Set(); const pg = doc.pages[pi]; if (outOfGamut(pg.bg)) bad.add(pg.bg.toUpperCase()); pg.els.forEach(el => { if (el.hidden) return; ['color', 'fill', 'stroke', 'g1', 'g2'].forEach(k => { if (outOfGamut(el[k])) bad.add(el[k].toUpperCase()); }); }); if (bad.size) out.push({ page: pi + 1, id: '', name: '색', msg: `· ${[...bad].slice(0, 4).join(', ')} — 아주 선명한 RGB 색은 인쇄하면 탁해집니다 (시안으로 확인하거나 조금 덜 선명한 색으로)` }); }
@@ -3968,6 +3970,7 @@ function printIssues(pages) {
       if (m < SF - 0.05) add(`· 재단선에서 ${Math.max(0, Math.round(m * 10) / 10)}mm — 안전 여백(${SF}mm) 안으로 옮기세요 (잘릴 수 있음)`);
     }
     if (el.type === 'text' && el.size && el.size < 6) add(`· 글자 ${el.size}pt — 6pt보다 작으면 인쇄 때 읽기 어렵습니다`);
+    if (el.type === 'text' && el.size && el.size <= 10 && nearBlack(el.color)) add(`· 작은 글자(${el.size}pt) 색 ${String(el.color).toUpperCase()} — 검정에 가깝지만 순수 검정이 아니라 인쇄하면 네 가지 잉크로 나뉘어 번져 보일 수 있습니다. 색을 #000000으로 바꾸고, 인쇄소에는 "검정 글자는 K100 단색"으로 요청하세요`);
     if (el.type === 'cal' && el.s) { const small = ['evSize', 'daySize'].filter(k => el.s[k] && el.s[k] < 5); if (small.length) add(`· 달력 글자 ${Math.min(...small.map(k => el.s[k]))}pt — 5pt보다 작으면 인쇄 때 읽기 어렵습니다`); }
     if ((el.type === 'shape' && el.strokeW && el.strokeW < 0.1) || (el.type === 'path' && el.strokeW && (el.d ? el.strokeW : el.strokeW * 0.2646) < 0.1)) add('· 선이 0.1mm보다 가늘어 인쇄 때 끊기거나 안 보일 수 있습니다');
     if ((el.type === 'shape' || el.type === 'image') && el.kind !== 'line') { const g = Math.min(...[x0, y0, doc.w - x1, doc.h - y1].filter(v => v > 0.3)); if (g < 2 && (el.w >= doc.w * 0.3 || el.h >= doc.h * 0.3)) add(`· 가장자리에서 ${Math.round(g * 10) / 10}mm 떨어져 재단 후 얇은 흰 줄이 남을 수 있습니다 — 가장자리에 붙이거나 3mm 이상 띄우세요`); }
@@ -4551,9 +4554,22 @@ function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEa
 /* ---- 관리프로그램 측정 → 향상왕 (같은 사이트 주소라 이 브라우저에 저장된 'naracha-meas'를 읽기만 함, 관리프로그램은 고치지 않음)
    계산은 관리프로그램 computeImprove와 같게: 같은 종류의 직전 회차 대비 기록 향상 > 0 인 사람 중 나이 그룹(14~19세 = 청소년)별 1위, 재원생만 ---- */
 const MEAS_SEP = String.fromCharCode(1);
-function measLocal() { try { const v = JSON.parse(localStorage.getItem('naracha-meas') || 'null'); return v && v.map ? v : null; } catch (e) { return null; } }
+/* 서버에서 바로 받기 (2026-11-18): 관리프로그램은 서버에서 받은 측정 자료를 브라우저(naracha-meas)에 적지 않아 공방이 못 읽던 문제 →
+   관리프로그램과 같은 구글 서버(앱스 스크립트)에서 측정(store=meas)·명단(store=att)을 '읽기만'. 접속 키는 관리프로그램이 이 브라우저에 둔 naracha_access_key */
+const MEAS_SERVER = 'https://script.google.com/macros/s/AKfycbysx2hkGfv3onXQHutPA6boYIZ74R4MNY_Jrc5cwgVebI9L1FRmj0YLT9YpYrS0tKVg7A/exec';
+let measSrv = null; /* { meas, att, at, err } */
+function measJoin(resp) { const rows = resp && !Array.isArray(resp) && Array.isArray(resp.rows) ? resp.rows : resp; if (rows && rows.error === 'AUTH') throw new Error('AUTH'); if (!Array.isArray(rows)) throw new Error('BAD'); if (rows.length < 2) return null; let j = ''; for (let i = 0; i < rows.length; i++) if (rows[i][0] === 'JSON') { for (let k = i + 1; k < rows.length; k++) j += rows[k][0] != null ? String(rows[k][0]) : ''; break; } return JSON.parse(j); }
+async function measFetch() {
+  let key = ''; try { key = localStorage.getItem('naracha_access_key') || ''; } catch (e) {}
+  if (!key) return (measSrv = { err: 'nokey' });
+  const get = st => fetch(`${MEAS_SERVER}?key=${encodeURIComponent(key)}&store=${st}&v=2&t=${Date.now()}`).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(measJoin);
+  try { const [meas, att] = await Promise.all([get('meas'), get('att').catch(() => null)]); return (measSrv = { meas: meas && meas.measV ? meas : null, att: att && att.attV ? att : null, at: Date.now() }); }
+  catch (e) { return (measSrv = { err: e.message === 'AUTH' ? 'auth' : 'net' }); }
+}
+function measLocal() { if (measSrv && measSrv.meas && measSrv.meas.map) return measSrv.meas; try { const v = JSON.parse(localStorage.getItem('naracha-meas') || 'null'); return v && v.map ? v : null; } catch (e) { return null; } }
+function measAtt() { if (measSrv && measSrv.att) return measSrv.att; try { return JSON.parse(localStorage.getItem('naracha-att') || 'null'); } catch (e) { return null; } }
 /* 재원생 판정 (관리프로그램 _measEnrolled와 같게 — 관리프로그램 작업방 확인): 명단 roster.list[].n 에 있고, 퇴관 quitMapAtt.map[이름](del:true가 아님)·휴관 closedMapAtt.map[이름]이 아님. st 꼬리표는 옛 표시라 보조로만 */
-function measEnrolledFn() { try { const a = JSON.parse(localStorage.getItem('naracha-att') || 'null'); const L = a && a.roster && a.roster.list; if (!Array.isArray(L) || !L.length) return null; const quit = (a.quitMapAtt && a.quitMapAtt.map) || {}, closed = (a.closedMapAtt && a.closedMapAtt.map) || {}; const live = new Set(L.filter(x => x && x.n && !(quit[x.n] && !quit[x.n].del) && !closed[x.n] && !/휴관|퇴관/.test(x.st || '')).map(x => x.n)); return nm => live.has(nm); } catch (e) { return null; } }
+function measEnrolledFn() { try { const a = measAtt(); const L = a && a.roster && a.roster.list; if (!Array.isArray(L) || !L.length) return null; const quit = (a.quitMapAtt && a.quitMapAtt.map) || {}, closed = (a.closedMapAtt && a.closedMapAtt.map) || {}; const live = new Set(L.filter(x => x && x.n && !(quit[x.n] && !quit[x.n].del) && !closed[x.n] && !/휴관|퇴관/.test(x.st || '')).map(x => x.n)); return nm => live.has(nm); } catch (e) { return null; } }
 function measSessions() { const m = measLocal(); if (!m) return null; const tomb = m.tomb || {}; return Object.values(m.map || {}).filter(s => s && s.kind && Array.isArray(s.rows) && !(tomb[s.id] > (s._t || 0))).map(s => Object.assign({}, s, { year: Number(s.year) || 0 })).sort((a, b) => (b.year + (b.half === 'H2' ? .5 : 0)) - (a.year + (a.half === 'H2' ? .5 : 0)) || (a.kind < b.kind ? -1 : 1)); }
 const measSc = s => s.year + (s.half === 'H2' ? 0.5 : 0), measHalf = s => s.half === 'H2' ? '후반기' : '전반기'; /* 도장은 측정을 연도 + 전반기/후반기로만 구분 (관장님 결정) */
 function measCellV(row, cat, sub) { for (const k in (row.cells || {})) { const p = k.split(MEAS_SEP); if (p[0].indexOf(cat) >= 0 && (!sub || (p[1] || '').indexOf(sub) >= 0)) return row.cells[k]; } return ''; }
@@ -4569,12 +4585,17 @@ function measImprove(s, all, enrolled) {
   return { prev, wins };
 }
 let measImp = { year: 0, half: '', kinds: null, off: {} };
-function openMeasImport() {
-  const all = measSessions(); let d = $('#dlgMeas'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgMeas'; d.className = 'wide'; document.body.appendChild(d); }
-  if (!all || !all.length) { d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="max-width:560px"><p>이 PC 브라우저에 관리프로그램 측정 자료가 없습니다.</p><p class="hint">같은 브라우저(크롬·엣지)에서 <b>관리프로그램(narachadata.github.io/naracha)</b>을 열어 <b>측정</b> 화면이 한 번 불러와지면, 여기서 바로 가져올 수 있습니다. 공방은 그 자료를 읽기만 하고 고치지 않습니다.</p></div>`; d.querySelector('[data-close]').onclick = () => d.close(); d.showModal(); return; }
+async function openMeasImport(again) {
+  let d = $('#dlgMeas'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgMeas'; d.className = 'wide'; document.body.appendChild(d); }
+  const box = (msg, hint) => { d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="max-width:560px"><p>${msg}</p>${hint ? `<p class="hint">${hint}</p>` : ''}</div>`; d.querySelector('[data-close]').onclick = () => d.close(); if (!d.open) d.showModal(); };
+  /* 열 때마다 서버에서 최신 측정·명단을 받음 (관리프로그램에서 입력·저장한 값이 바로 들어옴) */
+  if (!again || !measSrv) { box('<span class="spin"></span> 관리프로그램 서버에서 최신 측정 자료를 받는 중…'); await measFetch(); }
+  const all = measSessions();
+  const srvNote = measSrv && measSrv.meas ? '' : measSrv && measSrv.err === 'nokey' ? '이 PC 브라우저에서는 관리프로그램에 로그인(접속 키 입력)한 적이 없어 서버에서 받을 수 없습니다. 같은 브라우저(크롬·엣지)에서 <b>관리프로그램(narachadata.github.io/naracha)</b>에 한 번 로그인하면, 그 뒤로는 관리프로그램을 열지 않아도 여기서 바로 받습니다.' : measSrv && measSrv.err === 'auth' ? '관리프로그램 접속 키가 맞지 않아 서버에서 받지 못했습니다. 관리프로그램에 다시 로그인해 주세요.' : '서버에 연결하지 못했습니다(인터넷 확인).';
+  if (!all || !all.length) { box('관리프로그램 측정 자료가 없습니다.', srvNote || '관리프로그램 측정 화면에서 회차를 입력·저장하면 여기서 바로 받습니다. 공방은 그 자료를 읽기만 하고 고치지 않습니다.'); return; }
   const enrolled = measEnrolledFn(), live = !!enrolled;
   /* 관장님 지시: 지금 휴관·퇴관생은 반드시 제외 — 명단·장부를 못 읽으면 필터 없이 계산하지 않고 멈춤 */
-  if (!enrolled) { d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="max-width:560px"><p><b>수련생 명단을 읽지 못해 멈췄습니다.</b></p><p class="hint">지금 휴관·퇴관한 수련생이 상장에 잘못 들어가지 않도록, 명단·휴관·퇴관 자료가 있어야 향상왕을 계산합니다. 같은 브라우저에서 <b>관리프로그램(narachadata.github.io/naracha)</b>을 열어 명단이 불러와진 뒤 다시 누르세요.</p></div>`; d.querySelector('[data-close]').onclick = () => d.close(); d.showModal(); return; }
+  if (!enrolled) { d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="max-width:560px"><p><b>수련생 명단을 읽지 못해 멈췄습니다.</b></p><p class="hint">지금 휴관·퇴관한 수련생이 상장에 잘못 들어가지 않도록, 명단·휴관·퇴관 자료가 있어야 향상왕을 계산합니다. 같은 브라우저에서 <b>관리프로그램(narachadata.github.io/naracha)</b>을 열어 명단이 불러와진 뒤 다시 누르세요.</p></div>`; d.querySelector('[data-close]').onclick = () => d.close(); if (!d.open) d.showModal(); return; }
   const years = [...new Set(all.map(s => s.year))].sort((a, b) => b - a);
   if (!measImp.year || !years.includes(measImp.year)) { measImp.year = all[0].year; measImp.half = all[0].half === 'H2' ? 'H2' : 'H1'; measImp.kinds = ['줄넘기', '체력']; measImp.off = {}; }
   const draw = () => {
@@ -4582,7 +4603,7 @@ function openMeasImport() {
     const picked = all.filter(s => s.year === measImp.year && (s.half === 'H2' ? 'H2' : 'H1') === measImp.half && measImp.kinds.includes(s.kind)), res = picked.map(s => ({ s, r: measImprove(s, all, enrolled) }));
     const by = {}; res.forEach(({ s, r }) => r.wins.forEach(w => { (by[w.name] = by[w.name] || { name: w.name, age: w.age, recs: [] }).recs.push({ k: w.k, a: String(w.prev), b: String(w.cur), u: w.u, kind: s.kind }); }));
     const people = Object.values(by).sort((a, b) => b.recs.length - a.recs.length || a.name.localeCompare(b.name, 'ko')), nOn = people.filter(p => !measImp.off[p.name]).length, kinds = [...new Set(picked.map(s => s.kind))];
-    d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기 <small>관리프로그램 측정입력</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
+    d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기 <small>${measSrv && measSrv.meas ? `관리프로그램 서버 최신 · ${new Date(measSrv.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 받음` : '이 브라우저에 남은 자료 (서버 연결 안 됨)'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
       <p class="hint" style="margin-top:0">관리프로그램과 같은 계산: 같은 종류의 <b>직전 회차보다 기록이 오른 학생 중 나이 그룹별 1위</b>(14~19세는 청소년)', 지금 재원생만 (휴관·퇴관 제외)'. 한 학생이 여러 종목이면 <b>상장 한 장에 모두</b> 들어갑니다.</p>
       <div class="msel"><label class="f"><span>연도</span><select id="mYear">${years.map(y => `<option value="${Number(y)}" ${y === measImp.year ? 'selected' : ''}>${Number(y)}년</option>`).join('')}</select></label>
       <div class="f"><span>반기</span><div class="seg">${[['H1', '전반기'], ['H2', '후반기']].map(([a, t]) => `<button data-mhalf="${a}" aria-pressed="${measImp.half === a}" ${all.some(s => s.year === measImp.year && (s.half === 'H2' ? 'H2' : 'H1') === a) ? '' : 'disabled title="이 반기 측정 자료가 없습니다"'}>${t}</button>`).join('')}</div></div>
@@ -4606,7 +4627,7 @@ function openMeasImport() {
     };
     $('#mGo').onclick = () => go(false); $('#mGoMake').onclick = () => go(true);
   };
-  draw(); d.showModal();
+  draw(); if (!d.open) d.showModal();
 }
 
 /* ======================= 출력 (프린터로 바로) =======================
@@ -5557,20 +5578,24 @@ function toastUndo(msg, after) { const t = $('#toast'); t.className = 'toast act
 
 /* ---- 시작 ---- */
 // 같은 문서인지 (문서 번호가 있으면 번호로, 없으면 이름으로)
+// 파일 j가 이 브라우저 작업의 바탕 판(base) 뒤에 다른 곳에서 저장됐는지 — 그러면 덮어쓰기 전에 사본으로 보관해야 함
+function fileMovedOn(j, base) { if (!j || !j.saveId) return false; if (base && base.saveId) return base.saveId !== j.saveId; return !!j.pcId && j.pcId !== store.pcId(); }
+async function keepFileCopy(j) { const who = j.savedBy || '다른 PC'; try { const nm = await store.writeCopy(j, who); toast(`${who}가 저장한 파일 내용을 "충돌 사본"으로 보관했습니다: ${nm}`); } catch (e) { store.download(j); toast(`${who}가 저장한 파일 내용을 내려받기로 보관했습니다`); } }
+function movedNote(j) { const who = j.savedBy || '다른 PC', at = j.savedAt ? new Date(j.savedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''; return `\n\n※ 그사이 ${who}${at ? `(${at})` : ''}가 이 파일을 저장했습니다. 브라우저 작업으로 열면 그 내용은 "충돌 사본" 파일로 따로 보관한 뒤 저장합니다.`; }
 function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.docId : (a.name || '') === (b.name || '')); }
 (async function init() {
   doc = newDoc(); renderRail();
   let loaded = false;
   try {
     const p = await store.reconnect();
-    if (p === 'granted') { const j = await store.readFile(); const dr = await store.idbGet('doc').catch(() => null); if (dr && sameDoc(dr, j) && (dr.updatedAt || 0) > (j.savedAt || 0) + 1000 && window.confirm(`이 브라우저에 파일보다 나중에 고친 작업이 있습니다 (파일에 저장되지 못한 작업).\n\n확인: 브라우저 작업으로 열어 파일에 저장 (권장)\n취소: 파일 내용으로 열기 (브라우저 작업은 충돌 사본으로 보관)`)) { await loadDoc(dr); loaded = true; markDirty(); setStatus(`연결된 파일: ${store.state.fileName} · 브라우저 작업을 이어서 저장합니다`); } else { if (dr && sameDoc(dr, j) && (dr.updatedAt || 0) > (j.savedAt || 0) + 1000) { try { await store.writeCopy(dr, '브라우저 작업'); } catch (e) {} } await loadDoc(j); loaded = true; setStatus(`연결된 파일: ${store.state.fileName}`); setTimeout(() => warnIfRecentOther(j), 1500); } }
+    if (p === 'granted') { const base = await store.idbGet('docBase').catch(() => null); const j = await store.readFile(); const dr = await store.idbGet('doc').catch(() => null); const moved = !!dr && sameDoc(dr, j) && fileMovedOn(j, base); if (dr && sameDoc(dr, j) && (dr.updatedAt || 0) > (j.savedAt || 0) + 1000 && window.confirm(`이 브라우저에 파일보다 나중에 고친 작업이 있습니다 (파일에 저장되지 못한 작업).\n\n확인: 브라우저 작업으로 열어 파일에 저장 (권장)\n취소: 파일 내용으로 열기 (브라우저 작업은 충돌 사본으로 보관)${moved ? movedNote(j) : ''}`)) { if (moved) await keepFileCopy(j); await loadDoc(dr); loaded = true; markDirty(); setStatus(`연결된 파일: ${store.state.fileName} · 브라우저 작업을 이어서 저장합니다`); } else { if (dr && sameDoc(dr, j) && (dr.updatedAt || 0) > (j.savedAt || 0) + 1000) { try { await store.writeCopy(dr, '브라우저 작업'); } catch (e) {} } await loadDoc(j); loaded = true; setStatus(`연결된 파일: ${store.state.fileName}`); setTimeout(() => warnIfRecentOther(j), 1500); } }
     else if (p === 'prompt') { const saved = await store.idbGet('doc'); if (saved) { await loadDoc(saved); loaded = true; } const st = $('#status'); st.innerHTML = `<button class="btn sm" id="reconn">연결된 파일 "${esc(store.state.fileName)}" 다시 열기</button>`; store.state.needPerm = true;
       $('#reconn').onclick = async () => {
         if (!(await store.requestPermission())) return; store.state.needPerm = false;
-        const draft = loaded ? doc : null; const j = await store.readFile();
+        const base = await store.idbGet('docBase').catch(() => null); const draft = loaded ? doc : null; const j = await store.readFile(); const moved = !!draft && sameDoc(draft, j) && fileMovedOn(j, base);
         // 권한을 기다리는 동안(지난번 창 포함) 브라우저에서 고친 작업이 파일보다 새로우면 덮어쓰지 않음
         if (draft && sameDoc(draft, j) && (draft.updatedAt || 0) > (j.savedAt || 0) + 1000) {
-          if (window.confirm(`이 브라우저에 파일보다 나중에 고친 작업이 있습니다.\n\n확인: 지금 작업을 파일에 저장 (권장)\n취소: 파일 내용을 열고, 지금 작업은 "충돌 사본"으로 보관`)) { await saveFileNow(); setStatus(`연결된 파일: ${store.state.fileName} · 브라우저 작업을 저장했습니다`); updateSaveBadge(); return; }
+          if (window.confirm(`이 브라우저에 파일보다 나중에 고친 작업이 있습니다.\n\n확인: 지금 작업을 파일에 저장 (권장)\n취소: 파일 내용을 열고, 지금 작업은 "충돌 사본"으로 보관${moved ? movedNote(j) : ''}`)) { if (moved) await keepFileCopy(j); await saveFileNow(); setStatus(`연결된 파일: ${store.state.fileName} · 브라우저 작업을 저장했습니다`); updateSaveBadge(); return; }
           try { await store.writeCopy(draft, '브라우저 작업'); } catch (e) { store.download(draft); }
         }
         await loadDoc(j, '연결된 파일을 열었습니다'); updateSaveBadge();
