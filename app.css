@@ -1159,3 +1159,14 @@ body.tl-focus .stage{grid-column:4}
 .sizechip{font:inherit;font-size:12px;font-weight:500;color:var(--ui-muted);background:var(--ui-field);border:1px solid transparent;border-radius:8px;padding:2px 8px;cursor:pointer;margin-left:6px}.sizechip:hover{border-color:var(--ui-accent);color:var(--ui-accent)}
 .rsanchor{display:grid;grid-template-columns:repeat(3,18px);gap:3px}.rsanchor button{width:18px;height:18px;border-radius:4px;border:1px solid var(--ui-line,#ccc);background:var(--ui-field);cursor:pointer;padding:0}.rsanchor button.on{background:var(--ui-accent);border-color:var(--ui-accent)}
 @media (max-width:1280px){#btnResize span{display:none}.topbar input.pname{width:160px}}
+
+/* 글자 빠른 도구 막대 (캔버스 위 도구 막대 안) */
+.qbar{display:flex;align-items:center;gap:2px}.qbar[hidden]{display:none}
+.qbar .fp-btn{width:150px;height:30px;margin-right:4px}
+.qbar .qsz{display:flex;align-items:center;border:1px solid var(--ui-line,#ddd);border-radius:8px;overflow:hidden;margin-right:4px}.qbar .qsz .btn{width:24px;height:28px;padding:0;border-radius:0}.qbar .qsz input{width:44px;height:28px;border:0;text-align:center;background:transparent;font-weight:600}
+.qbar .qcol{position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:8px}.qbar .qcol:hover{background:var(--ui-field)}.qbar .qcol span{width:20px;height:20px;border-radius:5px;border:1px solid rgba(0,0,0,.15);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;text-shadow:0 0 2px rgba(0,0,0,.6)}.qbar .qcol input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.qbar .btn.on{background:var(--ui-accent-soft);color:var(--ui-accent)}
+details.pgvid{margin-top:10px}details.pgvid>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;font-weight:700;font-size:13px}
+.qrgrid{display:grid;grid-template-columns:1fr 200px;gap:16px;align-items:start}.qrprev{width:200px;height:200px;border:1px dashed var(--ui-line,#ccc);border-radius:10px;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#f3f3f3 0 25%,#fff 0 50%) 0 0/16px 16px}.qrprev svg{width:184px;height:184px}#dlgQr{width:min(560px,94vw)}
+@media (max-width:640px){.qrgrid{grid-template-columns:1fr}}
+.el-cal .cell .d .lun{font-family:'Noto Sans KR',sans-serif;font-weight:400;color:#9a9a9a;margin-left:.8mm;letter-spacing:-.02em;vertical-align:top}
