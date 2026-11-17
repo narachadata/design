@@ -1,6 +1,8 @@
 // 템플릿 3: 꼬리표(제작 형태·계절·연령·상황·직종) + 조합형 레이아웃 엔진으로 만드는 템플릿 100여 종
 const PTMM = 25.4 / 72; // 1pt = 0.3528mm
 // 제목: 상자 높이(mm)를 채우는 글자 크기(pt) + 길면 자동으로 줄이기(고정 상자). 예전엔 mm로 잡은 값을 pt로 써서 제목이 1/3 크기였음
+/* 부제·본문·단추: 예전 값이 상자에 비해 1/3 크기(mm를 pt로 씀) → 1.5배로 키우고 상자를 넘으면 자동으로 줄임 */
+const FS = v => { const sz = Math.round(v * 1.5 * 2) / 2; return { size: sz, fitText: true, fitMax: sz, sizing: 'fixed' }; };
 const fitT = (txt, bh, lh) => { const sz = Math.max(8, Math.round(bh / (String(txt || '').split('\n').length * lh) * 0.9 / PTMM)); return { size: sz, fitText: true, fitMax: sz, sizing: 'fixed' }; };
 (function () {
   const L = NC.tpl.list;
@@ -61,15 +63,15 @@ const fitT = (txt, bh, lh) => { const sz = Math.max(8, Math.round(bh / (String(t
     const motif = (i, x, y, s) => I(emojiSVG(P_.motifs[i % P_.motifs.length]), x, y, s, s, { name: '장식', fit: 'contain', opacity: 0.95 }); // 벡터 이모지: 현수막처럼 크게 인쇄해도 선명
     if (o.layout === 'band') {
       els.push(S('rect', 0, 0, w, h * 0.42, { fill: P_.fg, name: '상단 띠' }));
-      els.push(T(c.eyebrow, m, m * 0.9, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3.6 * u, weight: 700, color: P_.ac, ls: 0.3 }));
+      els.push(T(c.eyebrow, m, m * 0.9, w - 2 * m, 4 * u, { font: 'Montserrat', ...FS(3.6 * u), weight: 700, color: P_.ac, ls: 0.3 }));
       { const bh = h * 0.42 - m - 12 * u, nl = String(c.title).split('\n').length, sz = Math.round(bh / (nl * 1.08) * 0.9 / PTMM); /* 상자 높이(mm)를 글자 크기(pt)로 — 예전엔 mm 값을 pt로 써서 1/3 크기였음. 길면 자동으로 줄어듦 */
         els.push(T(c.title, m, m * 0.9 + 5 * u, w - 2 * m, bh, { font: fT, size: sz, fitText: true, fitMax: sz, sizing: 'fixed', weight: 800, color: WHITE, lh: 1.08, name: '제목' })); }
-      els.push(T(c.sub, m, h * 0.42 - 8 * u, w - 2 * m, 6 * u, { font: fB, size: 4.6 * u, weight: 500, color: '#e6e9f2', name: '부제' }));
+      els.push(T(c.sub, m, h * 0.42 - 8 * u, w - 2 * m, 6 * u, { font: fB, ...FS(4.6 * u), weight: 500, color: '#e6e9f2', name: '부제' }));
       els.push(motif(0, w - m - 14 * u, m * 0.6, 14 * u)); els.push(motif(1, w - m - 30 * u, h * 0.42 - 12 * u, 9 * u));
       els.push(S('rect', m, h * 0.48, w - 2 * m, h * 0.3, { fill: P_.soft, radius: 2 * u, name: '안내 상자' }));
-      els.push(T(c.body, m + 4 * u, h * 0.48 + 4 * u, w - 2 * m - 8 * u, h * 0.3 - 8 * u, { font: fB, size: 4.2 * u, lh: 1.75, weight: 500, color: INK, name: '본문' }));
-      if (c.cta) { els.push(S('pill', w / 2 - 22 * u, h * 0.82, 44 * u, 9 * u, { fill: P_.ac })); els.push(T(c.cta, w / 2 - 22 * u, h * 0.82 + 2.2 * u, 44 * u, 5 * u, { font: fB, size: 4.4 * u, weight: 700, color: inkOn(P_.ac, WHITE), align: 'center', name: '버튼' })); }
-      els.push(T(`${o.biz.name}  ·  ${ADDR}  ·  ${PHONE}`, m, h - m - 3 * u, w - 2 * m, 4 * u, { font: fB, size: 2.9 * u, color: tx, align: 'center', name: '하단 정보' }));
+      els.push(T(c.body, m + 4 * u, h * 0.48 + 4 * u, w - 2 * m - 8 * u, h * 0.3 - 8 * u, { font: fB, ...FS(4.2 * u), lh: 1.75, weight: 500, color: INK, name: '본문' }));
+      if (c.cta) { els.push(S('pill', w / 2 - 22 * u, h * 0.82, 44 * u, 9 * u, { fill: P_.ac })); els.push(T(c.cta, w / 2 - 22 * u, h * 0.82 + 2.2 * u, 44 * u, 5 * u, { font: fB, ...FS(4.4 * u), weight: 700, color: inkOn(P_.ac, WHITE), align: 'center', name: '버튼' })); }
+      els.push(T(`${o.biz.name}  ·  ${ADDR}  ·  ${PHONE}`, m, h - m - 3 * u, w - 2 * m, 4 * u, { font: fB, ...FS(2.9 * u), color: tx, align: 'center', name: '하단 정보' }));
       return P(P_.bg, els, o.label);
     }
     if (o.layout === 'center') { // 위에서 아래로 차례로 쌓음 (정사각형에서도 쪽 밖으로 넘치거나 버튼이 제목을 가리지 않게)
@@ -78,53 +80,53 @@ const fitT = (txt, bh, lh) => { const sz = Math.max(8, Math.round(bh / (String(t
       els.push(motif(0, w / 2 - D * 0.19 * u, (cy0 + D * 0.12) * u, D * 0.38 * u));
       if (o.biz.illu && o.useIllu) els.push(I(o.biz.illu, w / 2 - D * 0.41 * u, (cy0 + D * 0.09) * u, D * 0.82 * u, D * 0.88 * u, { pos: '50% 100%', name: '삽화' }));
       let y = cy0 + D + (tall ? 5 : 3); const ctaY = Hu - 6 - 14;
-      els.push(T(c.eyebrow, m, y * u, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3.4 * u, weight: 700, color: P_.ac, ls: 0.3, align: 'center' })); y += 5;
+      els.push(T(c.eyebrow, m, y * u, w - 2 * m, 4 * u, { font: 'Montserrat', ...FS(3.4 * u), weight: 700, color: P_.ac, ls: 0.3, align: 'center' })); y += 5;
       const tS = tall ? 15 : 12; els.push(T(c.title.replace('\n', ' '), m, y * u, w - 2 * m, (tS * 0.45 + 2) * u, { font: fT, size: tS * u, weight: 800, color: dark ? WHITE : P_.fg, lh: 1.1, align: 'center', name: '제목' })); y += tS * 0.45 + 3;
-      els.push(T(c.sub, m, y * u, w - 2 * m, 6 * u, { font: fB, size: 4.4 * u, weight: 500, color: sub, align: 'center', name: '부제' })); y += 7;
+      els.push(T(c.sub, m, y * u, w - 2 * m, 6 * u, { font: fB, ...FS(4.4 * u), weight: 500, color: sub, align: 'center', name: '부제' })); y += 7;
       // 본문이 다 안 들어가면(정사각 SNS) 가장 중요한 한 줄(문의·일시·기간·접수)만 남김
       let bodyT = c.body, bodyH = bodyT.split('\n').length * 3.9 * 0.3528 * 1.7 + 2; const lim = (c.cta ? ctaY : Hu - 10) - 1;
       if (y + bodyH > lim) { const ls_ = c.body.split('\n'); bodyT = ls_.find(l => /문의|일시|기간|접수|오픈|—/.test(l)) || ls_[ls_.length - 1]; bodyH = 3.9 * 0.3528 * 1.7 + 2; }
-      if (y + bodyH <= lim) els.push(T(bodyT, m + 6 * u, y * u, w - 2 * m - 12 * u, bodyH * u, { font: fB, size: 3.9 * u, lh: 1.7, weight: 500, color: tx, align: 'center', name: '본문' }));
-      if (c.cta) { els.push(S('pill', w / 2 - 20 * u, ctaY * u, 40 * u, 8 * u, { fill: P_.fg })); els.push(T(c.cta, w / 2 - 20 * u, (ctaY + 1.5) * u, 40 * u, 5 * u, { font: fB, size: 4 * u, weight: 700, color: inkOn(P_.fg, P_.ac), align: 'center', valign: 'middle', name: '버튼' })); }
+      if (y + bodyH <= lim) els.push(T(bodyT, m + 6 * u, y * u, w - 2 * m - 12 * u, bodyH * u, { font: fB, ...FS(3.9 * u), lh: 1.7, weight: 500, color: tx, align: 'center', name: '본문' }));
+      if (c.cta) { els.push(S('pill', w / 2 - 20 * u, ctaY * u, 40 * u, 8 * u, { fill: P_.fg })); els.push(T(c.cta, w / 2 - 20 * u, (ctaY + 1.5) * u, 40 * u, 5 * u, { font: fB, ...FS(4 * u), weight: 700, color: inkOn(P_.fg, P_.ac), align: 'center', valign: 'middle', name: '버튼' })); }
       els.push(motif(1, m, m, 10 * u)); els.push(motif(2, w - m - 10 * u, m * 0.8, 10 * u)); els.push(motif(3, m * 0.8, h - m - 12 * u, 9 * u));
-      els.push(T(o.biz.name, m, h - m - 3 * u, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3 * u, weight: 700, color: dark ? WHITE : P_.fg, align: 'center', ls: 0.2 }));
+      els.push(T(o.biz.name, m, h - m - 3 * u, w - 2 * m, 4 * u, { font: 'Montserrat', ...FS(3 * u), weight: 700, color: dark ? WHITE : P_.fg, align: 'center', ls: 0.2 }));
       return P(P_.bg, els, o.label);
     }
     if (o.layout === 'split') {
       els.push(S('rect', 0, 0, w * 0.5, h, { fill: P_.fg, name: '왼쪽 면' }));
-      els.push(T(c.eyebrow, m, m, w * 0.5 - 2 * m, 4 * u, { font: 'Montserrat', size: 3.4 * u, weight: 700, color: P_.ac, ls: 0.3 }));
+      els.push(T(c.eyebrow, m, m, w * 0.5 - 2 * m, 4 * u, { font: 'Montserrat', ...FS(3.4 * u), weight: 700, color: P_.ac, ls: 0.3 }));
       els.push(T(c.title, m, m + 6 * u, w * 0.5 - 1.5 * m, h * 0.5, Object.assign({ font: fT, weight: 800, color: WHITE, lh: 1.08, name: '제목' }, fitT(c.title, h * 0.5, 1.08))));
-      els.push(T(c.sub, m, h - m - 10 * u, w * 0.5 - 2 * m, 8 * u, { font: fB, size: 4 * u, weight: 500, color: '#e6e9f2', lh: 1.4, name: '부제' }));
+      els.push(T(c.sub, m, h - m - 10 * u, w * 0.5 - 2 * m, 8 * u, { font: fB, ...FS(4 * u), weight: 500, color: '#e6e9f2', lh: 1.4, name: '부제' }));
       els.push(motif(0, w * 0.5 + m, m, 18 * u));
       if (o.biz.illu && o.useIllu) els.push(I(o.biz.illu, w * 0.5 + m, h * 0.12, w * 0.5 - 2 * m, h * 0.42, { pos: '50% 100%', name: '삽화' }));
-      els.push(T(c.body, w * 0.5 + m, h * 0.6, w * 0.5 - 2 * m, h * 0.25, { font: fB, size: 4 * u, lh: 1.75, weight: 500, color: tx, name: '본문' }));
-      if (c.cta) { els.push(S('pill', w * 0.5 + m, h - m - 12 * u, w * 0.5 - 2 * m, 9 * u, { fill: P_.ac })); els.push(T(c.cta, w * 0.5 + m, h - m - 9.8 * u, w * 0.5 - 2 * m, 5 * u, { font: fB, size: 4.2 * u, weight: 700, color: inkOn(P_.ac, WHITE, 3), align: 'center', name: '버튼' })); }
-      els.push(T(o.biz.name + ' · ' + PHONE, w * 0.5 + m, h - m - 2.5 * u, w * 0.5 - 2 * m, 4 * u, { font: fB, size: 2.8 * u, color: sub, name: '하단 정보' }));
+      els.push(T(c.body, w * 0.5 + m, h * 0.6, w * 0.5 - 2 * m, h * 0.25, { font: fB, ...FS(4 * u), lh: 1.75, weight: 500, color: tx, name: '본문' }));
+      if (c.cta) { els.push(S('pill', w * 0.5 + m, h - m - 12 * u, w * 0.5 - 2 * m, 9 * u, { fill: P_.ac })); els.push(T(c.cta, w * 0.5 + m, h - m - 9.8 * u, w * 0.5 - 2 * m, 5 * u, { font: fB, ...FS(4.2 * u), weight: 700, color: inkOn(P_.ac, WHITE, 3), align: 'center', name: '버튼' })); }
+      els.push(T(o.biz.name + ' · ' + PHONE, w * 0.5 + m, h - m - 2.5 * u, w * 0.5 - 2 * m, 4 * u, { font: fB, ...FS(2.8 * u), color: sub, name: '하단 정보' }));
       return P(P_.bg, els, o.label);
     }
     if (o.layout === 'frame') {
       els.push(S('rect', m * 0.7, m * 0.7, w - 1.4 * m, h - 1.4 * m, { fill: '', stroke: P_.fg, strokeW: 0.5 * u, radius: 1.5 * u, name: '테두리' }));
       els.push(S('rect', m * 0.7 + 1.6 * u, m * 0.7 + 1.6 * u, w - 1.4 * m - 3.2 * u, h - 1.4 * m - 3.2 * u, { fill: '', stroke: P_.ac, strokeW: 0.15 * u, radius: 1 * u, name: '안쪽 테두리' }));
       [[m, m], [w - m - 10 * u, m], [m, h - m - 10 * u], [w - m - 10 * u, h - m - 10 * u]].forEach((p, i) => els.push(motif(i, p[0], p[1], 10 * u)));
-      els.push(T(c.eyebrow, m, h * 0.2, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3.4 * u, weight: 700, color: P_.ac, ls: 0.35, align: 'center' }));
+      els.push(T(c.eyebrow, m, h * 0.2, w - 2 * m, 4 * u, { font: 'Montserrat', ...FS(3.4 * u), weight: 700, color: P_.ac, ls: 0.35, align: 'center' }));
       // 제목은 자리(높이 h*0.3)를 채우는 크기로 (작은 엽서에서 위아래가 비지 않게), 줄 길이도 넘지 않게
       const tl = c.title.split('\n'), tByH = (h * 0.3) / (tl.length * 1.1) * 0.9 / 0.3528, tByW = (w - 2 * m) * 0.92 / (Math.max(...tl.map(l => [...l].length)) * 0.95) / 0.3528, tSz = Math.min(tByH, tByW, (tall ? 16 : 13) * u * 1.7);
       els.push(T(c.title, m, h * 0.2 + 6 * u, w - 2 * m, h * 0.3, Object.assign({ font: fT, weight: 800, color: dark ? WHITE : P_.fg, lh: 1.1, align: 'center', valign: 'middle', name: '제목' }, fitT(c.title, h * 0.3, 1.1))));
       els.push(S('line', w / 2 - 12 * u, h * 0.56, 24 * u, 1, { fill: P_.ac, stroke: P_.ac, strokeW: 0.4 * u }));
-      els.push(T(c.sub, m, h * 0.58, w - 2 * m, 6 * u, { font: fB, size: 4.4 * u, weight: 600, color: dark ? WHITE : P_.fg, align: 'center', name: '부제' }));
-      els.push(T(c.body, m + 6 * u, h * 0.65, w - 2 * m - 12 * u, h * 0.2, { font: fB, size: 3.9 * u, lh: 1.75, weight: 500, color: tx, align: 'center', name: '본문' }));
-      els.push(T(o.biz.name, m, h - m - 4 * u, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3 * u, weight: 700, color: dark ? WHITE : P_.fg, align: 'center', ls: 0.25 }));
+      els.push(T(c.sub, m, h * 0.58, w - 2 * m, 6 * u, { font: fB, ...FS(4.4 * u), weight: 600, color: dark ? WHITE : P_.fg, align: 'center', name: '부제' }));
+      els.push(T(c.body, m + 6 * u, h * 0.65, w - 2 * m - 12 * u, h * 0.2, { font: fB, ...FS(3.9 * u), lh: 1.75, weight: 500, color: tx, align: 'center', name: '본문' }));
+      els.push(T(o.biz.name, m, h - m - 4 * u, w - 2 * m, 4 * u, { font: 'Montserrat', ...FS(3 * u), weight: 700, color: dark ? WHITE : P_.fg, align: 'center', ls: 0.25 }));
       return P(P_.bg, els, o.label);
     }
     if (o.layout === 'minimal') {
       els.push(S('rect', 0, 0, w, 1.2 * u, { fill: P_.ac }));
-      els.push(T(c.eyebrow, m, m, w - 2 * m, 4 * u, { font: 'Montserrat', size: 3.2 * u, weight: 700, color: P_.sub, ls: 0.35 }));
+      els.push(T(c.eyebrow, m, m, w - 2 * m, 4 * u, { font: 'Montserrat', ...FS(3.2 * u), weight: 700, color: P_.sub, ls: 0.35 }));
       els.push(T(c.title, m, m + 7 * u, w - 2 * m, h * 0.4, Object.assign({ font: fT, weight: 900, color: dark ? WHITE : P_.fg, lh: 1.02, ls: -0.02, name: '제목' }, fitT(c.title, h * 0.4, 1.02))));
-      els.push(T(c.sub, m, h * 0.56, w - 2 * m, 6 * u, { font: fB, size: 4.8 * u, weight: 600, color: P_.ac, name: '부제' }));
-      els.push(T(c.body, m, h * 0.64, w * 0.62, h * 0.22, { font: fB, size: 4 * u, lh: 1.75, weight: 500, color: tx, name: '본문' }));
+      els.push(T(c.sub, m, h * 0.56, w - 2 * m, 6 * u, { font: fB, ...FS(4.8 * u), weight: 600, color: P_.ac, name: '부제' }));
+      els.push(T(c.body, m, h * 0.64, w * 0.62, h * 0.22, { font: fB, ...FS(4 * u), lh: 1.75, weight: 500, color: tx, name: '본문' }));
       els.push(motif(0, w - m - 22 * u, h * 0.62, 22 * u));
-      if (c.cta) { els.push(S('rect', m, h - m - 10 * u, 36 * u, 8 * u, { fill: dark ? WHITE : P_.fg, radius: 0.8 * u })); els.push(T(c.cta, m, h - m - 7.8 * u, 36 * u, 5 * u, { font: fB, size: 3.8 * u, weight: 700, color: dark ? P_.fg : WHITE, align: 'center', name: '버튼' })); }
-      els.push(T(o.biz.name + '  ' + PHONE, w - m - 60 * u, h - m - 2 * u, 60 * u, 4 * u, { font: fB, size: 2.9 * u, color: sub, align: 'right', name: '하단 정보' }));
+      if (c.cta) { els.push(S('rect', m, h - m - 10 * u, 36 * u, 8 * u, { fill: dark ? WHITE : P_.fg, radius: 0.8 * u })); els.push(T(c.cta, m, h - m - 7.8 * u, 36 * u, 5 * u, { font: fB, ...FS(3.8 * u), weight: 700, color: dark ? P_.fg : WHITE, align: 'center', name: '버튼' })); }
+      els.push(T(o.biz.name + '  ' + PHONE, w - m - 60 * u, h - m - 2 * u, 60 * u, 4 * u, { font: fB, ...FS(2.9 * u), color: sub, align: 'right', name: '하단 정보' }));
       return P(P_.bg, els, o.label);
     }
     if (o.layout === 'banner') {
@@ -141,12 +143,12 @@ const fitT = (txt, bh, lh) => { const sz = Math.max(8, Math.round(bh / (String(t
     if (o.layout === 'story') { // 세로 긴 SNS
       els.push(S('ellipse', -w * 0.3, -h * 0.1, w * 1.1, w * 1.1, { fill: P_.bg2, name: '원' }));
       els.push(motif(0, w * 0.6, h * 0.08, w * 0.3));
-      els.push(T(c.eyebrow, m, h * 0.32, w - 2 * m, 5 * u, { font: 'Montserrat', size: 4 * u, weight: 700, color: P_.ac, ls: 0.3 }));
+      els.push(T(c.eyebrow, m, h * 0.32, w - 2 * m, 5 * u, { font: 'Montserrat', ...FS(4 * u), weight: 700, color: P_.ac, ls: 0.3 }));
       els.push(T(c.title, m, h * 0.36, w - 2 * m, h * 0.22, Object.assign({ font: fT, weight: 800, color: dark ? WHITE : P_.fg, lh: 1.08, name: '제목' }, fitT(c.title, h * 0.22, 1.08))));
-      els.push(T(c.sub, m, h * 0.6, w - 2 * m, 8 * u, { font: fB, size: 5.4 * u, weight: 600, color: sub, lh: 1.4, name: '부제' }));
-      els.push(T(c.body, m, h * 0.68, w - 2 * m, h * 0.16, { font: fB, size: 4.6 * u, lh: 1.7, weight: 500, color: tx, name: '본문' }));
-      if (c.cta) { els.push(S('pill', m, h * 0.87, w - 2 * m, 10 * u, { fill: P_.fg })); els.push(T(c.cta, m, h * 0.87 + 2.6 * u, w - 2 * m, 6 * u, { font: fB, size: 5 * u, weight: 700, color: inkOn(P_.fg, P_.ac, 3), align: 'center', name: '버튼' })); }
-      els.push(T(o.biz.name, m, h - m - 4 * u, w - 2 * m, 5 * u, { font: 'Montserrat', size: 3.4 * u, weight: 700, color: dark ? WHITE : P_.fg, ls: 0.2, name: '하단 정보' }));
+      els.push(T(c.sub, m, h * 0.6, w - 2 * m, 8 * u, { font: fB, ...FS(5.4 * u), weight: 600, color: sub, lh: 1.4, name: '부제' }));
+      els.push(T(c.body, m, h * 0.68, w - 2 * m, h * 0.16, { font: fB, ...FS(4.6 * u), lh: 1.7, weight: 500, color: tx, name: '본문' }));
+      if (c.cta) { els.push(S('pill', m, h * 0.87, w - 2 * m, 10 * u, { fill: P_.fg })); els.push(T(c.cta, m, h * 0.87 + 2.6 * u, w - 2 * m, 6 * u, { font: fB, ...FS(5 * u), weight: 700, color: inkOn(P_.fg, P_.ac, 3), align: 'center', name: '버튼' })); }
+      els.push(T(o.biz.name, m, h - m - 4 * u, w - 2 * m, 5 * u, { font: 'Montserrat', ...FS(3.4 * u), weight: 700, color: dark ? WHITE : P_.fg, ls: 0.2, name: '하단 정보' }));
       return P(P_.bg, els, o.label);
     }
     return P(P_.bg, els, o.label);

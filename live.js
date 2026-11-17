@@ -171,7 +171,7 @@ NC.live = (function () {
     else if (msg.kind === 'cur') { touch(msg, null, via); const x = room.peers.get(msg.from); if (x) { x.c = msg.c || null; x.ct = Date.now(); } paintCursors(); }
     else if (msg.kind === 'bye') { const x = room.peers.get(msg.from); room.peers.delete(msg.from); if (x) note(`${x.pc || '다른 PC'}에서 이 문서를 닫았습니다`); emit(); paint(); checkSaver(); }
     else if (msg.kind === 'hello') { touch(msg, null, via); if (oldest() === me.id && api) { const d = api.doc(); send({ kind: 'state', pages: d.pages, doc: docFields(d) }, msg.from); } }
-    else if (msg.kind === 'state') { if (!api) return; const d = api.doc(); const sd = Object.assign({}, msg.doc, { pages: msg.pages }); const ops = diff(scan(d), scan(sd), sd); if (ops.length) receiveOps(ops); }
+    else if (msg.kind === 'state') { if (!api) return; const d = api.doc(); const sd = Object.assign({}, msg.doc, { pages: msg.pages }); const ops = diff(scan(d), scan(sd), sd); if (ops.length) { if (NC.store && NC.store.state.dirty && ops.some(o => o.op === 'del' || o.op === 'pageDel' || o.op === 'set')) { try { NC.store.writeCopy(JSON.parse(JSON.stringify(d)), '실시간 들어가기 전 이 PC 작업').then(n => note(`이 PC에서 저장하지 않은 작업이 있어 "${n}"로 보관하고 함께 편집을 시작합니다`)).catch(() => {}); } catch (e) {} } receiveOps(ops); } }
   }
   function docFields(d) { const o = {}; for (const k in d) if (k !== 'pages' && !SKIP.includes(k)) o[k] = d[k]; return o; }
   // 접속자 기록. via: 'bc'(같은 브라우저) | 'fb'(Firebase) — 어느 통로로 마지막에 봤는지 남겨 끊김 판정에 씀
@@ -290,7 +290,7 @@ NC.live = (function () {
     if (j.assets) for (const k in j.assets) if (!d.assets[k]) { d.assets[k] = j.assets[k]; got = true; }
     if (pending.size && j.pages) { for (const key of Array.from(pending)) { const [pg, id] = key.split('/'); const fp = j.pages.find(p => p.id === pg), fe = fp && fp.els.find(e => e.id === id); const p = d.pages.find(p => p.id === pg); const i = p ? p.els.findIndex(e => e.id === id) : -1; if (fe && i >= 0 && !hasBig(fe)) { p.els[i] = JSON.parse(J(fe)); pending.delete(key); got = true; } } }
     const same = J(docFields(j)) === J(docFields(d)) && J(j.pages) === J(d.pages);
-    if (!same && (j.savedAt || 0) > lastLocal + 2000 && Date.now() - lastLocal > 10000) { const sd = Object.assign({}, docFields(j), { pages: j.pages }); const ops = diff(scan(d), scan(sd), sd); if (ops.length) { receiveOps(ops); got = true; } }
+    if (!same && (j.savedAt || 0) > lastLocal + 2000 && Date.now() - lastLocal > 10000) { const sd = Object.assign({}, docFields(j), { pages: j.pages }); const ops = diff(scan(d), scan(sd), sd).filter(o => o.op !== 'del' && o.op !== 'pageDel'); if (ops.length) { receiveOps(ops); got = true; } } /* 보정은 추가·변경만 — 아직 전달 안 된 이 PC의 새 요소를 지우지 않음 */
     if (got) { base = scan(d); api.afterRemote(); }
     return same;
   }

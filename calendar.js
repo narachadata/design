@@ -167,7 +167,8 @@ NC.cal = (function () {
     (rules || []).forEach(r => {
       if (!r.text) return;
       let d = null;
-      if (r.kind === 'date') { const rm = Number(r.m) || 0, rd = Number(r.d); if ((rm === 0 || rm === m) && rd >= 1 && rd <= dim) d = rd; } /* 날짜 규칙: 매년 m월 d일 (m=0이면 매월 d일) — 생일·기념일·원비 날 */
+      if (r.week === 'every') { for (let k = 1; k <= dim; k++) if (new Date(y, m - 1, k).getDay() === Number(r.dow) && !el.events.some(e => e.d === k && e.text === r.text)) { el.events.push({ d: k, text: r.text, color: r.color || '' }); added++; } return; } /* 매주 ○요일 */
+      if (r.kind === 'date') { const rm = Number(r.m) || 0, rd = r.last ? dim : Number(r.d); if ((rm === 0 || rm === m) && rd >= 1 && rd <= dim) d = rd; } /* 날짜 규칙: 매년 m월 d일 (m=0이면 매월 d일) — 생일·기념일·원비 날 */
       else if (r.week === 'last') { for (let k = dim; k >= 1; k--) if (new Date(y, m - 1, k).getDay() === Number(r.dow)) { d = k; break; } }
       else { let c = 0; for (let k = 1; k <= dim; k++) if (new Date(y, m - 1, k).getDay() === Number(r.dow)) { c++; if (c === Number(r.week)) { d = k; break; } } }
       if (d && !el.events.some(e => e.d === d && e.text === r.text)) { el.events.push({ d, text: r.text, color: r.color || '' }); added++; }
