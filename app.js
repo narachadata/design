@@ -52,7 +52,7 @@ function viewSrc(el, mode) {
 }
 function src(ref) { if (!ref) return ''; if (ref.startsWith('asset:')) return blobURL(ref, ASSETS[ref.slice(6)]); if (ref.startsWith('a:')) return blobURL(ref, doc.assets[ref.slice(2)]); if (ref.startsWith('lib:')) return NC.lib.url(ref.slice(4)); return ref; }
 function addAsset(dataURL) { for (const k in doc.assets) if (doc.assets[k] === dataURL) return 'a:' + k; const id = uid(); doc.assets[id] = dataURL; return 'a:' + id; }
-function gcAssets() { const used = new Set(); const walk = v => { if (typeof v === 'string' && v.startsWith('a:')) used.add(v.slice(2)); else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(doc.pages); walk(doc.calendar); walk(doc.audio); hist.forEach(h => { for (const m of h.matchAll(/"a:([^"]+)"/g)) used.add(m[1]); }); for (const k in doc.assets) if (!used.has(k)) delete doc.assets[k]; } // 실행 취소 기록에 남은 그림도 지키기 (저장 뒤 Ctrl+Z로 지운 사진 되살리기)
+function gcAssets() { const used = new Set(); const walk = v => { if (typeof v === 'string' && v.startsWith('a:')) used.add(v.slice(2)); else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(doc.pages); walk(doc.calendar); walk(doc.audio); walk(doc.cert); hist.forEach(h => { for (const m of h.matchAll(/"a:([^"]+)"/g)) used.add(m[1]); }); for (const k in doc.assets) if (!used.has(k)) delete doc.assets[k]; } // 실행 취소 기록에 남은 그림도 지키기 (저장 뒤 Ctrl+Z로 지운 사진 되살리기)
 
 /* ---------- 실행 취소 ---------- */
 // 기록에는 내용만: 그림·올린 글꼴(수 MB)·이름·문서 번호·저장 시각은 빼고, 되돌릴 때 지금 값을 그대로 둠
@@ -4012,7 +4012,7 @@ async function fontCSSFor(node) {
 }
 let dlFallback = 0;
 async function renderPageCanvas(pg, dpi, mode, bg) {
-  const c = await renderPageCanvas0(pg, dpi, mode, bg);
+  const restoreF = await swapPdfFrames([pg], dpi); let c; try { c = await renderPageCanvas0(pg, dpi, mode, bg); } finally { restoreF(); } /* 상장 틀(원본 PDF)은 이 해상도로 다시 그림 */
   // 정확한 픽셀 크기로 (예: 1080×1350, 반올림 오차로 생기는 흰 줄 없앰)
   const b = mode === 'print' ? (Number(doc.bleed) || 0) : 0, tw = Math.round((doc.w + 2 * b) / 25.4 * dpi), th = Math.round((doc.h + 2 * b) / 25.4 * dpi);
   const near = Math.abs(c.width - tw) <= 3 && Math.abs(c.height - th) <= 3;
@@ -4119,7 +4119,8 @@ async function printVector(pages) {
   $('#pageStyle').textContent = `@page{size:${doc.w + 2 * b}mm ${doc.h + 2 * b}mm;margin:0}`;
   $('#canvas').innerHTML = ''; const th = $('#thumbs'); if (th) th.innerHTML = '';  // SVG id 중복 방지
   // 브라우저 인쇄 PDF에는 재단 여백(슬러그)이 없어 재단선이 도련 위 그림에 찍히므로 끔. 파일 이름에 도련 포함을 표시
-  const keepMarks = doc.cropMarks; doc.cropMarks = false; const root = $('#printRoot'); try { root.innerHTML = pages.map(i => sheetHTML(doc.pages[i], 'print')).join(''); } finally { doc.cropMarks = keepMarks; }
+  const restoreF = await swapPdfFrames(pages.map(i => doc.pages[i]), 600); /* 상장 틀은 원본 PDF를 600dpi로 */
+  const keepMarks = doc.cropMarks; doc.cropMarks = false; const root = $('#printRoot'); try { root.innerHTML = pages.map(i => sheetHTML(doc.pages[i], 'print')).join(''); } finally { doc.cropMarks = keepMarks; restoreF(); }
   const keepTitle = document.title; document.title = `${(doc.name || 'design').replace(/[\\/:*?"<>|]/g, '_')}_인쇄용${b ? `_도련${b}mm` : ''}`; window.addEventListener('afterprint', () => { document.title = keepTitle; }, { once: true }); setTimeout(() => { document.title = keepTitle; }, 60000);
   setStatus('PDF 준비 중…'); await ensureLibFonts(pages.map(i => doc.pages[i]));
   // 실제로 쓰인 글꼴·굵기·기울임 조합을 모두 먼저 불러 둠 (300·800 같은 굵기가 대체 글꼴로 찍히지 않게)
@@ -4335,7 +4336,7 @@ function certEls(form, r) {
     delete base.label; if (base.fitText) base.fitMax = base.size; Object.assign(base, L); out.push(base); };
   const sans = 'Noto Sans KR', serif = 'Nanum Myeongjo', fill = t => String(t || '').replace(/\{([^{}\n]+)\}/g, (m, nm) => { const c = F.common.find(x => x[1].replace(/ \(.*\)$/, '') === nm.trim()); return c ? certVal(D, r, c[0]) : m; });
   /* 글꼴: 관장님 상장과 같게 나눔명조 — 제목(상장 이름)·이름·급수는 나눔명조 ExtraBold(800), 본문·기록·날짜는 보통(400) */
-  T('title', certVal(D, r, 'title'), { label: '상장 이름', x: 15, y: 91, w: 180, h: 22, size: 42, weight: 800, font: serif, ls: 0.06, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
+  T('title', certVal(D, r, 'title'), { label: '상장 이름', x: 15, y: 108.5, w: 180, h: 22, size: 42, weight: 800, font: serif, ls: 0.06, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'bottom' }); /* 틀의 'THIS CERTIFICATE IS PRESENTED TO' 선(133.5mm) 바로 위에 앉게 (관장님) */
   T('name', certVal(D, r, 'name'), { label: '이름', x: 30, y: 139, w: 150, h: 17, size: 34, weight: 800, font: serif, ls: 0.04, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
   let bodyY = 180, bodySz = 15;
   if (form === 'record') {
@@ -4360,7 +4361,7 @@ function certEls(form, r) {
 }
 function certPage(form, r, i) {
   const C = certState(), els = [];
-  if (C.frame) els.push({ type: 'image', id: uid(), src: C.frame, x: 0, y: 0, w: doc.w, h: doc.h, rot: 0, fit: 'cover', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '상장 틀', locked: true, hidden: C.printFrame === false, certFrame: true });
+  if (C.frame) els.push({ type: 'image', id: uid(), src: C.frame, pdfSrc: C.framePdf || undefined, x: 0, y: 0, w: doc.w, h: doc.h, rot: 0, fit: 'cover', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '상장 틀', locked: true, hidden: C.printFrame === false, certFrame: true });
   return { id: uid(), bg: '#ffffff', els: els.concat(certEls(form, r)), label: `상장 ${i + 1} · ${r.name || ''}`, cert: { form, i } };
 }
 /* 화면 밖에서 글자 크기 자동 맞춤을 미리 계산 (캔버스에 열지 않은 쪽도 PDF에서 이름이 넘치지 않게) */
@@ -4371,24 +4372,42 @@ async function fitTextOffscreen(els) {
   try { list.forEach(el => { fitCache.delete(el.id); const t = document.createElement('div'); t.innerHTML = elHTML(el, 'edit'); const d = t.firstElementChild; box.firstChild.appendChild(d); autoFitText(d, el); }); } finally { box.remove(); }
 }
 function certRows(form) { return (certState().data[form].rows || []).filter(r => String(r.name || '').trim()); }
+async function loadPdfJs() { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', () => window.pdfjsLib); pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
+/* 원본 PDF 틀을 출력 해상도로 그림 (PNG — 가는 선이 JPEG처럼 번지지 않게). 최근 2개만 기억 */
+const framePdfCache = new Map();
+async function framePdfURL(ref, dpi) {
+  const key = ref + '|' + Math.round(dpi); if (framePdfCache.has(key)) return framePdfCache.get(key);
+  const data = doc.assets[ref.slice(2)]; if (!data) return null; await loadPdfJs();
+  const bin = atob(data.slice(data.indexOf(',') + 1)), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const pdf = await pdfjsLib.getDocument({ data: bytes }).promise, pg = await pdf.getPage(1), vp = pg.getViewport({ scale: dpi / 72 });
+  const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  await pg.render({ canvasContext: x, viewport: vp }).promise; const b = await new Promise(r => c.toBlob(r, 'image/png')); c.width = c.height = 0; try { pdf.destroy(); } catch (e) {}
+  const u = URL.createObjectURL(b); framePdfCache.set(key, u); while (framePdfCache.size > 2) { const k0 = framePdfCache.keys().next().value; URL.revokeObjectURL(framePdfCache.get(k0)); framePdfCache.delete(k0); }
+  return u;
+}
+/* 쪽들의 상장 틀을 잠깐 원본 PDF 고해상도 그림으로 바꿈 → 되돌리는 함수를 돌려줌 */
+async function swapPdfFrames(pages, dpi) {
+  const swaps = []; for (const pg of pages) for (const e of (pg.els || [])) if (e.pdfSrc && !e.hidden && doc.assets[String(e.pdfSrc).slice(2)]) { try { const u = await framePdfURL(e.pdfSrc, Math.max(72, Math.min(600, dpi))); if (u) { swaps.push([e, e.src]); e.src = u; } } catch (err) { console.warn('틀 PDF 그리기 실패', err); } }
+  return () => swaps.forEach(([e, s_]) => { e.src = s_; });
+}
 /* 상장 틀 불러오기: PDF(첫 쪽, 약 300dpi)나 그림 → 문서 그림 + 이 PC 기억(다음 상장 문서에 자동) */
 async function certLoadFrame() {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/pdf,image/*';
   inp.onchange = async () => {
-    const f = inp.files && inp.files[0]; if (!f) return; let url, wmm = 0, hmm = 0;
+    const f = inp.files && inp.files[0]; if (!f) return; let url, wmm = 0, hmm = 0, pdfUrl = '';
     try {
       setStatus('상장 틀을 읽는 중…');
       if (/pdf$/i.test(f.type) || /\.pdf$/i.test(f.name)) {
-        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', () => window.pdfjsLib); pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        await loadPdfJs(); pdfUrl = await fileToDataURL(f); if (!/^data:application\/pdf/.test(pdfUrl)) pdfUrl = 'data:application/pdf;base64,' + pdfUrl.split(',')[1]; /* 원본 PDF 보관 — 출력·PDF 때 그 해상도로 다시 그려 가는 선까지 선명하게 */
         const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise, pg = await pdf.getPage(1), v1 = pg.getViewport({ scale: 1 });
         wmm = v1.width * 25.4 / 72; hmm = v1.height * 25.4 / 72; const sc = 2480 / Math.min(v1.width, v1.height) * (Math.min(v1.width, v1.height) / v1.width), vp = pg.getViewport({ scale: Math.min(sc, 6) });
         const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
         await pg.render({ canvasContext: x, viewport: vp }).promise; url = c.toDataURL('image/jpeg', 0.92); c.width = c.height = 0;
       } else url = await shrinkDataURL(await fileToDataURL(f), 3508);
     } catch (e) { toast('상장 틀을 읽지 못했습니다: ' + e.message, true); return; } finally { setStatus(''); }
-    const C = certState(); C.frame = addAsset(url); try { await store.idbSet('cert-frame', { url, wmm, hmm, name: f.name }); } catch (e) {}
+    const C = certState(); C.frame = addAsset(url); C.framePdf = pdfUrl ? addAsset(pdfUrl) : undefined; try { await store.idbSet('cert-frame', { url, pdf: pdfUrl, wmm, hmm, name: f.name }); } catch (e) {}
     if (wmm && hmm && (Math.abs(wmm - doc.w) > 2 || Math.abs(hmm - doc.h) > 2)) toast(`틀 크기(${Math.round(wmm)}×${Math.round(hmm)}mm)가 문서(${Math.round(doc.w)}×${Math.round(doc.h)}mm)와 다릅니다 — 상장 문서는 A4 세로로 만드세요`, true);
-    doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) e.src = C.frame; })); commit(); renderAll(); toast('상장 틀을 넣었습니다 — 이 PC는 다음 상장 문서에도 이 틀을 씁니다');
+    doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { e.src = C.frame; e.pdfSrc = C.framePdf; } })); commit(); renderAll(); toast(C.framePdf ? '상장 틀(원본 PDF)을 넣었습니다 — 출력·PDF 때 원본 선 그대로 다시 그립니다. 이 PC는 다음 상장 문서에도 이 틀을 씁니다' : '상장 틀을 넣었습니다 — 이 PC는 다음 상장 문서에도 이 틀을 씁니다');
   };
   inp.click();
 }
@@ -4397,7 +4416,7 @@ async function certNewDoc() {
   await keepCurrentDoc(); await store.disconnect();
   const nd = newDoc(SIZES.find(s_ => s_[0] === 'a4p')); nd.fmt = 'a4p'; nd.name = `상장 ${new Date().getFullYear()}`; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.rules = doc.rules; nd.fonts = doc.fonts;
   doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; certState();
-  try { const fr = await store.idbGet('cert-frame'); if (fr && fr.url) doc.cert.frame = addAsset(fr.url); } catch (e) {}
+  try { const fr = await store.idbGet('cert-frame'); if (fr && fr.url) { doc.cert.frame = addAsset(fr.url); if (fr.pdf) doc.cert.framePdf = addAsset(fr.pdf); } } catch (e) {}
   commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다');
   zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); toast(doc.cert.frame ? 'A4 상장 문서를 만들었습니다 — 이 PC에 기억된 상장 틀을 넣었습니다' : 'A4 상장 문서를 만들었습니다 — ① 상장 틀을 불러오세요');
 }
@@ -4421,7 +4440,7 @@ function renderCertSide(body) {
   ${a4 && (doc.cert.frame || doc.pages.some(p => p.cert)) ? '' : `<div class="wz-card"><b>상장 만들기</b><p class="hint" style="margin:4px 0 8px">워드의 편지 병합처럼 양식은 한 번, 명단만 바꿔 여러 명의 상장을 한 번에 만듭니다.</p>${a4 ? '' : '<button class="btn primary full" data-cx="newdoc">A4 상장 문서 새로 만들기</button>'}</div>`}
   <h3>① 상장 틀 <small>배경</small></h3>
   <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm ${C.frame ? '' : 'primary'}" data-cx="frame">${C.frame ? '틀 바꾸기' : '📄 상장 틀 불러오기 (PDF·그림)'}</button>${C.frame ? `<label class="chk" title="틀이 미리 인쇄된 상장 용지에 찍을 때는 끄세요"><input type="checkbox" data-cx="printFrame" ${C.printFrame !== false ? 'checked' : ''}> 틀도 함께 인쇄</label>` : ''}</div>
-  ${C.frame ? '' : '<p class="hint">틀은 이 문서와 이 PC에만 보관됩니다 (관장 도장이 있어 인터넷에 올리지 않음).</p>'}
+  ${C.frame ? (C.framePdf ? '<p class="hint">원본 PDF 틀 — 출력·PDF 때 원본 선 그대로 다시 그립니다.</p>' : '<p class="hint" style="color:#b3261e">그림으로 바꾼 틀입니다. "틀 바꾸기"로 원본 PDF를 다시 불러오면 가는 선까지 선명하게 출력됩니다.</p>') : '<p class="hint">틀은 이 문서와 이 PC에만 보관됩니다 (관장 도장이 있어 인터넷에 올리지 않음).</p>'}
   <h3>② 양식 <small>주 문서</small></h3>
   <div class="cformgrid">${Object.entries(CERT_FORMS).map(([kk, f]) => `<button class="cform ${kk === form ? 'on' : ''}" data-cform="${kk}"><b>${f.name}</b><small>${f.desc}</small></button>`).join('')}</div>
   <div class="ccommon">${F.common.map(([kk, l]) => `<label class="f"><span>${l} <em class="hint">모두 같음</em></span><input type="text" data-cc="${kk}" value="${esc(D.common[kk] || '')}"></label>`).join('')}
@@ -4581,7 +4600,7 @@ function openPrint(pre) {
       <div class="grid2"><label class="f"><span>출력할 쪽</span><select id="prPg">${[['all', `모든 쪽${doc.pages.some(p => p.dlOff) ? ' (숨긴 쪽 빼고)' : ''}`], ['cur', `지금 쪽 (${cur + 1})`], ...(pgSel.size > 1 ? [['sel', `페이지 목록에서 고른 ${pgSel.size}쪽`]] : []), ...(hasCert ? [['cert', `상장 쪽만 (${doc.pages.filter(p => p.cert).length}장)`]] : []), ['range', '직접 입력']].map(([a, t]) => `<option value="${a}" ${S.pages === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       ${S.pages === 'range' ? `<label class="f"><span>쪽 번호</span><input id="prRange" value="${esc(S.range)}" placeholder="예: 1-3, 5"></label>` : `<div class="prcount">${list.length}쪽 · 종이 ${Math.round(doc.w)}×${Math.round(doc.h)}mm</div>`}</div>
       <div class="seg prmode">${[['img', '고화질 그림 (추천)', '화면과 똑같이 — 글꼴·효과·사진이 프린터·PC마다 달라지지 않음'], ['vec', '글자 선명 (벡터)', '작은 글자가 아주 또렷 — 효과가 많은 디자인은 그림 방식이 안전']].map(([a, t, ti]) => `<button data-prmode="${a}" aria-pressed="${S.mode === a}" title="${ti}">${t}</button>`).join('')}</div>
-      ${S.mode === 'img' ? `<div class="grid2"><label class="f"><span>품질</span><select id="prDpi"><option value="300" ${S.dpi === 300 ? 'selected' : ''}>고품질 300dpi (상장·사진)</option><option value="200" ${S.dpi === 200 ? 'selected' : ''}>표준 200dpi (빠름·많은 쪽)</option></select></label><label class="f"><span>종이 가장자리</span><select id="prFit"><option value="full" ${S.fit === 'full' ? 'selected' : ''}>꽉 채움 (테두리 없음 인쇄)</option><option value="safe" ${S.fit === 'safe' ? 'selected' : ''}>프린터 여백 안에 (96%로 조금 작게)</option></select></label></div>` : ''}
+      ${S.mode === 'img' ? `<div class="grid2"><label class="f"><span>품질</span><select id="prDpi"><option value="600" ${S.dpi === 600 ? 'selected' : ''}>최고 600dpi (가는 선·도장, 느림)</option><option value="300" ${S.dpi === 300 ? 'selected' : ''}>고품질 300dpi (상장·사진)</option><option value="200" ${S.dpi === 200 ? 'selected' : ''}>표준 200dpi (빠름·많은 쪽)</option></select></label><label class="f"><span>종이 가장자리</span><select id="prFit"><option value="full" ${S.fit === 'full' ? 'selected' : ''}>꽉 채움 (테두리 없음 인쇄)</option><option value="safe" ${S.fit === 'safe' ? 'selected' : ''}>프린터 여백 안에 (96%로 조금 작게)</option></select></label></div>` : ''}
       ${C && C.frame && list.some(i => doc.pages[i].cert) ? `<label class="chk"><input type="checkbox" id="prFrame" ${S.frame ? 'checked' : ''}> 상장 틀도 함께 출력 <small class="hint" style="margin:0">(틀이 인쇄된 상장 용지면 끄기)</small></label>` : ''}
       <details class="fx prtip" open><summary><b>엡손 잉크젯 설정 (${isMac ? '맥' : '윈도우'})</b></summary>${isMac ? `<ol><li>인쇄 창의 <b>프린터</b>에서 EPSON을 고르고 <b>용지 크기: A4</b> — 꽉 채움이면 <b>A4 (테두리 없음)</b>.</li><li><b>배율 100%</b> (크롬은 '추가 설정 → 배율: 기본값', 사파리는 '크기 조절 100%').</li><li><b>인쇄 설정</b>(또는 '용지 처리/품질')에서 <b>용지 종류</b>: 상장지·두꺼운 무광지는 'Matte(무광) / 고급 무광지', 일반지는 '일반 용지' · <b>인쇄 품질: 높음(고품질)</b>.</li><li>크롬은 <b>배경 그래픽</b>을 켭니다(그림 방식은 꺼도 됨).</li></ol>` : `<ol><li>인쇄 창의 <b>대상</b>에서 EPSON 프린터를 고릅니다 (PDF로 저장 아님).</li><li><b>추가 설정</b> → <b>용지 크기 A4</b> · <b>배율: 기본값(100%)</b> · <b>여백: 없음</b> · <b>배경 그래픽</b> 체크.</li><li>꽉 채움(테두리 없음)은 <b>'시스템 대화 상자를 사용하여 인쇄'</b>(Ctrl+Shift+P) → <b>기본 설정</b> → <b>테두리 없음</b> 체크, <b>용지 종류</b>: 상장지·두꺼운 무광지는 '고급 무광지(Matte)', 일반지는 '일반 용지' · <b>품질: 높음</b>.</li></ol>`}<p class="hint">테두리 없음이 안 되는 용지·프린터면 '프린터 여백 안에'를 고르세요 (가장자리가 잘리지 않음). 두꺼운 상장지는 프린터 뒤쪽 급지대에 한 장씩 넣는 것이 안전합니다.</p></details>
       <div class="row" style="justify-content:flex-end;gap:6px;margin-top:8px"><button class="btn primary" id="prGo" ${list.length ? '' : 'disabled'}>🖨 ${list.length}쪽 출력</button></div></div>`;
