@@ -400,7 +400,8 @@ let ghostRaf = 0;
 function ghostSoon() { if (ghostRaf) return; ghostRaf = requestAnimationFrame(() => { ghostRaf = 0; renderGhost(true); }); }
 function fitCanvas() {
   // 위에 떠 있는 도구 막대와 아래 쪽 이동 막대에 페이지가 가리지 않게 그 높이만큼 비워 두고 맞춤
-  const st = $('#stage'), tb = st.querySelector('.toolbar'), top = tb ? tb.offsetTop + tb.offsetHeight + 14 : 24, bot = st.classList.contains('tlon') && $('#vtl') && !document.body.classList.contains('tl-wide') ? $('#vtl').offsetHeight + 18 : 64;
+  const st = $('#stage'); st.classList.toggle('compact', st.clientHeight < 470); /* 낮은 작업 화면(노트북 + 큰 타임라인): 도구 막대를 아이콘 한 줄로 */
+  const tb = st.querySelector('.toolbar'), top = tb ? tb.offsetTop + tb.offsetHeight + (st.classList.contains('compact') ? 6 : 14) : 24, bot = st.classList.contains('tlon') && $('#vtl') && !document.body.classList.contains('tl-wide') ? $('#vtl').offsetHeight + 18 : 64;
   const w = st.clientWidth - 80, h = st.clientHeight - top - bot - 4;
   const k = zoom || Math.max(0.03, Math.min(Math.max(w, 60) / (doc.w * MM), Math.max(h, 60) / (doc.h * MM)));
   // 문서 밖으로 나간 요소가 있으면 그만큼 작업 화면을 넓혀 스크롤로 닿게 함 (좌우·위아래 같은 폭이라 페이지가 가운데에 그대로)
@@ -1735,7 +1736,7 @@ function applyTlView() {
   const v = tl.open ? tlView : 'stage', wide = v !== 'stage', b = document.body, el = $('#vtl');
   b.classList.toggle('tl-wide', wide); b.classList.toggle('tl-focus', v === 'focus'); b.classList.toggle('tl-tall', v === 'tall');
   if (el) { const home = wide ? document.body : $('#stage'); if (el.parentElement !== home) home.appendChild(el); }
-  try { const hgt = Number(localStorage.getItem('naracal-tlh-' + (v === 'tall' ? 'tall' : 'wide'))); document.body.style.setProperty('--tlh', (hgt >= 180 ? hgt : (v === 'tall' ? 440 : 300)) + 'px'); } catch (e) {}
+  try { const hgt = Number(localStorage.getItem('naracal-tlh-' + (v === 'tall' ? 'tall' : 'wide'))); document.body.style.setProperty('--tlh', Math.min(hgt >= 180 ? hgt : (v === 'tall' ? 440 : 300), Math.round(innerHeight * (v === 'tall' ? 0.5 : 0.4))) + 'px'); /* 노트북(높이 768)에서 디자인 화면이 너무 작아지지 않게 화면 높이의 50%(큰)·40%(넓은)까지 */ } catch (e) {}
   requestAnimationFrame(() => { fitCanvas(); renderTimeline(); });
 }
 function tlShow(on) {
@@ -1744,7 +1745,7 @@ function tlShow(on) {
   if (!$('#vtl')) {
     const d = document.createElement('div'); d.id = 'vtl'; d.className = 'vtl'; d.tabIndex = -1;
     d.innerHTML = `<div class="vtl-bar">
-      <button class="tb" id="tlUndo" title="되돌리기 (Ctrl+Z)">${tli('undo')}</button><button class="tb" id="tlRedo" title="다시 (Ctrl+Shift+Z)">${tli('redo')}</button><button class="tb" id="tlDel" title="고른 클립 지우기 (Delete)">${tli('del')}</button><button class="tb" id="tlSplit" title="재생 헤드에서 자르기 (Ctrl+B)">${tli('cut')}</button><button class="tb" id="tlText" title="재생 위치에 글자 넣기 (T)">${tli('text')}</button><button class="tb" id="tlRec" title="음성 녹음 (R)">${tli('mic')}</button>
+      <button class="tb" id="tlUndo" title="되돌리기 (Ctrl+Z)">${tli('undo')}</button><button class="tb" id="tlRedo" title="다시 (Ctrl+Shift+Z)">${tli('redo')}</button><button class="tb" id="tlDel" title="고른 클립 지우기 (Delete)">${tli('del')}</button><button class="tb" id="tlSplit" title="재생 헤드에서 자르기 (Ctrl+B)">${tli('cut')}</button><button class="tb" id="tlText" title="화면에 글자 넣기 — 재생 위치에서 타자기처럼 나타남 (T)">${tli('text')}</button><button class="tb tbtxt" id="tlCap" title="재생 위치에 자막 넣기 — 자막 트랙에 들어감 (C)">자막</button><button class="tb" id="tlRec" title="음성 녹음 (R)">${tli('mic')}</button>
       <span class="tsep"></span>
       <button class="tb" id="tlFirst" title="처음으로 (Home)">${tli('first')}</button><button class="tb" id="tlPrevF" title="한 프레임 뒤로 (←)">${tli('prevf')}</button><button class="tb tplay" id="tlPlay" title="재생 / 멈춤 (Space)">${tli('play', 20)}</button><button class="tb" id="tlNextF" title="한 프레임 앞으로 (→)">${tli('nextf')}</button><button class="tb" id="tlStop" title="정지 (K)">${tli('stop')}</button>
       <span class="tl-time" id="tlTime">00:00:00:00</span><span class="tl-tot" id="tlTot">/ 00:00:00:00</span><span class="tl-msg" id="tlMsg"></span>
@@ -1958,7 +1959,7 @@ function tlWire() {
   $('#tlFirst').onclick = () => tlSeek(0); $('#tlStop').onclick = () => tlPause();
   $('#tlPrevF').onclick = () => tlSeek(tl.T - 1 / Number(vset().fps || 30)); $('#tlNextF').onclick = () => tlSeek(tl.T + 1 / Number(vset().fps || 30));
   $('#tlText').onclick = () => { const { list } = tlScenes(), x = list.find(q => tl.T >= q.t0 && tl.T < q.t0 + q.dur + q.turn); if (x && x.i !== cur) goto(x.i); const el = addText('h', { text: '제목을 입력하세요', noEdit: true }); el.anim = { t: 'type', d: Math.max(0, Math.round((tl.T - (x ? x.t0 : 0)) * 10) / 10), s: 1.4 }; commit(); renderAll(); toast('타자기 효과 글자를 넣었습니다 — 두 번 눌러 글을 고치세요'); };
-  $('#tlRec').onclick = tlRecord;
+  $('#tlRec').onclick = tlRecord; $('#tlCap').onclick = () => tlAddCaption();
   $('#tlDel').onclick = () => { if (tl.selIt) { tracks().forEach(t => { t.items = (t.items || []).filter(q => q.id !== tl.selIt); }); tl.selIt = null; commit(); renderTimeline(); toastUndo('고른 클립을 지웠습니다'); return; } if (tl.selAu && doc.audio) { delete doc.audio; tl.selAu = false; commit(); renderTimeline(); renderSide(); toastUndo('배경 음악을 뺐습니다'); return; } tlDeleteScene(false); };
   root.addEventListener('click', e => {
     const t = e.target, trk = id => tracks().find(x => x.id === id);

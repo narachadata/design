@@ -1225,3 +1225,10 @@ dialog.cpvdlg .dbody{flex:1;min-height:0;max-height:none;overflow:hidden;display
 
 .cpvfoot{flex-wrap:wrap;align-items:center}.cpvfoot .cpvcap{margin:0;justify-content:flex-start;font-size:13px}.cpvfoot .cpvcap .hint{font-size:11.5px}
 #dragTip{position:fixed;z-index:9999;pointer-events:none;background:rgba(20,24,36,.88);color:#fff;font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:6px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tb.tbtxt{width:auto;padding:0 8px;font-size:12px;font-weight:700}
+/* 낮은 작업 화면: 도구 막대를 아이콘만 한 줄로 (노트북 + 큰 타임라인) */
+.stage.compact .toolbar{top:6px;padding:3px 4px;flex-wrap:nowrap;gap:0}
+.stage.compact .toolbar .btn{font-size:0;padding:3px 5px;min-height:0;height:28px;gap:0}
+.stage.compact .toolbar .btn .ic{width:16px;height:16px}
+.stage.compact .toolbar #zoomPct{font-size:11.5px;margin-left:3px}
+.stage.compact .toolbar .tgroup{padding:0 2px}
