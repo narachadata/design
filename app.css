@@ -1224,3 +1224,4 @@ dialog.cpvdlg .dbody{flex:1;min-height:0;max-height:none;overflow:hidden;display
 .cpvfoot{flex:none;justify-content:flex-end;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--ui-line)}
 
 .cpvfoot{flex-wrap:wrap;align-items:center}.cpvfoot .cpvcap{margin:0;justify-content:flex-start;font-size:13px}.cpvfoot .cpvcap .hint{font-size:11.5px}
+#dragTip{position:fixed;z-index:9999;pointer-events:none;background:rgba(20,24,36,.88);color:#fff;font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:6px;white-space:nowrap;font-variant-numeric:tabular-nums}
