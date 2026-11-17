@@ -4334,21 +4334,28 @@ function certEls(form, r) {
   const T = (key, text, o) => { if (!String(text || '').trim()) return; const L = C.layout[form + ':' + key] || {}; const base = Object.assign({}, TEXT_DEF, { id: uid(), text, font: 'Noto Sans KR', size: 15, weight: 700, color: '#1a1a1a', align: 'center', lh: 1.45, ls: 0, name: '상장 · ' + o.label, certKey: key }, o, { x: r1(o.x * kx), y: r1(o.y * ky), w: r1(o.w * kx), h: r1((o.h || 8) * ky), size: Math.round(o.size * k * 2) / 2 });
     delete base.label; if (base.fitText) base.fitMax = base.size; Object.assign(base, L); out.push(base); };
   const sans = 'Noto Sans KR', serif = 'Nanum Myeongjo', fill = t => String(t || '').replace(/\{([^{}\n]+)\}/g, (m, nm) => { const c = F.common.find(x => x[1].replace(/ \(.*\)$/, '') === nm.trim()); return c ? certVal(D, r, c[0]) : m; });
-  T('title', certVal(D, r, 'title'), { label: '상장 이름', x: 15, y: 91, w: 180, h: 22, size: 42, weight: 900, font: sans, ls: 0.06, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
-  T('name', certVal(D, r, 'name'), { label: '이름', x: 30, y: 139, w: 150, h: 17, size: 34, weight: 800, font: sans, ls: 0.04, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
-  let bodyY = 180;
+  /* 글꼴: 관장님 상장과 같게 나눔명조 — 제목(상장 이름)·이름·급수는 나눔명조 ExtraBold(800), 본문·기록·날짜는 보통(400) */
+  T('title', certVal(D, r, 'title'), { label: '상장 이름', x: 15, y: 91, w: 180, h: 22, size: 42, weight: 800, font: serif, ls: 0.06, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
+  T('name', certVal(D, r, 'name'), { label: '이름', x: 30, y: 139, w: 150, h: 17, size: 34, weight: 800, font: serif, ls: 0.04, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
+  let bodyY = 180, bodySz = 15;
   if (form === 'record') {
     /* 종목 목록: 관리프로그램에서 가져온 사람은 r.recs(사람마다 종목·단위가 다름), 손으로 넣은 사람은 공통 종목1·2 + 기록 */
     const u = certVal(D, r, 'unit'), recs = Array.isArray(r.recs) && r.recs.length ? r.recs : [[certVal(D, r, 'k1'), r.a1, r.b1], [certVal(D, r, 'k2'), r.a2, r.b2]].filter(x => x[0] && (x[1] || x[2])).map(x => ({ k: x[0], a: x[1], b: x[2], u }));
-    const n = recs.length, cols = n <= 2 ? n : n === 4 ? 2 : 3, rows_ = Math.ceil(n / Math.max(1, cols)), sz = n <= 2 ? 16 : n <= 4 ? 14.5 : 13, rh = n <= 2 ? 14 : 12.5, cw = n === 1 ? 100 : cols === 2 ? 78 : 56, gap = cols === 3 ? 4 : 10;
-    recs.forEach((q, i) => { const row = Math.floor(i / cols), inRow = Math.min(cols, n - row * cols), col = i - row * cols, tw = inRow * cw + (inRow - 1) * gap, x0 = 105 - tw / 2;
-      T('rec' + (i + 1), `${q.k}\n${certRec(q.a, q.u != null ? q.u : u)} → ${certRec(q.b, q.u != null ? q.u : u)}`, { label: '기록 ' + (i + 1), x: x0 + col * (cw + gap), y: 160 + row * rh, w: cw, h: rh - 1, size: sz, font: serif, weight: 700 }); });
-    bodyY = Math.max(180, 160 + rows_ * rh + 6);
+    /* 종목 3개까지: 종목 이름과 기록을 두 줄로 나란히(1~3칸). 4개 이상: '종목  기록 → 기록' 한 줄씩 두 칸 — 본문이 아래 KTA 로고(약 222mm)에 닿지 않게 */
+    const n = recs.length, line = q => `${certRec(q.a, q.u != null ? q.u : u)} → ${certRec(q.b, q.u != null ? q.u : u)}`;
+    if (n <= 3) { const cw = n === 1 ? 100 : n === 2 ? 78 : 58, gap = n === 3 ? 3 : 10, tw = n * cw + (n - 1) * gap;
+      recs.forEach((q, i) => T('rec' + (i + 1), `${q.k}\n${line(q)}`, { label: '기록 ' + (i + 1), x: 105 - tw / 2 + i * (cw + gap), y: 159, w: cw, h: 14, size: n === 3 ? 15 : 16, font: serif, weight: 400, lh: 1.4 })); bodyY = 180; }
+    else { /* 표처럼 두 칸: 칸마다 종목 이름(오른쪽 맞춤) | 기록(왼쪽 맞춤) — 줄이 가지런하게 */
+      const rows_ = Math.ceil(n / 2), sz = 13, lh = 1.45, rowH = sz * 0.3528 * lh, cols_ = [recs.slice(0, rows_), recs.slice(rows_)];
+      cols_.forEach((list, c) => { if (!list.length) return; const x0 = c ? 108 : 18;
+        T('recN' + (c + 1), list.map(q => q.k).join('\n'), { label: `기록 ${c + 1}칸 종목`, x: x0, y: 158, w: 44, h: rowH * list.length, size: sz, font: serif, weight: 400, lh, align: 'right' });
+        T('recV' + (c + 1), list.map(line).join('\n'), { label: `기록 ${c + 1}칸 기록`, x: x0 + 46, y: 158, w: 38, h: rowH * list.length, size: sz, font: serif, weight: 400, lh, align: 'left' }); });
+      bodyY = 158 + rows_ * rowH + 5; bodySz = 14; }
   } else if (form === 'grade') { T('grade', r.grade, { label: '급수', x: 40, y: 158, w: 130, h: 11, size: 24, weight: 800, font: serif }); bodyY = 182; }
-  else if (form === 'free') { T('line', r.line, { label: '이름 아래 한 줄', x: 25, y: 160, w: 160, h: 9, size: 15, font: serif, weight: 700 }); }
-  T('body', fill(D.body), { label: '본문', x: 18, y: bodyY, w: 174, h: 30, size: 15, font: serif, weight: 700, lh: 1.75 });
-  T('date', certVal(D, r, 'date'), { label: '날짜', x: 24, y: 229.5, w: 60, h: 8, size: 14, font: serif, weight: 700 });
-  if (form === 'grade') T('note', r.note, { label: '작은 글', x: 24, y: 241, w: 90, h: 5, size: 9, font: serif, weight: 700, align: 'left' });
+  else if (form === 'free') { T('line', r.line, { label: '이름 아래 한 줄', x: 25, y: 160, w: 160, h: 9, size: 15, font: serif, weight: 400 }); }
+  T('body', fill(D.body), { label: '본문', x: 18, y: bodyY, w: 174, h: 30, size: bodySz, font: serif, weight: 400, lh: bodySz < 15 ? 1.65 : 1.75 });
+  T('date', certVal(D, r, 'date'), { label: '날짜', x: 24, y: 229.5, w: 60, h: 8, size: 14, font: serif, weight: 400 });
+  if (form === 'grade') T('note', r.note, { label: '작은 글', x: 24, y: 241, w: 90, h: 5, size: 9, font: serif, weight: 400, align: 'left' });
   return out;
 }
 function certPage(form, r, i) {
@@ -4427,12 +4434,42 @@ function renderCertSide(body) {
   <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" data-cx="add">+ 한 명</button><button class="btn sm" data-cx="paste">엑셀에서 붙여넣기</button>${rows.length ? '<button class="btn sm" data-cx="clear">명단 비우기</button>' : ''}</div>
   <details class="fx" id="cpasteBox" style="margin-top:6px"><summary>붙여넣기 칸</summary><p class="hint">엑셀에서 <b>${F.cols.map(c => c[1].replace(/ \(.*\)$/, '')).join(' · ')}</b> 순서로 복사해 붙여 넣으세요. 첫 줄이 열 이름이면 이름으로 맞춥니다.</p><textarea id="cpaste" rows="5" placeholder="${F.cols.map(c => c[1].replace(/ \(.*\)$/, '')).join('&#9;')}"></textarea><button class="btn sm primary" data-cx="pastego">명단에 더하기</button></details>
   <h3>④ 결과 미리 보기</h3>
-  ${nOk ? `<div class="row cprevnav"><button class="btn sm icon" data-cnav="-1">‹</button><span>${Math.min(certPrev + 1, rows.length)} / ${rows.length} · <b>${esc((rows[certPrev] || {}).name || '(이름 없음)')}</b></span><button class="btn sm icon" data-cnav="1">›</button></div><div class="cprev" id="cprev"></div>${certWarn(form)}` : '<p class="hint">이름을 넣으면 여기에 상장이 보입니다.</p>'}
+  ${nOk ? `<button class="btn sm full" data-cx="preview" style="margin-bottom:6px">🔍 모두 크게 미리 보기</button><div class="row cprevnav"><button class="btn sm icon" data-cnav="-1">‹</button><span>${Math.min(certPrev + 1, rows.length)} / ${rows.length} · <b>${esc((rows[certPrev] || {}).name || '(이름 없음)')}</b></span><button class="btn sm icon" data-cnav="1">›</button></div><div class="cprev" id="cprev"></div>${certWarn(form)}` : '<p class="hint">이름을 넣으면 여기에 상장이 보입니다.</p>'}
   <h3>⑤ 병합 완료</h3>
-  <button class="btn primary full" data-cx="merge" ${nOk ? '' : 'disabled'}>🏅 상장 ${nOk}장 만들기</button>
+  <button class="btn primary full" data-cx="preview" ${nOk ? '' : 'disabled'}>🔍 ${nOk}장 모두 미리 보기</button>
+  <button class="btn full" data-cx="merge" ${nOk ? '' : 'disabled'} style="margin-top:6px">🏅 상장 ${nOk}장 만들기</button>
   <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn sm primary" data-cx="print" ${doc.pages.some(p => p.cert) ? '' : 'disabled'}>🖨 바로 출력</button><button class="btn sm" data-cx="pdf" ${doc.pages.some(p => p.cert) ? '' : 'disabled'}>PDF로 저장</button><button class="btn sm" data-cx="layout" ${page().cert ? '' : 'disabled'} title="지금 상장 쪽에서 글 상자를 옮기거나 글꼴·크기를 바꾼 뒤 누르면, 모든 상장에 같은 배치로">이 쪽 배치를 모든 상장에</button>${Object.keys(C.layout).some(kk => kk.startsWith(form + ':')) ? '<button class="btn sm" data-cx="layoutreset">배치 처음대로</button>' : ''}</div>
   <p class="hint" style="margin-top:8px">이름이 길면 글자 크기가 저절로 줄어듭니다. 종목 2 기록이 없는 사람은 기록 1이 가운데로 옵니다(조건부 필드). 날짜·측정 이름처럼 모두 같은 값은 ②에서 한 번만 바꾸면 됩니다.</p></div>`;
   const pv = $('#cprev'); if (pv) { const r = rows[certPrev]; const tmp = certPage(form, r || {}, certPrev); const bw = pv.clientWidth || 260, kk = bw / (doc.w * MM); pv.style.height = doc.h * MM * kk + 'px'; const draw = () => { pv.innerHTML = `<div style="transform:scale(${kk});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(doc.w, doc.h, tmp.els.map(e => Object.assign({}, e, { hidden: false })), '#ffffff')}</div>`; }; draw(); fitTextOffscreen(tmp.els).then(() => { if (document.body.contains(pv)) draw(); }); }
+}
+/* ---- 상장 모두 미리 보기 (만들기·출력 전에 실제 모습으로 확인 — 워드 '결과 미리 보기'의 큰 화면) ---- */
+let cpvIdx = -1;
+async function openCertPreview(after) {
+  const C = certState(), form = C.form, rows = certRows(form); if (!rows.length) { toast('명단에 이름이 없습니다', true); return; }
+  let d = $('#dlgCpv'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgCpv'; d.className = 'wide cpvdlg'; document.body.appendChild(d); }
+  d.innerHTML = `<div class="dhead"><h2>🔍 상장 미리 보기 <small>${rows.length}장 · 아직 만들지 않았습니다</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><p class="hint">상장을 준비하는 중… (이름 길이에 맞춰 글자 크기를 맞춥니다)</p></div>`;
+  d.querySelector('[data-close]').onclick = () => d.close(); d.showModal();
+  const pages = rows.map((r, i) => certPage(form, r, i)); pages.forEach(p => p.els.forEach(e => { if (e.certFrame) e.hidden = false; })); await fitTextOffscreen(pages.flatMap(p => p.els));
+  const warns = []; rows.forEach((r, i) => { if (form === 'record' && !(Array.isArray(r.recs) && r.recs.length) && !(r.a1 || r.b1)) warns.push(`${r.name}: 기록이 비었습니다`); });
+  const sheet = (p, w) => { const k = w / (doc.w * MM); return `<div class="cpvbox" style="width:${w}px;height:${doc.h * MM * k}px"><div style="transform:scale(${k});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(doc.w, doc.h, p.els, '#ffffff')}</div></div>`; };
+  const draw = () => {
+    const big = cpvIdx >= 0, H = Math.min(innerHeight * 0.68, 760), bw = H * doc.w / doc.h;
+    d.innerHTML = `<div class="dhead"><h2>🔍 상장 미리 보기 <small>${rows.length}장 · ${doc.pages.some(p => p.cert && p.cert.form === form) ? '만들면 지금 만든 상장을 바꿉니다' : '아직 만들지 않았습니다'}</small></h2><div class="row" style="gap:6px">${big ? '<button class="btn sm" data-cpv="grid">▦ 모두 보기</button>' : ''}<button class="btn sm" data-close>닫기</button></div></div><div class="dbody">
+      ${warns.length ? `<div class="ovfbar" style="display:block">⚠ ${warns.slice(0, 5).map(esc).join('<br>')}</div>` : ''}
+      ${big ? `<div class="cpvbig"><button class="btn icon cpvnav" data-cpvgo="-1" ${cpvIdx ? '' : 'disabled'}>‹</button>${sheet(pages[cpvIdx], bw)}<button class="btn icon cpvnav" data-cpvgo="1" ${cpvIdx < pages.length - 1 ? '' : 'disabled'}>›</button></div><p class="cpvcap"><b>${cpvIdx + 1} / ${pages.length}</b> · ${esc(rows[cpvIdx].name)} <span class="hint">(← → 키로 넘기기)</span></p>`
+        : `<p class="hint" style="margin-top:0">한 장을 누르면 크게 봅니다. 고칠 곳이 있으면 닫고 ②·③에서 고친 뒤 다시 미리 보세요.</p><div class="cpvgrid">${pages.map((p, i) => `<button class="cpvcard" data-cpvi="${i}">${sheet(p, 170)}<span><b>${i + 1}</b> ${esc(rows[i].name)}${form === 'record' && rows[i].recs ? ` <small>${rows[i].recs.length}종목</small>` : ''}</span></button>`).join('')}</div>`}
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn" data-cpv="close">고치러 가기</button><button class="btn" data-cpv="make">🏅 이대로 ${pages.length}장 만들기</button><button class="btn primary" data-cpv="print">🖨 만들고 출력</button></div></div>`;
+    d.querySelector('[data-close]').onclick = () => d.close();
+  };
+  d.onclick = async e => {
+    const c = e.target.closest('[data-cpvi]'); if (c) { cpvIdx = Number(c.dataset.cpvi); draw(); return; }
+    const g = e.target.closest('[data-cpvgo]'); if (g && !g.disabled) { cpvIdx = Math.max(0, Math.min(pages.length - 1, cpvIdx + Number(g.dataset.cpvgo))); draw(); return; }
+    const b = e.target.closest('[data-cpv]'); if (!b) return; const k = b.dataset.cpv;
+    if (k === 'grid') { cpvIdx = -1; draw(); } if (k === 'close') d.close();
+    if (k === 'make' || k === 'print') { d.close(); await certMerge(); if (k === 'print') openPrint('cert'); }
+  };
+  d.onkeydown = e => { if (cpvIdx < 0) return; if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); cpvIdx = Math.max(0, Math.min(pages.length - 1, cpvIdx + (e.key === 'ArrowRight' ? 1 : -1))); draw(); } };
+  cpvIdx = -1; draw(); if (after) toast(after);
 }
 function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEach((r, i) => { if (!String(r.name || '').trim() && Object.values(r).some(v => String(v || '').trim())) w.push(`${i + 1}번 줄에 이름이 없습니다`); if (form === 'record' && String(r.name || '').trim() && !(r.a1 || r.b1)) w.push(`${r.name}: 종목1 기록이 비었습니다`); }); return w.length ? `<div class="ovfbar" style="display:block">⚠ ${w.slice(0, 4).map(esc).join('<br>')}${w.length > 4 ? `<br>… ${w.length - 4}개 더` : ''}</div>` : ''; }
 (function () {
@@ -4459,7 +4496,7 @@ function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEa
     if (k === 'pastego') { certPaste($('#cpaste').value); }
     if (k === 'clear' && window.confirm(`명단 ${D.rows.length}줄을 비울까요?`)) { D.rows = []; certPrev = 0; markDirty(); renderSide(); }
     if (k === 'bodyreset') { D.body = F.body; markDirty(); renderSide(); }
-    if (k === 'merge') certMerge(); if (k === 'pdf') openDownload('pdfhq'); if (k === 'layout') certSaveLayout(); if (k === 'meas') openMeasImport(); if (k === 'print') openPrint('cert');
+    if (k === 'merge') certMerge(); if (k === 'pdf') openDownload('pdfhq'); if (k === 'layout') certSaveLayout(); if (k === 'meas') openMeasImport(); if (k === 'preview') openCertPreview(); if (k === 'print') openPrint('cert');
     if (k === 'layoutreset') { Object.keys(C.layout).forEach(kk => { if (kk.startsWith(C.form + ':')) delete C.layout[kk]; }); certMerge(); }
   });
 })();
@@ -4505,7 +4542,7 @@ function openMeasImport() {
       ${res.some(x => !x.r.prev) ? `<p class="hint" style="color:#b3261e">⚠ ${res.filter(x => !x.r.prev).map(x => `${x.s.year} ${measHalf(x.s)} ${x.s.kind}`).join(', ')}: 비교할 직전 회차가 없어 향상왕을 계산할 수 없습니다.</p>` : ''}
       <h3>향상왕 ${people.length}명 <small>${people.reduce((t, p) => t + p.recs.length, 0)}개 종목 · 체크를 풀면 빠짐</small></h3>
       <div class="mpeople">${people.map(p => `<label class="mper ${measImp.off[p.name] ? 'off' : ''}"><input type="checkbox" data-moff="${esc(p.name)}" ${measImp.off[p.name] ? '' : 'checked'}><b>${esc(p.name)}</b> <small>${esc(p.age === '청소년' ? '청소년' : p.age + '세')}</small><span>${p.recs.map(q => `${esc(q.k)} ${esc(q.a)}→${esc(q.b)}${esc(q.u)}`).join(' · ')}</span></label>`).join('') || '<p class="hint">향상왕이 없습니다</p>'}</div>
-      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="mReplace" checked> 지금 명단을 바꾸기 (끄면 뒤에 더함)</label><button class="btn" id="mGo" ${nOn ? '' : 'disabled'}>명단에 넣기</button><button class="btn primary" id="mGoMake" ${nOn ? '' : 'disabled'}>넣고 상장 ${nOn}장 만들기</button></div></div>`;
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="mReplace" checked> 지금 명단을 바꾸기 (끄면 뒤에 더함)</label><button class="btn" id="mGo" ${nOn ? '' : 'disabled'}>명단에 넣기</button><button class="btn primary" id="mGoMake" ${nOn ? '' : 'disabled'}>넣고 ${nOn}장 미리 보기</button></div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
     d.onclick = e => { const h = e.target.closest('[data-mhalf]'); if (h && !h.disabled) { measImp.half = h.dataset.mhalf; measImp.off = {}; draw(); } };
     d.onchange = e => { const t = e.target; if (t.id === 'mYear') { measImp.year = Number(t.value); const hs = all.filter(s => s.year === measImp.year).map(s => s.half === 'H2' ? 'H2' : 'H1'); if (!hs.includes(measImp.half)) measImp.half = hs[0]; measImp.off = {}; draw(); return; } if (t.dataset.mkind) { const kd = t.dataset.mkind; measImp.kinds = t.checked ? [...new Set(measImp.kinds.concat(kd))] : measImp.kinds.filter(x => x !== kd); measImp.off = {}; draw(); return; } if (t.dataset.moff) { if (t.checked) delete measImp.off[t.dataset.moff]; else measImp.off[t.dataset.moff] = 1; draw(); } };
@@ -4517,7 +4554,7 @@ function openMeasImport() {
       const rows = people.filter(p => !measImp.off[p.name]).map(p => ({ name: p.name, recs: p.recs }));
       D.rows = $('#mReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; markDirty(); d.close(); sideTab = 'cert'; renderRail(); renderSide();
       toast(`향상왕 ${rows.length}명을 명단에 넣었습니다 — 상장 이름·측정 이름·날짜를 확인하세요`);
-      if (make) { if (!doc.cert.frame) toast('상장 틀이 아직 없습니다 — ① 상장 틀을 불러오면 배경이 들어갑니다', true); await certMerge(); }
+      if (make) openCertPreview(doc.cert.frame ? '' : '상장 틀이 아직 없습니다 — ① 상장 틀을 불러오면 배경이 들어갑니다');
     };
     $('#mGo').onclick = () => go(false); $('#mGoMake').onclick = () => go(true);
   };
