@@ -1328,3 +1328,4 @@ dialog:focus{outline:none}
 .tl-skim{position:absolute;top:0;bottom:0;width:0;border-left:1px solid #ffd34d;z-index:5;pointer-events:none;box-shadow:0 0 0 .5px rgba(255,211,77,.5)}
 .tl-range{position:absolute;top:0;bottom:0;background:rgba(255,211,77,.13);border-left:2px solid #ffd34d;border-right:2px solid #ffd34d;z-index:3;pointer-events:none;box-sizing:border-box}
 .ovl .sel.panning{border-style:dashed;border-color:#f59e0b}.ovl .sel.panning .h{display:none}
+.vd-use{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.vd-use>span{font-size:12.5px;color:var(--ui-muted);margin-right:2px}.vd-use .btn.on{background:var(--ui-accent-soft,#eef3ff);border-color:#2f6fe4;color:#1f4fbf;font-weight:700}
