@@ -1177,3 +1177,8 @@ details.pgvid{margin-top:10px}details.pgvid>summary{cursor:pointer;list-style:no
 .sp-grid{display:flex;flex-direction:column;gap:18px;align-items:center;max-height:70vh;overflow:auto;padding:6px}.sp-row{display:flex;gap:0;align-items:flex-end;position:relative;box-shadow:0 8px 24px rgba(16,24,40,.18)}.sp-pg{position:relative;overflow:hidden;background:#fff;cursor:pointer}.sp-pg+.sp-pg{box-shadow:inset 8px 0 10px -8px rgba(0,0,0,.25)}.sp-empty{background:transparent;cursor:default;box-shadow:none!important}.sp-row:has(.sp-empty){box-shadow:none}.sp-row:has(.sp-empty) .sp-pg:not(.sp-empty){box-shadow:0 8px 24px rgba(16,24,40,.18)}.sp-cap{position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:12px;color:var(--ui-muted)}
 .el-cal .cell.phc .d,.el-cal .cell.phc .ev,.el-cal .cell.phc .ct{background:rgba(255,255,255,.86);border-radius:.8mm;padding:0 .7mm;display:inline-block;max-width:100%}.el-cal .cell.phc .ev,.el-cal .cell.phc .ct{display:block;width:fit-content}
 .psrow{display:flex;gap:4px;align-items:center;margin:0 0 8px}.psrow select{flex:1;min-width:0}
+/* 글 상자: 넘침 표시(인디자인 빨간 +), 크기 방식 */
+.ovl .ovf{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:3px;background:#e0312b;color:#fff;border:1.5px solid #fff;font:800 13px/12px sans-serif;padding:0;cursor:pointer;pointer-events:auto;box-shadow:0 1px 4px rgba(0,0,0,.35);z-index:8}
+.ovfbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:#fdecea;color:#b3261e;border-radius:8px;padding:6px 8px;margin:6px 0;font-size:12.5px;font-weight:600}
+.tbsz{margin-bottom:6px}
+.qbar{flex-wrap:wrap;justify-content:center;max-width:100%}@media (max-width:1100px){.qbar .fp-btn{width:118px}.qbar [data-qp]{display:none}}
