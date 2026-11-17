@@ -16,7 +16,7 @@ NC.store = (function () {
 
   async function connectNew(doc) {
     if (!state.supported) throw new Error('이 브라우저는 파일 연결을 지원하지 않습니다 (Chrome, Edge 권장). 대신 "내려받기"를 쓰세요.');
-    const h = await window.showSaveFilePicker({ suggestedName: (doc.name || 'design').replace(/[\\/:*?"<>|]/g, '_') + '.design.json', types: TYPES });
+    const h = await window.showSaveFilePicker({ suggestedName: (doc.name || 'design').replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 80) + '.design.json', types: TYPES });
     state.handle = h; state.fileName = h.name; state.lastMod = 0;
     await idbSet('fileHandle', h);
     await writeFile(doc);
@@ -97,7 +97,7 @@ NC.store = (function () {
   async function writeCopy(data, label) {
     const t = new Date(), p2 = n => String(n).padStart(2, '0');
     const stamp = `${p2(t.getMonth() + 1)}-${p2(t.getDate())} ${p2(t.getHours())}${p2(t.getMinutes())}${p2(t.getSeconds())}`;
-    const base = (data.name || 'design').replace(/[\\/:*?"<>|]/g, '_').trim() || 'design';
+    const base = (data.name || 'design').replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 80) || 'design';
     let name = `${base} (충돌 사본 ${stamp} ${String(label || '').replace(/[\\/:*?"<>|]/g, '_')})`;
     if (!state.dir) { try { await reconnectFolder(); } catch (e) {} } // 시작 직후(폴더 연결 전)에도 폴더에 보관
     if (state.dir && (await folderReady())) {
@@ -148,7 +148,7 @@ NC.store = (function () {
   function download(doc) {
     const blob = new Blob([JSON.stringify(doc)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = (doc.name || 'design').replace(/[\\/:*?"<>|]/g, '_') + '.design.json'; document.body.appendChild(a); a.click(); a.remove();
+    a.download = (doc.name || 'design').replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 80) + '.design.json'; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
   function pickLocal() {
@@ -235,7 +235,7 @@ NC.store = (function () {
   async function openHandle(h) { state.handle = h; state.fileName = h.name; await idbSet('fileHandle', h); return readFile(); }
   // 현재 문서를 폴더에 새 파일로 저장하고 연결 (이름이 겹치면 번호를 붙임)
   async function uniqueName(title, dir) {
-    const base = (title || 'design').replace(/[\\/:*?"<>|]/g, '_').trim() || 'design';
+    const base = (title || 'design').replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 80) || 'design';
     const names = new Set(); for await (const [n] of (dir || state.dir).entries()) names.add(n);
     let name = base + '.design.json'; for (let i = 2; names.has(name); i++) name = `${base} (${i}).design.json`;
     return name;

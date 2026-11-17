@@ -1318,3 +1318,9 @@ body.tl-focus #focusOut{display:inline-flex}
 .topbar.t1 :is(#btnOpen,#btnResize,#btnHoliday,#btnFonts,#btnPrint){font-size:0;gap:0;padding:6px 7px}
 .topbar.t2 .btn:not(#btnExport){font-size:0;gap:0;padding:6px 7px}.topbar.t2 .brand>span:not(.logo){display:none}.topbar.t2 input.pname{min-width:110px;width:140px}
 .topbar.t3 #status{display:none}.topbar.t3 #btnExport{font-size:0;gap:0;padding:6px 9px}.topbar.t3 input.pname{min-width:80px;width:100px}
+.wz-go{position:sticky;bottom:-1px;z-index:2;background:var(--ui-panel,#fff);padding:10px 0 6px;margin-top:6px;box-shadow:0 -10px 12px -10px rgba(16,24,40,.25)}
+body:has(dialog[open]) #cellBar{display:none}
+.cellbar{flex-wrap:wrap}
+dialog:focus{outline:none}
+/* 마법사: 왼쪽 설정 칸이 창 안에서 따로 스크롤 → 만들기 단추가 늘 아래에 보임 */
+@media (min-width:901px){.wz{grid-template-rows:minmax(0,1fr);height:78vh}.wz-side,.wz-main{min-height:0}}
