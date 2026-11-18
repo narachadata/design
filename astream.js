@@ -94,6 +94,8 @@ NC.astream = (function () {
     };
   }
   // mp4·m4a: 필요한 조각만 잘라 디코더로 (프라이밍 지연을 고려해 0.3초 앞에서 시작해 버림)
+  /* 묶음 사이: flush 대신 출력이 나올 때까지 잠깐 기다림 (flush는 디코더를 처음 상태로 돌려 경계마다 파형이 끊겼음 — 약 8.5초마다 '틱') */
+  async function drain(dec, out, errOf) { for (let k = 0; k < 300 && !out.length && !errOf(); k++) await new Promise(r => setTimeout(r, k < 30 ? 0 : 2)); if (!out.length && !errOf() && dec.state === 'configured') await dec.flush().catch(() => {}); }
   async function mp4Source(blob, info, from) {
     const S = info.samples; let i = S.findIndex(s => s.t + s.d > from - 0.3); if (i < 0) i = S.length;
     const out = []; let err = null, skipUntil = from;
@@ -107,7 +109,7 @@ NC.astream = (function () {
           let j = i, end = S[i].o + S[i].z; while (j + 1 < S.length && S[j + 1].o === end && end - S[i].o < (1 << 18) && j - i < 400) { j++; end += S[j].z; }
           const ab = new Uint8Array(await blob.slice(S[i].o, end).arrayBuffer());
           for (let k = i; k <= j; k++) dec.decode(new EncodedAudioChunk({ type: 'key', timestamp: Math.round(S[k].t * 1e6), duration: Math.round(S[k].d * 1e6), data: ab.subarray(S[k].o - S[i].o, S[k].o - S[i].o + S[k].z) }));
-          i = j + 1; await dec.flush().catch(() => {});
+          i = j + 1; await drain(dec, out, () => err);
         }
         return out.shift();
       },
@@ -151,7 +153,7 @@ NC.astream = (function () {
         const u = new Uint8Array(await blob.slice(off, off + (1 << 18)).arrayBuffer()); let i = 0;
         if (!synced) { while (i < u.length - 4 && !(mp3Frame(u, i) && mp3Frame(u, i + mp3Frame(u, i).len))) i++; synced = true; }
         while (i < u.length - 4) { const fr = mp3Frame(u, i); if (!fr) { i++; continue; } if (i + fr.len > u.length) break; dec.decode(new EncodedAudioChunk({ type: 'key', timestamp: Math.round(Math.max(0, t) * 1e6), data: u.subarray(i, i + fr.len) })); t += fr.spf / fr.sr; i += fr.len; }
-        off += Math.max(1, i); await dec.flush().catch(() => {}); }
+        off += Math.max(1, i); await drain(dec, out, () => err); }
       let c = out.shift(); if (skip > 0) { const s = Math.min(skip, c.n); skip -= s; if (s >= c.n) return this.next(); c = { c: c.c.map(a => a.subarray(s)), n: c.n - s, sr: c.sr }; } return c; },
       close() { try { dec.close(); } catch (e) {} } };
   }
