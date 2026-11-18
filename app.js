@@ -5557,7 +5557,7 @@ const prSave = () => { const o = Object.assign({}, prState); delete o.pages; del
 function prUse(cert) {
   const k = cert ? 'naracal-print-cert' : 'naracal-print'; if (k === prKey) return; prSave();
   const keep = { pages: prState.pages, range: prState.range, pick: prState.pick }; let o = prLoad(k);
-  if (!o && cert) { const g = prLoad('naracal-print') || {}; o = (Number(g.dx) || Number(g.dy)) ? g : { fit: 'actual', margin: 0 }; }  /* 처음: 예전에 맞춰 둔 위치 보정이 있으면 그대로 이어받음, 없으면 실제 크기 */
+  if (!o && cert) { const g = prLoad('naracal-print') || {}; o = (Number(g.dx) || Number(g.dy)) ? g : { fit: 'actual', margin: 0, mt: 0, mb: 0, ml: 0, mr: 0 }; }  /* 처음: 예전에 맞춰 둔 위치 보정이 있으면 그대로 이어받음, 없으면 실제 크기 */
   prKey = k; prState = Object.assign({}, PR_DEF, o || {}, keep);
 }
 /* 쪽 번호 글 ↔ 쪽 목록 ("1-3, 5" ↔ [0,1,2,4]) — 쉼표·띄어쓰기·물결(~)·'쪽' 모두 됨 */
@@ -5571,18 +5571,35 @@ function prPages() {
   return doc.pages.map((_, i) => i).filter(i => !doc.pages[i].dlOff);
 }
 /* 종이 위 자리 계산 (mm) */
+/* 여백 (워드 '페이지 설정 → 여백'처럼 위·아래·왼쪽·오른쪽 mm) — 예전 한 값(margin)만 있던 설정은 네 쪽에 같게 */
+function prMg(S) { const m0 = Math.max(0, Number(S.margin) || 0), v = k => { const n = Number(S[k]); return S[k] == null || S[k] === '' || isNaN(n) ? m0 : Math.max(0, Math.min(100, n)); }; return { t: v('mt'), b: v('mb'), l: v('ml'), r: v('mr') }; }
+function prSetMg(S, t, b, l, r) { Object.assign(S, { mt: t, mb: b == null ? t : b, ml: l == null ? t : l, mr: r == null ? (l == null ? t : l) : r }); S.margin = Math.min(S.mt, S.mb, S.ml, S.mr); }
 function prLayout() {
   const S = prState; let [pw, ph] = S.paper === 'doc' ? [doc.w, doc.h] : (PR_PAPERS[S.paper] || PR_PAPERS.A4);
   const land = S.orient === 'l' || (S.orient === 'auto' && doc.w > doc.h); if (land !== pw > ph) [pw, ph] = [ph, pw];
-  const m = Math.max(0, Number(S.margin) || 0), bw = Math.max(1, pw - 2 * m), bh = Math.max(1, ph - 2 * m);
+  const M = prMg(S), m = Math.min(M.t, M.b, M.l, M.r), bw = Math.max(1, pw - M.l - M.r), bh = Math.max(1, ph - M.t - M.b);
   const k = S.fit === 'actual' ? 1 : S.fit === 'custom' ? Math.max(0.05, (Number(S.pct) || 100) / 100) : Math.min(bw / doc.w, bh / doc.h);
-  const w = doc.w * k, h = doc.h * k, x = m + (bw - w) * S.ax + (Number(S.dx) || 0), y = m + (bh - h) * S.ay + (Number(S.dy) || 0);
+  const w = doc.w * k, h = doc.h * k, x = M.l + (bw - w) * S.ax + (Number(S.dx) || 0), y = M.t + (bh - h) * S.ay + (Number(S.dy) || 0);
   const over = x < -0.1 || y < -0.1 || x + w > pw + 0.1 || y + h > ph + 0.1; let note = over ? '종이 밖으로 나갑니다' : '';
   /* 상장: 틀을 빼고 찍으면(틀이 인쇄된 상장 용지) 글자만 종이 안에 있으면 됨. 틀까지 찍는데 위치 보정 때문이면 그렇게 알려 줌 */
   const cp = doc.pages.find(p => p.cert); if (over && cp) { const els = cp.els.filter(e => !e.certFrame && !e.hidden && e.type !== 'image' || (e.type === 'image' && !e.certFrame && !e.hidden)); if (els.length) { const bx0 = Math.min(...els.map(e => e.x)), by0 = Math.min(...els.map(e => e.y)), bx1 = Math.max(...els.map(e => e.x + e.w)), by1 = Math.max(...els.map(e => e.y + e.h)), cOver = x + bx0 * k < -0.1 || y + by0 * k < -0.1 || x + bx1 * k > pw + 0.1 || y + by1 * k > ph + 0.1;
       if (S.frame === false) note = cOver ? '글자가 종이 밖으로 나갑니다' : ''; else if (!cOver && (Number(S.dx) || Number(S.dy))) note = `위치 보정(가로 ${Number(S.dx) || 0}·세로 ${Number(S.dy) || 0}mm)만큼 틀 가장자리가 조금 잘립니다 — 틀이 인쇄된 상장 용지면 아래 '상장 틀도 함께 출력'을 끄세요`; } }
-  return { pw, ph, m, k, w, h, x, y, over: !!note, note };
+  return { pw, ph, m, M, k, w, h, x, y, over: !!note, note };
 }
+/* 출력 창 왼쪽 종이 미리 보기 (여백 숫자를 칠 때는 이것만 다시 그림 — 창 전체를 다시 그리면 입력이 끊김) */
+function pvHTML(S, list, L, pvI) {
+  const C = doc.cert, PV = 340, mmpx = Math.min(PV / L.pw, (PV * 1.3) / L.ph); /* 미리 보기 1mm = mmpx px */
+  const keepVis = []; if (C) doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { keepVis.push(e.id); elVisOv.set(e.id, !!S.frame); } }));
+  let sheet = ''; try { if (pvI != null) { const kk = (L.w * mmpx) / (doc.w * MM); sheet = `<div class="prpage" style="left:${L.x * mmpx}px;top:${L.y * mmpx}px;width:${L.w * mmpx}px;height:${L.h * mmpx}px"><div style="transform:scale(${kk});transform-origin:0 0;position:absolute;left:0;top:0">${sheetHTML(doc.pages[pvI], 'thumb')}</div></div>`; } } finally { keepVis.forEach(id => elVisOv.delete(id)); }
+  const M = L.M, mgBox = (M.t || M.b || M.l || M.r) ? `<div class="prmgline" style="left:${M.l * mmpx}px;top:${M.t * mmpx}px;right:${M.r * mmpx}px;bottom:${M.b * mmpx}px" title="여백 — 이 안에 찍힘"></div>` : '';
+  return `<div class="prpaper" style="width:${L.pw * mmpx}px;height:${L.ph * mmpx}px"><div class="prmargin" style="inset:${3 * mmpx}px" title="보통 프린터가 못 찍는 가장자리(약 3mm) — 테두리 없음이 아니면 이 밖은 잘릴 수 있음"></div>${sheet}${mgBox}</div>
+        <div class="prpvnav">${list.length > 1 ? `<button class="btn sm icon" data-prnav="-1" ${S.pv ? '' : 'disabled'}>‹</button>` : ''}<span>${pvI != null ? `${S.pv + 1} / ${list.length}쪽 (문서 ${pvI + 1}쪽)` : '출력할 쪽이 없습니다'}</span>${list.length > 1 ? `<button class="btn sm icon" data-prnav="1" ${S.pv < list.length - 1 ? '' : 'disabled'}>›</button>` : ''}</div>
+        <p class="hint prsize">디자인 ${Math.round(doc.w)}×${Math.round(doc.h)}mm → 종이에 <b>${Math.round(L.w * 10) / 10}×${Math.round(L.h * 10) / 10}mm (${Math.round(L.k * 1000) / 10}%)</b>${L.note ? ` · <b style="color:#b3261e">${esc(L.note)}</b>` : ''}</p>`;
+}
+/* 여백 그림 (워드 여백 대화창의 미리 보기처럼): 종이와 여백 안쪽(찍히는 자리) */
+function prMgFig(L) { const M = L.M, k = Math.min(86 / L.pw, 110 / L.ph), W = L.pw * k, H = L.ph * k, c = v => Math.min(v * k, Math.min(W, H) * 0.45);
+  return `<svg viewBox="0 0 ${W + 8} ${H + 8}" width="${W + 8}" height="${H + 8}" aria-hidden="true"><rect x="4.5" y="4.5" width="${W}" height="${H}" fill="#fff" stroke="#9aa3b2"/><rect x="${4.5 + c(M.l)}" y="${4.5 + c(M.t)}" width="${Math.max(2, W - c(M.l) - c(M.r))}" height="${Math.max(2, H - c(M.t) - c(M.b))}" fill="#e7eefc" stroke="#3b6fd8" stroke-dasharray="3 2"/>${[0.3, 0.42, 0.54, 0.66].map(f => `<line x1="${4.5 + c(M.l) + 4}" x2="${4.5 + W - c(M.r) - 4}" y1="${4.5 + c(M.t) + (H - c(M.t) - c(M.b)) * f}" y2="${4.5 + c(M.t) + (H - c(M.t) - c(M.b)) * f}" stroke="#b8c6e6" stroke-width="2"/>`).join('')}</svg>`; }
+const PR_MG_PRE = [['none', '없음', 0, 0], ['min', '최소', 4, 4], ['narrow', '좁게', 12.7, 12.7], ['mid', '보통', 25.4, 19.05], ['wide', '넓게', 25.4, 31.75]]; /* [위아래, 왼쪽오른쪽] mm — 워드 여백 보기 참고 */
 function openPrint(pre) {
   endEdit(); let d = $('#dlgPrint'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgPrint'; d.className = 'wide'; document.body.appendChild(d); }
   const hasCert = doc.pages.some(p => p.cert), isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent), isEdge = /Edg\//.test(navigator.userAgent);
@@ -5592,17 +5609,13 @@ function openPrint(pre) {
   if (pre !== 'cert' && pgSel.size > 1) { prState.pages = 'pick'; prState.pick = new Set(pgSel); }  /* 쪽 패널에서 여러 쪽을 골라 두었으면 그 쪽들로 시작 */
   else if (prState.pages === 'sel' || prState.pages === 'range' || (prState.pages === 'pick' && !(prState.pick && prState.pick.size))) prState.pages = 'all';
   if (prState.pick) prState.pick = new Set([...prState.pick].filter(i => i < doc.pages.length)); prState.pv = 0; let pickAnchor = -1;
-  const preset = k => { const S = prState; if (k === 'safe') Object.assign(S, { fit: 'fit', margin: 4, ax: 0.5, ay: 0.5, dx: 0, dy: 0 }); if (k === 'full') Object.assign(S, { fit: 'fit', margin: 0, ax: 0.5, ay: 0.5, dx: 0, dy: 0 }); if (k === 'exact') Object.assign(S, { fit: 'actual', margin: 0, ax: 0.5, ay: 0.5 }); };
+  const preset = k => { const S = prState; if (k === 'safe') { Object.assign(S, { fit: 'fit', ax: 0.5, ay: 0.5, dx: 0, dy: 0 }); prSetMg(S, 4); } if (k === 'full') { Object.assign(S, { fit: 'fit', ax: 0.5, ay: 0.5, dx: 0, dy: 0 }); prSetMg(S, 0); } if (k === 'exact') { Object.assign(S, { fit: 'actual', ax: 0.5, ay: 0.5 }); prSetMg(S, 0); } };
   const draw = () => {
     const S = prState, list = prPages(), L = prLayout(), C = doc.cert, pvI = list[Math.min(S.pv, list.length - 1)];
-    const PV = 340, sc = Math.min(PV / L.pw, (PV * 1.3) / L.ph), mmpx = sc; /* 미리 보기 1mm = sc px */
-    const keepVis = []; if (C) doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { keepVis.push(e.id); elVisOv.set(e.id, !!S.frame); } }));
-    let sheet = ''; try { if (pvI != null) { const kk = (L.w * mmpx) / (doc.w * MM); sheet = `<div class="prpage" style="left:${L.x * mmpx}px;top:${L.y * mmpx}px;width:${L.w * mmpx}px;height:${L.h * mmpx}px"><div style="transform:scale(${kk});transform-origin:0 0;position:absolute;left:0;top:0">${sheetHTML(doc.pages[pvI], 'thumb')}</div></div>`; } } finally { keepVis.forEach(id => elVisOv.delete(id)); }
+    const pvHTML_ = pvHTML(S, list, L, pvI);
     const seg = (key, opts) => `<div class="seg">${opts.map(([v, t, ti]) => `<button data-pk="${key}" data-pv="${v}" aria-pressed="${String(S[key]) === String(v)}" ${ti ? `title="${ti}"` : ''}>${t}</button>`).join('')}</div>`;
     d.innerHTML = `<div class="dhead"><h2>🖨 출력 <small>${prKey === 'naracal-print-cert' ? '상장용 설정(따로 기억) · ' : ''}${list.length}쪽 · ${esc(S.paper === 'doc' ? '문서 크기' : S.paper)} ${L.pw > L.ph ? '가로' : '세로'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody prdlg2">
-      <div class="prpv"><div class="prpaper" style="width:${L.pw * mmpx}px;height:${L.ph * mmpx}px">${S.fit !== 'actual' || S.margin ? `<div class="prmargin" style="inset:${3 * mmpx}px" title="보통 프린터가 못 찍는 가장자리(약 3mm) — 테두리 없음이 아니면 이 밖은 잘릴 수 있음"></div>` : ''}${sheet}</div>
-        <div class="prpvnav">${list.length > 1 ? `<button class="btn sm icon" data-prnav="-1" ${S.pv ? '' : 'disabled'}>‹</button>` : ''}<span>${pvI != null ? `${S.pv + 1} / ${list.length}쪽 (문서 ${pvI + 1}쪽)` : '출력할 쪽이 없습니다'}</span>${list.length > 1 ? `<button class="btn sm icon" data-prnav="1" ${S.pv < list.length - 1 ? '' : 'disabled'}>›</button>` : ''}</div>
-        <p class="hint prsize">디자인 ${Math.round(doc.w)}×${Math.round(doc.h)}mm → 종이에 <b>${Math.round(L.w * 10) / 10}×${Math.round(L.h * 10) / 10}mm (${Math.round(L.k * 1000) / 10}%)</b>${L.note ? ` · <b style="color:#b3261e">${esc(L.note)}</b>` : ''}</p></div>
+      <div class="prpv">${pvHTML_}</div>
       <div class="prset">
         <div class="grid2"><label class="f"><span>출력할 쪽</span><select id="prPg">${[['all', `모든 쪽${doc.pages.some(p => p.dlOff) ? ' (숨긴 쪽 빼고)' : ''}`], ['cur', `지금 쪽 (${cur + 1})`], ...(hasCert ? [['cert', `상장 쪽만 (${doc.pages.filter(p => p.cert).length}장)`]] : []), ['pick', S.pages === 'pick' ? `골라서 출력 (${list.length}쪽)` : '골라서 출력 (쪽 고르기)']].map(([a, t]) => `<option value="${a}" ${S.pages === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
         ${`<label class="f"><span>용지</span><select id="prPaper">${[['A4', 'A4 (210×297)'], ['A3', 'A3 (297×420)'], ['B5', 'B5 (182×257)'], ['Letter', 'Letter'], ['doc', `문서 크기 (${Math.round(doc.w)}×${Math.round(doc.h)})`]].map(([a, t]) => `<option value="${a}" ${S.paper === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`}</div>
@@ -5614,7 +5627,12 @@ function openPrint(pre) {
         <div class="prrow"><span>빠른 설정</span><div class="row" style="gap:4px;flex-wrap:wrap"><button class="btn sm" data-prset="safe" title="프린터가 못 찍는 가장자리를 피해 여백 4mm 안에 맞춤">여백 안에 맞춤 (추천)</button><button class="btn sm" data-prset="full" title="프린터에서 '테두리 없음'을 켠 경우">꽉 채움 (테두리 없음)</button><button class="btn sm" data-prset="exact" title="틀이 인쇄된 상장 용지에 글자만 — 크기 그대로">실제 크기 100%</button></div></div>
         <div class="prrow"><span>방향</span>${seg('orient', [['auto', '자동'], ['p', '세로'], ['l', '가로']])}</div>
         <div class="prrow"><span>크기</span>${seg('fit', [['fit', '용지에 맞춤'], ['actual', '실제 크기'], ['custom', '배율']])}${S.fit === 'custom' ? `<input type="number" id="prPct" min="5" max="400" step="1" value="${S.pct}" style="width:64px"> %` : ''}</div>
-        <div class="prrow"><span>여백</span><input type="range" id="prMargin" min="0" max="25" step="0.5" value="${S.margin}"><b>${S.margin}mm</b></div>
+        ${(() => { const M = L.M, cur = (PR_MG_PRE.find(([, , tb, lr]) => M.t === tb && M.b === tb && M.l === lr && M.r === lr) || [])[0], inp = (k, t) => `<label class="prmg-${k}"><span>${t}</span><input type="number" data-mg="${k}" min="0" max="100" step="0.5" value="${M[k]}" inputmode="decimal"><i>mm</i></label>`;
+          return `<div class="prrow prmg"><span>여백</span><div class="prmg-box">
+            <div class="prmg-pre">${PR_MG_PRE.map(([id, t, tb, lr]) => `<button type="button" class="btn sm ${cur === id ? 'on' : ''}" data-mgpre="${id}" title="위·아래 ${tb}mm · 왼쪽·오른쪽 ${lr}mm">${t}<small>${tb === lr ? tb + 'mm' : tb + '·' + lr}</small></button>`).join('')}</div>
+            <div class="prmg-grid">${inp('t', '위')}${inp('l', '왼쪽')}<div class="prmg-fig" id="prMgFig">${prMgFig(L)}</div>${inp('r', '오른쪽')}${inp('b', '아래')}</div>
+            <label class="chk prmg-link"><input type="checkbox" id="prMgLink" ${S.mgLink ? 'checked' : ''}> 네 쪽을 같게 (하나를 바꾸면 모두)</label>
+            <p class="hint" style="margin:2px 0 0">${S.fit === 'fit' ? '용지에 맞춤: 여백 안쪽(파란 점선)에 꼭 맞게 줄입니다.' : '실제 크기·배율: 크기는 그대로, 여백 안쪽에서 아래 정렬대로 놓습니다(위 여백을 늘리면 아래로 내려감).'}</p></div></div>`; })()}
         <div class="prrow"><span>정렬</span><div class="rsanchor">${[0, 0.5, 1].map(y => [0, 0.5, 1].map(x => `<button type="button" data-pra="${x},${y}" class="${S.ax === x && S.ay === y ? 'on' : ''}"></button>`).join('')).join('')}</div><small class="hint" style="margin:0">종이 안 어디에 둘지</small></div>
         <div class="prrow"><span>위치 보정</span><label>가로 <input type="number" id="prDx" step="0.5" value="${S.dx}" style="width:58px">mm</label><label>세로 <input type="number" id="prDy" step="0.5" value="${S.dy}" style="width:58px">mm</label></div>
         <div class="prrow"><span>방식</span>${seg('mode', [['img', '고화질 그림 (추천)', '화면과 똑같이 — PC·맥·프린터마다 같은 결과'], ['vec', '글자 선명 (벡터)', '종이 = 문서 크기일 때만, 위치 설정 없이']])}</div>
@@ -5626,8 +5644,13 @@ function openPrint(pre) {
       </div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
   };
-  d.oninput = e => { const t = e.target; if (t.id === 'prMargin') { prState.margin = Number(t.value); prSave(); draw(); } };
+  /* 여백 숫자: 칠 때마다 미리 보기·여백 그림만 다시 그림 (창 전체를 다시 그리면 입력 칸이 바뀌어 끊김) */
+  const live = () => { const S = prState, list = prPages(), L = prLayout(), pvI = list[Math.min(S.pv, list.length - 1)], pv = d.querySelector('.prpv'), fg = d.querySelector('#prMgFig'); if (pv) pv.innerHTML = pvHTML(S, list, L, pvI); if (fg) fg.innerHTML = prMgFig(L); d.querySelectorAll('[data-mgpre]').forEach(b => { const p0 = PR_MG_PRE.find(x => x[0] === b.dataset.mgpre); b.classList.toggle('on', !!p0 && L.M.t === p0[2] && L.M.b === p0[2] && L.M.l === p0[3] && L.M.r === p0[3]); }); };
+  d.oninput = e => { const t = e.target; if (!t.dataset || !t.dataset.mg) return; const S = prState, v = t.value === '' ? 0 : Math.max(0, Math.min(100, Number(t.value) || 0)), M = prMg(S);
+    if (S.mgLink) { prSetMg(S, v); d.querySelectorAll('[data-mg]').forEach(x => { if (x !== t) x.value = v; }); } else { M[t.dataset.mg] = v; prSetMg(S, M.t, M.b, M.l, M.r); }
+    S.pv = Math.min(S.pv, Math.max(0, prPages().length - 1)); live(); clearTimeout(d._mgT); d._mgT = setTimeout(prSave, 400); };
   d.onchange = e => { const t = e.target, S = prState;
+    if (t.id === 'prMgLink') { S.mgLink = t.checked; if (t.checked) { const M = prMg(S); prSetMg(S, M.t); } prSave(); draw(); return; }
     if (t.id === 'prPg') { const before = prPages(); S.pages = t.value; if (t.value === 'pick' && !(S.pick && S.pick.size)) S.pick = new Set(before.length ? before : [cur]); S.pv = 0; } if (t.id === 'prRange') { S.pick = new Set(prParse(t.value, doc.pages.length)); S.pv = 0; } if (t.id === 'prPaper') S.paper = t.value; if (t.id === 'prDpi') S.dpi = Number(t.value); if (t.id === 'prPct') S.pct = Number(t.value) || 100;
     if (t.id === 'prDx') S.dx = Number(t.value) || 0; if (t.id === 'prDy') S.dy = Number(t.value) || 0;
     if (t.id === 'prFrame') { S.frame = t.checked; if (doc.cert) { doc.cert.printFrame = t.checked; doc.pages.forEach(p => p.els.forEach(x => { if (x.certFrame) x.hidden = !t.checked; })); commit(); renderAll(); } if (!t.checked) preset('exact'); }
@@ -5637,6 +5660,7 @@ function openPrint(pre) {
     const pa = e.target.closest('[data-pra]'); if (pa) { const [x, y] = pa.dataset.pra.split(',').map(Number); prState.ax = x; prState.ay = y; prSave(); draw(); return; }
     const ps = e.target.closest('[data-prset]'); if (ps) { preset(ps.dataset.prset); prSave(); draw(); return; }
     const nv = e.target.closest('[data-prnav]'); if (nv && !nv.disabled) { prState.pv += Number(nv.dataset.prnav); draw(); return; }
+    const mp = e.target.closest('[data-mgpre]'); if (mp) { const p0 = PR_MG_PRE.find(x => x[0] === mp.dataset.mgpre); if (p0) { prSetMg(prState, p0[2], p0[2], p0[3], p0[3]); prSave(); draw(); } return; }
     const pf = e.target.closest('[data-prframe]'); if (pf) { const on = pf.dataset.prframe === '1'; prState.frame = on; if (doc.cert) certSetFrame(on, true); if (!on) preset('exact'); prState.pv = Math.min(prState.pv, Math.max(0, prPages().length - 1)); prSave(); draw(); return; }
     const pk = e.target.closest('[data-pick]'); if (pk) { const S = prState, i = Number(pk.dataset.pick); S.pick = S.pick || new Set(); const on = !S.pick.has(i);
       if (e.shiftKey && pickAnchor >= 0) { for (let j = Math.min(pickAnchor, i); j <= Math.max(pickAnchor, i); j++) on ? S.pick.add(j) : S.pick.delete(j); } else on ? S.pick.add(i) : S.pick.delete(i);
