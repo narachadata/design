@@ -1351,3 +1351,4 @@ dialog:focus{outline:none}
 .ctable input{width:100%!important;min-width:0;box-sizing:border-box;padding:3px 2px}.ctable td{overflow:hidden}.ctable .crecs{white-space:normal;word-break:keep-all;line-height:1.35;padding:2px 4px}
 .ctable th{white-space:normal;word-break:keep-all;line-height:1.15;padding:3px 1px;font-size:10.5px;text-overflow:clip;vertical-align:bottom}
 .dlshop{margin-top:6px}.dlshop textarea{width:100%;box-sizing:border-box;font-size:12px;line-height:1.45;margin:4px 0;resize:vertical}
+.vcheck{margin:8px 0 0;padding:8px 10px;border-radius:8px;font-size:12.5px;line-height:1.5}.vcheck.ok{background:#EAF7EE;color:#1E6B3A}.vcheck.warn{background:#FFF4E0;color:#7A4B00}.vcheck small{color:inherit;opacity:.85}

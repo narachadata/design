@@ -2584,9 +2584,9 @@ function openVideoMaker() {
     } catch (e) { pr.textContent = e.message; if (wr) { try { await wr.abort(); } catch (e2) {} } } finally { busy = false; if (document.body.contains(go)) { go.lastChild.textContent = '영상 만들기'; if (Vp && !stop) { const msg = $('#vidProg').textContent; P = VIDEO.player($('#vidCv'), Vp); P.onTime = t => { seek.value = t; $('#vidTime').textContent = `${fmtT(t)} / ${fmtT(Vp.total)}`; ic(); }; P.seek(0); $('#vidProg').textContent = msg; } } }
   };
 }
-const RAIL = [['pages', '페이지', 'i-pages'], ['naracha', '나라차', 'i-naracha'], ['tpl', '템플릿', 'i-tpl'], ['video', '영상', 'i-video'], ['elems', '요소', 'i-elems'], ['text', '텍스트', 'i-text'], ['photo', '사진', 'i-img'], ['upload', '업로드', 'i-upload'], ['project', '프로젝트', 'i-folder'], ['ai', 'AI 도구', 'i-ai'], ['bg', '배경', 'i-bg'], ['theme', '테마', 'i-theme'], ['chart', '차트', 'i-chart'], ['layers', '레이어', 'i-layers']];
+const RAIL = [['pages', '페이지', 'i-pages'], ['naracha', '나라차', 'i-naracha'], ['tpl', '템플릿', 'i-tpl'], ['elems', '요소', 'i-elems'], ['text', '텍스트', 'i-text'], ['photo', '사진', 'i-img'], ['video', '영상', 'i-video'], ['upload', '업로드', 'i-upload'], ['project', '프로젝트', 'i-folder'], ['ai', 'AI 도구', 'i-ai'], ['bg', '배경', 'i-bg'], ['theme', '테마', 'i-theme'], ['chart', '차트', 'i-chart'], ['layers', '레이어', 'i-layers']];
 /* 나라차 모음 안의 기능: [탭 또는 동작, 이름, 아이콘, 설명]. 탭(news·cert)은 왼쪽 패널로 열리고 세로 메뉴에서는 '나라차'가 켜진 채로 보임. 새 나라차 기능은 여기에 한 줄 더하면 됨 */
-const NARA = [['calendar', '캘린더', 'i-cal', '연간 인성 캘린더 — 캘린더 마법사(26쪽 한 번에)·인성 문구 넣기·반복 일정·공휴일·달력 테마'], ['news', '소식지', 'i-news', '월간 소식지 만들기 — 일정·인성 덕목·사진을 넣어 인쇄·TV용으로'], ['cert', '상장', 'i-award', '측정 기록을 가져와 상장을 한꺼번에 — 자리 표시 양식으로 위치·크기를 모두에 맞춤'], ['rules', '반복 일정 · 연간 행사', 'i-cal', '매주 수련·승급심사·생일·원비 날 — 달력에 자동으로 넣는 목록'], ['dojang', '도장 정보', 'i-pages', '전화·주소·도장 이름을 저장하면 템플릿에 자동으로 채움'], ['lib', '나라차 자료실 (요소)', 'i-elems', '로고·라차·포즈·일러스트 — 두 PC에서 함께 쓰는 그림']];
+const NARA = [['news', '소식지', 'i-news', '월간 소식지 만들기 — 일정·인성 덕목·사진을 넣어 인쇄·TV용으로'], ['cert', '상장', 'i-award', '측정 기록을 가져와 상장을 한꺼번에 — 자리 표시 양식으로 위치·크기를 모두에 맞춤'], ['calendar', '캘린더', 'i-cal', '연간 인성 캘린더 — 캘린더 마법사(26쪽 한 번에)·인성 문구 넣기·반복 일정·공휴일·달력 테마'], ['rules', '반복 일정 · 연간 행사', 'i-cal', '매주 수련·승급심사·생일·원비 날 — 달력에 자동으로 넣는 목록'], ['dojang', '도장 정보', 'i-pages', '전화·주소·도장 이름을 저장하면 템플릿에 자동으로 채움'], ['lib', '나라차 자료실 (요소)', 'i-elems', '로고·라차·포즈·일러스트 — 두 PC에서 함께 쓰는 그림']];
 const NARA_TABS = ['naracha', 'news', 'cert', 'calendar'];
 function naraGo(k) { if (k === 'news' || k === 'cert' || k === 'calendar') { sideTab = k; renderRail(); renderSide(); return; } if (k === 'cal') { openWizard(doc.calendar.year || 2027); return; } if (k === 'rules') { openRules(); return; } if (k === 'dojang') { openDojang(); return; } if (k === 'lib') { elCat = 'naracha'; elQ = ''; sideTab = 'elems'; renderRail(); renderSide(); } }
 function renderNaraSide(body) {
@@ -2597,11 +2597,12 @@ function renderNaraSide(body) {
 function renderCalSide(body) {
   const yearNow = doc.calendar.year || 2027, hasCal = doc.pages.some(p => p.els.some(e => e.type === 'cal'));
   body.innerHTML = `<div class="wz-card"><div class="wz-year">${yearNow}<small>년</small></div><p class="hint" style="margin:0 0 8px">연도별 달력 모양과 테마를 미리 보며 표지·인성·달력 26쪽을 한 번에 만듭니다.</p><button class="btn primary full" id="wzOpen"><svg class="ic"><use href="#i-cal"/></svg>캘린더 마법사 열기</button>${window.NARACAL_VPLAN ? `<button class="btn full" id="wzVirtue" style="margin-top:6px" title="나라차 인성덕목 2년 계획(메인 프로그램과 같은 내용)의 덕목·명언·실천·사자성어를 12달에 넣습니다. 그림은 그대로 둡니다.">📖 ${yearNow}년 인성 문구 넣기 · ${window.NARACAL_VTRACK(yearNow) === '극기' ? '1년차 극기' : '2년차 홍익'}</button>` : ''}</div>
+  ${(() => { const df = virtueDiff(yearNow); if (!df || !doc.pages.some(p => p.els.some(e => e.role === 'virtue'))) return ''; return df.length ? `<div class="vcheck warn">⚠ 이 문서의 인성 문구가 ${yearNow}년 계획표${virtuePlanFor(yearNow).edits ? '(관리 앱에서 고친 덕목 포함)' : ''}와 <b>${df.length}달</b> 다릅니다: ${df.slice(0, 6).map(x => `${x.m}월(${x.f.map(k => VFIELD[k]).join('·')})`).join(', ')}${df.length > 6 ? ' …' : ''}<br><small>메인 프로그램·소식지·학부모앱과 같은 문구로 맞추려면 위 '인성 문구 넣기'를 누르세요. 일부러 바꾼 문구라면 그대로 두세요.</small></div>` : `<div class="vcheck ok">✓ 이 문서의 인성 문구가 ${yearNow}년 계획표${virtuePlanFor(yearNow).edits ? '(관리 앱에서 고친 덕목 포함)' : ''}와 같습니다</div>`; })()}
   <div class="nara-list" style="margin-top:10px"><button class="nara-card" data-calx="rules"><svg class="ic"><use href="#i-cal"/></svg><span><b>반복 일정 · 연간 행사</b><small>매주 수련·승급심사·생일·원비 날 — 달력에 넣는 목록 (휴일 빼기)</small></span><i>›</i></button><button class="nara-card" data-calx="hol"><svg class="ic"><use href="#i-cal"/></svg><span><b>공휴일</b><small>${yearNow}년 공휴일 확인·고치기 (대체 휴일 포함)</small></span><i>›</i></button><button class="nara-card" data-calx="theme" ${hasCal ? '' : 'disabled title="이 문서에 달력이 없습니다"'}><svg class="ic"><use href="#i-theme"/></svg><span><b>달력 테마 바꾸기</b><small>${hasCal ? '지금 달력의 색·글꼴·배치를 한 번에' : '마법사로 만든 달력 문서에서 쓸 수 있습니다'}</small></span><i>›</i></button></div>`;
   $('#wzOpen').onclick = () => openWizard(yearNow);
   if ($('#wzVirtue')) $('#wzVirtue').onclick = () => {   /* [나라차 R4.505] 인성덕목 2년 계획 문구를 연도에 맞게 */
-      const tr = window.NARACAL_VTRACK(yearNow), P = (window.NARACAL_VPLAN || {})[tr]; if (!P || !doc.calendar.months) return;
-      if (!confirm(`${yearNow}년은 ${tr === '극기' ? '1년차 극기(나의 가치)' : '2년차 홍익(우리·모두의 가치)'}입니다.\n12달의 덕목·영문·명언·실천 2가지·사자성어를 나라차 인성덕목 2년 계획으로 바꿉니다.\n(그림·일정·디자인은 그대로 — 덕목이 바뀐 달은 그림을 새로 넣어 주세요)`)) return;
+      const VP = virtuePlanFor(yearNow), tr = VP.tr, P = VP.P; if (!P.length || !doc.calendar.months) return;
+      if (!confirm(`${yearNow}년은 ${tr === '극기' ? '1년차 극기(나의 가치)' : '2년차 홍익(우리·모두의 가치)'}입니다.\n12달의 덕목·영문·명언·실천 2가지·사자성어를 나라차 인성덕목 2년 계획으로 바꿉니다.\n(그림·일정·디자인은 그대로 — 덕목이 바뀐 달은 그림을 새로 넣어 주세요)${VP.edits ? (VP.changed.length ? `\n\n관리 앱에서 고친 덕목도 반영합니다: ${VP.changed.join(', ')}\n(이 달들의 영문·명언·실천·풀이는 원래 덕목 기준 문구이니 확인해 주세요)` : '\n\n관리 앱에서 고친 덕목: 없음 — 계획표 그대로') : '\n\n※ 관리 앱에서 고친 덕목까지 반영하려면 나라차 → 소식지에서 데이터를 한 번 불러온 뒤 다시 누르세요.'}`)) return;
       let n = 0; P.forEach((x, k) => { if (doc.calendar.months[k]) n += applyMonthContent(k, x); });
       commit(); rerender(); toast(n ? `인성 문구를 넣었습니다 (글 상자 ${n}곳)` : '이 문서에는 인성 문구 자리가 없습니다 — 캘린더 마법사로 만든 달력 문서에서 쓰세요', !n);
     };
@@ -3973,6 +3974,19 @@ let aiCtx = { tab: 'content', monthIdx: 0 };
 $('#btnAI').onclick = () => openAI(selEls()[0] && selEls()[0].type === 'image' ? 'image' : 'content');
 function openAI(tab) { aiCtx.tab = tab; const el = selEls()[0]; if (el && el.month) aiCtx.monthIdx = el.month - 1; if (!chatMode() && !AI.cfg.anthropicKey && !AI.cfg.geminiKey && tab !== 'keys') aiCtx.tab = 'keys'; renderAI(); $('#dlgAI').showModal(); }
 $$('#dlgAI [role=tab]').forEach(b => b.onclick = () => { aiCtx.tab = b.dataset.tab; renderAI(); });
+/* 인성 데이터 한 원본 원칙: 공방의 캘린더 문구(NARACAL_VPLAN)는 메인 프로그램 VIRTUE24의 cal과 같은 내용(2026-11-18 점검 — 24달 모두 같음).
+   관리 앱 [⚙ 설정 → 📖 인성덕목]에서 고친 내용(업무 창고 virtueEdits — 관리·학부모·소식지 공통)은 소식지 엔진이 자료를 불러왔을 때 함께 반영(덕목·사자성어·한자).
+   캘린더 전용 문구(영문·명언·실천·풀이)는 고친 내용에 없으므로, 덕목이 바뀐 달은 알려 줌 */
+function virtuePlanFor(year) {
+  const tr = window.NARACAL_VTRACK ? window.NARACAL_VTRACK(year) : '극기', P = clone(((window.NARACAL_VPLAN || {})[tr]) || []); let edits = null;
+  try { const w = newsWin; if (w && w.DATA && w.DATA.loaded && !w.DATA.demo && w.DATA.work) edits = w.DATA.work.virtueEdits || {}; } catch (e) {}
+  const changed = []; if (edits) P.forEach((x, k) => { const e = edits[tr + '-' + (k + 1)]; if (!e || e._reset) return; const c = []; if (typeof e.v === 'string' && e.v.trim() && e.v.trim() !== x.virtue) { x.virtue = e.v.trim(); c.push('덕목'); } if (typeof e.id === 'string' && e.id.trim() && e.id.trim() !== x.idiom) { x.idiom = e.id.trim(); c.push('사자성어'); } if (typeof e.hj === 'string' && e.hj.trim() && e.hj.trim() !== x.hanja) { x.hanja = e.hj.trim(); if (!c.includes('사자성어')) c.push('한자'); } if (c.length) changed.push(`${k + 1}월 ${c.join('·')}`); });
+  return { tr, P, edits: !!edits, changed };
+}
+const VFIELD = { virtue: '덕목', idiom: '사자성어', hanja: '한자', en: '영문', quote: '명언', practice: '실천', meaning: '풀이' };
+function virtueDiff(year) { const m = doc.calendar && doc.calendar.months; if (!Array.isArray(m) || !m.length) return null; const { P } = virtuePlanFor(year), out = [];
+  P.forEach((x, k) => { const c = m[k]; if (!c) return; const f = ['virtue', 'idiom', 'hanja', 'en', 'quote', 'meaning'].filter(key => String(c[key] || '').trim() !== String(x[key] || '').trim()); if (JSON.stringify((c.practice || []).slice(0, 2)) !== JSON.stringify((x.practice || []).slice(0, 2))) f.push('practice'); if (f.length) out.push({ m: k + 1, f }); });
+  return out; }
 function applyMonthContent(mi, r) {
   Object.assign(doc.calendar.months[mi], { virtue: r.virtue, en: r.en, quote: r.quote, practice: r.practice.slice(0, 2), idiom: r.idiom, hanja: r.hanja, meaning: r.meaning });
   let n = 0;
