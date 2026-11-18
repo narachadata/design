@@ -215,7 +215,7 @@ async function syncSettings(first) {
     else if (first) await store.pushSettings(true);
   } catch (e) { console.warn('설정 동기화', e); }
 }
-async function syncTick() { await checkExternalChange(); if (store.state.dir) await syncSettings(); }
+async function syncTick() { await checkExternalChange(); if (store.state.dir) { await syncSettings(); syncBlocks(); } }
 // 자료실을 다 읽으면 열려 있는 패널을 다시 그림
 NC.lib.onReady(() => { if (['photo', 'elems', 'tpl', 'project'].includes(sideTab)) renderSide(); });
 // 자료실 그림(lib:)을 문서 이미지로 복사해 넣기
@@ -228,7 +228,7 @@ setInterval(() => { if (store.state.dir) store.pushSettings().then(r => { if (r 
 async function afterFolderReady(opts) {
   opts = opts || {};
   await syncSettings(true);
-  NC.lib.load(true);
+  NC.lib.load(true); syncBlocks();
   if (store.state.handle && await store.inFolder(store.state.handle)) {
     if (opts.loadCurrent) { try { await loadDoc(await store.readFile()); } catch (e) { console.warn(e); } }
     return;
@@ -301,8 +301,8 @@ function elHTML(el, mode, ext) {
   if (el.type === 'image') {
     const s = elSrcOv.get(el.id) || viewSrc(el, mode); const clip = FX.clipPath(el.clip, el.w * MM, el.h * MM); const z = el.zoom || 1;
     const sh = el.shadow ? `filter:drop-shadow(${el.shX || 0.8}mm ${el.shY || 0.8}mm ${el.shB || 0.8}mm ${FX.rgba(el.shC || '#000000', el.shA == null ? 0.3 : el.shA)});` : '';
-    const inner = s ? `<img src="${s}" alt="" draggable="false" style="object-fit:${el.fit};object-position:${el.pos};transform:translate(${el.panX || 0}%,${el.panY || 0}%) scale(${z * (el.flip ? -1 : 1)},${z * (el.flipV ? -1 : 1)});${FX.imageFilter(el)}">${el.tint ? `<div class="tint" style="background:${el.tint};opacity:${el.tintA == null ? 0.4 : el.tintA};mix-blend-mode:${el.tintMode || 'multiply'}"></div>` : ''}` : (mode === 'edit' ? '<div style="font-size:3.5mm;color:rgba(0,0,0,.4);text-align:center;padding-top:35%">그림 없음<br>오른쪽에서 넣기</div>' : '');
-    return `<div class="el el-image${lock}" data-id="${el.id}" style="${base}${blend}${sh}"><div class="imgclip" style="border-radius:${el.radius || 0}mm;${clip ? `clip-path:${clip};` : ''}${el.border ? `border:${el.borderW || 0.5}mm solid ${el.border};` : ''}${s ? '' : 'outline:0.4mm dashed rgba(0,0,0,.3);'}">${inner}</div></div>`;
+    const inner = s ? `<img src="${s}" alt="" draggable="false" style="object-fit:${el.fit};object-position:${el.pos};transform:translate(${el.panX || 0}%,${el.panY || 0}%) scale(${z * (el.flip ? -1 : 1)},${z * (el.flipV ? -1 : 1)});${FX.imageFilter(el)}">${el.tint ? `<div class="tint" style="background:${el.tint};opacity:${el.tintA == null ? 0.4 : el.tintA};mix-blend-mode:${el.tintMode || 'multiply'}"></div>` : ''}` : (mode === 'edit' ? `<div class="imgph" style="font-size:${Math.max(3.5, Math.min(14, Math.min(el.w, el.h) * 0.07)).toFixed(2)}mm">그림 없음<br>오른쪽에서 넣기</div>` : mode === 'thumb' ? '<div class="imgph"></div>' : '');
+    return `<div class="el el-image${lock}" data-id="${el.id}" style="${base}${blend}${sh}"><div class="imgclip" style="border-radius:${el.radius || 0}mm;${clip ? `clip-path:${clip};` : ''}${el.border ? `border:${el.borderW || 0.5}mm solid ${el.border};` : ''}${s ? '' : `outline:${Math.max(0.4, Math.min(el.w, el.h) * 0.004).toFixed(2)}mm dashed rgba(128,128,128,.7);`}">${inner}</div></div>`;
   }
   if (el.type === 'video' && NC.media.isLocal(el.src) && mediaMissing.has(el.src.slice(2))) return `<div class="el el-video vmiss${lock}" data-id="${el.id}" style="${base}">${mode === 'edit' ? `<div class="vmiss-in"><b>원본 영상 없음</b><span>${esc(el.name || '')}</span><small>속성에서 '원본 다시 연결'</small></div>` : ''}</div>`;
   if (el.type === 'video') { const ps = el.poster ? src(el.poster) : ''; const len = Math.max(0, Number(el.tout || el.dur || 0) - Number(el.tin || 0)); return `<div class="el el-video${lock}" data-id="${el.id}" style="${base}${blend}"><div class="imgclip" style="border-radius:${el.radius || 0}mm;background:#1b1f2a">${ps && el.fit === 'blur' ? `<img src="${ps}" alt="" draggable="false" style="object-fit:cover;filter:blur(2mm) brightness(.72)">` : ''}${ps ? `<img src="${ps}" alt="" draggable="false" style="object-fit:${el.fit === 'contain' || el.fit === 'blur' ? 'contain' : 'cover'};${el.fit === 'blur' ? 'position:absolute;inset:0;' : ''}${FX.imageFilter(el).replace(/^filter:/, 'filter:')}">` : ''}${mode === 'edit' ? `<span class="vbadge">▶ ${(len / Math.max(0.1, Number(el.speed || 1))).toFixed(1)}초${Number(el.speed || 1) !== 1 ? ` · ${el.speed}배` : ''}</span>` : ''}</div></div>`; }
@@ -2689,7 +2689,7 @@ async function settingsClick(e) {
   else if (a === 'ai') { close(); openAI('keys'); }
   else if (a === 'recent') { ['naracal-recent-tpls', 'naracal-recent-elems', 'naracal-recent-fonts', 'naracal-recent-colors', 'naracal-recent-formats', 'naracal-trans-recent'].forEach(k => { try { localStorage.removeItem(k); } catch (er) {} }); renderSide(); toast('최근 사용 목록을 비웠습니다'); }
   else if (a === 'blocks') { close(); elCat = 'myblock'; sideTab = 'elems'; renderRail(); renderSide(); }
-  else if (a === 'blocksdel') { if (!window.confirm(`내 블록 ${myBlocks.length}개를 모두 지울까요? 되돌릴 수 없습니다.`)) return; myBlocks = []; await store.idbSet('my-blocks', []).catch(() => {}); renderSettings(); if (sideTab === 'elems') renderElems(); toast('내 블록을 모두 지웠습니다'); }
+  else if (a === 'blocksdel') { if (!window.confirm(`내 블록 ${myBlocks.length}개를 모두 지울까요? 되돌릴 수 없습니다.${myBlocks.some(b => b.synced) ? ' 동기화 폴더에 있는 블록은 다른 PC에서도 지워집니다.' : ''}`)) return; const gone = myBlocks; myBlocks = []; await store.idbSet('my-blocks', []).catch(() => {}); await blkForget(gone); renderSettings(); if (sideTab === 'elems') renderElems(); toast('내 블록을 모두 지웠습니다'); }
   else if (a === 'manual') { close(); openManual(); }
   else if (a === 'help') { close(); $('#dlgHelp').showModal(); }
   else if (a === 'reload') { toast('새 버전을 확인합니다…'); try { await store.idbSet('doc', doc); } catch (er) {} location.reload(); }
@@ -2872,7 +2872,29 @@ const rachaBtn = '<div class="row" style="margin:4px 0 2px"><button class="btn s
 function libHint(short) { const st = NC.lib.st; const msg = store.state.dir ? (st.error === 'none' ? '동기화 폴더에 "디자인자료" 폴더가 없습니다.' : st.ready ? '' : '나라차 자료실을 불러오는 중…') : '저장·동기화에서 구글 드라이브 폴더를 연결하면 나라차 로고·마스코트·사진·템플릿(나라차 자료실)이 여기에 나옵니다.'; return msg ? `<p class="hint">${short ? '<b>나라차 자료실</b> · ' : ''}${msg}</p>` : ''; }
 function getElem(id) { return NC.elems.get(id) || libElemItems().find(x => x.id === id) || myBlockItems().find(x => x.id === id); }
 /* 내 블록: 고른 요소(묶음)를 이름 붙여 이 PC 브라우저에 보관 → 요소 패널 '내 블록'에서 어느 문서에든 넣기. 그림은 그림 자료를 함께 담음 */
-let myBlocks = []; store.idbGet('my-blocks').then(v => { myBlocks = Array.isArray(v) ? v : []; }).catch(() => {});
+let myBlocks = [], blkDel = [], blkSyncing = false;
+store.idbGet('my-blocks').then(v => { myBlocks = Array.isArray(v) ? v : []; }).catch(() => {}).then(() => store.idbGet('my-blocks-del')).then(v => { blkDel = Array.isArray(v) ? v : []; }).catch(() => {}).then(() => syncBlocks());
+/* 내 블록을 동기화 폴더(디자인자료/내 블록)와 맞춤 — 두 PC가 같은 블록을 씀.
+   synced = 폴더에 올라간 적 있음 → 폴더에서 사라졌으면 다른 PC가 지운 것. 아직 안 올린 블록(폴더 연결 전에 만든 것)은 올림.
+   blkDel = 폴더가 없을 때 지운 블록 → 다음에 폴더가 연결되면 폴더에서도 지움 */
+async function syncBlocks() {
+  if (blkSyncing || !store.state.dir) return; blkSyncing = true;
+  try {
+    const snap = myBlocks, r = await NC.lib.listBlocks(); if (!r) return;
+    if (blkDel.length) { const left = []; for (const id of blkDel) { if (r.names.has(id) && !(await NC.lib.removeBlock(id))) { left.push(id); continue; } r.names.delete(id); r.list = r.list.filter(b => b.id !== id); } blkDel = left; await store.idbSet('my-blocks-del', blkDel).catch(() => {}); }
+    const remote = new Map(r.list.map(b => [b.id, b])); let next = [];
+    for (const b of snap) {
+      if (r.names.has(b.id)) { if (!remote.has(b.id)) next.push(b); continue; } /* 폴더 것을 씀 (아직 못 읽었으면 이 PC 것) */
+      if (b.synced) continue; /* 다른 PC에서 지움 */
+      try { await NC.lib.saveBlock(b); next.push(Object.assign({}, b, { synced: true })); } catch (e) { next.push(b); }
+    }
+    remote.forEach(b => next.push(Object.assign({}, b, { synced: true })));
+    if (myBlocks !== snap) { /* 맞추는 사이 이 PC에서 저장·삭제한 것 반영 */ const now = myBlocks, gone = new Set(snap.filter(b => !now.some(x => x.id === b.id)).map(b => b.id)); next = next.filter(b => !gone.has(b.id)); now.forEach(b => { const i = next.findIndex(x => x.id === b.id); if (i < 0) next.push(b); else if (b.synced && !next[i].synced) next[i] = b; }); }
+    next.sort((a, b) => (b.t || 0) - (a.t || 0));
+    const sig = l => l.map(b => `${b.id}:${b.name}:${b.t || 0}:${b.synced ? 1 : 0}`).join('|');
+    if (sig(next) !== sig(myBlocks)) { const nAdd = next.filter(b => !myBlocks.some(x => x.id === b.id)).length; myBlocks = next; await store.idbSet('my-blocks', myBlocks).catch(() => {}); if (sideTab === 'elems') renderElems(); if (nAdd && myBlocks.length) setStatus(`다른 PC의 내 블록 ${nAdd}개를 가져왔습니다`); }
+  } catch (e) { console.warn('내 블록 동기화', e); } finally { blkSyncing = false; }
+}
 const myBlockItems = () => myBlocks.map(b => ({ cat: 'myblock', id: 'blk-' + b.id, name: b.name, kw: '내 블록 ' + b.name, w: b.w, h: b.h, make: () => clone(b.els), mine: true }));
 async function saveMyBlock() {
   const els = selEls(); if (!els.length) { toast('먼저 블록으로 저장할 요소를 고르세요', true); return; }
@@ -2882,9 +2904,15 @@ async function saveMyBlock() {
   const size = JSON.stringify(out).length; if (size > 12e6) { toast('그림이 너무 커서 블록으로 저장하지 못했습니다 (12MB 넘음)', true); return; }
   myBlocks = [{ id: uid(), name: nm.trim().slice(0, 40), w: r1(w), h: r1(h), els: out, t: Date.now() }].concat(myBlocks).slice(0, 60);
   try { await store.idbSet('my-blocks', myBlocks); } catch (e) { toast('블록을 저장하지 못했습니다: ' + e.message, true); return; }
-  if (sideTab === 'elems') renderElems(); toast(`'${nm.trim()}'${eul(nm.trim())} 내 블록으로 저장했습니다 — 요소 → 내 블록 (이 PC 브라우저에 보관)`);
+  let where = '이 PC 브라우저에 보관 · 동기화 폴더를 연결하면 다른 PC에서도 보입니다';
+  if (store.state.dir) { try { await NC.lib.saveBlock(myBlocks[0]); myBlocks[0].synced = true; await store.idbSet('my-blocks', myBlocks).catch(() => {}); where = '동기화 폴더에 보관 — 다른 PC에서도 보입니다'; } catch (e) { where = '이 PC에만 보관됨 — 폴더에 쓰지 못했습니다: ' + e.message; } }
+  if (sideTab === 'elems') renderElems(); toast(`'${nm.trim()}'${eul(nm.trim())} 내 블록으로 저장했습니다 — 요소 → 내 블록 (${where})`);
 }
-async function delMyBlock(id) { const b = myBlocks.find(x => 'blk-' + x.id === id); if (!b || !window.confirm(`내 블록 '${b.name}'${eul(b.name)} 지울까요?`)) return; myBlocks = myBlocks.filter(x => x !== b); await store.idbSet('my-blocks', myBlocks).catch(() => {}); renderElems(); toast('내 블록을 지웠습니다'); }
+async function blkForget(list) { /* 폴더에서도 지움 (폴더가 없으면 다음 연결 때 지우도록 기억) */
+  for (const b of list) { if (!b.synced) continue; let ok = false; try { ok = await NC.lib.removeBlock(b.id); } catch (e) {} if (!ok && !blkDel.includes(b.id)) blkDel.push(b.id); }
+  await store.idbSet('my-blocks-del', blkDel).catch(() => {});
+}
+async function delMyBlock(id) { const b = myBlocks.find(x => 'blk-' + x.id === id); if (!b || !window.confirm(`내 블록 '${b.name}'${eul(b.name)} 지울까요?${b.synced ? ' 다른 PC에서도 지워집니다.' : ''}`)) return; myBlocks = myBlocks.filter(x => x !== b); await store.idbSet('my-blocks', myBlocks).catch(() => {}); await blkForget([b]); renderElems(); toast('내 블록을 지웠습니다'); }
 async function insertElem(id, at, opt = {}) { const it = getElem(id); if (!it) return; let els = it.make(uid, { year: doc.calendar.year || 2027 }); if (it.lib) { setStatus('자료실에서 불러오는 중…'); try { els = await NC.lib.materialize(els, addAsset); } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return; } finally { setStatus(''); } }
   els.forEach(e => { if (typeof e.src === 'string' && e.src.startsWith('data:')) e.src = addAsset(e.src); });  /* 내 블록의 그림 */
   /* 그림 바꿔 넣기(캔바 방식): 그림 요소 하나를 넣을 때 바꿀 그림(끌어 놓은 곳 또는 고른 그림 하나)이 있으면 자리·크기·자르기를 그대로 두고 그림만 바꿈 */
