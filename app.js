@@ -5425,7 +5425,7 @@ function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEa
   });
 })();
 /* ---- 관리프로그램 측정 → 향상왕 (같은 사이트 주소라 이 브라우저에 저장된 'naracha-meas'를 읽기만 함, 관리프로그램은 고치지 않음)
-   계산은 관리프로그램 computeImprove와 같게: 같은 종류의 직전 회차 대비 기록 향상 > 0 인 사람 중 나이 그룹(14~19세 = 청소년)별 1위, 재원생만 ---- */
+   계산은 관리프로그램 computeImprove와 같게: 같은 종류의 직전 회차 대비 기록 향상 > 0 인 사람 중 나이 그룹(14~19세 = 청소년, 20세 이상 = 성인 한 그룹)별 1위, 재원생만 ---- */
 const MEAS_SEP = String.fromCharCode(1);
 /* 서버에서 바로 받기 (2026-11-18): 관리프로그램은 서버에서 받은 측정 자료를 브라우저(naracha-meas)에 적지 않아 공방이 못 읽던 문제 →
    관리프로그램과 같은 구글 서버(앱스 스크립트)에서 측정(store=meas)·명단(store=att)을 '읽기만'. 접속 키는 관리프로그램이 이 브라우저에 둔 naracha_access_key */
@@ -5448,12 +5448,15 @@ const measSc = s => s.year + (s.half === 'H2' ? 0.5 : 0), measHalf = s => s.half
 function measCellV(row, cat, sub) { for (const k in (row.cells || {})) { const p = k.split(MEAS_SEP); if (p[0] === cat && (!sub || (p[1] || '') === sub)) return row.cells[k]; } /* 정확히 같은 종목·세부가 먼저(줄넘기 ↔ 쌩쌩이 줄넘기 섞임 방지) */ for (const k in (row.cells || {})) { const p = k.split(MEAS_SEP); if (p[0].indexOf(cat) >= 0 && (!sub || (p[1] || '').indexOf(sub) >= 0)) return row.cells[k]; } return ''; }
 function measCatTitle(kind, name) { let t = String(name).replace(/\s*\(.*\)\s*$/, ''); if (kind === '줄넘기') t = t.replace(/^엇걸어뛰기$/, '엇걸어 풀어뛰기').replace(/^(앞으로|뒤로)뛰기$/, '$1 뛰기'); return t + '왕'; }
 function measUnit(kind, name) { if (kind === '줄넘기') return '회'; if (/악력/.test(name)) return 'kg'; if (/앉아윗몸|유연성|멀리뛰기|순발력/.test(name)) return 'cm'; return '회'; }
+/* 나이 그룹 (관리프로그램 _measAgeGroup R4.821과 같게 — 관장님: 성인은 나이로 나누지 않고 「성인」 한 그룹, 나이 표기 없음) */
+function measAgeGroup(age) { const n = parseFloat(age); if (n >= 14 && n <= 19) return '청소년'; if (n >= 20 || /성인/.test(String(age || ''))) return '성인'; return age || '?'; }
+const measAgeLabel = g => (g === '청소년' || g === '성인' || g === '?') ? g : g + '세', measAgeRank = g => g === '성인' ? 999 : g === '청소년' ? 19.5 : (parseFloat(g) || 0);
 function measImprove(s, all, enrolled) {
   const prev = all.filter(o => o.id !== s.id && o.kind === s.kind && measSc(o) < measSc(s)).sort((a, b) => measSc(b) - measSc(a))[0]; if (!prev) return { prev: null, wins: [] };
   const pBy = {}; (prev.rows || []).forEach(r => { pBy[r.name] = r; });
   const cats = (s.cats || []).filter(c => !/비만도|종합|비고/.test(c.name) && (c.subs || []).some(su => (typeof su === 'string' ? su : su && su.sub) === '기록'));
   const wins = [];
-  cats.forEach(cat => { const by = {}; (s.rows || []).forEach(r => { if (enrolled && !enrolled(r.name)) return; const pr = pBy[r.name]; if (!pr) return; const cv = parseFloat(measCellV(r, cat.name, '기록')), pv = parseFloat(measCellV(pr, cat.name, '기록')); if (isNaN(cv) || isNaN(pv)) return; const imp = cv - pv; if (imp <= 0) return; const n = parseFloat(r.age), age = n >= 14 && n <= 19 ? '청소년' : (r.age || '?'); if (!by[age] || imp > by[age].imp) by[age] = { age, name: r.name, prev: pv, cur: cv, imp, cat: cat.name }; });
+  cats.forEach(cat => { const by = {}; (s.rows || []).forEach(r => { if (enrolled && !enrolled(r.name)) return; const pr = pBy[r.name]; if (!pr) return; const cv = parseFloat(measCellV(r, cat.name, '기록')), pv = parseFloat(measCellV(pr, cat.name, '기록')); if (isNaN(cv) || isNaN(pv)) return; const imp = cv - pv; if (imp <= 0) return; const age = measAgeGroup(r.age); if (!by[age] || imp > by[age].imp) by[age] = { age, name: r.name, prev: pv, cur: cv, imp, cat: cat.name }; });
     Object.values(by).forEach(w => wins.push(Object.assign(w, { kind: s.kind, k: measCatTitle(s.kind, w.cat), u: measUnit(s.kind, w.cat) }))); });
   return { prev, wins };
 }
@@ -5475,15 +5478,15 @@ async function openMeasImport(again) {
     /* 연도 · 상반기/하반기 · 줄넘기/체력 을 고르면 그 측정 회차들의 향상왕 (관장님: "년도, 전반기, 후반기, 줄넘기, 체력 데이터를 선택") */
     const picked = all.filter(s => s.year === measImp.year && (s.half === 'H2' ? 'H2' : 'H1') === measImp.half && measImp.kinds.includes(s.kind)), res = picked.map(s => ({ s, r: measImprove(s, all, enrolled) }));
     const by = {}; res.forEach(({ s, r }) => r.wins.forEach(w => { (by[w.name] = by[w.name] || { name: w.name, age: w.age, recs: [] }).recs.push({ k: w.k, a: String(w.prev), b: String(w.cur), u: w.u, kind: s.kind }); }));
-    const people = Object.values(by).sort((a, b) => b.recs.length - a.recs.length || a.name.localeCompare(b.name, 'ko')), nOn = people.filter(p => !measImp.off[p.name]).length, kinds = [...new Set(picked.map(s => s.kind))];
+    const people = Object.values(by).sort((a, b) => measAgeRank(a.age) - measAgeRank(b.age) || b.recs.length - a.recs.length || a.name.localeCompare(b.name, 'ko')), nOn = people.filter(p => !measImp.off[p.name]).length, kinds = [...new Set(picked.map(s => s.kind))];
     d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기 <small>${measSrv && measSrv.meas ? `관리프로그램 서버 최신 · ${new Date(measSrv.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 받음` : '이 브라우저에 남은 자료 (서버 연결 안 됨)'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
-      <p class="hint" style="margin-top:0">관리프로그램과 같은 계산: 같은 종류의 <b>직전 회차보다 기록이 오른 학생 중 나이 그룹별 1위</b>(14~19세는 청소년), 지금 재원생만(휴관·퇴관 제외). 한 학생이 여러 종목이면 <b>상장 한 장에 모두</b> 들어갑니다.</p>
+      <p class="hint" style="margin-top:0">관리프로그램과 같은 계산: 같은 종류의 <b>직전 회차보다 기록이 오른 학생 중 나이 그룹별 1위</b>(14~19세는 청소년, 20세 이상은 「성인」 한 그룹), 지금 재원생만(휴관·퇴관 제외). 한 학생이 여러 종목이면 <b>상장 한 장에 모두</b> 들어갑니다.</p>
       <div class="msel"><label class="f"><span>연도</span><select id="mYear">${years.map(y => `<option value="${Number(y)}" ${y === measImp.year ? 'selected' : ''}>${Number(y)}년</option>`).join('')}</select></label>
       <div class="f"><span>반기</span><div class="seg">${[['H1', '전반기'], ['H2', '후반기']].map(([a, t]) => `<button data-mhalf="${a}" aria-pressed="${measImp.half === a}" ${all.some(s => s.year === measImp.year && (s.half === 'H2' ? 'H2' : 'H1') === a) ? '' : 'disabled title="이 반기 측정 자료가 없습니다"'}>${t}</button>`).join('')}</div></div>
       <div class="f"><span>종류 <small>둘 다 고르면 한 사람 한 장에 합침</small></span><div class="row" style="gap:12px">${['줄넘기', '체력'].map(kd => { const ss = all.find(s => s.year === measImp.year && (s.half === 'H2' ? 'H2' : 'H1') === measImp.half && s.kind === kd); return `<label class="chk" style="margin:0"><input type="checkbox" data-mkind="${kd}" ${measImp.kinds.includes(kd) ? 'checked' : ''} ${ss ? '' : 'disabled'}> ${kd} ${ss ? `<small class="hint" style="margin:0">${(ss.rows || []).length}명 측정</small>` : '<small class="hint" style="margin:0">자료 없음</small>'}</label>`; }).join('')}</div></div></div>
       ${res.some(x => !x.r.prev) ? `<p class="hint" style="color:#b3261e">⚠ ${res.filter(x => !x.r.prev).map(x => esc(`${x.s.year} ${measHalf(x.s)} ${x.s.kind}`)).join(', ')}: 비교할 직전 회차가 없어 향상왕을 계산할 수 없습니다.</p>` : ''}
       <h3>향상왕 ${people.length}명 <small>${people.reduce((t, p) => t + p.recs.length, 0)}개 종목 · 체크를 풀면 빠짐</small></h3>
-      <div class="mpeople">${people.map(p => `<label class="mper ${measImp.off[p.name] ? 'off' : ''}"><input type="checkbox" data-moff="${esc(p.name)}" ${measImp.off[p.name] ? '' : 'checked'}><b>${esc(p.name)}</b> <small>${esc(p.age === '청소년' ? '청소년' : p.age + '세')}</small><span>${p.recs.map(q => `${esc(q.k)} ${esc(q.a)}→${esc(q.b)}${esc(q.u)}`).join(' · ')}</span></label>`).join('') || '<p class="hint">향상왕이 없습니다</p>'}</div>
+      <div class="mpeople">${people.map(p => `<label class="mper ${measImp.off[p.name] ? 'off' : ''}"><input type="checkbox" data-moff="${esc(p.name)}" ${measImp.off[p.name] ? '' : 'checked'}><b>${esc(p.name)}</b> <small>${esc(measAgeLabel(p.age))}</small><span>${p.recs.map(q => `${esc(q.k)} ${esc(q.a)}→${esc(q.b)}${esc(q.u)}`).join(' · ')}</span></label>`).join('') || '<p class="hint">향상왕이 없습니다</p>'}</div>
       <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="mReplace" ${certState().data.record.rows.some(r => String(r.name || '').trim() && !(Array.isArray(r.recs) && r.recs.length)) ? '' : 'checked'}> 지금 명단을 바꾸기 (끄면 뒤에 더함 · Ctrl+Z로 되돌리기)</label><button class="btn" id="mGo" ${nOn ? '' : 'disabled'}>명단에 넣기</button><button class="btn primary" id="mGoMake" ${nOn ? '' : 'disabled'}>넣고 ${nOn}장 미리 보기</button></div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
     d.onclick = e => { const h = e.target.closest('[data-mhalf]'); if (h && !h.disabled) { measImp.half = h.dataset.mhalf; measImp.off = {}; draw(); } };
