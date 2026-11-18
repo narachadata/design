@@ -6502,23 +6502,34 @@ if (/[?&]qa\b/.test(location.search)) window.NCQA = { tlShow, live: NC.live, con
   });
 })();
 
-/* ---- 새 버전 알림: 작업 중에는 새로고침하지 않고 단추만 보여 줌. 5분 넘게 손대지 않았을 때만 자동으로 ---- */
+/* ---- 새 버전 자동 적용 (2026-11-18 팀장님: "새롭게 수정되면 강제로 리로드"):
+   1분마다·창으로 돌아올 때 version.json 확인 → 새 판이면 작업을 저장하고 10초 알림 뒤 새로 엶.
+   꼭 기다리는 때: 저장 중·끌기/그리기 중·영상 재생/녹화 중·내려받기/출력 준비 중(상태 줄이 '…'로 끝남). 글 고치는 중이면 고친 글을 먼저 확정.
+   대화창이 열려 있으면 최대 2분 기다렸다가 그래도 새로 엶. 같은 판으로 이미 한 번 새로 열었는데 옛 파일이 보이면(브라우저 저장본) 되풀이하지 않음 ---- */
 (function () {
   const cur_ = window.NARACAL_VER || '';
   if (!cur_ || location.protocol === 'file:') return;
-  let pending = null, lastInput = Date.now(), timer = 0;
-  ['pointerdown', 'keydown', 'wheel'].forEach(ev => window.addEventListener(ev, () => { lastInput = Date.now(); }, { capture: true, passive: true }));
-  // 같은 버전으로 이미 한 번 새로고침했는데도 옛 파일이 보이면(브라우저 저장본) 다시 새로고침하지 않음 — 되풀이 새로고침 방지
+  let pending = null, since = 0, timer = 0, left = 0;
   const tried = () => { try { return sessionStorage.getItem('nc-reloaded-to') || ''; } catch (e) { return ''; } };
-  async function check() { try { const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return; const j = await r.json(); if (j.ver && j.ver > cur_ && j.ver !== tried()) { pending = j.ver; showBtn(); } } catch (e) {} }
-  const busy = () => editing || drag || pen || $('#cellEd') || document.querySelector('dialog[open]') || $('#dlPanel') || store.state.saving || (typeof tl !== 'undefined' && (tl.playing || tl.starting)) || (typeof recState !== 'undefined' && recState);
-  async function reloadNow() { if (!pending) return; clearTimeout(nudgeTimer); if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } try { await store.idbSet('doc', doc); } catch (e) {} try { sessionStorage.setItem('nc-reloaded-to', pending); } catch (e) {} { const u = new URL(location.href); u.searchParams.set('v', pending); location.href = u.href; } }
-  function showBtn() {
-    let b = $('#newVerBtn'); if (!b) { b = document.createElement('button'); b.id = 'newVerBtn'; b.className = 'btn sm newver'; b.title = '저장된 작업은 그대로 두고 새 버전으로 다시 엽니다'; b.onclick = reloadNow; const bar = $('.topbar .grow'); if (bar) bar.after(b); else document.body.appendChild(b); }
-    b.innerHTML = `<svg class="ic"><use href="#i-refresh"/></svg>새 버전 · 새로고침`;
-    clearInterval(timer); timer = setInterval(() => { if (pending && Date.now() - lastInput > 5 * 60000 && !busy()) reloadNow(); }, 30000);
+  async function check() { if (pending) return; try { const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return; const j = await r.json(); if (j.ver && j.ver > cur_ && j.ver !== tried()) { pending = j.ver; since = Date.now(); start(); } } catch (e) {} }
+  const hardBusy = () => drag || pen || $('#cellEd') || store.state.saving || $('#dlPanel') || (typeof tl !== 'undefined' && (tl.playing || tl.starting)) || (typeof recState !== 'undefined' && recState) || /…\s*$/.test(($('#status') || {}).textContent || '');
+  const softBusy = () => !!document.querySelector('dialog[open]');
+  async function reloadNow() { if (!pending) return; clearInterval(timer); try { if (editing) endEdit(); } catch (e) {} try { clearTimeout(nudgeTimer); } catch (e) {} try { if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); } } catch (e) {} try { await store.idbSet('doc', doc); } catch (e) {} try { sessionStorage.setItem('nc-reloaded-to', pending); } catch (e) {} { const u = new URL(location.href); u.searchParams.set('v', pending); location.href = u.href; } }
+  function showBtn(txt) {
+    let b = $('#newVerBtn'); if (!b) { b = document.createElement('button'); b.id = 'newVerBtn'; b.className = 'btn sm newver'; b.title = '작업을 저장하고 새 버전으로 바로 다시 엽니다'; b.onclick = reloadNow; const bar = $('.topbar .grow'); if (bar) bar.after(b); else document.body.appendChild(b); }
+    b.innerHTML = `<svg class="ic"><use href="#i-refresh"/></svg>${txt}`;
   }
-  setInterval(check, 120000); window.addEventListener('focus', check); setTimeout(check, 20000);
+  function start() {
+    left = 10; clearInterval(timer);
+    timer = setInterval(() => {
+      if (hardBusy() || (softBusy() && Date.now() - since < 120000)) { showBtn('새 버전 · 작업이 끝나면 새로 엽니다'); left = Math.max(left, 3); return; }
+      left--; showBtn(`새 버전 · ${Math.max(left, 0)}초 뒤 새로 엶 (지금)`);
+      if (left === 9) toast('새 버전이 나왔습니다 — 작업을 저장하고 10초 뒤 새로 엽니다 (지금 바로: 위의 단추)');
+      if (left <= 0) reloadNow();
+    }, 1000);
+  }
+  setInterval(check, 60000); window.addEventListener('focus', check); document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); }); setTimeout(check, 15000);
+  if (/[?&]qa\b/.test(location.search)) window.NCQA_ver = { check, get pending() { return pending; }, set pending(v) { pending = v; since = Date.now(); if (v) start(); else { clearInterval(timer); } }, hardBusy };
 })();
 
 /* ---- 기타 ---- */
