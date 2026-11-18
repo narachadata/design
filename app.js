@@ -2516,7 +2516,7 @@ function openVideoMaker() {
   let busy = false, stop = false, P = null, Vp = null;
   d.addEventListener('cancel', e => { if (busy) e.preventDefault(); }); d.addEventListener('close', () => { stop = true; if (P) P.destroy(); d.remove(); });
   const curQ = () => vset().q || '1080', curFps = () => Number(vset().fps || 30);
-  const est = () => { const o = VIDEO.outSize(doc.w, doc.h, curQ()), mb = estMB(curQ(), curFps()); $('#vidEst').textContent = `저장 크기 ${o.W}×${o.H} · ${fmtT(tot)} · 파일 최대 약 ${mb < 1 ? '1' : Math.round(mb)}MB (움직임이 적으면 훨씬 작음)`; };
+  const est = () => { const o = VIDEO.outSize(doc.w, doc.h, curQ()), mb = estMB(curQ(), curFps()); $('#vidEst').textContent = `저장 크기 ${o.W}×${o.H} · ${fmtT(tot)} · 파일 최대 약 ${mb < 1 ? '1' : Math.round(mb)}MB (움직임이 적으면 훨씬 작음)${mb > 1500 && window.showSaveFilePicker ? ' · 긴 영상이라 시작할 때 저장할 곳을 고르면 그 파일에 바로 씁니다' : ''}${mb > 4096 ? ' · 4GB가 넘으면 FAT32 USB에는 복사되지 않음' : ''}`; };
   const setV = (k, v) => { doc.video = Object.assign(vset(), doc.video || {}, { [k]: v }); markDirty(); est(); };
   $('#vidQ').onclick = e => { const b = e.target.closest('[data-q]'); if (!b || busy) return; $$('#vidQ [data-q]').forEach(x => x.setAttribute('aria-pressed', x === b)); setV('q', b.dataset.q); const nt = $('#vidUseNote'); if (nt && doc.h > doc.w && b.dataset.q === '2160') { nt.hidden = false; nt.innerHTML = '세로 4K(2160×3840)는 유튜브·휴대폰에서는 되지만 <b>TV·셋톱에서는 재생이 안 될 수 있습니다</b> — 숏츠·릴스는 1080p(1080×1920)를 권장합니다.'; } };
   $('#vidFps').onchange = e => setV('fps', Number(e.target.value));
@@ -2544,19 +2544,27 @@ function openVideoMaker() {
   const go = $('#vidGo');
   go.onclick = async () => {
     if (busy) { stop = true; return; }
+    /* 긴 영상(예상 1.5GB 넘음): 메모리가 모자라 멈추지 않게, 시작하기 전에 저장할 파일을 골라 거기에 바로 씀 (크롬·엣지) */
+    let fileH = null, wr = null; const mbE = estMB(curQ(), curFps());
+    if (mbE > (window.__ncBigMB || 1500) && window.showSaveFilePicker && VIDEO.canFast()) { const o0 = VIDEO.outSize(doc.w, doc.h, curQ()); try { fileH = await window.showSaveFilePicker({ suggestedName: `${docFileName('영상')}${o0.H > o0.W ? '_숏츠' : ''}_${Math.min(o0.W, o0.H)}p${curFps()}.mp4`, types: [{ description: 'MP4 영상', accept: { 'video/mp4': ['.mp4'] } }] }); } catch (e) { if (e && e.name === 'AbortError') { toast('저장할 곳을 고르지 않아 시작하지 않았습니다 — 긴 영상은 파일에 바로 씁니다', true); return; } fileH = null; } }
     busy = true; stop = false; go.lastChild.textContent = '중지'; const pr = $('#vidProg');
     if (P) { P.destroy(); P = null; ic(); }
     try {
       const Vb = await videoBuild(curQ(), (k, nn) => { pr.textContent = `장면을 준비하는 중… ${Math.round(k / Math.max(1, nn) * 100)}%`; }, () => stop); if (!Vb) throw new Error('중지했습니다');
       // 빠른 방식(WebCodecs + mp4-muxer) 먼저, 안 되면 실제 시간 녹화로
       let res = null, fastErr = null;
-      if (VIDEO.canFast()) { try { res = await VIDEO.encode({ V: Vb, fps: curFps(), canvas: $('#vidCv'), cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `영상 만드는 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; seek.value = T; } }); if (!res && stop) { pr.textContent = '중지했습니다'; return; } } catch (e) { fastErr = e; console.warn('빠른 내보내기 실패, 녹화 방식으로', e); } }
+      if (fileH) wr = await fileH.createWritable();
+      if (VIDEO.canFast()) { try { res = await VIDEO.encode({ V: Vb, fps: curFps(), canvas: $('#vidCv'), writable: wr, cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `영상 만드는 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; seek.value = T; } }); if (!res && stop) { if (wr) { try { await wr.abort(); } catch (e2) {} } pr.textContent = '중지했습니다'; return; } } catch (e) { fastErr = e; console.warn('빠른 내보내기 실패, 녹화 방식으로', e); if (wr) { try { await wr.abort(); } catch (e2) {} wr = null; } } }
       if (!res) { if (fastErr) pr.textContent = '빠른 방식을 쓸 수 없어 실제 시간 녹화로 만듭니다 — 이 창을 가리지 마세요'; res = await VIDEO.record({ V: Vb, fps: curFps(), canvas: $('#vidCv'), cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `녹화 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; seek.value = T; } }); }
       if (!res) { pr.textContent = '중지했습니다'; return; }
+      if (res.file || (fileH && res.blob)) { /* 파일에 바로 쓴 경우 (녹화 방식으로 바뀌었으면 결과를 그 파일에 씀) */
+        if (!res.file) { const w2 = await fileH.createWritable(); await w2.write(res.blob); await w2.close(); }
+        const f = await fileH.getFile(), mb = f.size / 1048576; pr.textContent = `저장했습니다 — ${fileH.name} · ${mb >= 1024 ? (mb / 1024).toFixed(2) + 'GB' : mb.toFixed(1) + 'MB'} · ${res.note || ''}`;
+        toast(f.size > 4 * 1073741824 ? `영상을 저장했습니다 (${(mb / 1024).toFixed(1)}GB) — 4GB가 넘어 FAT32 형식 USB에는 복사되지 않습니다. exFAT·NTFS USB를 쓰세요` : `영상을 저장했습니다 — ${fileH.name}`, f.size > 4 * 1073741824); if ($('#vidShare') && $('#vidShare').checked) toast('큰 영상은 결과물 폴더 복사를 건너뜁니다 — 저장한 파일을 직접 옮기세요', true); return; }
       const a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = `${docFileName('영상')}${Vb.H > Vb.W ? '_숏츠' : ''}_${Math.min(Vb.W, Vb.H)}p${curFps()}.${res.ext}`;  /* 화질·fps가 보이는 이름 (USB·윈도우에서 안전한 글자만) */ document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
       let shared = ''; if ($('#vidShare') && $('#vidShare').checked) { try { if (!(await store.folderReady())) throw new Error('동기화 폴더가 연결되어 있지 않습니다'); shared = await NC.media.saveResult(res.blob, a.download); } catch (err) { toast('결과물 폴더에 저장하지 못했습니다: ' + err.message, true); } }
       const missV = (Vb && Vb.voices && Vb.voices.miss) || []; pr.textContent = `저장했습니다 — ${(res.blob.size / 1048576).toFixed(1)}MB · ${res.note || res.warn || ''}${shared ? ` · 내 드라이브/결과물/${shared}` : ''}${missV.length ? ` · ⚠ 빠진 소리: ${missV.join(', ')}` : ''}`; if (res.warn) toast(res.warn, true); else if (missV.length) toast(`영상을 저장했습니다 — 단, 소리 ${missV.length}개가 빠졌습니다(원본 없음)`, true); else toast('영상을 저장했습니다');
-    } catch (e) { pr.textContent = e.message; } finally { busy = false; if (document.body.contains(go)) { go.lastChild.textContent = '영상 만들기'; if (Vp && !stop) { const msg = $('#vidProg').textContent; P = VIDEO.player($('#vidCv'), Vp); P.onTime = t => { seek.value = t; $('#vidTime').textContent = `${fmtT(t)} / ${fmtT(Vp.total)}`; ic(); }; P.seek(0); $('#vidProg').textContent = msg; } } }
+    } catch (e) { pr.textContent = e.message; if (wr) { try { await wr.abort(); } catch (e2) {} } } finally { busy = false; if (document.body.contains(go)) { go.lastChild.textContent = '영상 만들기'; if (Vp && !stop) { const msg = $('#vidProg').textContent; P = VIDEO.player($('#vidCv'), Vp); P.onTime = t => { seek.value = t; $('#vidTime').textContent = `${fmtT(t)} / ${fmtT(Vp.total)}`; ic(); }; P.seek(0); $('#vidProg').textContent = msg; } } }
   };
 }
 const RAIL = [['pages', '페이지', 'i-pages'], ['naracha', '나라차', 'i-naracha'], ['tpl', '템플릿', 'i-tpl'], ['video', '영상', 'i-video'], ['elems', '요소', 'i-elems'], ['text', '텍스트', 'i-text'], ['photo', '사진', 'i-img'], ['upload', '업로드', 'i-upload'], ['project', '프로젝트', 'i-folder'], ['ai', 'AI 도구', 'i-ai'], ['bg', '배경', 'i-bg'], ['theme', '테마', 'i-theme'], ['chart', '차트', 'i-chart'], ['layers', '레이어', 'i-layers']];
