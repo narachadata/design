@@ -403,6 +403,10 @@ function renderCanvas() {
 // 크기 글: 화면용(px) 형식이거나 px 단위로 넣었으면 px, 아니면 mm
 /* 을/를: 마지막 한글 글자의 받침으로 고름 ('퍽 (발차기)'를 · '기합'을) */
 function eul(v) { const m = String(v == null ? '' : v).match(/[가-힣](?=[^가-힣]*$)/); if (!m) return '을(를)'; return (m[0].charCodeAt(0) - 0xAC00) % 28 ? '을' : '를'; }
+/* 저장 파일 이름: 문서 이름이 크기 이름('스토리 · 릴스', 'A4 세로')이나 '새 디자인' 그대로면 첫 쪽의 가장 큰 글(제목)로 */
+function docFileName(fb) { const nm = String(doc.name || '').trim(), def = !nm || nm === '새 디자인' || FORMATS.some(f => f[1] === nm);
+  let out = nm; if (def) { const pg = doc.pages.find(p => !p.dlOff && !p.vOff) || doc.pages[0], t = pg && pg.els.filter(e => e.type === 'text' && !e.hidden && String(e.text || '').trim()).sort((a, b) => (b.size || 0) - (a.size || 0))[0]; out = t ? String(t.text).split('\n').map(x => x.trim()).filter(Boolean)[0] || '' : ''; if (!out) out = nm || fb; }
+  return out.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/[. ]+$/, '').slice(0, 60) || fb; }
 function sizeLabelFor(W, H, fmtId, unit) { const f = FORMATS.find(x => x[0] === fmtId), px = (f && f[5] === 'px') || unit === 'px'; return px ? `${Math.round(W * 96 / 25.4)} × ${Math.round(H * 96 / 25.4)} px` : W >= 1000 || H >= 1000 ? `${Math.round(W) / 10} × ${Math.round(H) / 10} cm` : `${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm`; }
 function isPxDoc() { const f = FORMATS.find(x => x[0] === doc.fmt); return !!(f && f[5] === 'px'); }
 function docSizeLabel(sep) { const f = FORMATS.find(x => x[0] === doc.fmt); sep = sep || '×'; return f && f[5] === 'px' ? `${f[3]}${sep}${f[4]}px` : doc.w >= 1000 || doc.h >= 1000 ? `${Math.round(doc.w) / 10}${sep}${Math.round(doc.h) / 10}cm` : `${Math.round(doc.w * 100) / 100}${sep}${Math.round(doc.h * 100) / 100}mm`; }
@@ -480,7 +484,7 @@ function rotCursor(d, rot) { const base = { n: 0, ne: 45, e: 90, se: 135, s: 180
 function renderOverlay(guides) {
   const o = $('#ovl'); const els = selEls(); let h = '';
   els.forEach(el => { const single = els.length === 1, kpx = kScale() * MM, sw = el.w * kpx, sh = el.h * kpx, tiny = single && Math.min(sw, sh) < 26; h += `<div class="sel${single ? '' : ' multi'}${tiny ? ' tiny' : ''}${imgPan === el.id ? ' panning' : ''}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].filter(d => !((d === 'n' || d === 's') && (sh < 34 || sw < 16)) && !((d === 'e' || d === 'w') && (sw < 34 || sh < 16))).map(d =>  /* 위·아래 손잡이는 높이가 낮으면, 좌·우 손잡이는 너비가 좁으면 가운데를 가리므로 뺌 (한 줄 글 상자는 좌·우 손잡이 유지) */ `<div class="h ${d}" data-h="${d}"${el.rot ? ` style="cursor:${rotCursor(d, el.rot)}"` : ''}></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; if (el.locked) h += `<button class="lockbadge" data-unlock="${el.id}" title="잠금 풀기 (Ctrl+L)">🔒 잠금 풀기</button>`; h += '</div>'; });
-  if (els.length > 1) { const U = unionBox(els), bx = U.x, by = U.y, bw = U.w, bh = U.h; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm">${els.some(e => e.locked) ? '' : ['nw', 'ne', 'se', 'sw'].map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="함께 크기 조절 (비율 유지)"></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot" data-g="1" title="함께 돌리기 (Shift: 15°씩)"></div>'}</div>`; }
+  if (els.length > 1) { const U = unionBox(els), bx = U.x, by = U.y, bw = U.w, bh = U.h; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm">${els.some(e => e.locked) ? '' : ['nw', 'ne', 'se', 'sw'].map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="함께 크기 조절 (비율 유지)"></div>`).join('') + (() => { const kp = kScale() * MM, sw = bw * kp, sh = bh * kp; return ['n', 's', 'e', 'w'].filter(d => /[ns]/.test(d) ? sw >= 34 && sh >= 16 : sh >= 34 && sw >= 16).map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="한쪽으로 늘이기·줄이기 (Shift: 비율 유지)"></div>`).join(''); })() + '<div class="rotline"></div><div class="h rot" data-h="rot" data-g="1" title="함께 돌리기 (Shift: 15°씩)"></div>'}</div>`; }
   (guides || []).forEach(g => { h += g.v != null ? `<div class="guide v" style="left:${g.v}mm"></div>` : `<div class="guide h" style="top:${g.h}mm"></div>`; });
   h += calOverlay(); h += userGuidesHTML(); h += bookGuidesHTML();
   page().els.forEach(el => { if (textOver.has(el.id) && !el.hidden) h += `<button class="ovf" data-ovf="${el.id}" style="left:${el.x + el.w}mm;top:${el.y + el.h}mm" title="글이 상자를 넘칩니다 — 누르면 상자를 글에 맞춤 (인디자인의 넘침 표시)">+</button>`; }); try { if (showRulers()) requestAnimationFrame(drawRulers); } catch (e) {} // 고른 요소 범위를 눈금자에 표시
@@ -729,6 +733,10 @@ function dragMove(e) {
     const vx = d.includes('w') ? -B.w : d.includes('e') ? B.w : 0, vy = d.includes('n') ? -B.h : d.includes('s') ? B.h : 0; const k = Math.max(0.05, ((p.x - ax) * vx + (p.y - ay) * vy) / Math.max(1e-6, vx * vx + vy * vy)); /* 대각선(모서리)·한 축(변) 투영 */
     const nx = d.includes('w') ? ax - B.w * k : ax, ny = d.includes('n') ? ay - B.h * k : ay;
     dragTip(e, `${dimText(B.w * k, B.h * k)} · ${Math.round(k * 100)}%`);
+    const side = d.length === 1 && !e.shiftKey;  /* 변 손잡이: 그 방향으로만 늘임(글자 크기·선 두께는 그대로) — Shift면 비율 유지 */
+    if (side) { const kx = /[ew]/.test(d) ? k : 1, ky = /[ns]/.test(d) ? k : 1, sx0 = /[ew]/.test(d) ? nx : B.x, sy0 = /[ns]/.test(d) ? ny : B.y; dragTip(e, `${dimText(B.w * kx, B.h * ky)} · ${Math.round(k * 100)}%`);
+      drag.els.forEach((el, i) => { const o = drag.o[i]; el.x = r1(sx0 + (o.x - B.x) * kx); el.y = r1(sy0 + (o.y - B.y) * ky); el.w = r1(Math.max(1, o.w * kx)); el.h = r1(Math.max(1, o.h * ky)); if (el.type === 'text' && o.sizing === 'autow' && kx !== 1) el.sizing = ''; if (o.pts) el.pts = o.pts.map(q => [r1(q[0] * kx), r1(q[1] * ky)]); });
+    } else
     drag.els.forEach((el, i) => { const o = drag.o[i]; el.x = r1(nx + (o.x - B.x) * k); el.y = r1(ny + (o.y - B.y) * k); el.w = r1(o.w * k); el.h = r1(o.h * k); if (o.size) el.size = Math.round(o.size * k * 10) / 10; if (o.html) el.html = o.html.replace(/font-size:\s*([\d.]+)pt/g, (_, v) => 'font-size:' + Math.round(v * k * 2) / 2 + 'pt'); if (o.strokeW) el.strokeW = Math.round(o.strokeW * k * 100) / 100; if (o.pts) el.pts = o.pts.map(q => [r1(q[0] * k), r1(q[1] * k)]); });
     renderCanvas(); renderOverlay();
   } else if (drag.kind === 'cells') {
@@ -901,7 +909,7 @@ function setTool(t) { tool = t; $$('[data-tool]').forEach(b => b.classList.toggl
 $$('[data-tool]').forEach(b => b.onclick = () => setTool(tool === b.dataset.tool ? 'select' : b.dataset.tool));
 
 document.addEventListener('keydown', e => {
-  if (editing) { if (e.key === 'Escape' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); endEdit(); } return; }
+  if (editing) { if (e.key === 'Escape' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); endEdit(); } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.code === 'KeyA' && !e.isComposing) { e.preventDefault(); const r = document.createRange(); r.selectNodeContents(editing); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); }  /* 글 고치기 중 ⌘A·Ctrl+A = 이 글 상자 전체 (환경에 따라 페이지 전체가 잡히거나 안 잡히던 것) */ return; }
   if (imgPan && e.key === 'Escape') { e.preventDefault(); endImgPan(); return; }
   { const tIn = e.target.matches && e.target.matches('input,textarea,select'), nonText = tIn && e.target.matches('input[type=range],input[type=checkbox],input[type=radio],input[type=color],select'), undoKey = (e.ctrlKey || e.metaKey) && !e.altKey && (e.code === 'KeyZ' || e.code === 'KeyY'); if ((tIn && !(nonText && undoKey)) || popupOpen()) return; }
   const mod = e.ctrlKey || e.metaKey;
@@ -2538,7 +2546,7 @@ function openVideoMaker() {
       if (VIDEO.canFast()) { try { res = await VIDEO.encode({ V: Vb, fps: curFps(), canvas: $('#vidCv'), cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `영상 만드는 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; seek.value = T; } }); if (!res && stop) { pr.textContent = '중지했습니다'; return; } } catch (e) { fastErr = e; console.warn('빠른 내보내기 실패, 녹화 방식으로', e); } }
       if (!res) { if (fastErr) pr.textContent = '빠른 방식을 쓸 수 없어 실제 시간 녹화로 만듭니다 — 이 창을 가리지 마세요'; res = await VIDEO.record({ V: Vb, fps: curFps(), canvas: $('#vidCv'), cancelled: () => stop, onProgress: (p, T) => { pr.textContent = `녹화 중… ${Math.round(p * 100)}%  (${fmtT(T)} / ${fmtT(Vb.total)})`; seek.value = T; } }); }
       if (!res) { pr.textContent = '중지했습니다'; return; }
-      const a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = `${(doc.name || '영상').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/[. ]+$/, '').slice(0, 80) || '영상'}${Vb.H > Vb.W ? '_숏츠' : ''}_${Math.min(Vb.W, Vb.H)}p${curFps()}.${res.ext}`;  /* 화질·fps가 보이는 이름 (USB·윈도우에서 안전한 글자만) */ document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = `${docFileName('영상')}${Vb.H > Vb.W ? '_숏츠' : ''}_${Math.min(Vb.W, Vb.H)}p${curFps()}.${res.ext}`;  /* 화질·fps가 보이는 이름 (USB·윈도우에서 안전한 글자만) */ document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
       let shared = ''; if ($('#vidShare') && $('#vidShare').checked) { try { if (!(await store.folderReady())) throw new Error('동기화 폴더가 연결되어 있지 않습니다'); shared = await NC.media.saveResult(res.blob, a.download); } catch (err) { toast('결과물 폴더에 저장하지 못했습니다: ' + err.message, true); } }
       const missV = (Vb && Vb.voices && Vb.voices.miss) || []; pr.textContent = `저장했습니다 — ${(res.blob.size / 1048576).toFixed(1)}MB · ${res.note || res.warn || ''}${shared ? ` · 내 드라이브/결과물/${shared}` : ''}${missV.length ? ` · ⚠ 빠진 소리: ${missV.join(', ')}` : ''}`; if (res.warn) toast(res.warn, true); else if (missV.length) toast(`영상을 저장했습니다 — 단, 소리 ${missV.length}개가 빠졌습니다(원본 없음)`, true); else toast('영상을 저장했습니다');
     } catch (e) { pr.textContent = e.message; } finally { busy = false; if (document.body.contains(go)) { go.lastChild.textContent = '영상 만들기'; if (Vp && !stop) { const msg = $('#vidProg').textContent; P = VIDEO.player($('#vidCv'), Vp); P.onTime = t => { seek.value = t; $('#vidTime').textContent = `${fmtT(t)} / ${fmtT(Vp.total)}`; ic(); }; P.seek(0); $('#vidProg').textContent = msg; } } }
@@ -5012,9 +5020,9 @@ function certTplPage(form, n) {
   return { id: uid(), bg: '#ffffff', els: els.concat(body), label: '상장 양식 · 자리 표시', certTpl: { form, n: certRecN(form, r0) }, dlOff: true, vOff: true };
 }
 /* 양식 쪽을 만들거나 새로 고쳐 그 쪽으로 감 */
-async function certShowTpl(quiet) {
+async function certShowTpl(quiet, n) {
   if (!(await certNeedA4())) return; await certEnsureFrame();
-  const C = certState(), pg = certTplPage(C.form); let i = doc.pages.findIndex(p => p.certTpl);
+  const C = certState(), pg = certTplPage(C.form, n); let i = doc.pages.findIndex(p => p.certTpl);
   if (i >= 0) { pg.id = doc.pages[i].id; doc.pages[i] = pg; } else if (doc.pages.length === 1 && !doc.pages[0].els.length && !doc.pages[0].cert) { doc.pages[0] = pg; i = 0; } else { i = doc.pages.findIndex(p => p.cert); if (i < 0) i = doc.pages.length; doc.pages.splice(i, 0, pg); }
   certTplBusy = true; try { sel = []; cur = i; fitCache.clear(); commit(); } finally { certTplBusy = false; } renderAll();
   if (!quiet) toast('상장 양식입니다 — 《 》는 사람마다 바뀌는 자리. 글 상자의 위치·크기·글꼴·줄 간격을 고치면 모든 상장에 바로 적용됩니다');
@@ -5027,6 +5035,12 @@ function certTplCommit() {
   const fresh = () => certEls(form, certTplRow(form, rows, n)).concat(C.serial && C.serial.on ? [certSerialEl(C, form, 0)] : []);
   if (cur === ti) { /* 지금 고치는 쪽이 양식: 기본 배치와 달라진 상자만 기억 */
     const gen = fresh(), changed = [];
+    { const D0 = C.data[form], F0 = CERT_FORMS[form], back = [];
+      tp.els.forEach(e => { if (!e.certKey || e.tplField || e.type !== 'text') return; const g = gen.find(q => q.certKey === e.certKey); const t = String(e.text || '').trim(); if (!g || !t || t === String(g.text || '').trim()) return;
+        if (e.certKey === 'title' || e.certKey === 'date') { D0.common[e.certKey] = t; back.push(e.certKey === 'title' ? '상장 이름' : '날짜'); }
+        else if (e.certKey === 'body') { let b = t.replace(/《이름》/g, '{이름}'); /* 본문에 채워져 있던 공통 값(측정 이름 등)은 다시 {자리}로 되돌려 둠 — 나중에 그 값을 바꿔도 따라오게 */ (String(D0.body || '').match(/\{([^{}\n]+)\}/g) || []).forEach(tok => { const nm = tok.slice(1, -1).trim(); if (nm === '이름') return; const c = F0.common.find(x => x[1].replace(/ \(.*\)$/, '') === nm), v = c ? certVal(D0, null, c[0]) : ''; if (v && b.split(v).length === 2) b = b.replace(v, tok); }); D0.body = b; back.push('본문'); } });
+      if (back.length) { doc.pages.forEach(p => { if (!p.cert || p.cert.form !== form) return; const r = rows[p.cert.i]; if (!r) return; const f2 = certEls(form, r); p.els.forEach(e => { if (!['title', 'date', 'body'].includes(e.certKey)) return; const g = f2.find(q => q.certKey === e.certKey); if (g && g.text !== e.text) { e.text = g.text; delete e.html; fitCache.delete(e.id); } }); });
+        clearTimeout(certTplCommit.tb); certTplCommit.tb = setTimeout(() => { if (sideTab === 'cert') renderSide(); toast(`양식에서 고친 ${back.join('·')}을 왼쪽 값(②)에 넣고 만든 상장에도 적용했습니다`); }, 300); } }
     tp.els.forEach(e => { if (!e.certKey) return; const g = gen.find(q => q.certKey === e.certKey); if (!g) return; if (CERT_LP.every(k => (k === 'h' && e.sizing !== 'fixed') || (k === 'w' && e.sizing === 'autow') || same(val(e, k), val(g, k)))) return;  /* 자동 높이·자동 너비는 글에 따라 저절로 바뀌므로 비교하지 않음 */ const L = {}; CERT_LP.forEach(k => { if (e[k] !== undefined) L[k] = clone(e[k]); }); if (e.fitText) { L.size = e.fitMax || e.size; L.fitMax = L.size; } C.layout[certLKey(form, e.certKey, n)] = L; changed.push(e.certKey); });
     if (changed.length) {
       /* 종목 수가 다른 상장: 기록 상자의 가로 배치는 종목 수마다 다르므로, 위아래 이동·글자 크기 비율·글꼴·굵기·색·줄 간격만 같이 */
@@ -5071,7 +5085,7 @@ function renderCertSide(body) {
   <label class="f"><span>본문 <em class="hint">{ } 자리는 위 값으로 바뀜</em></span><textarea data-cbody rows="4">${esc(D.body)}</textarea></label>
   <div class="cchips"><span class="cchips-l">자리 표시 넣기</span>${['이름'].concat(fieldChips).map(l => `<button class="btn sm cchip" data-cchip="${esc(l)}" title="누르면 본문의 커서 자리에 {${esc(l)}}가 들어갑니다 — 상장을 만들 때 ${l === '이름' ? '그 사람 이름' : '위에 적은 값'}으로 바뀝니다">{${esc(l)}}</button>`).join('')}</div>
   <div class="row" style="justify-content:flex-end;margin-top:4px"><button class="btn sm" data-cx="bodyreset" title="본문을 이 양식의 처음(기본) 문구로 되돌립니다">↺ 본문을 기본 문구로 되돌리기</button></div>
-  <button class="btn full" data-cx="tpl" style="margin-top:8px" title="사람마다 바뀌는 자리(이름·기록 등)가 표시된 양식 — 여기서 위치·크기·간격을 고치면 모든 상장에 적용됩니다">📐 양식 보기·고치기 <small>(자리 표시 · 고치면 모든 상장에)</small></button></div>
+  <button class="btn full" data-cx="tpl" style="margin-top:8px" title="사람마다 바뀌는 자리(이름·기록 등)가 표시된 양식 — 여기서 위치·크기·간격을 고치면 모든 상장에 적용됩니다">📐 양식 보기·고치기 <small>(자리 표시 · 고치면 모든 상장에)</small></button>${(() => { if (form !== 'record') return ''; const ns = [...new Set(rows.map(r => certRecN(form, r)).filter(Boolean))].sort((a, b) => a - b); if (ns.length < 2) return ''; const tp = doc.pages.find(p => p.certTpl), cn = tp && tp.certTpl.n; return `<div class="row ctplns" style="gap:4px;margin-top:4px;flex-wrap:wrap;align-items:center"><small class="hint" style="margin:0">종목 수별 양식:</small>${ns.map(m => `<button class="btn sm${cn === m ? ' on' : ''}" data-cx="tpln" data-ctpln="${m}" title="종목 ${m}개인 상장의 배치를 봅니다 (기록 상자 가로 배치는 종목 수마다 따로 기억)">${m}개 (${rows.filter(r => certRecN(form, r) === m).length}명)</button>`).join('')}</div>`; })()}</div>
   <h3>③ 명단 <small>${nOk}명 · 엑셀에서 붙여넣기 가능</small></h3>
   <div class="ctable-wrap"><table class="ctable"><tr><th>#</th>${F.cols.map(([, l]) => `<th title="${esc(l)}">${esc(l.replace(/ \(.*\)$/, ''))}</th>`).join('')}<th></th></tr>
   ${rows.map((r, i) => `<tr class="${i === certPrev ? 'cur' : ''}"><td class="ci" data-cpick="${i}" title="미리 보기">${i + 1}</td>${Array.isArray(r.recs) && r.recs.length && form === 'record' ? `<td><input data-cr="${i}" data-ck="name" value="${esc(r.name || '')}" style="width:7em"></td><td colspan="${F.cols.length - 1}" class="crecs" title="관리프로그램 측정에서 가져온 기록">${r.recs.map(q => `${esc(q.k)} ${esc(q.a)}→${esc(q.b)}${esc(q.u || '')}`).join(' · ')}</td>` : F.cols.map(([kk, , w]) => `<td><input data-cr="${i}" data-ck="${kk}" value="${esc(r[kk] || '')}" style="width:${w}em"></td>`).join('')}<td><button class="x" data-cdel="${i}" title="이 줄 지우기">×</button></td></tr>`).join('')}</table></div>
@@ -5164,6 +5178,7 @@ function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEa
     if (k === 'clear' && window.confirm(`명단 ${D.rows.length}줄을 비울까요?`)) { D.rows = []; certPrev = 0; markDirty(); renderSide(); }
     if (k === 'bodyreset') { D.body = F.body; markDirty(); renderSide(); }
     if (k === 'tpl') certShowTpl(); if (k === 'merge') certMerge(); if (k === 'pdf') openDownload('pdfhq'); if (k === 'layout') certSaveLayout(); if (k === 'meas') openMeasImport(); if (k === 'preview') openCertPreview(); if (k === 'print') openPrint('cert');
+    if (b.dataset.ctpln) { certShowTpl(false, Number(b.dataset.ctpln)).then(() => { if (sideTab === 'cert') renderSide(); }); return; }
     if (k === 'layoutreset') { Object.keys(C.layout).forEach(kk => { if (kk.startsWith(C.form + ':')) delete C.layout[kk]; }); certMerge(); }
   });
 })();
