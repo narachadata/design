@@ -1350,3 +1350,4 @@ dialog:focus{outline:none}
 .ctable{width:100%;table-layout:fixed}.ctable th{overflow:hidden;text-overflow:ellipsis}.ctable th:first-child{width:20px}.ctable th:last-child{width:20px}.ctable th:nth-child(2){width:30%}
 .ctable input{width:100%!important;min-width:0;box-sizing:border-box;padding:3px 2px}.ctable td{overflow:hidden}.ctable .crecs{white-space:normal;word-break:keep-all;line-height:1.35;padding:2px 4px}
 .ctable th{white-space:normal;word-break:keep-all;line-height:1.15;padding:3px 1px;font-size:10.5px;text-overflow:clip;vertical-align:bottom}
+.dlshop{margin-top:6px}.dlshop textarea{width:100%;box-sizing:border-box;font-size:12px;line-height:1.45;margin:4px 0;resize:vertical}
