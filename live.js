@@ -16,6 +16,9 @@ NC.live = (function () {
 
   let api = null;                        // app.js가 넘겨주는 함수들 (attach)
   const me = { id: rid(), joined: Date.now() };
+  /* 속성마다 마지막으로 바꾼 시각·PC — 두 PC가 같은 속성을 동시에 고쳐도 양쪽이 같은 규칙(늦은 쪽, 같으면 PC 번호 큰 쪽)으로 골라 결과가 같아짐 */
+  const pts = new Map(); const newer = (a, b) => !b || a[0] > b[0] || (a[0] === b[0] && a[1] > b[1]);
+  setInterval(() => { const old = Date.now() - 120000; for (const [k, v] of pts) if (v[0] < old) pts.delete(k); }, 30000);
   const canSave = () => !!(api && api.canSave ? api.canSave() : true); /* 이 PC가 문서 파일(동기화 폴더)에 쓸 수 있는지 — 저장 담당은 쓸 수 있는 PC 중에서 고름 */
   let room = null;                       // { docId, bc, fb, peers: Map }
   let base = null;                       // 마지막으로 서로 맞춘 상태 (scan 결과)
@@ -106,7 +109,8 @@ NC.live = (function () {
         else if (op.op === 'pageDel') { if (d.pages.length > 1) d.pages = d.pages.filter(p => p.id !== op.pg); }
         else if (op.op === 'pages') { const m = new Map(d.pages.map(p => [p.id, p])); const out = op.ids.map(id => m.get(id)).filter(Boolean); d.pages.forEach(p => { if (!op.ids.includes(p.id)) out.push(p); }); if (out.length) d.pages = out; }
         else if (op.op === 'set') { const p = pageOf(op.pg); if (!p) continue; const j = p.els.findIndex(e => e.id === op.el.id); const miss = { v: false }; const el = unslim(op.el, j >= 0 ? p.els[j] : undefined, miss); if (j >= 0) { const old = p.els[j]; attrs = []; for (const k of new Set([...Object.keys(old), ...Object.keys(el)])) if (J(old[k]) !== J(el[k])) attrs.push(k); p.els[j] = el; } else p.els.splice(Math.min(op.i || 0, p.els.length), 0, el); const k = op.pg + '/' + el.id; if (miss.v) pending.add(k); else pending.delete(k); }
-        else if (op.op === 'patch') { const p = pageOf(op.pg); const el = p && p.els.find(e => e.id === op.id); if (!el) continue; const miss = { v: false }; attrs = []; for (const k in (op.set || {})) { const v = unslim(op.set[k], el[k], miss); if (J(el[k]) !== J(v)) { el[k] = v; attrs.push(k); } } (op.del || []).forEach(k => { if (k in el) { delete el[k]; attrs.push(k); } }); if (miss.v) pending.add(op.pg + '/' + op.id); }
+        else if (op.op === 'patch') { const p = pageOf(op.pg); const el = p && p.els.find(e => e.id === op.id); if (!el) continue; const miss = { v: false }; attrs = []; const late = k => { if (!op.ts) return false; const key = op.pg + '/' + op.id + '/' + k, st = [op.ts, op.by || '']; if (!newer(st, pts.get(key))) return true; pts.set(key, st); return false; };  /* 이 PC가 더 늦게 고친 속성은 그대로 둠 */
+          for (const k in (op.set || {})) { if (late(k)) continue; const v = unslim(op.set[k], el[k], miss); if (J(el[k]) !== J(v)) { el[k] = v; attrs.push(k); } } (op.del || []).forEach(k => { if (late(k)) return; if (k in el) { delete el[k]; attrs.push(k); } }); if (miss.v) pending.add(op.pg + '/' + op.id); }
         else if (op.op === 'del') { const p = pageOf(op.pg); if (!p) continue; p.els = p.els.filter(e => e.id !== op.id); pending.delete(op.pg + '/' + op.id); }
         else if (op.op === 'order') { const p = pageOf(op.pg); if (!p) continue; const m = new Map(p.els.map(e => [e.id, e])); const out = op.ids.map(id => m.get(id)).filter(Boolean); p.els.forEach(e => { if (!op.ids.includes(e.id)) out.push(e); }); p.els = out; }
         touched.push([keyOf(op), attrs]);
@@ -160,7 +164,7 @@ NC.live = (function () {
     const v = scan(d);
     const ops = base ? diff(base, v, d) : [];
     base = v;
-    if (ops.length) send({ kind: 'ops', ops });
+    if (ops.length) { const st = [Date.now(), me.id]; ops.forEach(op => { if (op.op !== 'patch') return; op.ts = st[0]; op.by = st[1]; Object.keys(op.set).concat(op.del).forEach(k => pts.set(op.pg + '/' + op.id + '/' + k, st)); }); send({ kind: 'ops', ops }); }
   }
   function send(msg, to) {
     msg = Object.assign({ id: rid(), from: me.id, pc: pcName(), joined: me.joined, fs: canSave() }, msg); if (to) msg.to = to;
