@@ -101,6 +101,37 @@ NC.lib = (function () {
     await writeBlob(d, id + '.json', new Blob([JSON.stringify(m, null, 1)], { type: 'application/json' }));
   }
 
+  /* ---------- 내 블록 (디자인자료/내 블록/<id>.json) ----------
+     블록 하나마다 파일 하나 — 목록 파일이 없어서 두 PC가 동시에 저장해도 서로 덮어쓰지 않음.
+     자료실(library.json)이 없어도 동기화 폴더만 연결돼 있으면 씀 */
+  const BLK = '내 블록', blkSeen = {};
+  async function blkDir(create) {
+    if (!(await NC.store.folderReady())) return null;
+    try { const d = await NC.store.state.dir.getDirectoryHandle(DIR, { create: !!create }); return await d.getDirectoryHandle(BLK, { create: !!create }); } catch (e) { return null; }
+  }
+  // 폴더의 블록 목록. names = 파일이 있는 블록 번호(동기화 중이라 아직 못 읽은 것 포함), list = 읽은 블록. 폴더가 없으면 null
+  async function listBlocks() {
+    const d = await blkDir(false); if (!d) return (await NC.store.folderReady()) ? { names: new Set(), list: [] } : null;
+    const names = new Set(), list = [];
+    for await (const [name, h] of d.entries()) {
+      if (h.kind !== 'file' || !name.endsWith('.json')) continue;
+      const id = name.slice(0, -5); names.add(id);
+      try {
+        const f = await h.getFile(), c = blkSeen[name];
+        if (c && c.mod === f.lastModified && c.size === f.size) { list.push(c.data); continue; }
+        const data = JSON.parse(await f.text()); if (!data || data.id !== id || !Array.isArray(data.els)) continue;
+        blkSeen[name] = { mod: f.lastModified, size: f.size, data }; list.push(data);
+      } catch (e) {}
+    }
+    return { names, list };
+  }
+  async function saveBlock(b) {
+    const d = await blkDir(true); if (!d) throw new Error('동기화 폴더가 연결되어 있지 않습니다');
+    const o = Object.assign({}, b, { by: b.by || NC.store.pcName() }); delete o.synced;
+    await writeBlob(d, b.id + '.json', new Blob([JSON.stringify(o)], { type: 'application/json' }));
+  }
+  async function removeBlock(id) { const d = await blkDir(false); if (!d) return false; try { await d.removeEntry(id + '.json'); } catch (e) { if (e && e.name !== 'NotFoundError') return false; } delete blkSeen[id + '.json']; return true; }
+
   /* ---------- 자료실 글꼴 (디자인자료/글꼴/fonts.json) ----------
      공개 사이트에 올리면 안 되는 글꼴이라 동기화 폴더에만 둠. 목록에는 미리 만든 견본 그림만 보여 주고,
      글꼴 파일은 문서에서 실제로 쓸 때 그 글꼴만 읽어 @font-face(blob 주소)로 등록 */
@@ -127,7 +158,7 @@ NC.lib = (function () {
 
   return {
     fonts() { return st.fonts || []; }, ensureFont, isLibFont: fam => !!fontInfo(fam),
-    st, load, url, dataURL, materialize, reset, saveMine, removeMine, renameMine, loadMine,
+    st, load, url, dataURL, materialize, reset, saveMine, removeMine, renameMine, loadMine, listBlocks, saveBlock, removeBlock,
     mine() { return st.mine || []; },
     onReady(f) { st.listeners.push(f); },
     get ready() { return st.ready; },
