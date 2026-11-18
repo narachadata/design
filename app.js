@@ -5545,20 +5545,24 @@ async function openMeasImport(again) {
 /* 출력 설정: 이 PC에 기억. paper = 'doc'(문서 크기) | 'A4' | 'A3' | 'B5' | 'Letter', orient = 'auto'|'p'|'l', fit = 'fit'(용지에 맞춤)|'actual'(실제 크기 100%)|'custom'(배율), margin mm, ax·ay 정렬(0·0.5·1), dx·dy 위치 보정 mm */
 const PR_PAPERS = { A4: [210, 297], A3: [297, 420], B5: [182, 257], Letter: [215.9, 279.4] };
 const PR_DEF = { pages: 'all', range: '', mode: 'img', dpi: 300, frame: true, paper: 'A4', orient: 'auto', fit: 'fit', pct: 100, margin: 4, ax: 0.5, ay: 0.5, dx: 0, dy: 0, pv: 0 };
-const prLoad = k => { try { const o = JSON.parse(localStorage.getItem(k) || 'null'); if (!o) return null; delete o.pages; delete o.range; delete o.pv; return o; } catch (e) { return null; } };
+const prLoad = k => { try { const o = JSON.parse(localStorage.getItem(k) || 'null'); if (!o) return null; delete o.pages; delete o.range; delete o.pv; delete o.pick; return o; } catch (e) { return null; } };
 let prKey = 'naracal-print';  /* 상장은 'naracal-print-cert'에 따로 기억 (이 PC 프린터 값이라 동기화하지 않음) */
 let prState = Object.assign({}, PR_DEF, prLoad(prKey) || {});
-const prSave = () => { const o = Object.assign({}, prState); delete o.pages; delete o.range; delete o.pv; lsSet(prKey, o); };
+const prSave = () => { const o = Object.assign({}, prState); delete o.pages; delete o.range; delete o.pv; delete o.pick; lsSet(prKey, o); };  /* 고른 쪽은 문서마다 달라 기억하지 않음 */
 function prUse(cert) {
   const k = cert ? 'naracal-print-cert' : 'naracal-print'; if (k === prKey) return; prSave();
-  const keep = { pages: prState.pages, range: prState.range }; let o = prLoad(k);
+  const keep = { pages: prState.pages, range: prState.range, pick: prState.pick }; let o = prLoad(k);
   if (!o && cert) { const g = prLoad('naracal-print') || {}; o = (Number(g.dx) || Number(g.dy)) ? g : { fit: 'actual', margin: 0 }; }  /* 처음: 예전에 맞춰 둔 위치 보정이 있으면 그대로 이어받음, 없으면 실제 크기 */
   prKey = k; prState = Object.assign({}, PR_DEF, o || {}, keep);
 }
+/* 쪽 번호 글 ↔ 쪽 목록 ("1-3, 5" ↔ [0,1,2,4]) — 쉼표·띄어쓰기·물결(~)·'쪽' 모두 됨 */
+function prParse(str, n) { const out = []; String(str || '').replace(/쪽/g, '').split(/[,\s]+/).forEach(p => { const m = p.trim().match(/^(\d+)(?:[-~](\d+))?$/); if (!m) return; const a = Number(m[1]), b = Number(m[2] || m[1]); for (let i = Math.min(a, b); i <= Math.max(a, b); i++) if (i >= 1 && i <= n) out.push(i - 1); }); return [...new Set(out)].sort((a, b) => a - b); }
+function prRangeText(list) { const a = [...list].sort((x, y) => x - y), out = []; for (let i = 0; i < a.length; i++) { let j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++; out.push(j > i + 1 ? `${a[i] + 1}-${a[j] + 1}` : j === i + 1 ? `${a[i] + 1}, ${a[j] + 1}` : `${a[i] + 1}`); i = j; } return out.join(', '); }
 function prPages() {
   const n = doc.pages.length, S = prState; if (S.pages === 'cur') return [cur]; if (S.pages === 'sel') return [...pgSel].filter(i => i < n).sort((a, b) => a - b);
   if (S.pages === 'cert') return doc.pages.map((p, i) => p.cert ? i : -1).filter(i => i >= 0);
-  if (S.pages === 'range') { const out = []; (S.range || '').split(',').forEach(p => { const m = p.trim().match(/^(\d+)(?:\s*[-~]\s*(\d+))?$/); if (!m) return; const a = Number(m[1]), b = Number(m[2] || m[1]); for (let i = Math.min(a, b); i <= Math.max(a, b); i++) if (i >= 1 && i <= n) out.push(i - 1); }); return [...new Set(out)]; }
+  if (S.pages === 'range') return prParse(S.range, n);
+  if (S.pages === 'pick') return [...(S.pick || [])].filter(i => i >= 0 && i < n).sort((a, b) => a - b);
   return doc.pages.map((_, i) => i).filter(i => !doc.pages[i].dlOff);
 }
 /* 종이 위 자리 계산 (mm) */
@@ -5580,7 +5584,9 @@ function openPrint(pre) {
   prUse(hasCert && (pre === 'cert' || doc.pages.every(p => p.cert || !p.els.length)));
   prState.frame = !(doc.cert && doc.cert.printFrame === false); /* 상장 패널의 '틀도 함께 인쇄'와 같게 시작 */
   if (pre === 'cert' && hasCert) { prState.pages = 'cert'; if (Math.abs(doc.w - 210) < 1 && Math.abs(doc.h - 297) < 1) prState.paper = 'A4'; } else if (prState.pages === 'cert' && !hasCert) prState.pages = 'all';
-  if (prState.pages === 'sel' && pgSel.size < 2) prState.pages = 'all'; prState.pv = 0;
+  if (pre !== 'cert' && pgSel.size > 1) { prState.pages = 'pick'; prState.pick = new Set(pgSel); }  /* 쪽 패널에서 여러 쪽을 골라 두었으면 그 쪽들로 시작 */
+  else if (prState.pages === 'sel' || prState.pages === 'range' || (prState.pages === 'pick' && !(prState.pick && prState.pick.size))) prState.pages = 'all';
+  if (prState.pick) prState.pick = new Set([...prState.pick].filter(i => i < doc.pages.length)); prState.pv = 0; let pickAnchor = -1;
   const preset = k => { const S = prState; if (k === 'safe') Object.assign(S, { fit: 'fit', margin: 4, ax: 0.5, ay: 0.5, dx: 0, dy: 0 }); if (k === 'full') Object.assign(S, { fit: 'fit', margin: 0, ax: 0.5, ay: 0.5, dx: 0, dy: 0 }); if (k === 'exact') Object.assign(S, { fit: 'actual', margin: 0, ax: 0.5, ay: 0.5 }); };
   const draw = () => {
     const S = prState, list = prPages(), L = prLayout(), C = doc.cert, pvI = list[Math.min(S.pv, list.length - 1)];
@@ -5593,8 +5599,12 @@ function openPrint(pre) {
         <div class="prpvnav">${list.length > 1 ? `<button class="btn sm icon" data-prnav="-1" ${S.pv ? '' : 'disabled'}>‹</button>` : ''}<span>${pvI != null ? `${S.pv + 1} / ${list.length}쪽 (문서 ${pvI + 1}쪽)` : '출력할 쪽이 없습니다'}</span>${list.length > 1 ? `<button class="btn sm icon" data-prnav="1" ${S.pv < list.length - 1 ? '' : 'disabled'}>›</button>` : ''}</div>
         <p class="hint prsize">디자인 ${Math.round(doc.w)}×${Math.round(doc.h)}mm → 종이에 <b>${Math.round(L.w * 10) / 10}×${Math.round(L.h * 10) / 10}mm (${Math.round(L.k * 1000) / 10}%)</b>${L.note ? ` · <b style="color:#b3261e">${esc(L.note)}</b>` : ''}</p></div>
       <div class="prset">
-        <div class="grid2"><label class="f"><span>출력할 쪽</span><select id="prPg">${[['all', `모든 쪽${doc.pages.some(p => p.dlOff) ? ' (숨긴 쪽 빼고)' : ''}`], ['cur', `지금 쪽 (${cur + 1})`], ...(pgSel.size > 1 ? [['sel', `고른 ${pgSel.size}쪽`]] : []), ...(hasCert ? [['cert', `상장 쪽만 (${doc.pages.filter(p => p.cert).length}장)`]] : []), ['range', '직접 입력']].map(([a, t]) => `<option value="${a}" ${S.pages === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-        ${S.pages === 'range' ? `<label class="f"><span>쪽 번호</span><input id="prRange" value="${esc(S.range)}" placeholder="예: 1-3, 5"></label>` : `<label class="f"><span>용지</span><select id="prPaper">${[['A4', 'A4 (210×297)'], ['A3', 'A3 (297×420)'], ['B5', 'B5 (182×257)'], ['Letter', 'Letter'], ['doc', `문서 크기 (${Math.round(doc.w)}×${Math.round(doc.h)})`]].map(([a, t]) => `<option value="${a}" ${S.paper === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`}</div>
+        <div class="grid2"><label class="f"><span>출력할 쪽</span><select id="prPg">${[['all', `모든 쪽${doc.pages.some(p => p.dlOff) ? ' (숨긴 쪽 빼고)' : ''}`], ['cur', `지금 쪽 (${cur + 1})`], ...(hasCert ? [['cert', `상장 쪽만 (${doc.pages.filter(p => p.cert).length}장)`]] : []), ['pick', S.pages === 'pick' ? `골라서 출력 (${list.length}쪽)` : '골라서 출력 (쪽 고르기)']].map(([a, t]) => `<option value="${a}" ${S.pages === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        ${`<label class="f"><span>용지</span><select id="prPaper">${[['A4', 'A4 (210×297)'], ['A3', 'A3 (297×420)'], ['B5', 'B5 (182×257)'], ['Letter', 'Letter'], ['doc', `문서 크기 (${Math.round(doc.w)}×${Math.round(doc.h)})`]].map(([a, t]) => `<option value="${a}" ${S.paper === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`}</div>
+        ${S.pages === 'pick' ? (() => { const P = S.pick || new Set(), n = doc.pages.length, lbl = (p, i) => p.cert ? `상장 ${(p.cert.i || 0) + 1}` : (p.label || p.name || ''); return `<div class="prpick">
+          <div class="prpick-top"><label class="f" style="margin:0;flex:1"><span>쪽 번호 <small>예: 1-3, 5, 8 — 아래에서 눌러 골라도 됩니다</small></span><input id="prRange" value="${esc(prRangeText(P))}" placeholder="예: 1-3, 5, 8" autocomplete="off"></label></div>
+          <div class="prpick-q">${[['all', '전체'], ['none', '모두 해제'], ['odd', '홀수 쪽'], ['even', '짝수 쪽'], ...(hasCert ? [['cert', '상장 쪽만']] : []), ['inv', '반대로']].map(([k, t]) => `<button type="button" class="btn sm" data-pickq="${k}">${t}</button>`).join('')}<span class="hint" style="margin:0 0 0 auto">${P.size}/${n}쪽 · Shift+누르기 = 사이 쪽 모두</span></div>
+          <div class="prpick-grid">${doc.pages.map((p, i) => `<button type="button" class="prpk ${P.has(i) ? 'on' : ''} ${pvI === i ? 'pv' : ''}" data-pick="${i}" title="${esc(`${i + 1}쪽${lbl(p, i) ? ' · ' + lbl(p, i) : ''}`)} — 누르면 넣기/빼기"><b>${i + 1}</b><small>${esc(lbl(p, i)) || '&nbsp;'}</small></button>`).join('')}</div></div>`; })() : ''}
         <div class="prrow"><span>빠른 설정</span><div class="row" style="gap:4px;flex-wrap:wrap"><button class="btn sm" data-prset="safe" title="프린터가 못 찍는 가장자리를 피해 여백 4mm 안에 맞춤">여백 안에 맞춤 (추천)</button><button class="btn sm" data-prset="full" title="프린터에서 '테두리 없음'을 켠 경우">꽉 채움 (테두리 없음)</button><button class="btn sm" data-prset="exact" title="틀이 인쇄된 상장 용지에 글자만 — 크기 그대로">실제 크기 100%</button></div></div>
         <div class="prrow"><span>방향</span>${seg('orient', [['auto', '자동'], ['p', '세로'], ['l', '가로']])}</div>
         <div class="prrow"><span>크기</span>${seg('fit', [['fit', '용지에 맞춤'], ['actual', '실제 크기'], ['custom', '배율']])}${S.fit === 'custom' ? `<input type="number" id="prPct" min="5" max="400" step="1" value="${S.pct}" style="width:64px"> %` : ''}</div>
@@ -5613,7 +5623,7 @@ function openPrint(pre) {
   };
   d.oninput = e => { const t = e.target; if (t.id === 'prMargin') { prState.margin = Number(t.value); prSave(); draw(); } };
   d.onchange = e => { const t = e.target, S = prState;
-    if (t.id === 'prPg') S.pages = t.value; if (t.id === 'prRange') S.range = t.value; if (t.id === 'prPaper') S.paper = t.value; if (t.id === 'prDpi') S.dpi = Number(t.value); if (t.id === 'prPct') S.pct = Number(t.value) || 100;
+    if (t.id === 'prPg') { const before = prPages(); S.pages = t.value; if (t.value === 'pick' && !(S.pick && S.pick.size)) S.pick = new Set(before.length ? before : [cur]); S.pv = 0; } if (t.id === 'prRange') { S.pick = new Set(prParse(t.value, doc.pages.length)); S.pv = 0; } if (t.id === 'prPaper') S.paper = t.value; if (t.id === 'prDpi') S.dpi = Number(t.value); if (t.id === 'prPct') S.pct = Number(t.value) || 100;
     if (t.id === 'prDx') S.dx = Number(t.value) || 0; if (t.id === 'prDy') S.dy = Number(t.value) || 0;
     if (t.id === 'prFrame') { S.frame = t.checked; if (doc.cert) { doc.cert.printFrame = t.checked; doc.pages.forEach(p => p.els.forEach(x => { if (x.certFrame) x.hidden = !t.checked; })); commit(); renderAll(); } if (!t.checked) preset('exact'); }
     S.pv = 0; prSave(); draw(); };
@@ -5622,6 +5632,11 @@ function openPrint(pre) {
     const pa = e.target.closest('[data-pra]'); if (pa) { const [x, y] = pa.dataset.pra.split(',').map(Number); prState.ax = x; prState.ay = y; prSave(); draw(); return; }
     const ps = e.target.closest('[data-prset]'); if (ps) { preset(ps.dataset.prset); prSave(); draw(); return; }
     const nv = e.target.closest('[data-prnav]'); if (nv && !nv.disabled) { prState.pv += Number(nv.dataset.prnav); draw(); return; }
+    const pk = e.target.closest('[data-pick]'); if (pk) { const S = prState, i = Number(pk.dataset.pick); S.pick = S.pick || new Set(); const on = !S.pick.has(i);
+      if (e.shiftKey && pickAnchor >= 0) { for (let j = Math.min(pickAnchor, i); j <= Math.max(pickAnchor, i); j++) on ? S.pick.add(j) : S.pick.delete(j); } else on ? S.pick.add(i) : S.pick.delete(i);
+      pickAnchor = i; const L2 = prPages(); S.pv = Math.max(0, L2.indexOf(i)); const g = d.querySelector('.prpick-grid'), st = g ? g.scrollTop : 0; draw(); const g2 = d.querySelector('.prpick-grid'); if (g2) g2.scrollTop = st; return; }
+    const pq = e.target.closest('[data-pickq]'); if (pq) { const S = prState, n = doc.pages.length, all = [...Array(n).keys()], k = pq.dataset.pickq, P = S.pick || new Set();
+      S.pick = new Set(k === 'all' ? all : k === 'none' ? [] : k === 'odd' ? all.filter(i => i % 2 === 0) : k === 'even' ? all.filter(i => i % 2 === 1) : k === 'cert' ? all.filter(i => doc.pages[i].cert) : all.filter(i => !P.has(i))); S.pv = 0; pickAnchor = -1; draw(); return; }
     if (e.target.closest('#prGo')) { const list = prPages(); d.close(); runPrint(list); }
   };
   draw(); d.showModal();
