@@ -1424,3 +1424,7 @@ dialog.mandlg .dhead h2 small{font-size:12.5px;font-weight:500;color:var(--ui-mu
 
 /* 빈 그림 자리: 밝은·어두운 배경 모두에서 보이게(회색 반투명) */
 .imgph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.35;color:rgba(128,128,128,.95);background:rgba(128,128,128,.16);pointer-events:none}
+
+/* 연결점(파이널컷 ⌥⌘+클릭으로 옮긴 자리) */
+.tl-cp{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:#fff;opacity:.9;pointer-events:none;z-index:2}
+.tl-cp::before{content:'';position:absolute;left:-3px;bottom:-1px;width:8px;height:8px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
