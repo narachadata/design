@@ -71,13 +71,16 @@ NC.live = (function () {
       if (pa.attrs !== pb.attrs) ops.push({ op: 'page', pg: id, v: JSON.parse(pb.attrs) });
       pa.ids.forEach(eid => { if (!pb.els.has(eid)) ops.push({ op: 'del', pg: id, id: eid }); });
       let changed = false;
-      pb.ids.forEach((eid, j) => { const sb = pb.els.get(eid), sa = pa.els.get(eid); if (sa !== sb) { ops.push({ op: 'set', pg: id, i: j, el: JSON.parse(sb) }); if (!sa) changed = true; } });
+      pb.ids.forEach((eid, j) => { const sb = pb.els.get(eid), sa = pa.els.get(eid); if (sa === sb) return; if (!sa) { ops.push({ op: 'set', pg: id, i: j, el: JSON.parse(sb) }); changed = true; return; }
+        /* 있던 요소: 바뀐 속성만 보냄 — 두 PC가 같은 요소의 다른 속성(글·색 등)을 동시에 고쳐도 둘 다 남음 */
+        const ea = JSON.parse(sa), eb = JSON.parse(sb), set = {}, del = []; for (const k of new Set([...Object.keys(ea), ...Object.keys(eb)])) { if (!(k in eb)) del.push(k); else if (J(ea[k]) !== J(eb[k])) set[k] = eb[k]; }
+        ops.push({ op: 'patch', pg: id, id: eid, set, del }); });
       if (J(pa.ids.filter(x => pb.els.has(x))) !== J(pb.ids.filter(x => pa.els.has(x))) || changed) ops.push({ op: 'order', pg: id, ids: pb.ids });
     });
     if (a && J(a.pageIds) !== J(b.pageIds)) ops.push({ op: 'pages', ids: b.pageIds });
     return ops;
   }
-  const keyOf = op => op.op === 'doc' ? 'doc:' + op.k : op.op === 'pages' ? 'pages' : op.op === 'order' ? 'order:' + op.pg : op.op === 'set' ? op.pg + '/' + op.el.id : op.op === 'del' ? op.pg + '/' + op.id : 'page:' + op.pg;
+  const keyOf = op => op.op === 'doc' ? 'doc:' + op.k : op.op === 'pages' ? 'pages' : op.op === 'order' ? 'order:' + op.pg : op.op === 'set' ? op.pg + '/' + op.el.id : op.op === 'del' || op.op === 'patch' ? op.pg + '/' + op.id : 'page:' + op.pg;
   // 긴 data: 문자열(그림)을 표시로 바꿈 — Firebase로 보낼 때만
   function slim(v) { if (typeof v === 'string') return v.length > BIG && /^data:/.test(v) ? BIG_MARK : v; if (Array.isArray(v)) return v.map(slim); if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = slim(v[k]); return o; } return v; }
   // 표시로 온 값은 이쪽에 있던 값으로 채움. 채우지 못하면 true(파일에서 보충할 것)
@@ -103,6 +106,7 @@ NC.live = (function () {
         else if (op.op === 'pageDel') { if (d.pages.length > 1) d.pages = d.pages.filter(p => p.id !== op.pg); }
         else if (op.op === 'pages') { const m = new Map(d.pages.map(p => [p.id, p])); const out = op.ids.map(id => m.get(id)).filter(Boolean); d.pages.forEach(p => { if (!op.ids.includes(p.id)) out.push(p); }); if (out.length) d.pages = out; }
         else if (op.op === 'set') { const p = pageOf(op.pg); if (!p) continue; const j = p.els.findIndex(e => e.id === op.el.id); const miss = { v: false }; const el = unslim(op.el, j >= 0 ? p.els[j] : undefined, miss); if (j >= 0) { const old = p.els[j]; attrs = []; for (const k of new Set([...Object.keys(old), ...Object.keys(el)])) if (J(old[k]) !== J(el[k])) attrs.push(k); p.els[j] = el; } else p.els.splice(Math.min(op.i || 0, p.els.length), 0, el); const k = op.pg + '/' + el.id; if (miss.v) pending.add(k); else pending.delete(k); }
+        else if (op.op === 'patch') { const p = pageOf(op.pg); const el = p && p.els.find(e => e.id === op.id); if (!el) continue; const miss = { v: false }; attrs = []; for (const k in (op.set || {})) { const v = unslim(op.set[k], el[k], miss); if (J(el[k]) !== J(v)) { el[k] = v; attrs.push(k); } } (op.del || []).forEach(k => { if (k in el) { delete el[k]; attrs.push(k); } }); if (miss.v) pending.add(op.pg + '/' + op.id); }
         else if (op.op === 'del') { const p = pageOf(op.pg); if (!p) continue; p.els = p.els.filter(e => e.id !== op.id); pending.delete(op.pg + '/' + op.id); }
         else if (op.op === 'order') { const p = pageOf(op.pg); if (!p) continue; const m = new Map(p.els.map(e => [e.id, e])); const out = op.ids.map(id => m.get(id)).filter(Boolean); p.els.forEach(e => { if (!op.ids.includes(e.id)) out.push(e); }); p.els = out; }
         touched.push([keyOf(op), attrs]);
@@ -115,6 +119,7 @@ NC.live = (function () {
   function receiveOps(ops) { if (!ops || !ops.length) return; if (!queue.length) queuedAt = Date.now(); queue.push(...ops); flush(); }
   function flush() {
     if (!queue.length || !api || busy()) return;
+    changed();             /* 아직 안 보낸 이 PC 변경(오른쪽 칸에 쓰는 중인 글 등)을 먼저 보냄 — 아래에서 기준(base)을 다시 잡으면 영영 안 보내지므로 */
     const ops = queue; queue = [];
     const d = api.doc();
     applying = true;
@@ -136,7 +141,9 @@ NC.live = (function () {
     for (const op of diff(scan(a), scan(b), b)) {
       const ex = excl.get(keyOf(op));
       if (!ex) { plain.push(op); continue; }
-      if (ex === '*' || op.op !== 'set') continue;
+      if (ex === '*') continue;
+      if (op.op === 'patch') { const p = d.pages.find(x => x.id === op.pg), cur = p && p.els.find(e => e.id === op.id); if (!cur) continue; for (const k in op.set) if (!ex.has(k)) cur[k] = op.set[k]; op.del.forEach(k => { if (!ex.has(k)) delete cur[k]; }); continue; }
+      if (op.op !== 'set') continue;
       const p = d.pages.find(x => x.id === op.pg), cur = p && p.els.find(e => e.id === op.el.id); if (!cur) continue;
       const pa = a.pages.find(x => x.id === op.pg), ea = pa && pa.els.find(e => e.id === op.el.id) || {};
       for (const k of new Set([...Object.keys(ea), ...Object.keys(op.el)])) { if (ex.has(k) || J(ea[k]) === J(op.el[k])) continue; if (op.el[k] === undefined) delete cur[k]; else cur[k] = op.el[k]; }
@@ -298,6 +305,7 @@ NC.live = (function () {
   /* ---------- 화면 표시: 상단 접속 목록 + 다른 PC가 고르는 요소 ---------- */
   const css = `.livebar{display:inline-flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap}.livebar .lv{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--ui-field,#f3f4f7);border:1px solid var(--ui-line,#dde1ea);cursor:pointer;color:var(--ui-fg,#222)}.livebar .lv i{width:8px;height:8px;border-radius:50%;background:var(--c,#2f9e6b);display:inline-block}.livebar .lv.off i{background:#bbb}.livebar .lv.err i{background:#e0564b}
 .live-box{position:absolute;pointer-events:none;border:2px solid var(--c);border-radius:2px;box-sizing:border-box}.live-box b{position:absolute;left:-2px;top:-20px;font:600 11px/1 Pretendard,sans-serif;color:#fff;background:var(--c);padding:3px 6px;border-radius:4px;white-space:nowrap}
+.live-ghost{position:absolute;border:2px dashed var(--c);background:color-mix(in srgb,var(--c) 12%,transparent);border-radius:2px;box-sizing:border-box;transform-origin:50% 50%;transition:left .1s linear,top .1s linear,width .1s linear,height .1s linear}
 .live-cur{position:absolute;left:0;top:0;transition:transform .12s linear,opacity .4s;will-change:transform}.live-cur svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}.live-cur b{position:absolute;left:15px;top:15px;font:600 11px/1 Pretendard,sans-serif;color:#fff;background:var(--c);padding:3px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.25)}.live-box.clash{border-style:dashed;animation:lvClash 1s ease-in-out infinite}@keyframes lvClash{50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 35%,transparent)}}
 .live-rules{font:12px/1.5 ui-monospace,Menlo,monospace;background:#f6f7fa;border:1px solid #dde1ea;border-radius:6px;padding:8px;max-height:180px;overflow:auto;white-space:pre;user-select:all}`;
   function ensureUI() { if (document.getElementById('liveCss')) return; const s = document.createElement('style'); s.id = 'liveCss'; s.textContent = css; document.head.appendChild(s); const st = document.getElementById('status'); if (st && !document.getElementById('livebar')) { const b = document.createElement('span'); b.id = 'livebar'; b.className = 'livebar'; st.insertAdjacentElement('afterend', b); b.onclick = () => api && api.openSettings(); } }
@@ -331,11 +339,13 @@ NC.live = (function () {
   function sendCur(c) {
     if (!room || !room.peers.size || !api) return;
     const d = api.doc(), s = api.state(), pg = c && d.pages[s.cur] ? d.pages[s.cur].id : null, v = c ? { x: c.x, y: c.y, pg } : null;
+    if (v && s.drag && /^(move|resize|rot|gresize|grot)$/.test(s.dragKind || '') && d.pages[s.cur]) { const P = d.pages[s.cur], R = n => Math.round(n * 1000) / 1000; const b = s.sel.slice(0, 12).map(id => P.els.find(e => e.id === id)).filter(Boolean).map(e => [R(e.x / d.w), R(e.y / d.h), R(e.w / d.w), R(e.h / d.h), Math.round(e.rot || 0)]); if (b.length) v.b = b; }
     if (J(v) === J(myCur)) return; myCur = v; clearTimeout(curTimer);
     const wait = 100 - (Date.now() - curSentAt); if (v && wait > 0) { curTimer = setTimeout(flushCur, wait); return; } flushCur();
   }
   function flushCur() { curSentAt = Date.now(); if (!room) return; if (room.bc) { try { room.bc.postMessage({ id: rid(), from: me.id, pc: pcName(), joined: me.joined, kind: 'cur', c: myCur }); } catch (e) {} } if (room.fb && room.fb.cur) room.fb.cur(myCur); }
   document.addEventListener('pointermove', e => { if (!room || !room.peers.size) return; const cv = document.getElementById('canvas'); if (!cv) return; const r = cv.getBoundingClientRect(); if (!r.width || !r.height) return; const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height; sendCur(x > -0.08 && x < 1.08 && y > -0.08 && y < 1.08 ? { x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 } : null); }, { passive: true });
+  document.addEventListener('pointerup', e => { if (!room || !room.peers.size || !myCur || !myCur.b) return; setTimeout(() => sendCur({ x: myCur.x, y: myCur.y }), 30); }, { passive: true }); /* 놓으면 끌던 상자를 지움 */
   document.addEventListener('pointerleave', () => sendCur(null)); addEventListener('blur', () => sendCur(null));
   function paintCursors() {
     const wrap = document.getElementById('canvasWrap'), cv = document.getElementById('canvas'); if (!wrap || !cv) return;
@@ -347,8 +357,11 @@ NC.live = (function () {
       if (!n) { n = document.createElement('div'); n.className = 'live-cur'; n.dataset.cid = p.id; n.innerHTML = '<svg viewBox="0 0 16 16" width="18" height="18"><path d="M1.5 1.5l5 12.5 1.9-5.1 5.1-1.9z" fill="var(--c)" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"/></svg><b></b>'; L.appendChild(n); }
       n.style.setProperty('--c', p.color); const b = n.querySelector('b'); if (b.textContent !== p.pc) b.textContent = p.pc || '다른 PC';
       n.style.transform = `translate(${(r.left - wr.left + p.c.x * r.width).toFixed(1)}px,${(r.top - wr.top + p.c.y * r.height).toFixed(1)}px)`; n.style.opacity = Date.now() - p.ct > 10000 ? '0.35' : '1';
+      /* 상대가 끌고 있는 요소의 지금 자리(점선 상자) — 놓으면 실제 변경이 옴 */
+      const gb = (p.c.b || []).map(([x, y, w, h, rot]) => `<i class="live-ghost" style="--c:${p.color};left:${(r.left - wr.left + x * r.width).toFixed(1)}px;top:${(r.top - wr.top + y * r.height).toFixed(1)}px;width:${(w * r.width).toFixed(1)}px;height:${(h * r.height).toFixed(1)}px;transform:rotate(${rot}deg)"></i>`).join('');
+      let G = L.querySelector(`[data-gid="${CSS.escape(p.id)}"]`); if (!G) { G = document.createElement('div'); G.dataset.gid = p.id; L.appendChild(G); } if (G.innerHTML !== gb) G.innerHTML = gb;
     }
-    L.querySelectorAll('[data-cid]').forEach(n => { if (!keep.has(n.dataset.cid)) n.remove(); });
+    L.querySelectorAll('[data-cid]').forEach(n => { if (!keep.has(n.dataset.cid)) n.remove(); }); L.querySelectorAll('[data-gid]').forEach(n => { if (!keep.has(n.dataset.gid)) n.remove(); });
   }
   document.addEventListener('scroll', () => { if (room && room.peers.size) paintCursors(); }, true);
   function paint() {
