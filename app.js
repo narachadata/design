@@ -401,9 +401,11 @@ function renderCanvas() {
 // 여러 요소를 감싸는 상자(회전 반영)
 // 문서 크기 글: SNS·화면용(px) 문서는 px로, 인쇄물은 mm로
 // 크기 글: 화면용(px) 형식이거나 px 단위로 넣었으면 px, 아니면 mm
-function sizeLabelFor(W, H, fmtId, unit) { const f = FORMATS.find(x => x[0] === fmtId), px = (f && f[5] === 'px') || unit === 'px'; return px ? `${Math.round(W * 96 / 25.4)} × ${Math.round(H * 96 / 25.4)} px` : `${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm`; }
+/* 을/를: 마지막 한글 글자의 받침으로 고름 ('퍽 (발차기)'를 · '기합'을) */
+function eul(v) { const m = String(v == null ? '' : v).match(/[가-힣](?=[^가-힣]*$)/); if (!m) return '을(를)'; return (m[0].charCodeAt(0) - 0xAC00) % 28 ? '을' : '를'; }
+function sizeLabelFor(W, H, fmtId, unit) { const f = FORMATS.find(x => x[0] === fmtId), px = (f && f[5] === 'px') || unit === 'px'; return px ? `${Math.round(W * 96 / 25.4)} × ${Math.round(H * 96 / 25.4)} px` : W >= 1000 || H >= 1000 ? `${Math.round(W) / 10} × ${Math.round(H) / 10} cm` : `${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm`; }
 function isPxDoc() { const f = FORMATS.find(x => x[0] === doc.fmt); return !!(f && f[5] === 'px'); }
-function docSizeLabel(sep) { const f = FORMATS.find(x => x[0] === doc.fmt); sep = sep || '×'; return f && f[5] === 'px' ? `${f[3]}${sep}${f[4]}px` : `${Math.round(doc.w * 100) / 100}${sep}${Math.round(doc.h * 100) / 100}mm`; }
+function docSizeLabel(sep) { const f = FORMATS.find(x => x[0] === doc.fmt); sep = sep || '×'; return f && f[5] === 'px' ? `${f[3]}${sep}${f[4]}px` : doc.w >= 1000 || doc.h >= 1000 ? `${Math.round(doc.w) / 10}${sep}${Math.round(doc.h) / 10}cm` : `${Math.round(doc.w * 100) / 100}${sep}${Math.round(doc.h * 100) / 100}mm`; }
 function unionBox(els) { const bb = els.map(elBox), x = Math.min(...bb.map(b => b.x)), y = Math.min(...bb.map(b => b.y)); return { x, y, w: Math.max(...bb.map(b => b.x + b.w)) - x, h: Math.max(...bb.map(b => b.y + b.h)) - y }; }
 function elBox(el) {
   const a = (el.rot || 0) * Math.PI / 180, c = Math.abs(Math.cos(a)), s_ = Math.abs(Math.sin(a));
@@ -1390,7 +1392,7 @@ async function renderMediaLib() {
 }
 async function removeFromLib(id) {
   const m = libCache.get(id), used = libUsedRefs()(id);
-  if (!window.confirm(`"${m ? m.name : id}"을(를) 보관함에서 뺄까요?${used ? '\n\n이 문서에서 쓰고 있는 파일입니다. 빼면 다음에 열 때 원본을 다시 연결해야 합니다.' : ''}\n(PC의 원본 파일은 지워지지 않습니다)`)) return;
+  if (!window.confirm(`"${m ? m.name : id}"${eul(m ? m.name : id)} 보관함에서 뺄까요?${used ? '\n\n이 문서에서 쓰고 있는 파일입니다. 빼면 다음에 열 때 원본을 다시 연결해야 합니다.' : ''}\n(PC의 원본 파일은 지워지지 않습니다)`)) return;
   try { await NC.media.remove(id); mediaMissing.add(id); vEls.clear(); tl.Vkey = ''; tl.Vscene = ''; toast('보관함에서 뺐습니다'); renderMediaLib(); if (used) { renderCanvas(); renderTimeline(); } } catch (e) { toast('빼지 못했습니다: ' + e.message, true); }
 }
 async function previewVideoLib(id) {
@@ -1704,12 +1706,12 @@ async function applyRespToVideo(id) {
   const pages = brandize(t.build(uid, { w: S.w, h: S.h, screen: true }), S.w, S.h, t);
   pages.forEach(pg => { VIDEO.autoAnimate(pg, S.w, S.h); pg.vcam = 'in'; });
   const r = { w: S.w, h: S.h, fmt: vtSize === '916' ? 'story' : vtSize === '45' ? 'ig45' : '', pages, video: { dur: 4.5, trans: 'soft', turn: 0.8, q: '1080', fps: 30, loop: false }, audio: { src: 'b:m-bright', name: '밝은 아침 (경쾌)', vol: 0.7, from: 0, fin: 0.5, fout: 2 } };
-  if (await openVideoDoc(r, `${t.name} 영상`)) { doc.video = Object.assign(vset(), doc.video || {}, { born: 'video' }); markDirty(); toast(`'${t.name}'을(를) 영상으로 만들었습니다`); }
+  if (await openVideoDoc(r, `${t.name} 영상`)) { doc.video = Object.assign(vset(), doc.video || {}, { born: 'video' }); markDirty(); toast(`'${t.name}'${eul(t.name)} 영상으로 만들었습니다`); }
 }
 function addSfx(ref, name, quiet) {
   const TR = tracks(); let t = TR.find(x => x.id === tl.selTr && x.type === 'audio') || TR.find(x => x.type === 'audio'); if (!t) { t = { id: uid(), type: 'audio', name: '효과음', items: [] }; TR.push(t); }
   const at = Math.max(0, tlFrame(tl.T || 0));
-  t.items.push({ id: uid(), ref, name, at, vol: 1 }); if (!quiet) { commit(); renderTimeline(); toast(`'${name}'을(를) ${t.name} 트랙 ${fmtT(at)}에 넣었습니다 — 타임라인에서 끌어 옮기세요`); }
+  t.items.push({ id: uid(), ref, name, at, vol: 1 }); if (!quiet) { commit(); renderTimeline(); toast(`'${name}'${eul(name)} ${t.name} 트랙 ${fmtT(at)}에 넣었습니다 — 타임라인에서 끌어 옮기세요`); }
 }
 
 // 영상 편집 단축키 (프리미어·캡컷·필모라와 같은 키). 타임라인이 열려 있을 때만, 글자 입력 중에는 동작하지 않음
@@ -2492,16 +2494,16 @@ function openVideoMaker() {
   <div class="vd-use" id="vidUse"><span>어디에 쓰나요?</span>${[['yt', '유튜브·TV'], ['shorts', '숏츠·릴스'], ['msg', '카톡·문자'], ['keep', '보관(4K)']].map(([k, t]) => `<button type="button" class="btn sm" data-use="${k}">${t}</button>`).join('')}</div><p class="hint" id="vidUseNote" style="margin:0" hidden></p>
   <div class="vd-q" id="vidQ">${QS.map(qBtn).join('')}</div>
   <div class="row" style="align-items:center;gap:12px;flex-wrap:wrap"><label class="f" style="margin:0;flex-direction:row;align-items:center;gap:6px"><span>초당 장면 수</span><select id="vidFps">${[[24, '24fps (영화 느낌)'], [30, '30fps (기본)'], [60, '60fps (부드럽게)']].map(([v, t]) => `<option value="${v}" ${Number(vset().fps || 30) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label><span class="hint" id="vidEst"></span></div>
-  <p class="hint" style="margin:0">저장 형식은 <b>MP4 (H.264 영상 + AAC 소리)</b>입니다. 윈도우·맥의 기본 플레이어, TV, 휴대폰, 유튜브·카톡에서 별도 프로그램 없이 소리까지 재생됩니다.</p>
+  <p class="hint" style="margin:0">저장 형식은 <b>MP4 (H.264 영상 + AAC 소리)</b>입니다. 윈도우·맥의 기본 플레이어, TV, 휴대폰, 유튜브·카톡에서 별도 프로그램 없이 소리까지 재생됩니다${doc.h > doc.w ? ' (세로 4K 2160×3840은 TV에서 재생이 안 될 수 있음 — 숏츠는 1080p 권장)' : ''}.</p>
   <div class="row" style="justify-content:space-between;align-items:center"><label class="vd-chk" style="margin:0"><input type="checkbox" id="vidShare" ${localStorage.getItem('naracal-video-share') === '1' ? 'checked' : ''}> 내 드라이브 '결과물' 폴더에도 저장 <small>(최종 결과물만 온라인에)</small></label><span><button class="btn" data-close>닫기</button> <button class="btn primary" id="vidGo"><svg class="ic"><use href="#i-video"/></svg>영상 만들기</button></span></div></div>`;
   document.body.appendChild(d); d.querySelectorAll('[data-close]').forEach(b => b.onclick = () => d.close()); d.showModal();
   $('#vidShare').onchange = e => { try { localStorage.setItem('naracal-video-share', e.target.checked ? '1' : '0'); } catch (err) {} };
   let busy = false, stop = false, P = null, Vp = null;
   d.addEventListener('cancel', e => { if (busy) e.preventDefault(); }); d.addEventListener('close', () => { stop = true; if (P) P.destroy(); d.remove(); });
   const curQ = () => vset().q || '1080', curFps = () => Number(vset().fps || 30);
-  const est = () => { const o = VIDEO.outSize(doc.w, doc.h, curQ()), mb = estMB(curQ(), curFps()); $('#vidEst').textContent = `저장 크기 ${o.W}×${o.H} · ${fmtT(tot)} · 파일 약 ${mb < 1 ? '1' : Math.round(mb)}MB`; };
+  const est = () => { const o = VIDEO.outSize(doc.w, doc.h, curQ()), mb = estMB(curQ(), curFps()); $('#vidEst').textContent = `저장 크기 ${o.W}×${o.H} · ${fmtT(tot)} · 파일 최대 약 ${mb < 1 ? '1' : Math.round(mb)}MB (움직임이 적으면 훨씬 작음)`; };
   const setV = (k, v) => { doc.video = Object.assign(vset(), doc.video || {}, { [k]: v }); markDirty(); est(); };
-  $('#vidQ').onclick = e => { const b = e.target.closest('[data-q]'); if (!b || busy) return; $$('#vidQ [data-q]').forEach(x => x.setAttribute('aria-pressed', x === b)); setV('q', b.dataset.q); };
+  $('#vidQ').onclick = e => { const b = e.target.closest('[data-q]'); if (!b || busy) return; $$('#vidQ [data-q]').forEach(x => x.setAttribute('aria-pressed', x === b)); setV('q', b.dataset.q); const nt = $('#vidUseNote'); if (nt && doc.h > doc.w && b.dataset.q === '2160') { nt.hidden = false; nt.innerHTML = '세로 4K(2160×3840)는 유튜브·휴대폰에서는 되지만 <b>TV·셋톱에서는 재생이 안 될 수 있습니다</b> — 숏츠·릴스는 1080p(1080×1920)를 권장합니다.'; } };
   $('#vidFps').onchange = e => setV('fps', Number(e.target.value));
   $('#vidUse').onclick = e => { const b = e.target.closest('[data-use]'); if (!b || busy) return; const use = b.dataset.use, q = use === 'msg' ? '720' : use === 'keep' ? '2160' : '1080', ar = doc.w / doc.h, tall = ar < 0.7, wide = ar > 1.5, notes = [];
     setV('q', q); setV('fps', 30); $('#vidFps').value = '30'; $$('#vidQ [data-q]').forEach(x => x.setAttribute('aria-pressed', x.dataset.q === q)); $$('#vidUse [data-use]').forEach(x => x.classList.toggle('on', x === b));
@@ -2944,7 +2946,7 @@ function openTplPreview(t) {
     const ready = async pgs => { if (!t.lib) return true; try { setStatus('자료실 그림을 넣는 중…'); await NC.lib.materialize(pgs, addAsset); return true; } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return false; } finally { setStatus(''); } };
     $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm(`현재 문서를 닫고 새 문서를 만들까요? (${keepNote()})`)) return; await keepCurrentDoc(); const pgs = tplPagesFor(t, S); fillDojang(pgs); const keepAssets = doc.assets; doc.assets = {}; if (!(await ready(pgs))) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = S.w; nd.h = S.h; nd.fmt = S.fmt || ''; nd.name = t.name; nd.pages = pgs; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; nd.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); if (!S.screen && ['print', 'doc', 'cal', 'sign'].includes((FORMATS.find(f => f[0] === S.fmt) || [])[2])) nd.bleed = 3; doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)'); zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다 (${label(S)})`); };
     // 지금 문서에 넣기: 늘 지금 문서 크기로 다시 짜서 넣음. 지금 쪽이 비어 있으면 그 쪽을 바꿈
-    $('#tplHere').onclick = async () => { const pg = tplPagesFor(t, docS); if (!(await ready(pg))) return; const nDj = fillDojang(pg); const emp = !page().els.length; doc.pages.splice(emp ? cur : cur + 1, emp ? 1 : 0, ...pg); const at = emp ? cur : cur + 1; commit(); goto(at); d.close(); toastUndo((emp ? `"${t.name}"을(를) 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`) + (nDj ? ` · 도장 정보 ${nDj}곳 채움` : '')); };
+    $('#tplHere').onclick = async () => { const pg = tplPagesFor(t, docS); if (!(await ready(pg))) return; const nDj = fillDojang(pg); const emp = !page().els.length, only = emp && doc.pages.length === 1, defName = !doc.name || doc.name === '새 디자인' || FORMATS.some(f => f[1] === doc.name); doc.pages.splice(emp ? cur : cur + 1, emp ? 1 : 0, ...pg); const at = emp ? cur : cur + 1; if (only && defName && t.name) { doc.name = t.name; $('#pname').value = doc.name; }  /* 빈 새 문서에 넣으면 문서 이름도 템플릿 이름으로 */ commit(); goto(at); d.close(); toastUndo((emp ? `"${t.name}"${eul(t.name)} 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`) + (nDj ? ` · 도장 정보 ${nDj}곳 채움` : '')); };
   };
   draw(); d.showModal();
 }
@@ -3232,7 +3234,7 @@ function renderInspector() {
     <h3>일정</h3><label class="f"><span>날짜 (달력 칸을 눌러도 됩니다)</span><select id="daySel"><option value="">날짜 선택</option>${Array.from({ length: dim }, (_, d) => d + 1).map(d => `<option value="${d}" ${d === selDay ? 'selected' : ''}>${el.month}월 ${d}일 (${CAL.WD.ko1[new Date(el.year, el.month - 1, d).getDay()]})</option>`).join('')}</select></label>
     ${selDay ? `${holNames.length ? `<p class="hint">공휴일: ${holNames.join(', ')}</p>` : ''}<div class="evlist">${evs.map(({ e, k }) => `<div class="evrow"><input type="text" data-ev="${k}" value="${esc(e.text)}" placeholder="일정 내용"><select data-evc="${k}">${Object.entries(COLOR_NAMES).map(([c, t]) => `<option value="${c}" ${(e.color || '') === c ? 'selected' : ''}>${t}</option>`).join('')}</select><button class="x" data-evdel="${k}">×</button></div>`).join('')}</div><button class="btn sm primary" id="evAdd">+ 이 날짜에 일정 추가</button>` : ''}
     <h3>이달의 일정 (${allEv.length})</h3><ul class="list">${allEv.map(({ e, k }) => `<li data-godate="${e.d}"><b>${e.d}일</b><span>${esc(e.text)}</span><button class="x" data-evdel="${k}">×</button></li>`).join('') || '<li><span class="hint" style="margin:0">일정 없음</span></li>'}</ul>
-    <div class="row" style="margin-top:6px"><button class="btn sm" id="rulesApply">반복 일정 넣기</button><button class="btn sm" id="rulesAll">문서의 모든 달력에</button><button class="btn sm" id="rulesEdit">규칙 편집</button></div>
+    <div class="row" style="margin-top:6px"><button class="btn sm" id="rulesApply" title="규칙 목록대로 이 달력에 바로 넣습니다 (되돌리기 가능)">이 달력에 반복 일정 넣기</button><button class="btn sm" id="rulesAll" title="문서의 모든 달력에 바로 넣습니다">모든 달력에</button><button class="btn sm" id="rulesEdit" title="매주·매월 규칙과 여러 줄 붙여넣기">규칙 편집·붙여넣기…</button></div>
     <h3>메모 (빈 칸에 파란 글씨)</h3>${F('메모 1', 'notes.0', (el.notes || [])[0])}${F('메모 2', 'notes.1', (el.notes || [])[1])}
     <h3>모양</h3><div class="grid2">${F('주 시작', 's.weekStart', s.weekStart, { type: 'select', options: [[0, '일요일'], [1, '월요일']] })}${F('줄 수', 's.rows', s.rows, { type: 'select', options: [['merge', '5줄 (24/31 합침)'], ['6', '6줄'], ['auto', '자동']] })}</div>
     <div class="grid2">${F('요일 표기', 's.wdLang', s.wdLang, { type: 'select', options: [['en', 'SUNDAY'], ['short', 'SUN'], ['ko', '일요일'], ['ko1', '일']] })}${F('요일 줄 높이(mm)', 's.wdH', s.wdH, { type: 'number', step: 0.5 })}</div>
@@ -3293,8 +3295,8 @@ function renderInspector() {
     if (b.id === 'calHol') openHoliday(el.year);
     if (b.id === 'evAdd') { el.events = el.events || []; el.events.push({ d: selDay, text: '', color: '' }); commit(); rerender(); const last = $$('#inspector .evrow input').pop(); if (last) last.focus(); }
     if (b.dataset.evdel != null) { el.events.splice(Number(b.dataset.evdel), 1); commit(); rerender(); }
-    if (b.id === 'rulesApply') { const n = CAL.applyRules(el, doc.rules, doc); commit(); rerender(); toast(`${n}개 일정을 넣었습니다`); }
-    if (b.id === 'rulesAll') { let n = 0; doc.pages.forEach(p => p.els.forEach(x => { if (x.type === 'cal') n += CAL.applyRules(x, doc.rules, doc); })); commit(); rerender(); toast(`문서 전체에 ${n}개 일정을 넣었습니다`); }
+    if (b.id === 'rulesApply') { const n = CAL.applyRules(el, doc.rules, doc); if (!n) { toast((doc.rules || []).some(r => r.text) ? '새로 넣을 반복 일정이 없습니다 (이미 들어 있음) — 목록은 "규칙 편집"에서' : '반복 일정 목록이 비어 있습니다 — "규칙 편집"에서 매주 수련·승급심사 등을 넣으세요', true); return; } commit(); rerender(); toastUndo(`${el.month}월에 반복 일정 ${n}개를 넣었습니다`); }
+    if (b.id === 'rulesAll') { let n = 0; doc.pages.forEach(p => p.els.forEach(x => { if (x.type === 'cal') n += CAL.applyRules(x, doc.rules, doc); })); if (!n) { toast('새로 넣을 반복 일정이 없습니다 — 목록은 "규칙 편집"에서', true); return; } commit(); rerender(); toastUndo(`문서의 모든 달력에 반복 일정 ${n}개를 넣었습니다`); }
     if (b.id === 'rulesEdit') openRules();
   };
   ins.querySelectorAll('li[data-godate]').forEach(li => li.onclick = e => { if (e.target.closest('button')) return; selDay = Number(li.dataset.godate); rerender(); });
@@ -3673,10 +3675,10 @@ async function driveOp(kind, key, op) {
         if (isCur) { st.handle = nh; st.fileName = nh.name; st.lastMod = (await nh.getFile()).lastModified; await store.idbSet('fileHandle', nh); updateSaveBadge(); }
       }
       if (op === 'dup') { const j = JSON.parse(await (await x.handle.getFile()).text()); j.name = (j.name || label) + ' 사본'; const d = await store.dirAt(x.path); const h = await d.getFileHandle(await store.uniqueNameIn(j.name, d), { create: true }); const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign(j, { saveId: '', lineage: [] }))); await w.close(); toast('사본을 만들었습니다'); }
-      if (op === 'move') { const to = await pickFolder(); if (!to) return; if (isCur && st.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const nh = await store.moveEntry(x.handle, x.path, to); if (isCur) { st.handle = nh; st.fileName = nh.name; st.lastMod = (await nh.getFile()).lastModified; await store.idbSet('fileHandle', nh); updateSaveBadge(); } toast(`"${label}"을(를) ${to.length ? to.join(' › ') : '내 드라이브'}로 옮겼습니다`); }
+      if (op === 'move') { const to = await pickFolder(); if (!to) return; if (isCur && st.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const nh = await store.moveEntry(x.handle, x.path, to); if (isCur) { st.handle = nh; st.fileName = nh.name; st.lastMod = (await nh.getFile()).lastModified; await store.idbSet('fileHandle', nh); updateSaveBadge(); } toast(`"${label}"${eul(label)} ${to.length ? to.join(' › ') : '내 드라이브'}로 옮겼습니다`); }
       if (op === 'trash') { if (isCur) throw new Error('지금 작업 중인 디자인은 휴지통으로 보낼 수 없습니다. 다른 디자인을 먼저 여세요.'); await store.toTrash(x.handle, x.path); toast('휴지통으로 옮겼습니다'); }
       if (op === 'restore') { await store.moveEntry(x.handle, [store.TRASH], []); toast('내 드라이브로 되살렸습니다'); }
-      if (op === 'purge') { if (!window.confirm(`"${label}"을(를) 영구 삭제할까요? 되돌릴 수 없습니다.`)) return; await store.emptyEntry(x.name); }
+      if (op === 'purge') { if (!window.confirm(`"${label}"${eul(label)} 영구 삭제할까요? 되돌릴 수 없습니다.`)) return; await store.emptyEntry(x.name); }
     }
     renderDrive();
   } catch (err) { toast(err.message, true); }
@@ -3777,7 +3779,7 @@ async function duplicateDoc() {
   try {
     if (await store.folderReady()) {
       const h = await store.copyIntoFolder(copy);
-      if (window.confirm(`사본 "${h.name.replace(/\.design\.json$/i, '')}"을(를) 동기화 폴더에 만들었습니다.\n\n확인: 사본을 열어 작업합니다\n취소: 지금 문서에서 계속 작업합니다`)) await openFolderDoc(h, '사본을 열었습니다');
+      if (window.confirm(`사본 "${h.name.replace(/\.design\.json$/i, '')}"${eul(h.name.replace(/\.design\.json$/i, ''))} 동기화 폴더에 만들었습니다.\n\n확인: 사본을 열어 작업합니다\n취소: 지금 문서에서 계속 작업합니다`)) await openFolderDoc(h, '사본을 열었습니다');
       else toast('사본을 만들었습니다 (열기 목록에 있습니다)');
     } else { store.download(copy); toast('사본을 파일로 내려받았습니다 — 지금 화면은 원본 그대로입니다. 사본을 고치려면 위 \'열기\'로 내려받은 파일을 여세요'); }
   } catch (e) { toast('사본을 만들지 못했습니다: ' + e.message, true); }
@@ -4398,9 +4400,11 @@ function dlPages() {
 }
 // 캔버스 한계 안에서 쓸 수 있는 dpi
 function dlDpi(want, bleed) { const W = (doc.w + 2 * bleed) / 25.4, H = (doc.h + 2 * bleed) / 25.4; return Math.max(24, Math.min(want, 16000 / W, 16000 / H, Math.sqrt(120e6 / (W * H)))); } /* 한 변 16,000px(크롬 한계 32,767의 절반 — 메모리 여유)·1.2억 화소 */
+/* 문서에 맞는 기본(권장) 형식: SNS·화면용(px) → PNG, 도련이 있거나 1m 넘는 인쇄물(현수막) → 인쇄소용 PDF, 그 밖 → 고화질 PDF */
+function dlDefFmt() { const pxDoc = Math.abs(doc.w * 96 / 25.4 - Math.round(doc.w * 96 / 25.4)) < 0.05 && Math.abs(doc.h * 96 / 25.4 - Math.round(doc.h * 96 / 25.4)) < 0.05 && doc.w > 150; return pxDoc ? 'png' : Number(doc.bleed) > 0 || doc.w >= 1000 || doc.h >= 1000 ? 'pdfprint' : 'pdfhq'; }
 function openDownload(fmt) {
   if (fmt) { dlState.fmt = fmt; dlState.userFmt = true; }
-  const pxDoc = Math.abs(doc.w * 96 / 25.4 - Math.round(doc.w * 96 / 25.4)) < 0.05 && Math.abs(doc.h * 96 / 25.4 - Math.round(doc.h * 96 / 25.4)) < 0.05 && doc.w > 150; if (dlState.docKey !== doc.w + 'x' + doc.h) { dlState.docKey = doc.w + 'x' + doc.h; dlState.scale = pxDoc ? 1 : 3.125; if (!fmt) dlState.userFmt = false; /* 다른 문서로 바뀌면 그 문서에 맞는 기본 형식부터 */ if (!dlState.userFmt) dlState.fmt = pxDoc ? 'png' : Number(doc.bleed) > 0 ? 'pdfprint' : 'pdfhq'; } /* SNS·화면용(px) 문서는 PNG, 인쇄물은 PDF */
+  const pxDoc = Math.abs(doc.w * 96 / 25.4 - Math.round(doc.w * 96 / 25.4)) < 0.05 && Math.abs(doc.h * 96 / 25.4 - Math.round(doc.h * 96 / 25.4)) < 0.05 && doc.w > 150; if (dlState.docKey !== doc.w + 'x' + doc.h) { dlState.docKey = doc.w + 'x' + doc.h; dlState.scale = pxDoc ? 1 : 3.125; if (!fmt) dlState.userFmt = false; /* 다른 문서로 바뀌면 그 문서에 맞는 기본 형식부터 */ if (!dlState.userFmt) dlState.fmt = dlDefFmt(); } /* SNS·화면용(px) 문서는 PNG, 인쇄물은 PDF */
   let p = $('#dlPanel'); if (p) { p.remove(); if (!fmt) return; }
   p = document.createElement('div'); p.id = 'dlPanel'; p.className = 'dlpanel'; document.body.appendChild(p);
   const b = $('#btnExport').getBoundingClientRect(); p.style.right = Math.max(8, innerWidth - b.right) + 'px'; p.style.top = (b.bottom + 8) + 'px';
@@ -4417,7 +4421,7 @@ function renderDownload() {
   if (img && S.merge && n > 1) dpi = Math.min(dpi, dlMergeDpi(n, bleed));
   const px = v => Math.round(v / 25.4 * dpi);
   p.innerHTML = `<div class="dlhead"><b>다운로드</b><button class="x" data-dl="close">×</button></div>
-  <label class="f"><span>파일 형식</span></label><div class="dlfmts">${DL_FMTS.map(([k, t, d]) => { const tag = k === (Number(doc.bleed) > 0 ? 'pdfprint' : 'pdfhq') ? '권장' : ''; return `<button data-fmt2="${k}" class="${S.fmt === k ? 'on' : ''}"><b>${t}${tag ? ` <em>${tag}</em>` : ''}</b><small>${d}</small></button>`; }).join('')}</div>
+  <label class="f"><span>파일 형식</span></label><div class="dlfmts">${DL_FMTS.map(([k, t, d]) => { const tag = k === dlDefFmt() ? '권장' : ''; return `<button data-fmt2="${k}" class="${S.fmt === k ? 'on' : ''}"><b>${t}${tag ? ` <em>${tag}</em>` : ''}</b><small>${d}</small></button>`; }).join('')}</div>
   ${img ? `<label class="f"><span>크기</span><select id="dlScale">${[[1, '1배 (화면·SNS용 96dpi)'], [2, '2배 (선명하게 192dpi)'], [3.125, '인쇄용 300dpi'], [3.646, '고급 인쇄 350dpi']].map(([v, t]) => `<option value="${v}" ${S.scale === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>` : ''}
   <label class="f"><span>페이지 선택</span><select id="dlPages"><option value="all" ${S.pages === 'all' ? 'selected' : ''}>${doc.pages.some(p => p.dlOff) && doc.pages.some(p => !p.dlOff) ? `모든 페이지 (숨긴 ${doc.pages.filter(p => p.dlOff).length}쪽 빼고 ${doc.pages.filter(p => !p.dlOff).length}쪽)` : `모든 페이지 (1~${doc.pages.length})`}</option><option value="cur" ${S.pages === 'cur' ? 'selected' : ''}>현재 페이지 (${cur + 1})</option><option value="range" ${S.pages === 'range' ? 'selected' : ''}>직접 입력</option>${img && sel.length ? `<option value="sel" ${S.pages === 'sel' ? 'selected' : ''}>선택한 요소만 (${sel.length}개)</option>` : ''}</select></label>
   ${S.pages === 'range' ? `<label class="f"><input id="dlRange" placeholder="예: 1-3, 5" value="${esc(S.range)}"></label>` : ''}
@@ -4425,7 +4429,7 @@ function renderDownload() {
   ${img && n > 1 ? `<label class="chk"><input type="checkbox" id="dlMerge" ${S.merge ? 'checked' : ''}> 한 장의 이미지로 합치기 (세로로 이어 붙임)</label>` : ''}
   ${img && Number(doc.bleed) > 0 ? `<label class="chk"><input type="checkbox" id="dlImgBleed" ${S.imgBleed ? 'checked' : ''}> 도련 ${doc.bleed}mm 포함 (명함·스티커를 인쇄소에 이미지로 보낼 때)</label>` : ''}
   <div class="dlinfo"><b>다운로드 정보</b><ul><li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${docSizeLabel(' × ')}${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${(px(doc.h + 2 * bleed) * (img && S.merge && n > 1 ? n : 1)).toLocaleString()} px · ${Math.round(dpi)}dpi${(img ? Math.round(dpi) < Math.round(96 * S.scale) - 1 : DL_PDF[S.fmt] && Math.round(dpi) < DL_PDF[S.fmt].dpi - 1) ? (Math.max(doc.w, doc.h) >= 1500 ? ' <small>(현수막처럼 큰 인쇄물은 멀리서 보므로 60~100dpi면 충분)</small>' : ' <b>(크기가 커서 브라우저 한계에 맞춰 낮춤)</b>') : ''}</li>${(() => { const pc = px(doc.w + 2 * bleed) * px(doc.h + 2 * bleed) * n, f = img ? S.fmt : 'jpg', q = img ? 0.92 : DL_PDF[S.fmt].q, mb = dlEstMB(pc, f, q); return `<li>파일 크기 최대 약 ${mb < 1 ? '1MB' : mb < 10 ? mb.toFixed(1) + 'MB' : Math.round(mb) + 'MB'} <small>(사진이 적은 디자인은 훨씬 작아짐)</small>${mb > 300 ? ' <b>— 아주 클 수 있으니 인쇄소 웹하드로 보내거나 쪽을 나눠 받으세요</b>' : ''}</li>`; })()}${!img && DL_PDF[S.fmt] && PDF_TENTH(doc.w + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0)), doc.h + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0))) ? '<li><b>5.08m가 넘어 PDF를 1/10 크기로 만듭니다</b> — 인쇄소에 "1000% 확대 출력" 요청 (화질은 그대로)</li>' : ''}` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
-  ${S.fmt === 'pdfprint' ? `<p class="hint" style="margin:6px 0 0">${bleed ? `도련 ${bleed}mm 포함 작업 사이즈${doc.cropMarks ? ` + 재단선(도련 바깥 5mm) — 파일 한 장은 ${r1(doc.w + 2 * bleed + 10)}×${r1(doc.h + 2 * bleed + 10)}mm` : ''}.` : '<b>도련이 0mm입니다.</b> 프로젝트 탭에서 도련을 넣으세요 (보통 1.5~3mm).'} 대부분의 인쇄소는 재단선 없는 작업 사이즈 파일을 받습니다.<br>이 PDF는 sRGB 그림(${Math.round(dpi || 300)}dpi)으로 된 파일입니다. 인쇄소에 "sRGB 기준 CMYK 변환"을 요청하고, 밝은 파랑·초록은 탁해질 수 있으니 시안(교정쇄)으로 확인하세요. 명함처럼 작은 검정 글자가 많으면 "PDF (벡터)"가 더 선명합니다(검정 단색 처리 가능).</p>` : ''}${S.fmt === 'pdfweb' ? '<p class="hint" style="margin:6px 0 0">확대하거나 인쇄하면 글자가 덜 선명할 수 있습니다. 인쇄·보관용은 "PDF (고화질)"을 쓰세요.</p>' : ''}</div>
+  ${S.fmt === 'pdfprint' ? `<p class="hint" style="margin:6px 0 0">${bleed ? `도련 ${bleed}mm 포함 작업 사이즈${doc.cropMarks ? ` + 재단선(도련 바깥 5mm) — 파일 한 장은 ${r1(doc.w + 2 * bleed + 10)}×${r1(doc.h + 2 * bleed + 10)}mm` : ''}.` : ((FORMATS.find(x => x[0] === doc.fmt) || [])[2] === 'sign' ? '도련 없음(0mm) — 현수막·간판은 보통 도련 없이 작업 사이즈 그대로 맡깁니다.' : `도련 없음(0mm) — 바탕색·그림이 종이 끝까지 닿으면 도련이 필요합니다(아래 인쇄 점검이 알려 드림, 이 문서는 ${bleedFor(FORMATS.find(x => x[0] === doc.fmt)) || 3}mm 권장).`)} 대부분의 인쇄소는 재단선 없는 작업 사이즈 파일을 받습니다.<br>이 PDF는 sRGB 그림(${Math.round(dpi || 300)}dpi)으로 된 파일입니다. 인쇄소에 "sRGB 기준 CMYK 변환"을 요청하고, 밝은 파랑·초록은 탁해질 수 있으니 시안(교정쇄)으로 확인하세요. 명함처럼 작은 검정 글자가 많으면 "PDF (벡터)"가 더 선명합니다(검정 단색 처리 가능).</p>` : ''}${S.fmt === 'pdfweb' ? '<p class="hint" style="margin:6px 0 0">확대하거나 인쇄하면 글자가 덜 선명할 수 있습니다. 인쇄·보관용은 "PDF (고화질)"을 쓰세요.</p>' : ''}</div>
   <div id="dlWarn"></div><div class="dlprog" id="dlProg"></div>
   <button class="btn primary full" id="dlGo"><svg class="ic"><use href="#i-upload"/></svg>${S.fmt === 'pdfvector' ? '인쇄 창 열기' : '다운로드'}</button>`;
   p.onclick = e => { const c = e.target.closest('[data-dl="close"]'); if (c) { p.remove(); return; } const fm = e.target.closest('[data-fmt2]'); if (fm) { S.fmt = fm.dataset.fmt2; S.userFmt = true; renderDownload(); } };
@@ -4466,7 +4470,7 @@ function printIssues(pages) {
     const pxDoc = doc.fmt === 'px' || (doc.w > 150 && Math.abs(doc.w * 96 / 25.4 - Math.round(doc.w * 96 / 25.4)) < 0.05 && Math.abs(doc.h * 96 / 25.4 - Math.round(doc.h * 96 / 25.4)) < 0.05);
     const white = c => !c || /^#?(fff|ffffff)$/i.test(String(c).trim()) || String(c).trim() === 'transparent';
     if (!b && !pxDoc && !SAFE_BY[doc.fmt]) { const pi = pages.find(i => { const pg = doc.pages[i]; return !white(pg.bg) || pg.els.some(el => !el.hidden && (el.type === 'image' || el.type === 'shape') && (el.x <= 0.3 || el.y <= 0.3 || el.x + el.w >= doc.w - 0.3 || el.y + el.h >= doc.h - 0.3)); });
-      if (pi != null) out.push({ page: pi + 1, id: '', name: '도련', msg: '· 도련이 0mm입니다 — 바탕색·그림이 종이 가장자리까지 닿아 있어 재단하면 가장자리에 흰 줄이 남을 수 있습니다. 문서(프로젝트) 설정에서 도련을 3mm로 넣으세요' }); } }
+      if (pi != null) out.push({ page: pi + 1, id: '', name: '도련', msg: `· 도련이 0mm입니다 — 바탕색·그림이 종이 가장자리까지 닿아 있어 재단하면 가장자리에 흰 줄이 남을 수 있습니다. 문서(프로젝트) 설정에서 도련을 ${bleedFor(FORMATS.find(x => x[0] === doc.fmt)) || 3}mm로 넣으세요` }); } }
   for (const pi of pages) { const bad = new Set(); const pg = doc.pages[pi]; if (outOfGamut(pg.bg)) bad.add(pg.bg.toUpperCase()); pg.els.forEach(el => { if (el.hidden) return; ['color', 'fill', 'stroke', 'g1', 'g2'].forEach(k => { if (outOfGamut(el[k])) bad.add(el[k].toUpperCase()); }); }); if (bad.size) out.push({ page: pi + 1, id: '', name: '색', msg: `· ${[...bad].slice(0, 4).join(', ')} — 아주 선명한 RGB 색은 인쇄하면 탁해집니다 (시안으로 확인하거나 조금 덜 선명한 색으로)` }); }
   for (const pi of pages) for (const el of doc.pages[pi].els) {
     if (el.hidden) continue; const add = msg => out.push({ page: pi + 1, id: el.id, name: elName(el), msg });
@@ -5077,9 +5081,8 @@ function renderCertSide(body) {
   <h3>④ 결과 미리 보기</h3>
   ${nOk ? `<button class="btn sm full" data-cx="preview" style="margin-bottom:6px">🔍 모두 크게 미리 보기</button><div class="row cprevnav"><button class="btn sm icon" data-cnav="-1">‹</button><span>${Math.min(certPrev + 1, rows.length)} / ${rows.length} · <b>${esc((rows[certPrev] || {}).name || '(이름 없음)')}</b></span><button class="btn sm icon" data-cnav="1">›</button></div><div class="cprev" id="cprev"></div>${certWarn(form)}` : '<p class="hint">이름을 넣으면 여기에 상장이 보입니다.</p>'}
   <h3>⑤ 병합 완료</h3>
-  <button class="btn primary full" data-cx="preview" ${nOk ? '' : 'disabled'}>🔍 ${nOk}장 모두 미리 보기</button>
   <div class="cserial"><label class="chk"><input type="checkbox" data-cx="serialOn" ${C.serial && C.serial.on ? 'checked' : ''}> 상장 번호 넣기 <small class="hint">(${esc(certNo(Object.assign({}, C, { serial: Object.assign({ prefix: String(new Date().getFullYear()), start: 1 }, C.serial || {}) }), 0))} …)</small></label>${C.serial && C.serial.on ? `<div class="row" style="gap:6px"><label class="f" style="flex:1;margin:0"><span>연도(앞 글자)</span><input type="text" data-cser="prefix" value="${esc(C.serial.prefix || '')}"></label><label class="f" style="flex:1;margin:0"><span>시작 번호</span><input type="number" min="1" data-cser="start" value="${Number(C.serial.start) || 1}"></label></div><p class="hint" style="margin:4px 0 0">다음 번호는 다른 PC와 이어집니다. 번호 위치는 상장 쪽에서 번호 글 상자를 옮긴 뒤 아래 '이 쪽 배치를 모든 상장에' 단추를 누르세요.</p>` : ''}${(C.log || []).length ? `<button class="btn sm" data-cx="certlog" style="margin-top:6px">📒 발급 대장 내려받기 (${C.log.length}건 · 엑셀에서 열림)</button>` : ''}</div>
-  <button class="btn full" data-cx="merge" ${nOk ? '' : 'disabled'} style="margin-top:6px">🏅 상장 ${nOk}장 만들기</button>
+  <button class="btn primary full" data-cx="merge" ${nOk ? '' : 'disabled'} style="margin-top:6px">🏅 상장 ${nOk}장 만들기</button>
   <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn sm primary" data-cx="print" ${doc.pages.some(p => p.cert) ? '' : 'disabled'}>🖨 바로 출력</button><button class="btn sm" data-cx="pdf" ${doc.pages.some(p => p.cert) ? '' : 'disabled'}>PDF로 저장</button><button class="btn sm" data-cx="layout" ${page().cert ? '' : 'disabled'} title="지금 상장 쪽에서 글 상자를 옮기거나 글꼴·크기를 바꾼 뒤 누르면, 모든 상장에 같은 배치로">이 쪽 배치를 모든 상장에</button>${Object.keys(C.layout).some(kk => kk.startsWith(form + ':')) ? '<button class="btn sm" data-cx="layoutreset">배치 처음대로</button>' : ''}</div>
   <p class="hint" style="margin-top:8px">이름이 길면 글자 크기가 저절로 줄어듭니다. 종목 2 기록이 없는 사람은 기록 1이 가운데로 옵니다(조건부 필드). 날짜·측정 이름처럼 모두 같은 값은 ②에서 한 번만 바꾸면 됩니다.</p></div>`;
   const pv = $('#cprev'); if (pv) { const r = rows[certPrev]; const tmp = certPage(form, r || {}, certPrev); const bw = pv.clientWidth || 260, kk = bw / (doc.w * MM); pv.style.height = doc.h * MM * kk + 'px'; const draw = () => { pv.innerHTML = `<div style="transform:scale(${kk});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(doc.w, doc.h, tmp.els.map(e => Object.assign({}, e, { hidden: false })), '#ffffff')}</div>`; }; draw(); fitTextOffscreen(tmp.els).then(() => { if (document.body.contains(pv)) draw(); }); }
@@ -5846,7 +5849,7 @@ function renderResize() {
     if (f) nd.bleed = bleedFor(f);
     $('#dlgResize').close(); gcAssets();
     try {
-      if (await store.folderReady()) { const h = await store.copyIntoFolder(nd); if (window.confirm(`"${h.name.replace(/\.design\.json$/i, '')}"을(를) 만들었습니다.\n\n확인: 새 크기 디자인을 열어 다듬기\n취소: 지금 문서에서 계속`)) await openFolderDoc(h, '새 크기 디자인을 열었습니다'); else toast('새 크기 사본을 만들었습니다 (열기 목록에 있습니다)'); }
+      if (await store.folderReady()) { const h = await store.copyIntoFolder(nd); if (window.confirm(`"${h.name.replace(/\.design\.json$/i, '')}"${eul(h.name.replace(/\.design\.json$/i, ''))} 만들었습니다.\n\n확인: 새 크기 디자인을 열어 다듬기\n취소: 지금 문서에서 계속`)) await openFolderDoc(h, '새 크기 디자인을 열었습니다'); else toast('새 크기 사본을 만들었습니다 (열기 목록에 있습니다)'); }
       else { store.download(nd); toast('새 크기 사본을 파일로 내려받았습니다'); }
     } catch (e) { toast('사본을 만들지 못했습니다: ' + e.message, true); }
   };
@@ -5879,7 +5882,7 @@ async function renderVersions() {
       if (!window.confirm(`${fmt(x.time)} 버전으로 되돌릴까요?\n지금 상태는 버전 기록에 먼저 남겨 두고, Ctrl+Z로도 되돌릴 수 있습니다.`)) return;
       await verNow('되돌리기 전'); { /* 그 버전에 없던 항목(뒤에 넣은 소리 트랙·표시 등)은 지우고, 문서 열기와 같은 정리(sanitizeDoc·기본값)를 거침 */ const nd = Object.assign(newDoc(), clone(j)); sanitizeDoc(nd); new Set([...Object.keys(doc), ...Object.keys(nd)]).forEach(k => { if (DOC_KEYS_SKIP.has(k) || k === 'assets' || k === 'fonts') return; if (k in nd) doc[k] = nd[k]; else delete doc[k]; }); } doc.assets = Object.assign({}, doc.assets, j.assets || {}); (j.fonts || []).forEach(f => { if (!doc.fonts.some(x => x.family === f.family)) doc.fonts.push(f); }); cur = Math.min(cur, doc.pages.length - 1); sel = []; cellSel = null; commit(); zoom = 0; renderAll(); fitCanvas(); $('#dlgVer').close(); try { checkMedia(true); } catch (e) {} toast(`${fmt(x.time)} 버전으로 되돌렸습니다`);
     };
-    $('#verCopy').onclick = async () => { const c = Object.assign({}, j, { name: `${doc.name || '디자인'} (${fmt(x.time).replace(':', '시 ')}분 버전)` }); delete c._size; const h = await store.copyIntoFolder(c); toast(`"${h.name.replace(/\.design\.json$/i, '')}"을(를) 만들었습니다 (열기 목록에 있습니다)`); };
+    $('#verCopy').onclick = async () => { const c = Object.assign({}, j, { name: `${doc.name || '디자인'} (${fmt(x.time).replace(':', '시 ')}분 버전)` }); delete c._size; const h = await store.copyIntoFolder(c); toast(`"${h.name.replace(/\.design\.json$/i, '')}"${eul(h.name.replace(/\.design\.json$/i, ''))} 만들었습니다 (열기 목록에 있습니다)`); };
   };
 }
 async function verNow(memo) {
