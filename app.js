@@ -2163,6 +2163,18 @@ function vkDrag(e, host, vp) {
   window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
 }
 // 검색창 한글 조합 보호: 글자를 조합하는 동안에는 다시 그리지 않고(그리면 입력칸이 새로 생겨 'ㅌㅐ'처럼 낱자로 깨짐), 한 글자가 끝나면 검색
+/* 한글 검색 (2026-11-18 팀장님: "한글 기반 프로그램이니 고려해서"): 띄어쓰기 무시 · 초성으로 찾기(ㄴㄴㅁㅈ → 나눔명조) ·
+   치는 중인 마지막 글자는 받침 전이어도 맞음(나누 → 나눔) · 영문 대소문자 무시 */
+const KO_CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
+function koHas(hay, q) {
+  const H = String(hay || '').toLowerCase().replace(/\s+/g, ''), Q = String(q || '').toLowerCase().replace(/\s+/g, ''); if (!Q) return true; if (H.includes(Q)) return true;
+  const syl = c => { const n = c.charCodeAt(0) - 0xAC00; return n >= 0 && n < 11172 ? n : -1; };
+  const one = (h, c, last) => { if (h === c) return true; const sh = syl(h); if (sh < 0) return false; const ci = KO_CHO.indexOf(c); if (ci >= 0) return Math.floor(sh / 588) === ci; /* 초성 하나 */
+    const sc = syl(c); return last && sc >= 0 && sc % 28 === 0 && Math.floor(sh / 28) === Math.floor(sc / 28); }; /* 받침 전 마지막 글자 */
+  const qs = [...Q], hs = [...H];
+  outer: for (let i = 0; i + qs.length <= hs.length; i++) { for (let j = 0; j < qs.length; j++) if (!one(hs[i + j], qs[j], j === qs.length - 1)) continue outer; return true; }
+  return false;
+}
 function imeSafe(inp, fn) { inp.addEventListener('compositionstart', () => { inp._comp = true; }); inp.addEventListener('compositionend', e => { inp._comp = false; fn(e); }); inp.oninput = e => { if (e.isComposing || inp._comp) return; fn(e); }; }
 function headHTML(t) {
   const ic = t.type === 'audio' ? 'bell' : t.type === 'caption' ? 'text' : 'eye', toggle = t.type === 'audio' ? (t.mute ? 'mute' : 'vol') : 'eye';
@@ -2947,7 +2959,7 @@ function renderElems() {
   const si0 = $('#elSearch'), hadF = !!si0 && document.activeElement === si0, caret = hadF ? si0.selectionStart : 0;  // 다시 그려도 검색창 입력이 끊기지 않게
   const body = $('#sidebody'); const q = elQ.trim().toLowerCase();
   const libEls = libElemItems(); const cats = NC.elems.cats.slice(0, 1).concat([['naracha', '나라차']], myBlocks.length ? [['myblock', `내 블록 ${myBlocks.length}`]] : [], NC.elems.cats.slice(1));
-  const qw = q.split(/\s+/).filter(Boolean), pool = libEls.concat(myBlockItems(), NC.elems.items), txtOf = i => (i.name + ' ' + i.kw).toLowerCase(), has = (i, w) => { const t = txtOf(i); return t.includes(w) || (EL_SYN[w] || []).some(x => t.includes(x)); }; let all = pool.filter(i => qw.every(w => has(i, w))); if (!all.length && qw.length > 1) { const hits = i => qw.filter(w => has(i, w)).length; all = pool.filter(i => hits(i) > 0).sort((a, b) => hits(b) - hits(a)); }  // 모든 낱말이 맞는 것이 없으면 맞는 낱말이 많은 순
+  const qw = q.split(/\s+/).filter(Boolean), pool = libEls.concat(myBlockItems(), NC.elems.items), txtOf = i => (i.name + ' ' + i.kw).toLowerCase(), has = (i, w) => { const t = txtOf(i); return koHas(t, w) || (EL_SYN[w] || []).some(x => t.includes(x)); }; let all = pool.filter(i => qw.every(w => has(i, w))); if (!all.length && qw.length > 1) { const hits = i => qw.filter(w => has(i, w)).length; all = pool.filter(i => hits(i) > 0).sort((a, b) => hits(b) - hits(a)); }  // 모든 낱말이 맞는 것이 없으면 맞는 낱말이 많은 순
   const recent = recentElems().map(getElem).filter(Boolean);
   let h = `<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:wrap"><label class="f" style="flex:1 1 100%;margin:0"><input type="text" id="elSearch" placeholder="요소 검색 (예: 로고, 라차, 별, 말풍선)" value="${esc(elQ)}"></label><button class="btn sm" data-addmine title="내 PC의 PNG·SVG·JPG를 요소로 추가 (자료실에 보관돼 두 PC 모두에서 보임)">＋ 내 요소</button><button class="btn sm" data-addqr title="신청서·밴드·유튜브 주소를 QR 코드로 넣기">▦ QR</button><button class="btn sm" data-addcal title="한 달 달력 칸 넣기 (공휴일·일정·음력 표시)">📅 달력</button></div><div class="tcats" id="elcats">${cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>${(() => { const s0 = selEls(); return s0.length === 1 && s0[0].type === 'image' ? '<p class="hint el-swap">🖼 그림을 골라 두었습니다 — 그림 요소를 누르면 그 자리에 <b>바꿔 넣습니다</b> (Shift+누르기: 새로 넣기)</p>' : ''; })()}`;
   if (elCat === 'naracha' && !q) {
@@ -2980,7 +2992,7 @@ function libPhotoHTML() {
   const ph = NC.lib.items('photo'); if (!ph.length) return libHint(true);
   const cats = [...new Set(ph.map(x => x.cat))];
   const q = photoQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const list = ph.filter(x => (!photoCat || x.cat === photoCat) && (!q.length || q.every(w => (x.name + ' ' + x.kw).toLowerCase().includes(w))));
+  const list = ph.filter(x => (!photoCat || x.cat === photoCat) && (!q.length || q.every(w => koHas(x.name + ' ' + x.kw, w))));
   const card = x => `<button data-libimg="${esc(x.file)}" title="${esc(x.name)}" draggable="true"><img src="${NC.lib.url(x.thumb)}" alt="${esc(x.name)}" loading="lazy" draggable="false"></button>`;
   let h = `<h3>나라차 자료실 사진 <small>${ph.length}</small></h3><label class="f"><input type="text" id="photoSearch" placeholder="사진 검색 (예: 겨루기, 아이, 도장)" value="${esc(photoQ)}"></label>
   <div class="tcats"><button data-pcat="" class="${photoCat ? '' : 'on'}">전체</button>${cats.map(c => `<button data-pcat="${esc(c)}" class="${photoCat === c ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>`;
@@ -3079,7 +3091,7 @@ function tplItems() {
   themeItems.concat(calItems).forEach(t => { t.tags = { format: '달력', season: '사계절', age: '전체', occasion: '안내', biz: '태권도장' }; t.kw = t.name + ' 달력 캘린더 ' + (t.desc || ''); });
   const q = (tplQ || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
   if (tplCat === 'holiday') { const order = NC.tpl.nextHolidays ? NC.tpl.nextHolidays() : []; const rank = t => { const i = order.indexOf(t.holiday); return i < 0 ? 99 : i; }; items.sort((a, b) => (a.holiday ? 0 : 1) - (b.holiday ? 0 : 1) || rank(a) - rank(b)); }
-  return items.filter(t => (tplCat === 'all' || (tplCat === 'holiday' ? !!t.holiday : t.cat === tplCat)) && Object.keys(tplF).every(k => !tplF[k] || (t.tags && t.tags[k] === tplF[k])) && (!q.length || q.every(w => (t.name + ' ' + (t.kw || '')).toLowerCase().includes(w))));
+  return items.filter(t => (tplCat === 'all' || (tplCat === 'holiday' ? !!t.holiday : t.cat === tplCat)) && Object.keys(tplF).every(k => !tplF[k] || (t.tags && t.tags[k] === tplF[k])) && (!q.length || q.every(w => koHas(t.name + ' ' + (t.kw || ''), w))));
 }
 function tplSheet(t, pages) { const tmp = Object.assign({}, doc, { w: t.w, h: t.h, bleed: 0, cropMarks: false }); const saved = doc; doc = tmp; try { return sheetHTML(pages[0], 'thumb'); } finally { doc = saved; } }
 function recentTpls() { try { return JSON.parse(localStorage.getItem('naracal-recent-tpls') || '[]'); } catch (e) { return []; } }
@@ -3293,17 +3305,23 @@ function openFontPop(btn) {
   closeFontPop(); const k = btn.dataset.fp, cur_ = btn.dataset.cur; const pop = document.createElement('div'); pop.id = 'fpPop';
   const cats = [['all', '전체'], ['hot', '인기'], ['title', '제목'], ['brush', '붓'], ['hand', '손글씨'], ['body', '본문'], ['latin', '영문'], ['mine', '내 글꼴']];
   const row = f => `<div class="fp-row ${f.family === cur_ ? 'on' : ''}" data-font="${esc(f.family)}" style="font-family:'${esc(f.family)}'">${f.preview ? `<img class="fpimg" src="${esc(f.preview)}" alt="" loading="lazy">` : '<span class="sm">나라차 태권도 가나다 ABC 123</span>'}<span class="nm">${esc(f.label)}${f.lib ? ' <em class="ftag">자료실</em>' : f.web ? ' <em class="ftag web">인기</em>' : ''}</span></div>`;
-  const render = () => {
+  /* 찾기 칸은 한 번만 그리고 목록만 다시 그림 — 칸을 다시 그리면 한글 조합이 끊겨 자소가 분리됨(ㄴㅏㄴㅜ) */
+  const listHTML = () => {
     const fonts = allFonts(); const rec = recentFonts().map(n => fonts.find(f => f.family === n)).filter(Boolean);
-    const list = sortFonts(fonts.filter(f => (fpState.cat === 'all' || (fpState.cat === 'hot' ? f.web || f.lib : f.cat === fpState.cat)) && (!fpState.q || (f.label + f.family).toLowerCase().includes(fpState.q.toLowerCase()))));
-    pop.innerHTML = `<div class="fp-head"><input type="text" id="fpQ" placeholder="글꼴 찾기" value="${esc(fpState.q)}"><div class="fp-cats">${cats.map(([c, t]) => `<button type="button" data-fc="${c}" class="${fpState.cat === c ? 'on' : ''}">${t}</button>`).join('')}</div></div>
-    <div class="fp-list">${rec.length && fpState.cat === 'all' && !fpState.q ? `<div class="fp-sec">최근 사용</div>${rec.map(row).join('')}<div class="fp-sec">전체</div>` : ''}${list.map(row).join('') || '<div class="hint" style="padding:10px">맞는 글꼴이 없습니다</div>'}</div>
+    const list = sortFonts(fonts.filter(f => (fpState.cat === 'all' || (fpState.cat === 'hot' ? f.web || f.lib : f.cat === fpState.cat)) && (!fpState.q.trim() || fpState.q.trim().split(/\s+/).every(w => koHas(f.label + ' ' + f.family, w)) || koHas(f.label, fpState.q))));
+    return `${rec.length && fpState.cat === 'all' && !fpState.q.trim() ? `<div class="fp-sec">최근 사용</div>${rec.map(row).join('')}<div class="fp-sec">전체</div>` : ''}${list.map(row).join('') || '<div class="hint" style="padding:10px">맞는 글꼴이 없습니다 — 초성(ㄴㅁ)이나 짧은 낱말(명조)로도 찾을 수 있어요</div>'}`;
+  };
+  const renderList = () => { const L = pop.querySelector('.fp-list'); if (L) { L.innerHTML = listHTML(); L.scrollTop = 0; } };
+  const render = () => {
+    pop.innerHTML = `<div class="fp-head"><input type="text" id="fpQ" placeholder="글꼴 찾기 (예: 명조, ㄴㄴㅁㅈ)" value="${esc(fpState.q)}" autocomplete="off" spellcheck="false"><div class="fp-cats">${cats.map(([c, t]) => `<button type="button" data-fc="${c}" class="${fpState.cat === c ? 'on' : ''}">${t}</button>`).join('')}</div></div>
+    <div class="fp-list">${listHTML()}</div>
     <div class="fp-foot"><button type="button" class="btn sm" id="fpMore">글꼴 둘러보기·내 글꼴 올리기</button></div>`;
-    const q = pop.querySelector('#fpQ'); q.oninput = () => { fpState.q = q.value; const pos = q.selectionStart; render(); const q2 = pop.querySelector('#fpQ'); q2.focus(); q2.setSelectionRange(pos, pos); };
+    const q = pop.querySelector('#fpQ'); q.addEventListener('input', () => { fpState.q = q.value; renderList(); }); /* 조합 중에도 목록만 바뀌고 칸은 그대로 */
+    q.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { const first = pop.querySelector('.fp-list [data-font]'); if (first) { applyFontChoice(k, first.dataset.font); closeFontPop(); } } if (e.key === 'Escape') closeFontPop(); });
   };
   render(); const r = btn.getBoundingClientRect(); document.body.appendChild(pop);
-  const h = Math.min(400, window.innerHeight - 20); pop.style.maxHeight = h + 'px'; pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 328)) + 'px'; pop.style.top = (r.bottom + h + 8 > window.innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4) + 'px';
-  pop.onclick = e => { const c = e.target.closest('[data-fc]'); if (c) { fpState.cat = c.dataset.fc; render(); return; } const rw = e.target.closest('[data-font]'); if (rw) { applyFontChoice(k, rw.dataset.font); closeFontPop(); return; } if (e.target.id === 'fpMore') { closeFontPop(); openFonts(); } };
+  const h = Math.min(400, window.innerHeight - 20); pop.style.maxHeight = h + 'px'; pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 348)) + 'px'; pop.style.top = (r.bottom + h + 8 > window.innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4) + 'px';
+  pop.onclick = e => { const c = e.target.closest('[data-fc]'); if (c) { fpState.cat = c.dataset.fc; pop.querySelectorAll('[data-fc]').forEach(b => b.classList.toggle('on', b === c)); renderList(); return; } const rw = e.target.closest('[data-font]'); if (rw) { applyFontChoice(k, rw.dataset.font); closeFontPop(); return; } if (e.target.id === 'fpMore') { closeFontPop(); openFonts(); } };
   setTimeout(() => { const q = pop.querySelector('#fpQ'); if (q) q.focus(); }, 0);
 }
 function closeFontPop() { const p = $('#fpPop'); if (p) p.remove(); }
@@ -3354,7 +3372,7 @@ function renderInspector() {
     <div class="row"><label class="f" style="flex:1;margin:0"><span>글꼴</span>${fontPicker('font', el.font)}</label><button class="btn sm" id="fontBrowse" style="margin-top:17px">둘러보기</button></div>
     <div class="fsz"><span>글자 크기</span><div class="fszc"><button type="button" data-fsz="-1" title="작게 (Ctrl+Shift+,)">−</button><input class="num" id="fszIn" data-k="size" type="number" step="0.5" min="1" value="${el.size}" title="크기를 직접 입력 (제한 없음)"><button type="button" class="fszdd" data-fszdd title="자주 쓰는 크기">▾</button><button type="button" data-fsz="1" title="크게 (Ctrl+Shift+.)">+</button><em>pt</em></div></div>
     <div class="tfmt"><button type="button" data-tfi="bold" class="${fmtOn(el, 'bold') ? 'on' : ''}" title="굵게 (Ctrl+B)"><b>B</b></button><button type="button" data-tfi="italic" class="${el.italic ? 'on' : ''}" title="기울임 (Ctrl+I)"><i>I</i></button><button type="button" data-tfi="underline" class="${el.underline ? 'on' : ''}" title="밑줄 (Ctrl+U)"><u>U</u></button><button type="button" data-tfi="strike" class="${el.strike ? 'on' : ''}" title="취소선"><s>S</s></button><button type="button" data-tfi2="upper" class="${el.upper ? 'on' : ''}" title="영문 대문자">AA</button><button type="button" data-tfi2="vertical" class="${el.vertical ? 'on' : ''}" title="세로쓰기">세로</button>
-    <select data-k="weight" title="굵기 단계 (이 글꼴에 실제로 있는 굵기만)">${(() => { const have = fontWeights(el.font); return [[100, '아주 가늘게'], [200, '더 가늘게'], [300, '가늘게'], [400, '보통'], [500, '중간'], [600, '약간 굵게'], [700, '굵게'], [800, '아주 굵게'], [900, '최대']].filter(([a]) => have.includes(a) || String(a) === String(el.weight)).map(([a, t]) => `<option value="${a}" ${String(a) === String(el.weight) ? 'selected' : ''}>${t}${have.includes(a) ? '' : ' (가짜 굵게)'}</option>`).join(''); })()}</select></div>
+    <select data-k="weight" title="굵기 단계 (이 글꼴에 실제로 있는 굵기만)">${(() => { const have = fontWeights(el.font); return [[100, '아주 가늘게'], [200, '더 가늘게'], [300, '가늘게'], [400, '보통'], [500, '중간'], [600, '약간 굵게'], [700, '굵게 (Bold)'], [800, '아주 굵게 (ExtraBold)'], [900, '최대']].filter(([a]) => have.includes(a) || String(a) === String(el.weight)).map(([a, t]) => `<option value="${a}" ${String(a) === String(el.weight) ? 'selected' : ''}>${t}${have.includes(a) ? '' : ' (가짜 굵게)'}</option>`).join(''); })()}</select></div>
     <p class="hint" style="margin:2px 0 8px">글자를 두 번 눌러 편집하면서 일부만 드래그하면, 위에 뜨는 작은 도구 막대(또는 여기 B·I·U·S)로 <b>고른 글자만</b> 굵게·기울임·밑줄·색·크기를 바꿀 수 있습니다.</p>
     ${tboxHTML(el)}
     <div class="grid2">${F('줄 간격', 'lh', el.lh, { type: 'slider', min: 0.6, max: 3, step: 0.05, def: 1.35 })}${F('자간', 'ls', el.ls, { type: 'slider', min: -0.2, max: 1, step: 0.01, unit: 'em', def: 0 })}</div>
@@ -3687,7 +3705,7 @@ function renderNewDesign() {
   const custom = `<h3>직접 입력</h3><div class="custom"><label>가로<input type="number" id="ndW" min="1" value="210"></label><label>세로<input type="number" id="ndH" min="1" value="297"></label><label>단위<select id="ndU"><option value="mm">mm</option><option value="cm">cm</option><option value="px">px</option></select></label><button class="btn primary" id="ndMake">새 디자인 만들기</button></div><p class="hint">인쇄물은 mm·cm, 화면용(SNS·웹·영상)은 px로 넣으면 편합니다. px는 96dpi 기준으로 바꿉니다.</p>`;
   const q = ndState.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   let h = '';
-  if (q.length) { const list = FORMATS.filter(f => q.every(w => (f[1] + ' ' + f[6]).toLowerCase().includes(w))); h = `<h3>검색 결과 <small>${list.length}</small></h3><div class="fgrid">${list.map(fcard).join('') || '<p class="hint">맞는 크기가 없습니다. 직접 입력으로 만들어 보세요.</p>'}</div>` + custom; }
+  if (q.length) { const list = FORMATS.filter(f => q.every(w => koHas(f[1] + ' ' + f[6], w))); h = `<h3>검색 결과 <small>${list.length}</small></h3><div class="fgrid">${list.map(fcard).join('') || '<p class="hint">맞는 크기가 없습니다. 직접 입력으로 만들어 보세요.</p>'}</div>` + custom; }
   else if (ndState.nav === 'custom') h = custom;
   else if (ndState.nav === 'rec') {
     const rec = recentFormats().map(id => FORMATS.find(f => f[0] === id)).filter(Boolean);
@@ -3797,7 +3815,7 @@ async function renderDrive() {
   ${drv.view === 'drive' && drv.path.length && !q ? `<div class="dvfolder up" data-crumb="${drv.path.length - 1}" data-dropdir="${esc(JSON.stringify(drv.path.slice(0, -1)))}"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/></svg><div><b>상위 폴더로</b><small>${esc(drv.path.length > 1 ? drv.path[drv.path.length - 2] : '내 드라이브')}</small></div></div>` : ''}
   ${folders.length ? `<div class="dvfolders">${folders.map(fcardH).join('')}</div>` : ''}
   ${docs.length ? `<div class="dvdocs">${docs.map(dcardH).join('')}</div>` : !folders.length ? `<p class="hint" style="margin-top:30px;text-align:center">${trash ? '휴지통이 비어 있습니다.' : q ? '맞는 디자인이 없습니다.' : '아직 디자인이 없습니다. 오른쪽 위 "새 디자인 만들기"로 시작하세요.'}</p>` : ''}`;
-  const qi = $('#dvQ'); qi.oninput = () => { clearTimeout(drv.qt); drv.qt = setTimeout(() => { drv.q = qi.value; renderDrive().then(() => { const n = $('#dvQ'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }); }, 300); };
+  const qi = $('#dvQ'); qi.addEventListener('compositionstart', () => { qi._comp = true; }); qi.addEventListener('compositionend', () => { qi._comp = false; qi.oninput(); });  /* 한글 조합 중에는 다시 그리지 않음 (자소 분리 방지) */ qi.oninput = e => { if (e && (e.isComposing || qi._comp)) return; clearTimeout(drv.qt); drv.qt = setTimeout(() => { if (qi.matches(':focus') && qi._comp) return; drv.q = qi.value; renderDrive().then(() => { const n = $('#dvQ'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }); }, 300); };
   $('#dvSort').onchange = e => { drv.sort = e.target.value; renderDrive(); };
   // 미리보기는 화면에 보일 때 첫 쪽만 그림
   const obs = new IntersectionObserver(ents => ents.forEach(en => { if (!en.isIntersecting) return; obs.unobserve(en.target); fillThumb(en.target, docs[Number(en.target.dataset.thumb)]); }), { root: main, rootMargin: '200px' });
@@ -4771,7 +4789,7 @@ const fontDataCache = new Map(); let fontCssText = null;
 async function fontCSSFor(node) {
   // 쓰인 글꼴과 그 굵기만 넣음 (한글 글꼴은 굵기 하나가 수 MB라, 모두 넣으면 그림 한 장에 수십 MB를 읽어 아주 느림)
   const used = new Set(), wts = new Map(); node.querySelectorAll('*').forEach(e => { const cs = getComputedStyle(e), w = Number(cs.fontWeight) || 400; cs.fontFamily.split(',').forEach(f => { const fam = f.trim().replace(/^["']|["']$/g, ''); used.add(fam); if (!wts.has(fam)) wts.set(fam, new Set()); wts.get(fam).add(w); }); });
-  if (!fontCssText) { try { fontCssText = await (await fetch('fonts/fonts.css')).text(); } catch (e) { fontCssText = null; } }
+  if (!fontCssText) { try { fontCssText = await (await fetch('fonts/fonts.css?v=' + (window.NARACAL_VER || Date.now()))).text(); /* 판 번호를 붙여 옛 사본(브라우저 보관)을 쓰지 않게 — 새 글꼴이 출력에서 빠지던 것 */ } catch (e) { fontCssText = null; } }
   const toData = async url => { if (!fontDataCache.has(url)) fontDataCache.set(url, fetch(url).then(r => r.blob()).then(b => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); }))); return fontDataCache.get(url); };
   const out = [];
   const webCss = (($('#webfontCss') || {}).textContent || '') + '\n' + (($('#libfontCss') || {}).textContent || '');
@@ -5106,8 +5124,13 @@ const CERT_FRAME_JPG = 'assets/cert/naracha-cert-frame.jpg', CERT_FRAME_PDF = 'a
    출력이 모두 굵게 나오던 것 → 기억된 배치·이미 만든 상장의 굵기를 보통으로 ② 제목(상장 이름)은 선에서 1cm 더 위로 (기본 자리 105 → 95mm, 기억된 자리·만든 상장도 10mm 위로)
    제목·이름·급수는 ExtraBold(800) 그대로. 문서마다 한 번만 (doc.cert.wv) */
 function certMigrate(C) {  /* 처음 불러올 때 이 줄보다 먼저 불릴 수 있어 상수 대신 함수 안에 */
-  const CERT_WV = 2, CERT_BOLD = ['title', 'name', 'grade'];
-  if ((C.wv || 0) >= CERT_WV) return; const ky = doc.h / 297;
+  const CERT_WV = 3, CERT_BOLD = ['title', 'name', 'grade'], v0 = C.wv || 0;
+  if (v0 >= CERT_WV) return; const ky = doc.h / 297;
+  /* 판 3 (11/18 팀장님 "나눔명조 ExtraBold체로"): 제목·이름·급수는 글꼴 목록에 따로 있는 「나눔명조 ExtraBold」 글꼴로 */
+  const xb = o => { if (o && (!o.font || /^(Nanum Myeongjo|Noto Sans KR)$/.test(o.font))) { o.font = 'Nanum Myeongjo ExtraBold'; o.weight = 800; } };
+  Object.entries(C.layout || {}).forEach(([k, L]) => { const key = String(k.split(':')[1] || '').split('@')[0]; if (CERT_BOLD.includes(key) && L && typeof L === 'object') xb(L); });
+  (doc.pages || []).forEach(p => { if (p.cert) p.els.forEach(e => { if (e.type === 'text' && CERT_BOLD.includes(e.certKey)) xb(e); }); });
+  if (v0 >= 2) { C.wv = CERT_WV; return; }  /* 판 2(굵기·제목 자리)는 이미 함 */
   Object.entries(C.layout || {}).forEach(([k, L]) => { if (!L || typeof L !== 'object') return; const key = String(k.split(':')[1] || '').split('@')[0];
     if (!CERT_BOLD.includes(key) && Number(L.weight) >= 600) L.weight = 400; if (key === 'title' && typeof L.y === 'number') L.y = r1(L.y - 10 * ky); });
   (doc.pages || []).forEach(p => { if (!p.cert) return; p.els.forEach(e => { if (!e.certKey || e.type !== 'text') return;
@@ -5115,7 +5138,7 @@ function certMigrate(C) {  /* 처음 불러올 때 이 줄보다 먼저 불릴 �
   C.wv = CERT_WV;
 }
 function certState() {
-  if (!doc.cert) doc.cert = { form: 'record', printFrame: true, data: {}, layout: {}, wv: 2 };  /* wv: certMigrate 판 */
+  if (!doc.cert) doc.cert = { form: 'record', printFrame: true, data: {}, layout: {}, wv: 3 };  /* wv: certMigrate 판 */
   const C = doc.cert; certMigrate(C); C.data = C.data || {}; C.layout = C.layout || {}; if (!C.frame) { C.frame = CERT_FRAME_JPG; C.framePdf = CERT_FRAME_PDF; } /* 틀은 기본으로 내장 틀 */
   Object.entries(CERT_FORMS).forEach(([k, f]) => { if (!C.data[k]) C.data[k] = { common: Object.fromEntries(f.common.map(([a, , v]) => [a, a === 'date' ? CERT_TODAY() : v])), body: f.body, rows: [] }; });
   return C;
@@ -5131,10 +5154,10 @@ function certEls(form, r) {
   const recN = certRecN(form, r);
   const T = (key, text, o) => { if (!String(text || '').trim()) return; const L = C.layout[certLKey(form, key, recN)] || {}; const base = Object.assign({}, TEXT_DEF, { id: uid(), text, font: 'Noto Sans KR', size: 15, weight: 700, color: '#1a1a1a', align: 'center', lh: 1.45, ls: 0, name: '상장 · ' + o.label, certKey: key }, o, { x: r1(o.x * kx), y: r1(o.y * ky), w: r1(o.w * kx), h: r1((o.h || 8) * ky), size: Math.round(o.size * k * 2) / 2 });
     delete base.label; Object.assign(base, L); if (base.fitText) base.fitMax = Number(L.fitMax) || base.size; out.push(base); };
-  const sans = 'Noto Sans KR', serif = 'Nanum Myeongjo', fill = t => String(t || '').replace(/\{([^{}\n]+)\}/g, (m, nm) => { if (nm.trim() === '이름') return r && r.name ? String(r.name) : m; const c = F.common.find(x => x[1].replace(/ \(.*\)$/, '') === nm.trim()); return c ? certVal(D, r, c[0]) : m; });
-  /* 글꼴: 관장님 상장과 같게 나눔명조 — 제목(상장 이름)·이름·급수는 나눔명조 ExtraBold(800), 본문·기록·날짜는 보통(400) */
-  T('title', certVal(D, r, 'title'), { label: '상장 이름', x: 15, y: 95, w: 180, h: 22, size: 42, weight: 800, font: serif, ls: 0.06, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'bottom' }); /* 틀의 'THIS CERTIFICATE IS PRESENTED TO' 선(133.5mm) 위 약 16mm에 앉게 (11/17 관장님: 선 위 6mm → 11/18 팀장님: 1cm 더 위로) */
-  T('name', certVal(D, r, 'name'), { label: '이름', x: 30, y: 139, w: 150, h: 17, size: 34, weight: 800, font: serif, ls: 0.04, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
+  const sans = 'Noto Sans KR', serif = 'Nanum Myeongjo', serifXB = 'Nanum Myeongjo ExtraBold', fill = t => String(t || '').replace(/\{([^{}\n]+)\}/g, (m, nm) => { if (nm.trim() === '이름') return r && r.name ? String(r.name) : m; const c = F.common.find(x => x[1].replace(/ \(.*\)$/, '') === nm.trim()); return c ? certVal(D, r, c[0]) : m; });
+  /* 글꼴: 관장님 상장과 같게 나눔명조 — 제목(상장 이름)·이름·급수는 「나눔명조 ExtraBold」 글꼴(글꼴 목록에 따로, 800), 본문·기록·날짜는 나눔명조 보통(400) */
+  T('title', certVal(D, r, 'title'), { label: '상장 이름', x: 15, y: 95, w: 180, h: 22, size: 42, weight: 800, font: serifXB, ls: 0.06, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'bottom' }); /* 틀의 'THIS CERTIFICATE IS PRESENTED TO' 선(133.5mm) 위 약 16mm에 앉게 (11/17 관장님: 선 위 6mm → 11/18 팀장님: 1cm 더 위로) */
+  T('name', certVal(D, r, 'name'), { label: '이름', x: 30, y: 139, w: 150, h: 17, size: 34, weight: 800, font: serifXB, ls: 0.04, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
   let bodyY = 180, bodySz = 15;
   if (form === 'record') {
     /* 종목 목록: 관리프로그램에서 가져온 사람은 r.recs(사람마다 종목·단위가 다름), 손으로 넣은 사람은 공통 종목1·2 + 기록 */
@@ -5149,7 +5172,7 @@ function certEls(form, r) {
         T('recN' + (c + 1), list.map(q => q.k).join('\n'), { label: `기록 ${c + 1}칸 종목`, x: x0, y: 158, w: nw, h: rowH * list.length, size: sz, font: serif, weight: 400, lh, align: 'right' });
         T('recV' + (c + 1), list.map(line).join('\n'), { label: `기록 ${c + 1}칸 기록`, x: x0 + nw + 2, y: 158, w: vw, h: rowH * list.length, size: sz, font: serif, weight: 400, lh, align: 'left' }); }
       bodyY = 158 + rows_ * rowH + 5; bodySz = 14; }
-  } else if (form === 'grade') { T('grade', r.grade, { label: '급수', x: 40, y: 158, w: 130, h: 11, size: 24, weight: 800, font: serif }); bodyY = 182; }
+  } else if (form === 'grade') { T('grade', r.grade, { label: '급수', x: 40, y: 158, w: 130, h: 11, size: 24, weight: 800, font: serifXB }); bodyY = 182; }
   else if (form === 'free') { T('line', r.line, { label: '이름 아래 한 줄', x: 25, y: 160, w: 160, h: 9, size: 15, font: serif, weight: 400 }); }
   T('body', fill(D.body), { label: '본문', x: 18, y: bodyY, w: 174, h: 30, size: bodySz, font: serif, weight: 400, lh: bodySz < 15 ? 1.65 : 1.75 });
   T('date', certVal(D, r, 'date'), { label: '날짜', x: 24, y: 229.5, w: 60, h: 8, size: 14, font: serif, weight: 400 });

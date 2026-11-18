@@ -275,6 +275,14 @@ window.NARACAL_FONTS = [
   ]
  },
  {
+  "family": "Nanum Myeongjo ExtraBold",
+  "label": "나눔명조 ExtraBold",
+  "cat": "body",
+  "weights": [
+   800
+  ]
+ },
+ {
   "family": "Song Myung",
   "label": "송명 (명조)",
   "cat": "body",

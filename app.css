@@ -1,6 +1,6 @@
 /* ===== 에디터 UI ===== */
 :root{
-  --ui-bg:#f3f4f7; --ui-panel:#ffffff; --ui-fg:#1b2130; --ui-fg2:#3f4756; --ui-muted:#707887; --ui-line:#e2e5eb; --ui-line2:#cfd4dd; --ui-field:#f5f6f9;
+  --ui-bg:#f3f4f7; --ui-panel:#ffffff; --ui-fg:#1b2130; --ui-fg2:#3f4756; --ui-muted:#5c6473; --ui-line:#e2e5eb; --ui-line2:#cfd4dd; --ui-field:#f5f6f9;
   --ui-accent:#2f5bea; --ui-accent-soft:#e9eefc; --ui-accent-fg:#ffffff; --ui-stage:#e4e7ee; --ui-danger:#d13b3b; --ui-ai:#6b3fd1; --ui-ai-soft:#f0ebfb;
   --brand:#1e2b5a; --r:8px; --sh:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
   --side-w:300px; --insp-w:320px;
@@ -9,7 +9,7 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%}
-body{margin:0;background:var(--ui-bg);color:var(--ui-fg);font-family:var(--font-ui);font-size:14px;line-height:1.45;overflow:hidden;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--ui-bg);color:var(--ui-fg);font-family:var(--font-ui);font-size:14px;line-height:1.45;overflow:hidden;-webkit-font-smoothing:auto} /* 2026-11-18: antialiased는 맥에서 글자를 가늘고 흐릿하게 만들어(팀장님 "글자가 모두 흐릿") 기본값으로 */
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--ui-accent);outline-offset:1px}
 .ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
@@ -168,7 +168,7 @@ kbd{background:var(--ui-field);border:1px solid var(--ui-line2);border-radius:5p
 .fontrow{display:grid;grid-template-columns:160px 1fr auto;align-items:center;gap:12px;padding:8px 12px;border:1px solid var(--ui-line);border-radius:10px;cursor:pointer}
 .fontrow:hover{background:var(--ui-field);border-color:var(--ui-line2)}
 .fontrow.active{border-color:var(--ui-accent);background:var(--ui-accent-soft)}
-.fontrow .nm{font-size:12.5px;color:var(--ui-fg2);font-weight:600}
+.fontrow .nm{font-size:14px;color:var(--ui-fg);font-weight:600}
 .fontrow .sample{font-size:22px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .holtable{width:100%;border-collapse:collapse;font-size:13px}
 .holtable td,.holtable th{border-bottom:1px solid var(--ui-line);padding:5px 6px;text-align:left}
@@ -231,18 +231,18 @@ code{background:var(--ui-field);padding:1px 6px;border-radius:5px;font-size:12.5
 .fp-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fp-btn i{font-style:normal;color:var(--ui-muted);font-size:11px;font-family:var(--font-ui)}
 .fp-btn:hover{border-color:var(--ui-muted)}
-#fpPop{position:fixed;z-index:70;width:320px;background:#fff;border:1px solid var(--ui-line);border-radius:10px;box-shadow:0 12px 36px rgba(0,0,0,.22);display:flex;flex-direction:column;overflow:hidden}
+#fpPop{position:fixed;z-index:70;width:340px;background:#fff;border:1px solid var(--ui-line);border-radius:10px;box-shadow:0 12px 36px rgba(0,0,0,.22);display:flex;flex-direction:column;overflow:hidden}
 #fpPop .fp-head{padding:8px;border-bottom:1px solid var(--ui-line);display:flex;flex-direction:column;gap:6px}
 #fpPop .fp-head input{width:100%;padding:6px 8px;border:1px solid var(--ui-line);border-radius:6px;background:var(--ui-field)}
 #fpPop .fp-cats{display:flex;gap:3px;flex-wrap:wrap}
 #fpPop .fp-cats button{border:1px solid var(--ui-line);background:#fff;border-radius:999px;padding:2px 8px;font-size:11.5px;cursor:pointer;color:var(--ui-muted)}
 #fpPop .fp-cats button.on{background:#eef2fb;border-color:var(--ui-accent);color:var(--ui-accent)}
 #fpPop .fp-list{overflow-y:auto;flex:1;min-height:0}
-#fpPop .fp-row{display:flex;flex-direction:column;gap:1px;padding:7px 10px;cursor:pointer;border-bottom:1px solid #f0f1f4}
+#fpPop .fp-row{display:flex;flex-direction:column;gap:3px;padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f1f4}
 #fpPop .fp-row:hover{background:var(--ui-field)}
 #fpPop .fp-row.on{background:#eef2fb}
-#fpPop .fp-row .sm{font-size:19px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#fpPop .fp-row .nm{font-family:var(--font-ui);font-size:11px;color:var(--ui-muted)}
+#fpPop .fp-row .sm{font-size:20px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#fpPop .fp-row .nm{font-family:var(--font-ui);font-size:13.5px;font-weight:600;color:var(--ui-fg2)}
 #fpPop .fp-foot{padding:6px 8px;border-top:1px solid var(--ui-line);background:var(--ui-field)}
 
 /* 숫자 입력칸: 화살표 제거·여백 축소로 좁은 칸에서도 숫자가 잘리지 않게 */
@@ -543,7 +543,7 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .stage .ovl{overflow:visible}
 .stage .canvas-wrap{overflow:visible}
 .el-cal .cg .cglines{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none}
-.fontrow,#fpPop .fp-row{content-visibility:auto;contain-intrinsic-size:auto 44px}
+.fontrow,#fpPop .fp-row{content-visibility:auto;contain-intrinsic-size:auto 54px}
 /* 페이지·레이어 끌어 옮기기, 우클릭 메뉴 */
 #thumbs .thumb.dragging,#sidebody .layer.dragging{opacity:.4}
 #thumbs .thumb.dropb{box-shadow:0 -3px 0 #2f6fe4}#thumbs .thumb.dropa{box-shadow:0 3px 0 #2f6fe4}
@@ -581,7 +581,7 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .rsbox{position:relative;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.15)}
 .rsbox .sheet{box-shadow:none}
 /* 글꼴 견본 그림 */
-#fpPop .fp-row .fpimg,.fontrow .fpimg{height:24px;width:auto;max-width:100%;object-fit:contain;object-position:left center;display:block}
+#fpPop .fp-row .fpimg,.fontrow .fpimg{height:26px;width:auto;max-width:100%;object-fit:contain;object-position:left center;display:block}
 .fontrow .fpimg{height:28px}
 .ftag{font-style:normal;font-size:10px;background:#e8eefc;color:#2f5bea;border-radius:4px;padding:0 4px;margin-left:4px}
 .ftag.web{background:#fdecef;color:#c0304f}
