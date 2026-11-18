@@ -160,18 +160,19 @@ NC.cal = (function () {
     for (let i = 0; i < 42; i++) { const n = i - first + 1; h += (n < 1 || n > dim) ? '<span></span>' : `<span style="${(i + s.weekStart) % 7 === 0 ? `color:${s.sunColor}` : ''}">${n}</span>`; }
     return h + '</div>';
   }
-  function applyRules(el, rules) {
-    const y = el.year, m = el.month, dim = daysIn(y, m);
+  function applyRules(el, rules, doc) {
+    const y = el.year, m = el.month, dim = daysIn(y, m), hol = doc ? holidayMap(doc, y) : {}, p2 = n => String(n).padStart(2, '0');
+    const off = (r, k) => r.noHol && (hol[`${y}-${p2(m)}-${p2(k)}`] || []).length;  /* '휴일 빼기' 규칙: 공휴일이면 건너뜀 */
     el.events = el.events || [];
     let added = 0;
     (rules || []).forEach(r => {
       if (!r.text) return;
       let d = null;
-      if (r.week === 'every') { for (let k = 1; k <= dim; k++) if (new Date(y, m - 1, k).getDay() === Number(r.dow) && !el.events.some(e => e.d === k && e.text === r.text)) { el.events.push({ d: k, text: r.text, color: r.color || '' }); added++; } return; } /* 매주 ○요일 */
+      if (r.week === 'every') { for (let k = 1; k <= dim; k++) if (new Date(y, m - 1, k).getDay() === Number(r.dow) && !off(r, k) && !el.events.some(e => e.d === k && e.text === r.text)) { el.events.push({ d: k, text: r.text, color: r.color || '' }); added++; } return; } /* 매주 ○요일 */
       if (r.kind === 'date') { const rm = Number(r.m) || 0, rd = r.last ? dim : Number(r.d); if ((rm === 0 || rm === m) && rd >= 1 && rd <= dim) d = rd; } /* 날짜 규칙: 매년 m월 d일 (m=0이면 매월 d일) — 생일·기념일·원비 날 */
       else if (r.week === 'last') { for (let k = dim; k >= 1; k--) if (new Date(y, m - 1, k).getDay() === Number(r.dow)) { d = k; break; } }
       else { let c = 0; for (let k = 1; k <= dim; k++) if (new Date(y, m - 1, k).getDay() === Number(r.dow)) { c++; if (c === Number(r.week)) { d = k; break; } } }
-      if (d && !el.events.some(e => e.d === d && e.text === r.text)) { el.events.push({ d, text: r.text, color: r.color || '' }); added++; }
+      if (d && !off(r, d) && !el.events.some(e => e.d === d && e.text === r.text)) { el.events.push({ d, text: r.text, color: r.color || '' }); added++; }
     });
     return added;
   }
