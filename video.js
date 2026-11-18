@@ -344,7 +344,8 @@ NC.video = (function () {
   // 더킹: 구간 [s,e] 안에서 k배, 앞뒤 r초 동안 직선으로 내려가고 올라감
   function duckAt(D, t) { if (!D || !D.iv || !D.iv.length) return 1; const r = D.r || 0.35; let f = 1; for (const [s, e] of D.iv) { if (t < s - r || t > e + r) continue; const p = t < s ? (s - t) / r : t > e ? (t - e) / r : 0; f = Math.min(f, D.k + (1 - D.k) * Math.min(1, p)); } return f; }
   function duckKeys(D) { const r = (D && D.r) || 0.35, o = []; ((D && D.iv) || []).forEach(([s, e]) => o.push(s - r, s, e, e + r)); return o; }
-  function envAt(v, t, total) { const end = vEnd(v, total), vol = v.vk && v.vk.length ? vkAt(v.vk, t - v.at) : v.vol == null ? 1 : Number(v.vol); let g = vol * duckAt(v.duck, t); if (v.fin > 0 && t < v.at + v.fin) g *= Math.max(0, (t - v.at) / v.fin); if (v.fout > 0 && t > end - v.fout) g *= Math.max(0, (end - t) / v.fout); return g; }
+  function envAt(v, t, total) { const end = vEnd(v, total), vol = v.vk && v.vk.length ? vkAt(v.vk, t - v.at) : v.vol == null ? 1 : Number(v.vol); let g = vol * duckAt(v.duck, t); if (v.fin > 0 && t < v.at + v.fin) g *= Math.max(0, (t - v.at) / v.fin); if (v.fout > 0 && t > end - v.fout) g *= Math.max(0, (end - t) / v.fout); if (t - v.at < MF) g *= Math.max(0, (t - v.at) / MF); if (end - t < MF) g *= Math.max(0, (end - t) / MF); return g; }
+  const MF = 0.008;  /* 클립 끝 마이크로 페이드(8ms) — 잘린 파형이 갑자기 끊겨 나는 '딱' 소리 막기 */
   // 미리보기·실시간 녹화: 짧은 소리는 버퍼로, 파일은 오디오 플레이어로 (몇 시간짜리도 바로 재생)
   // 반복 소리의 원본 위치: 처음엔 off부터 끝까지, 그다음부터는 off~끝을 되풀이 (저장 astream.bufferReader·reader의 loopFrom과 같은 규칙)
   const loopPos = (p, o0, D) => p < D ? p : o0 + ((p - o0) % Math.max(0.05, D - o0));
@@ -354,7 +355,7 @@ NC.video = (function () {
       const end = vEnd(v, total); if (end <= T0) return;
       const g = ac.createGain(), at = t => when + (t - T0), t1 = Math.max(T0, v.at);
       // 음량이 꺾이는 시각(페이드 끝·시작, 음량 점)마다 값을 정해 직선으로 이음 — 내보내기(envAt)와 같은 모양
-      const ks = new Set([end]); if (v.fin > 0) ks.add(v.at + v.fin); if (v.fout > 0) ks.add(end - v.fout); (v.vk || []).forEach(k => ks.add(v.at + Number(k[0]))); duckKeys(v.duck).forEach(t => ks.add(t));
+      const ks = new Set([end, v.at + MF, end - MF]); if (v.fin > 0) ks.add(v.at + v.fin); if (v.fout > 0) ks.add(end - v.fout); (v.vk || []).forEach(k => ks.add(v.at + Number(k[0]))); duckKeys(v.duck).forEach(t => ks.add(t));
       g.gain.setValueAtTime(envAt(v, t1, total), at(t1)); [...ks].filter(t => t > t1 && t <= end).sort((a, b) => a - b).forEach(t => g.gain.linearRampToValueAtTime(envAt(v, t, total), at(t)));
       g.connect(dest);
       const startAt = Math.max(when, at(v.at)), pos = Number(v.off || 0) + Math.max(0, T0 - v.at), dur = end - Math.max(T0, v.at);
