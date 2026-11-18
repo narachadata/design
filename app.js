@@ -475,7 +475,10 @@ function formatGuides() {
   const f = FORMATS.find(x => x[0] === doc.fmt), grp = f ? f[2] : ''; let h = '';
   if (!(Number(doc.bleed) > 0) && ['print', 'doc', 'sign', 'cal'].includes(grp)) { const m = safeMM(); h += `<div class="pg-safe" style="left:${m}mm;top:${m}mm;width:${doc.w - 2 * m}mm;height:${doc.h - 2 * m}mm" title="안전 여백 ${m}mm: 글자·로고는 이 안쪽에"></div>`; }
   if (doc.fmt === 'story') { const t = PX(250), b = PX(340); h += `<div class="pg-zone" style="left:0;top:0;width:${doc.w}mm;height:${t}mm"><span>위쪽 ${t.toFixed(0)}mm: 프로필·진행 막대에 가려짐</span></div><div class="pg-zone" style="left:0;top:${doc.h - b}mm;width:${doc.w}mm;height:${b}mm"><span>아래쪽: 답장 칸에 가려짐</span></div>`; }
-  if (doc.fmt === 'leaflet') { const a = Math.abs(doc.w - 297) < 1 ? [99, 198] : [doc.w / 3, doc.w * 2 / 3]; h += a.map(x => `<div class="pg-fold" style="left:${x}mm;top:0;height:${doc.h}mm" title="접는 선 ${x}mm"></div>`).join(''); }
+  if (doc.fmt === 'leaflet') { /* 3단 말아 접기: 안으로 접혀 들어가는 날개는 약 3mm 좁게(A4 가로 100·100·97mm) — 같은 폭이면 접을 때 종이가 걸려 울어짐. 홀수 쪽 = 바깥면(날개·뒷면·앞표지), 짝수 쪽 = 안쪽면 */
+    const W = doc.w, dd = Math.max(1, Math.round(W / 99 * 10) / 10), big = Math.round((W + dd) / 3 * 10) / 10, flap = Math.round((W - 2 * big) * 10) / 10, inside = cur % 2 === 1;
+    const a = inside ? [big, 2 * big] : [flap, flap + big], names = inside ? [`안쪽 1 · ${big}mm`, `안쪽 2 · ${big}mm`, `안쪽 3 (날개 안) · ${flap}mm`] : [`날개 (안으로 접힘) · ${flap}mm`, `뒷면 · ${big}mm`, `앞표지 · ${big}mm`], starts = [0, a[0], a[1]];
+    h += a.map(x => `<div class="pg-fold" style="left:${x}mm;top:0;height:${doc.h}mm"></div>`).join('') + names.map((t, i) => `<div class="pg-foldl" style="left:${starts[i] + 2}mm;top:1.5mm">${t}</div>`).join(''); }
   if (doc.fmt === 'yt-thumb') { const w = PX(150), hh = PX(60), m = PX(12); h += `<div class="pg-zone" style="left:${doc.w - w - m}mm;top:${doc.h - hh - m}mm;width:${w}mm;height:${hh}mm"><span>재생 시간</span></div>`; }
   return h;
 }
@@ -2610,7 +2613,66 @@ function renderCalSide(body) {
 }
 function naraBack() { return '<button class="btn sm nara-back" data-narab title="나라차 기능 모음으로">‹ 나라차</button>'; }
 document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-narab]')) { sideTab = 'naracha'; if (newsMode) setNewsMode(false); renderRail(); renderSide(); } });
-function renderRail() { $('#rail').innerHTML = RAIL.map(([k, t, ic]) => `<button data-tab="${k}" aria-selected="${sideTab === k || (k === 'naracha' && NARA_TABS.includes(sideTab))}" title="${k === 'naracha' ? '나라차 — 캘린더·소식지·상장 등 나라차 전용 기능 모음' : t}"${k === 'naracha' ? ' class="rail-nara"' : ''}><svg class="ic"><use href="#${ic}"/></svg><span>${t}</span></button>`).join(''); $$('#rail button').forEach(b => b.onclick = () => { focusOut(); /* 영상 집중 보기에서 왼쪽 메뉴를 누르면 패널이 보이는 보기로 */ sideTab = b.dataset.tab; if (sideTab !== 'news' && newsMode) setNewsMode(false); renderRail(); renderSide(); if (sideTab === 'video') { if (!tlOn()) tlShow(true); } else if (tlOn() && tlOnlyVideo) { if (tl.playing) tlPause(); tlShow(false); } }); }
+function renderRail() { $('#rail').innerHTML = (RAIL.map(([k, t, ic]) => `<button data-tab="${k}" aria-selected="${sideTab === k || (k === 'naracha' && NARA_TABS.includes(sideTab))}" title="${k === 'naracha' ? '나라차 — 캘린더·소식지·상장 등 나라차 전용 기능 모음' : t}"${k === 'naracha' ? ' class="rail-nara"' : ''}><svg class="ic"><use href="#${ic}"/></svg><span>${t}</span></button>`).join('') + '<div class="rail-sp"></div><button data-rx="manual" class="rail-x" title="매뉴얼 — 나라차 운영 상황별 따라 하기 (그림으로)"><svg class="ic"><use href="#i-book"/></svg><span>매뉴얼</span></button><button data-rx="settings" class="rail-x" title="설정 — 화면·영상·저장·도장 정보·출력·정리"><svg class="ic"><use href="#i-settings"/></svg><span>설정</span></button>'); $$('#rail [data-rx]').forEach(b => b.onclick = () => { focusOut(); if (b.dataset.rx === 'settings') openSettings(); else openManual(); }); $$('#rail button[data-tab]').forEach(b => b.onclick = () => { focusOut(); /* 영상 집중 보기에서 왼쪽 메뉴를 누르면 패널이 보이는 보기로 */ sideTab = b.dataset.tab; if (sideTab !== 'news' && newsMode) setNewsMode(false); renderRail(); renderSide(); if (sideTab === 'video') { if (!tlOn()) tlShow(true); } else if (tlOn() && tlOnlyVideo) { if (tl.playing) tlPause(); tlShow(false); } }); }
+/* 매뉴얼 (그림으로 따라 하기) — 준비되기 전까지는 도움말 */
+function openManual() { if (typeof window.NC_openManual === 'function') { window.NC_openManual(); return; } $('#dlgHelp').showModal(); }
+/* ---- 설정 (세로 메뉴 맨 아래 ⚙): 여러 곳에 흩어져 있던 설정을 한곳에. 바꾸면 바로 적용되고 이 PC에 기억(일부는 동기화 폴더로 두 PC 같이) ---- */
+let setTab = 'view';
+function openSettings(tab) {
+  if (tab) setTab = tab; let d = $('#dlgSettings');
+  if (!d) { d = document.createElement('dialog'); d.id = 'dlgSettings'; d.className = 'wide setdlg'; d.innerHTML = `<div class="dhead"><h2>⚙ 설정</h2><button class="btn sm" data-close>닫기</button></div><div class="setbody"><nav id="setNav"></nav><div id="setMain"></div></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close();
+    d.addEventListener('click', settingsClick); d.addEventListener('change', settingsChange); }
+  renderSettings(); if (!d.open) d.showModal();
+}
+const SET_TABS = [['view', '화면 · 편집'], ['video', '영상'], ['save', '저장 · 이 PC'], ['dojang', '도장 · 브랜드'], ['print', '출력 · AI'], ['clean', '정리'], ['about', '정보 · 도움']];
+async function renderSettings() {
+  const nav = $('#setNav'), main = $('#setMain'); if (!nav) return;
+  nav.innerHTML = SET_TABS.map(([k, t]) => `<button data-st="${k}" class="${setTab === k ? 'on' : ''}">${t}</button>`).join('');
+  const sw = (id, on, t, d) => `<label class="setrow"><span><b>${t}</b>${d ? `<small>${d}</small>` : ''}</span><input type="checkbox" class="sw" data-set="${id}" ${on ? 'checked' : ''}></label>`;
+  const btn = (act, t, d, label) => `<div class="setrow"><span><b>${t}</b>${d ? `<small>${d}</small>` : ''}</span><button class="btn sm" data-sa="${act}">${label || '열기'}</button></div>`;
+  let h = '';
+  if (setTab === 'view') h = `<h3>화면 · 편집</h3>${sw('guides', showGuides(), '인쇄 안내선', '도련(빨강)·안전 여백(파랑)·리플렛 접는 선·스토리 가림 영역')}${sw('rulers', showRulers(), '눈금자', '위·왼쪽 눈금자 — 눈금자에서 끌어 안내선 만들기')}${sw('snap', tlSnapOn, '타임라인 자석(스냅)', '끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙음 (단축키 N)')}${btn('panels', '패널 너비 처음대로', '왼쪽 패널·오른쪽 속성 패널을 끌어 바꾼 너비를 기본으로', '처음대로')}${btn('keys', '디자인 단축키', '복사·붙여넣기·정렬·묶기 등')}`;
+  else if (setTab === 'video') h = `<h3>영상</h3>${sw('pgm', pgmPref, '나란히 보기 (결과 화면)', '타임라인을 열면 왼쪽 편집·오른쪽 결과 화면으로 나눠 봄')}${sw('skim', tlSkimOn, '훑어보기', '타임라인 위에서 마우스를 움직이면 그 자리 화면을 미리 봄 (단축키 S)')}${sw('tlonly', tlOnlyVideo, '영상 메뉴에서만 타임라인', '끄면 다른 메뉴에서도 타임라인이 열려 있음')}${sw('vshare', (() => { try { return localStorage.getItem('naracal-video-share') === '1'; } catch (e) { return false; } })(), '영상 저장 때 결과물 폴더에도', '동기화 폴더의 결과물 폴더에 MP4를 함께 저장 (다른 PC·TV에서 바로)')}${btn('tlh', '타임라인 높이 처음대로', '끌어 바꾼 타임라인 높이를 기본으로', '처음대로')}${btn('vkeys', '영상 편집 단축키', '파이널컷 방식 J·K·L·B·Q·W·I·O 등 (타임라인에서 ?)')}`;
+  else if (setTab === 'save') { const ready = await store.folderReady().catch(() => false); let est = ''; try { const e = await navigator.storage.estimate(); est = `${(e.usage / 1048576).toFixed(0)}MB 사용 / 약 ${(e.quota / 1073741824).toFixed(0)}GB 가능`; } catch (e) {}
+    h = `<h3>저장 · 이 PC</h3><div class="setrow"><span><b>이 PC 이름</b><small>충돌 안내·버전 기록·실시간에 표시 (예: 도장 PC, 집 맥북)</small></span><input type="text" id="setPc" value="${esc(store.pcName())}" maxlength="20" style="width:150px"></div>${btn('sync', '저장 · 동기화 폴더', ready ? `연결됨 — ${esc(store.state.dirName || '동기화 폴더')} (두 PC에서 같은 문서·설정)` : '연결 안 됨 — 구글 드라이브 폴더를 연결하면 두 PC에서 같이 씀')}${btn('versions', '버전 기록', '자동으로 남긴 예전 판을 보고 되살리기')}${btn('local', '이 브라우저에만 있는 문서', '파일로 저장 안 한 직전 문서·다른 탭 문서')}<div class="setrow"><span><b>브라우저 저장 공간</b><small>${est || '알 수 없음'} — 사진·동영상 원본은 이 PC 파일 그대로 (저장 공간을 쓰지 않음)</small></span></div>`; }
+  else if (setTab === 'dojang') { const bc = brandColors();
+    h = `<h3>도장 · 브랜드</h3>${btn('dojang', '도장 정보', '전화·주소·도장 이름 — 템플릿에 자동으로 채움')}<div class="setrow"><span><b>브랜드 색</b><small>색 고르기 창 맨 위에 나오는 도장 색 — 색 고르기 창에서 더하거나 뺄 수 있음</small></span><span class="setcolors">${bc.map(c => `<i style="background:${esc(c)}" title="${esc(c)}"></i>`).join('')}<button class="btn sm" data-sa="brandreset">처음 색으로</button></span></div>${btn('rules', '반복 일정 · 연간 행사', '매주 수련·승급심사·생일 — 달력에 넣는 목록 (도장 기본 목록 저장)')}${btn('calendar', '캘린더 · 인성 문구', '나라차 → 캘린더 패널 (캘린더 마법사·인성 문구 넣기·공휴일)')}`; }
+  else if (setTab === 'print') h = `<h3>출력 · AI</h3>${btn('print', '프린터 출력 설정', '용지·방향·맞춤·여백 — 이 PC에 기억 (상장은 따로)')}${btn('ai', 'AI 도우미 설정', 'Claude·Gemini 키 또는 채팅 요금제로 쓰기, 그림 스튜디오')}`;
+  else if (setTab === 'clean') h = `<h3>정리</h3>${btn('recent', '최근 사용 목록 비우기', '최근 템플릿·요소·글꼴·색·크기·넘김 목록 (문서는 그대로)', '비우기')}${btn('blocks', `내 블록 (${myBlocks.length}개)`, '요소 → 내 블록에서 보기 · 오른쪽 클릭으로 하나씩 지우기', '보기')}${myBlocks.length ? btn('blocksdel', '내 블록 모두 지우기', '이 PC 브라우저에 보관한 블록을 모두 지움 (되돌릴 수 없음)', '모두 지우기') : ''}`;
+  else if (setTab === 'about') h = `<h3>정보 · 도움</h3><div class="setrow"><span><b>나라차 디자인 공방</b><small>버전 ${esc(window.NARACAL_VER || '')} · 나라차태권도 전용 디자인·영상·상장·소식지·캘린더</small></span></div>${btn('manual', '매뉴얼', '나라차 운영 상황별 따라 하기 (그림으로)')}${btn('help', '도움말', '기능 설명 한눈에')}${btn('keys', '디자인 단축키', '')}${btn('vkeys', '영상 편집 단축키', '')}${btn('reload', '새 버전 확인', '새 버전이 있으면 받아서 다시 엶 (작업은 브라우저에 저장된 채)', '확인')}`;
+  main.innerHTML = h;
+}
+function settingsChange(e) { const t = e.target, k = t.dataset && t.dataset.set; if (t.id === 'setPc') { store.setPcName(t.value); t.value = store.pcName(); toast('이 PC 이름을 저장했습니다'); return; } if (!k) return; const on = t.checked;
+  if (k === 'guides') { try { localStorage.setItem('naracal-guides', on ? '1' : '0'); } catch (er) {} renderOverlay(); }
+  else if (k === 'rulers') { if (showRulers() !== on) toggleRulers(); }
+  else if (k === 'snap') { if (tlSnapOn !== on) tlToggleSnap(); }
+  else if (k === 'pgm') pgmToggle(on);
+  else if (k === 'skim') { if (tlSkimOn !== on) tlToggleSkim(); }
+  else if (k === 'tlonly') { tlOnlyVideo = on; try { localStorage.setItem('naracal-tlonly', on ? '1' : '0'); } catch (er) {} toast(on ? '영상 메뉴에서만 타임라인을 엽니다' : '다른 메뉴에서도 타임라인이 열려 있습니다'); }
+  else if (k === 'vshare') { try { localStorage.setItem('naracal-video-share', on ? '1' : '0'); } catch (er) {} toast(on ? '영상을 저장할 때 결과물 폴더에도 저장합니다' : '결과물 폴더에는 저장하지 않습니다'); } }
+async function settingsClick(e) {
+  const st = e.target.closest('[data-st]'); if (st) { setTab = st.dataset.st; renderSettings(); return; }
+  const b = e.target.closest('[data-sa]'); if (!b) return; const a = b.dataset.sa, close = () => $('#dlgSettings').close();
+  if (a === 'panels') { try { localStorage.removeItem('naracal-panels'); } catch (er) {} document.documentElement.style.removeProperty('--side-w'); document.documentElement.style.removeProperty('--insp-w'); fitCanvas(); toast('패널 너비를 처음대로 되돌렸습니다'); }
+  else if (a === 'tlh') { try { localStorage.removeItem('naracal-tlh-tall'); localStorage.removeItem('naracal-tlh-wide'); } catch (er) {} if (typeof applyTlView === 'function') applyTlView(); toast('타임라인 높이를 처음대로 되돌렸습니다'); }
+  else if (a === 'keys') { close(); $('#dlgHelp').showModal(); setTimeout(() => { const p = [...document.querySelectorAll('#dlgHelp p')].find(x => /단축키/.test(x.textContent)); if (p) p.scrollIntoView({ block: 'center' }); }, 60); }
+  else if (a === 'vkeys') { close(); tlKeysHelp(); }
+  else if (a === 'sync') { close(); openSaveDialog(); }
+  else if (a === 'versions') { close(); openVersions(); }
+  else if (a === 'local') { close(); drv.view = 'local'; openDrive(); }
+  else if (a === 'dojang') { close(); openDojang(); }
+  else if (a === 'brandreset') { lsSet('naracal-brand-colors', BRAND_DEF); renderSettings(); toast('브랜드 색을 처음 색으로 되돌렸습니다'); }
+  else if (a === 'rules') { close(); openRules(); }
+  else if (a === 'calendar') { close(); sideTab = 'calendar'; renderRail(); renderSide(); }
+  else if (a === 'print') { close(); openPrint(); }
+  else if (a === 'ai') { close(); openAI('keys'); }
+  else if (a === 'recent') { ['naracal-recent-tpls', 'naracal-recent-elems', 'naracal-recent-fonts', 'naracal-recent-colors', 'naracal-recent-formats', 'naracal-trans-recent'].forEach(k => { try { localStorage.removeItem(k); } catch (er) {} }); renderSide(); toast('최근 사용 목록을 비웠습니다'); }
+  else if (a === 'blocks') { close(); elCat = 'myblock'; sideTab = 'elems'; renderRail(); renderSide(); }
+  else if (a === 'blocksdel') { if (!window.confirm(`내 블록 ${myBlocks.length}개를 모두 지울까요? 되돌릴 수 없습니다.`)) return; myBlocks = []; await store.idbSet('my-blocks', []).catch(() => {}); renderSettings(); if (sideTab === 'elems') renderElems(); toast('내 블록을 모두 지웠습니다'); }
+  else if (a === 'manual') { close(); openManual(); }
+  else if (a === 'help') { close(); $('#dlgHelp').showModal(); }
+  else if (a === 'reload') { toast('새 버전을 확인합니다…'); try { await store.idbSet('doc', doc); } catch (er) {} location.reload(); }
+}
 /* TV 발표 화면 (캔바 '발표'처럼): 숨긴 쪽은 빼고 지금 쪽부터 화면 가득. ←/→/스페이스/누르기로 넘김, Esc 끝 */
 function openPresent(from) {
   const list = doc.pages.map((p, i) => i).filter(i => !doc.pages[i].dlOff); if (!list.length) { toast('보여 줄 쪽이 없습니다', true); return; }
@@ -5373,7 +5435,11 @@ function prLayout() {
   const m = Math.max(0, Number(S.margin) || 0), bw = Math.max(1, pw - 2 * m), bh = Math.max(1, ph - 2 * m);
   const k = S.fit === 'actual' ? 1 : S.fit === 'custom' ? Math.max(0.05, (Number(S.pct) || 100) / 100) : Math.min(bw / doc.w, bh / doc.h);
   const w = doc.w * k, h = doc.h * k, x = m + (bw - w) * S.ax + (Number(S.dx) || 0), y = m + (bh - h) * S.ay + (Number(S.dy) || 0);
-  return { pw, ph, m, k, w, h, x, y, over: x < -0.1 || y < -0.1 || x + w > pw + 0.1 || y + h > ph + 0.1 };
+  const over = x < -0.1 || y < -0.1 || x + w > pw + 0.1 || y + h > ph + 0.1; let note = over ? '종이 밖으로 나갑니다' : '';
+  /* 상장: 틀을 빼고 찍으면(틀이 인쇄된 상장 용지) 글자만 종이 안에 있으면 됨. 틀까지 찍는데 위치 보정 때문이면 그렇게 알려 줌 */
+  const cp = doc.pages.find(p => p.cert); if (over && cp) { const els = cp.els.filter(e => !e.certFrame && !e.hidden && e.type !== 'image' || (e.type === 'image' && !e.certFrame && !e.hidden)); if (els.length) { const bx0 = Math.min(...els.map(e => e.x)), by0 = Math.min(...els.map(e => e.y)), bx1 = Math.max(...els.map(e => e.x + e.w)), by1 = Math.max(...els.map(e => e.y + e.h)), cOver = x + bx0 * k < -0.1 || y + by0 * k < -0.1 || x + bx1 * k > pw + 0.1 || y + by1 * k > ph + 0.1;
+      if (S.frame === false) note = cOver ? '글자가 종이 밖으로 나갑니다' : ''; else if (!cOver && (Number(S.dx) || Number(S.dy))) note = `위치 보정(가로 ${Number(S.dx) || 0}·세로 ${Number(S.dy) || 0}mm)만큼 틀 가장자리가 조금 잘립니다 — 틀이 인쇄된 상장 용지면 아래 '상장 틀도 함께 출력'을 끄세요`; } }
+  return { pw, ph, m, k, w, h, x, y, over: !!note, note };
 }
 function openPrint(pre) {
   endEdit(); let d = $('#dlgPrint'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgPrint'; d.className = 'wide'; document.body.appendChild(d); }
@@ -5392,7 +5458,7 @@ function openPrint(pre) {
     d.innerHTML = `<div class="dhead"><h2>🖨 출력 <small>${prKey === 'naracal-print-cert' ? '상장용 설정(따로 기억) · ' : ''}${list.length}쪽 · ${esc(S.paper === 'doc' ? '문서 크기' : S.paper)} ${L.pw > L.ph ? '가로' : '세로'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody prdlg2">
       <div class="prpv"><div class="prpaper" style="width:${L.pw * mmpx}px;height:${L.ph * mmpx}px">${S.fit !== 'actual' || S.margin ? `<div class="prmargin" style="inset:${3 * mmpx}px" title="보통 프린터가 못 찍는 가장자리(약 3mm) — 테두리 없음이 아니면 이 밖은 잘릴 수 있음"></div>` : ''}${sheet}</div>
         <div class="prpvnav">${list.length > 1 ? `<button class="btn sm icon" data-prnav="-1" ${S.pv ? '' : 'disabled'}>‹</button>` : ''}<span>${pvI != null ? `${S.pv + 1} / ${list.length}쪽 (문서 ${pvI + 1}쪽)` : '출력할 쪽이 없습니다'}</span>${list.length > 1 ? `<button class="btn sm icon" data-prnav="1" ${S.pv < list.length - 1 ? '' : 'disabled'}>›</button>` : ''}</div>
-        <p class="hint prsize">디자인 ${Math.round(doc.w)}×${Math.round(doc.h)}mm → 종이에 <b>${Math.round(L.w * 10) / 10}×${Math.round(L.h * 10) / 10}mm (${Math.round(L.k * 1000) / 10}%)</b>${L.over ? ' · <b style="color:#b3261e">종이 밖으로 나갑니다</b>' : ''}</p></div>
+        <p class="hint prsize">디자인 ${Math.round(doc.w)}×${Math.round(doc.h)}mm → 종이에 <b>${Math.round(L.w * 10) / 10}×${Math.round(L.h * 10) / 10}mm (${Math.round(L.k * 1000) / 10}%)</b>${L.note ? ` · <b style="color:#b3261e">${esc(L.note)}</b>` : ''}</p></div>
       <div class="prset">
         <div class="grid2"><label class="f"><span>출력할 쪽</span><select id="prPg">${[['all', `모든 쪽${doc.pages.some(p => p.dlOff) ? ' (숨긴 쪽 빼고)' : ''}`], ['cur', `지금 쪽 (${cur + 1})`], ...(pgSel.size > 1 ? [['sel', `고른 ${pgSel.size}쪽`]] : []), ...(hasCert ? [['cert', `상장 쪽만 (${doc.pages.filter(p => p.cert).length}장)`]] : []), ['range', '직접 입력']].map(([a, t]) => `<option value="${a}" ${S.pages === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
         ${S.pages === 'range' ? `<label class="f"><span>쪽 번호</span><input id="prRange" value="${esc(S.range)}" placeholder="예: 1-3, 5"></label>` : `<label class="f"><span>용지</span><select id="prPaper">${[['A4', 'A4 (210×297)'], ['A3', 'A3 (297×420)'], ['B5', 'B5 (182×257)'], ['Letter', 'Letter'], ['doc', `문서 크기 (${Math.round(doc.w)}×${Math.round(doc.h)})`]].map(([a, t]) => `<option value="${a}" ${S.paper === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`}</div>

@@ -1336,7 +1336,7 @@ dialog:focus{outline:none}
 .rnh{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--ui-muted);white-space:nowrap;cursor:pointer}.rnh input{margin:0}
 .el-swap{margin:4px 0 6px;padding:6px 8px;background:#FFF7E0;border:1px solid #F2D27A;border-radius:8px;color:#6B4E00}
 /* 세로 메뉴 '나라차' 모음: 페이지 아래, 위아래 가는 선으로 기본 메뉴와 구분 */
-.rail button.rail-nara{position:relative;margin:3px 0;color:#ffd54a}
+.rail button.rail-nara{position:relative;margin:3px 0;color:#eef1f7}.rail button.rail-nara .ic{width:24px;height:22px}  /* 나라차 로고 아이콘: 사람 모양 빨강 + 곡선은 글자색 */
 .rail button.rail-nara::before,.rail button.rail-nara::after{content:"";position:absolute;left:10px;right:10px;height:1px;background:rgba(255,255,255,.14)}
 .rail button.rail-nara::before{top:-3px}.rail button.rail-nara::after{bottom:-3px}
 .rail button.rail-nara[aria-selected=true]{color:#fff}
@@ -1352,3 +1352,22 @@ dialog:focus{outline:none}
 .ctable th{white-space:normal;word-break:keep-all;line-height:1.15;padding:3px 1px;font-size:10.5px;text-overflow:clip;vertical-align:bottom}
 .dlshop{margin-top:6px}.dlshop textarea{width:100%;box-sizing:border-box;font-size:12px;line-height:1.45;margin:4px 0;resize:vertical}
 .vcheck{margin:8px 0 0;padding:8px 10px;border-radius:8px;font-size:12.5px;line-height:1.5}.vcheck.ok{background:#EAF7EE;color:#1E6B3A}.vcheck.warn{background:#FFF4E0;color:#7A4B00}.vcheck small{color:inherit;opacity:.85}
+.pg-foldl{position:absolute;font:600 2.6mm/1 'Noto Sans KR',sans-serif;color:rgba(47,111,228,.85);background:rgba(255,255,255,.75);padding:.4mm .8mm;border-radius:.6mm;pointer-events:none;white-space:nowrap}
+/* 세로 메뉴 맨 아래: 매뉴얼 · 설정 */
+.rail .rail-sp{flex:1 1 auto;min-height:10px}
+.rail button.rail-x{position:relative}.rail button.rail-x[data-rx="manual"]::before{content:"";position:absolute;left:10px;right:10px;top:-3px;height:1px;background:rgba(255,255,255,.14)}
+/* 설정 창 */
+dialog.setdlg{width:min(860px,94vw);max-height:88vh;padding:0;display:flex;flex-direction:column}
+dialog.setdlg[open]{display:flex}
+.setbody{display:grid;grid-template-columns:170px 1fr;min-height:0;flex:1;overflow:hidden}
+#setNav{border-right:1px solid var(--ui-line,#e3e6ee);padding:10px 8px;display:flex;flex-direction:column;gap:2px;overflow:auto;background:var(--ui-field,#f6f7fa)}
+#setNav button{text-align:left;border:0;background:none;padding:9px 10px;border-radius:8px;font:inherit;font-size:13.5px;cursor:pointer;color:inherit}
+#setNav button:hover{background:rgba(47,91,234,.08)}#setNav button.on{background:#2f5bea;color:#fff;font-weight:700}
+#setMain{padding:6px 18px 18px;overflow:auto}#setMain h3{margin:12px 0 6px}
+.setrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--ui-line,#eef0f4)}
+.setrow>span:first-child{display:flex;flex-direction:column;gap:2px;min-width:0}.setrow b{font-size:14px}.setrow small{font-size:12px;color:var(--ui-muted);line-height:1.4}
+.setrow input.sw{appearance:none;width:40px;height:22px;border-radius:11px;background:#c9ced9;position:relative;cursor:pointer;flex:none;transition:background .15s}
+.setrow input.sw::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s}
+.setrow input.sw:checked{background:#2f5bea}.setrow input.sw:checked::after{left:21px}
+.setcolors{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.setcolors i{width:18px;height:18px;border-radius:5px;border:1px solid rgba(0,0,0,.15);display:inline-block}
+@media (max-width:640px){.setbody{grid-template-columns:1fr}#setNav{flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--ui-line,#e3e6ee)}}
