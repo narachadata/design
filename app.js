@@ -5566,11 +5566,11 @@ function attState() {
 }
 const attRowsOn = () => attState().rows.filter(r => String(r.name || '').trim() && !r.off);
 let attPrev = 0;
-/* 연도 칸: 자동이면 등록일이 출석부 연도 안이거나 한 달 안이면 '신규', 아니면 '기등록' */
+/* 연도 칸: 자동이면 이번 달(오늘이 든 달) 등록생은 '신규', 아니면 '기등록' (11/18 팀장님 "신규는 이번달 등록생") */
 function attStatus(join, A) {
   if (A.stMode === 'old') return '기등록'; if (A.stMode === 'year') return String(A.year); if (A.stMode === 'none') return '';
   const j = String(join || ''); if (!/^\d{4}-\d\d-\d\d/.test(j)) return '기등록';
-  const days = (Date.now() - new Date(j.slice(0, 10) + 'T00:00:00').getTime()) / 864e5; return (Number(j.slice(0, 4)) >= Number(A.year) || days <= 31) ? '신규' : '기등록';
+  const t = new Date(), ym = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`; return j.slice(0, 7) === ym ? '신규' : '기등록';
 }
 const attTel = p => { const d = String(p || '').replace(/\D/g, ''); if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`; if (d.length === 10) return d.startsWith('02') ? `02-${d.slice(2, 6)}-${d.slice(6)}` : `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`; return String(p || '').trim(); };
 const attReg = t => { t = String(t || '').trim(); if (/프리/.test(t)) return '프리패스'; const m = t.match(/주\s*(\d)/); return m ? (Number(m[1]) >= 4 ? '프리패스' : `주${m[1]}회`) : t; };
@@ -5726,7 +5726,7 @@ function renderAttSide(body) {
   <h3>② 명단 <small>${rows.length}명 중 ${nOn}명 출력 · 체크를 풀면 빠짐</small></h3>
   <div class="row" style="gap:6px;align-items:flex-end;flex-wrap:wrap"><label class="f" style="margin:0;width:6.5em"><span>출석부 연도</span><input type="number" min="2000" max="2100" data-aset="year" value="${Number(A.year)}"></label>
     <label class="f" style="margin:0;flex:1;min-width:12em"><span>'연도' 칸에 넣을 글</span><select data-aset="stMode">${[['auto', '자동: 신규 / 기등록'], ['old', '모두 기등록'], ['year', `연도 숫자 (${Number(A.year)})`], ['none', '비움']].map(([k, t]) => `<option value="${k}" ${A.stMode === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
-  ${A.stMode === 'auto' ? `<p class="hint" style="margin:4px 0 0">자동: 등록일이 ${Number(A.year)}년이거나 등록한 지 한 달 안이면 「신규」, 아니면 「기등록」. 칸을 직접 고쳐도 됩니다.</p>` : ''}
+  ${A.stMode === 'auto' ? `<p class="hint" style="margin:4px 0 0">자동: 이번 달(${new Date().getMonth() + 1}월)에 등록한 사람은 「신규」, 그 전에 등록한 사람은 「기등록」. 칸을 직접 고쳐도 됩니다.</p>` : ''}
   <div class="ctable-wrap" style="margin-top:6px"><table class="ctable"><tr><th title="출력">✓</th><th>#</th>${cols.map(([, l]) => `<th>${esc(l)}</th>`).join('')}<th title="관리프로그램 사진">📷</th><th></th></tr>
   ${rows.map((r, i) => `<tr class="${i === attPrev ? 'cur' : ''} ${r.off ? 'off' : ''}"><td><input type="checkbox" data-aon="${i}" ${r.off ? '' : 'checked'} title="체크를 풀면 출력에서 빠짐"></td><td class="ci" data-apick="${i}" title="미리 보기">${i + 1}</td>${cols.map(([k]) => `<td><input data-ar="${i}" data-ak="${k}" value="${esc(r[k] || '')}" style="min-width:${W[k]}em"></td>`).join('')}<td>${r.photo ? `<button class="x" data-aphdel="${i}" title="사진 빼기">📷</button>` : `<button class="x" data-aphadd="${i}" title="사진 넣기 (그림 파일)">＋</button>`}</td><td><button class="x" data-adel="${i}" title="이 줄 지우기">×</button></td></tr>`).join('')}</table></div>
   <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" data-ax="add">+ 한 명 (손으로)</button>${rows.length ? '<button class="btn sm" data-ax="allon">모두 체크</button><button class="btn sm" data-ax="alloff">모두 해제</button><button class="btn sm" data-ax="clear">명단 비우기</button>' : ''}</div>
