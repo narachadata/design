@@ -186,7 +186,8 @@ async function loadDoc(j, from, quiet) {
   doc = Object.assign(newDoc(), j); doc.assets = doc.assets || {}; doc.holidays = doc.holidays || {}; doc.fonts = doc.fonts || [];
   if (!doc.calendar.theme || !doc.calendar.theme.id) doc.calendar.theme = Object.assign({ id: 'classic' }, doc.calendar.theme || {});
   const m8 = doc.calendar.months && doc.calendar.months[7]; if (m8 && !m8.image && /우정/.test(m8.virtue || '')) { m8.image = 'asset:illu-08-friendship'; doc.pages.forEach(p => p.els.forEach(e => { if (e.type === 'image' && e.role === 'illust' && e.month === 8 && !e.src) e.src = m8.image; })); }
-  if (doc.calendar && doc.calendar.months) virtueArtFix(doc.calendar, doc.pages, doc.calendar.year || 2027, true);  /* 빈 삽화 자리 = 그 해 덕목 그림 */
+  if (doc.calendar && doc.calendar.months) virtueArtFix(doc.calendar, doc.pages, doc.calendar.year || 2027, true);
+  if (doc.cert) certMigrate(doc.cert);  /* 상장 굵기·제목 자리 고침 (한 번만) */  /* 빈 삽화 자리 = 그 해 덕목 그림 */
   cur = 0; sel = []; selDay = null; hist = []; histMeta = []; hptr = -1;
   await registerDocFonts(); ensureAllHolidays();
   $('#pname').value = doc.name || '';
@@ -5101,9 +5102,21 @@ const CERT_FORMS = {
 };
 let certPrev = 0;
 const CERT_FRAME_JPG = 'assets/cert/naracha-cert-frame.jpg', CERT_FRAME_PDF = 'assets/cert/naracha-cert-frame.pdf'; /* 공방 내장 상장틀(A4, 일러스트 원본 PDF) — 관장님 결정 2026-11-17 */
+/* 상장 양식 고침 (2026-11-18 팀장님): ① 본문·기록·날짜 등은 나눔명조 보통(400) — 첫 판(11/17)의 굵은 본문(700)이 '이 쪽 배치를 모든 상장에'로 기억돼
+   출력이 모두 굵게 나오던 것 → 기억된 배치·이미 만든 상장의 굵기를 보통으로 ② 제목(상장 이름)은 선에서 1cm 더 위로 (기본 자리 105 → 95mm, 기억된 자리·만든 상장도 10mm 위로)
+   제목·이름·급수는 ExtraBold(800) 그대로. 문서마다 한 번만 (doc.cert.wv) */
+function certMigrate(C) {  /* 처음 불러올 때 이 줄보다 먼저 불릴 수 있어 상수 대신 함수 안에 */
+  const CERT_WV = 2, CERT_BOLD = ['title', 'name', 'grade'];
+  if ((C.wv || 0) >= CERT_WV) return; const ky = doc.h / 297;
+  Object.entries(C.layout || {}).forEach(([k, L]) => { if (!L || typeof L !== 'object') return; const key = String(k.split(':')[1] || '').split('@')[0];
+    if (!CERT_BOLD.includes(key) && Number(L.weight) >= 600) L.weight = 400; if (key === 'title' && typeof L.y === 'number') L.y = r1(L.y - 10 * ky); });
+  (doc.pages || []).forEach(p => { if (!p.cert) return; p.els.forEach(e => { if (!e.certKey || e.type !== 'text') return;
+    if (!CERT_BOLD.includes(e.certKey) && Number(e.weight) >= 600) e.weight = 400; if (e.certKey === 'title' && typeof e.y === 'number') e.y = r1(e.y - 10 * ky); }); });
+  C.wv = CERT_WV;
+}
 function certState() {
-  if (!doc.cert) doc.cert = { form: 'record', printFrame: true, data: {}, layout: {} };
-  const C = doc.cert; C.data = C.data || {}; C.layout = C.layout || {}; if (!C.frame) { C.frame = CERT_FRAME_JPG; C.framePdf = CERT_FRAME_PDF; } /* 틀은 기본으로 내장 틀 */
+  if (!doc.cert) doc.cert = { form: 'record', printFrame: true, data: {}, layout: {}, wv: 2 };  /* wv: certMigrate 판 */
+  const C = doc.cert; certMigrate(C); C.data = C.data || {}; C.layout = C.layout || {}; if (!C.frame) { C.frame = CERT_FRAME_JPG; C.framePdf = CERT_FRAME_PDF; } /* 틀은 기본으로 내장 틀 */
   Object.entries(CERT_FORMS).forEach(([k, f]) => { if (!C.data[k]) C.data[k] = { common: Object.fromEntries(f.common.map(([a, , v]) => [a, a === 'date' ? CERT_TODAY() : v])), body: f.body, rows: [] }; });
   return C;
 }
@@ -5120,7 +5133,7 @@ function certEls(form, r) {
     delete base.label; Object.assign(base, L); if (base.fitText) base.fitMax = Number(L.fitMax) || base.size; out.push(base); };
   const sans = 'Noto Sans KR', serif = 'Nanum Myeongjo', fill = t => String(t || '').replace(/\{([^{}\n]+)\}/g, (m, nm) => { if (nm.trim() === '이름') return r && r.name ? String(r.name) : m; const c = F.common.find(x => x[1].replace(/ \(.*\)$/, '') === nm.trim()); return c ? certVal(D, r, c[0]) : m; });
   /* 글꼴: 관장님 상장과 같게 나눔명조 — 제목(상장 이름)·이름·급수는 나눔명조 ExtraBold(800), 본문·기록·날짜는 보통(400) */
-  T('title', certVal(D, r, 'title'), { label: '상장 이름', x: 15, y: 105, w: 180, h: 22, size: 42, weight: 800, font: serif, ls: 0.06, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'bottom' }); /* 틀의 'THIS CERTIFICATE IS PRESENTED TO' 선(133.5mm) 위 약 6mm에 앉게 (관장님: 선 위에, 너무 내려오지 않게) */
+  T('title', certVal(D, r, 'title'), { label: '상장 이름', x: 15, y: 95, w: 180, h: 22, size: 42, weight: 800, font: serif, ls: 0.06, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'bottom' }); /* 틀의 'THIS CERTIFICATE IS PRESENTED TO' 선(133.5mm) 위 약 16mm에 앉게 (11/17 관장님: 선 위 6mm → 11/18 팀장님: 1cm 더 위로) */
   T('name', certVal(D, r, 'name'), { label: '이름', x: 30, y: 139, w: 150, h: 17, size: 34, weight: 800, font: serif, ls: 0.04, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
   let bodyY = 180, bodySz = 15;
   if (form === 'record') {
