@@ -22,14 +22,14 @@ NC.vtpl = (function () {
 
   const LIST = [
     /* ---- 숏츠 전용 (2026 숏폼 흐름: 첫 1초에 큰 글자로 붙잡기 → 빠른 컷 → 마지막에 할 일 하나). 요소마다 들어오고 나가는 움직임을 달리해 눈이 따라가게 ---- */
-    { id: 's-reasons', name: '이유 3가지 (정보형)', desc: '첫 화면 큰 질문 → 1·2·3 쾅 → 체험 신청', music: 'm-energy', sizes: ['916'], video: { dur: 3, trans: 'whip', turn: 0.35 }, build(S) {
+    { id: 's-reasons', name: '이유 3가지 (정보형)', desc: '첫 화면 큰 질문 → 1·2·3 쾅 → 체험 신청', music: 'm-energy', sizes: ['916', '45'], video: { dur: 3, trans: 'whip', turn: 0.35 }, build(S) {
       const g = geo(S), u = g.u, items = [['자신감이 자라요', '"나도 할 수 있어!"\n스스로 해낸 경험이 쌓여요', RED], ['집중력이 좋아져요', '구령에 맞춰 움직이며\n듣고 따르는 힘이 커져요', NAVY], ['예의가 몸에 배요', '인사로 시작해 인사로 끝나는\n매일의 습관', '#2F7D5B']];
       const out = [scene(NAVY, [R(g.cx - u * 22, u * 40, u * 44, u * 9, YEL, { radius: u * 4.5, anim: an('swipe', 0.05, 0.5) }), T('학부모님 필독', g.cx - u * 22, u * 41.6, u * 44, u * 5, { color: INK, anim: an('swipe', 0.05, 0.5) }), T('태권도를\n꼭 해야 하는\n이유 3가지', u * 6, u * 58, g.W - u * 12, u * 11, { font: 'YeogiOttaeJalnan', lh: 1.15, anim: an('wordslam', 0.35, 1.1) }), T('👇', 0, u * 112, g.W, u * 9, { anim: an('pop', 1.4, 0.4), animLoop: { t: 'bob', T: 0.8, a: 1.4 } })], { vcam: 'in', vcamA: 0.05, vdur: 2.6 })];
       items.forEach(([t1, t2, c], i) => out.push(scene(CREAM, [T(String(i + 1), 0, u * 30, g.W, u * 30, { font: 'Anton', weight: 400, color: c, anim: an('slam', 0, 0.45), animOut: { t: 'punch', s: 0.3, at: 0 } }), PH(u * 12, u * 72, g.W - u * 24, u * 34, { radius: u * 3, anim: an('punch', 0.35, 0.5) }), T(t1, u * 6, u * 110, g.W - u * 12, u * 8, { font: 'YeogiOttaeJalnan', color: INK, anim: an('mask', 0.55, 0.5) }), T(t2, u * 8, u * 122, g.W - u * 16, u * 4.6, { color: '#3B4253', weight: 600, lh: 1.4, anim: an('wordpop', 0.9, 0.9) })], { vtrans: i % 2 ? 'whip' : 'pullin', vcam: 'in', vcamA: 0.04 })));
       out.push(scene(NAVY, [logo(g.cx, u * 44, u * 64, true), T('지금 무료 체험', 0, u * 66, g.W, u * 10, { font: 'YeogiOttaeJalnan', anim: an('stretch', 0.2, 0.7) }), R(g.cx - u * 30, u * 88, u * 60, u * 13, YEL, { radius: u * 6.5, anim: an('pop', 0.6, 0.5), animLoop: { t: 'jelly', T: 0.9, a: 1.2 } }), T('프로필 링크에서 신청', g.cx - u * 30, u * 91.5, u * 60, u * 5.2, { color: INK, anim: an('pop', 0.6, 0.5), animLoop: { t: 'jelly', T: 0.9, a: 1.2 } })], { vdur: 3.4 }));
       return { pages: out, sfx: [{ ref: 'b:whoosh', at: 0.05 }, { ref: 'b:hit', at: 2.95 }, { ref: 'b:hit', at: 6.3 }, { ref: 'b:hit', at: 9.65 }, { ref: 'b:tada', at: 13.2 }] };
     } },
-    { id: 's-review', name: '학부모님 후기 (신뢰)', desc: '별점 반짝 → 후기 카드가 단어씩 → 도장 로고', music: 'm-calm', sizes: ['916'], video: { dur: 4, trans: 'soft', turn: 0.6 }, build(S) {
+    { id: 's-review', name: '학부모님 후기 (신뢰)', desc: '별점 반짝 → 후기 카드가 단어씩 → 도장 로고', music: 'm-calm', sizes: ['916', '45'], video: { dur: 4, trans: 'soft', turn: 0.6 }, build(S) {
       const g = geo(S), u = g.u, rv = [['"낯가리던 아이가\n먼저 인사를 해요"', '초등 2학년 학부모님'], ['"줄넘기 20개에서\n82개가 됐어요!"', '초등 4학년 학부모님'], ['"사범님들이 아이 마음을\n먼저 봐 주세요"', '7살 학부모님']];
       const out = [scene(CREAM, [T('실제 학부모님 후기', 0, u * 52, g.W, u * 9, { font: 'YeogiOttaeJalnan', color: NAVY, anim: an('mask', 0.1, 0.6) }), T('★★★★★', 0, u * 68, g.W, u * 8, { color: '#F5B301', anim: an('flash', 0.6, 0.6), animLoop: { t: 'glow', T: 1.2, a: 1.5 } }), T('나라차태권도', 0, u * 84, g.W, u * 5, { color: '#5B6170', weight: 600, anim: an('fade', 1, 0.6) })], { vdur: 2.8 })];
       rv.forEach(([q, who], i) => out.push(scene(i % 2 ? '#EEF3FF' : CREAM, [R(u * 7, u * 42, g.W - u * 14, u * 64, '#ffffff', { radius: u * 5, shadow: true, shC: '#1E2B5A', shA: 0.12, shX: 0, shY: 1.5, shB: 3, anim: an('rise', 0, 0.5) }), T('“', u * 12, u * 44, u * 20, u * 20, { font: 'Anton', weight: 400, color: YEL, align: 'left', anim: an('pop', 0.15, 0.4) }), T(q, u * 12, u * 62, g.W - u * 24, u * 6.4, { color: INK, lh: 1.35, anim: an('wordpop', 0.35, 1.2) }), T('★★★★★', u * 12, u * 86, g.W - u * 24, u * 4.6, { color: '#F5B301', anim: an('fade', 1.4, 0.4) }), T('— ' + who, u * 12, u * 94, g.W - u * 24, u * 4.2, { color: '#5B6170', weight: 600, anim: an('fade', 1.6, 0.5) })], { vcam: 'in', vcamA: 0.03 })));
@@ -37,7 +37,7 @@ NC.vtpl = (function () {
       out[out.length - 1].els[2].anim = an('fade', 1.1, 0.6);
       return { pages: out, sfx: [{ ref: 'b:bell', at: 0.6 }] };
     } },
-    { id: 's-master', name: '관장·사범 소개 (신뢰)', desc: '사진 → 이름이 올라오고 → 자격이 차례로 → 한마디', music: 'm-calm', sizes: ['916'], video: { dur: 3.6, trans: 'slide', turn: 0.6 }, build(S) {
+    { id: 's-master', name: '관장·사범 소개 (신뢰)', desc: '사진 → 이름이 올라오고 → 자격이 차례로 → 한마디', music: 'm-calm', sizes: ['916', '45'], video: { dur: 3.6, trans: 'slide', turn: 0.6 }, build(S) {
       const g = geo(S), u = g.u;
       const out = [scene(INK, [PH(0, u * 22, g.W, u * 92, { radius: 0, anim: an('fade', 0, 0.8) }), R(0, u * 96, g.W, u * 36, 'rgba(20,24,33,.82)', { anim: an('fade', 0.4, 0.5) }), T('안녕하세요!', u * 8, u * 100, g.W - u * 16, u * 6, { align: 'left', color: YEL, anim: an('mask', 0.6, 0.5) }), T('나라차태권도 관장 ○○○', u * 8, u * 110, g.W - u * 16, u * 7.4, { align: 'left', font: 'YeogiOttaeJalnan', anim: an('wordpop', 0.9, 0.8) })], { vcam: 'in', vcamA: 0.05, vdur: 3.8 }),
         scene(NAVY, [T('이런 사람이 가르칩니다', 0, u * 40, g.W, u * 6.5, { font: 'YeogiOttaeJalnan', anim: an('mask', 0, 0.5) })].concat(['국기원 공인 ○단', '태권도 지도자 자격 1급', '어린이 지도 경력 ○년', '응급처치·안전교육 수료'].flatMap((t, i) => [R(u * 10, u * (58 + i * 15), g.W - u * 20, u * 11, 'rgba(255,255,255,.1)', { radius: u * 3, anim: an('swipe', 0.4 + i * 0.3, 0.5) }), T('✓  ' + t, u * 14, u * (60.4 + i * 15), g.W - u * 28, u * 5.2, { align: 'left', weight: 700, anim: an('swipe', 0.45 + i * 0.3, 0.5) })])), { vdur: 4 }),
@@ -45,7 +45,7 @@ NC.vtpl = (function () {
       out[2].els[1].anim = an('fade', 0.9, 0.5);
       return { pages: out, sfx: [{ ref: 'b:swoosh', at: 4.2 }] };
     } },
-    { id: 's-challenge', name: '발차기 챌린지 (재미)', desc: '쾅! 챌린지 → 카운트 → 정답 공개 · 빠른 컷', music: 'm-drum', sizes: ['916'], video: { dur: 1.6, trans: 'flash', turn: 0.25 }, build(S) {
+    { id: 's-challenge', name: '발차기 챌린지 (재미)', desc: '쾅! 챌린지 → 카운트 → 정답 공개 · 빠른 컷', music: 'm-drum', sizes: ['916', '45'], video: { dur: 1.6, trans: 'flash', turn: 0.25 }, build(S) {
       const g = geo(S), u = g.u;
       const out = [scene(RED, [T('CHALLENGE', 0, u * 52, g.W, u * 13, { font: 'Anton', weight: 400, anim: an('slam', 0, 0.45), animLoop: { t: 'shake', T: 1, a: 0.5 } }), T('발차기 10초 챌린지', 0, u * 74, g.W, u * 7.4, { font: 'YeogiOttaeJalnan', color: YEL, anim: an('wordslam', 0.45, 0.8) })], { vtrans: 'glitch', vdur: 2.2 }),
         scene(INK, [PH(u * 6, u * 30, g.W - u * 12, u * 80, { radius: u * 4, anim: an('punch', 0, 0.4) }), T('몇 번 찼을까?', 0, u * 116, g.W, u * 8, { font: 'YeogiOttaeJalnan', anim: an('stretch', 0.3, 0.6), animLoop: { t: 'wiggle', T: 0.7, a: 1.3 } })], { vtrans: 'flash', vdur: 3 })];
@@ -53,7 +53,7 @@ NC.vtpl = (function () {
       out.push(scene(YEL, [T('정답은', 0, u * 52, g.W, u * 7, { color: INK, weight: 700, anim: an('mask', 0, 0.4) }), T('27번!', 0, u * 64, g.W, u * 22, { font: 'YeogiOttaeJalnan', color: RED, anim: an('slam', 0.3, 0.45), animLoop: { t: 'jelly', T: 0.6, a: 1.5 } }), T('🔥🔥🔥', 0, u * 96, g.W, u * 9, { anim: an('pop', 0.8, 0.4), animLoop: { t: 'bob', T: 0.6, a: 1.2 } }), T('너도 도전해 볼래?', 0, u * 112, g.W, u * 6, { color: INK, weight: 800, anim: an('wordpop', 1.1, 0.7) })], { vdur: 3.6 }));
       return { pages: out, sfx: [{ ref: 'b:boom', at: 0.05 }, { ref: 'b:drumroll', at: 2.5 }, { ref: 'b:hit', at: 5.8 }, { ref: 'b:hit', at: 6.8 }, { ref: 'b:hit', at: 7.8 }, { ref: 'b:tada', at: 9.1 }] };
     } },
-    { id: 's-beforeafter', name: '비포·애프터 (향상왕)', desc: '전 → 후 사진을 나란히, 기록이 쾅 · 꾸준함 강조', music: 'm-bright', sizes: ['916'], video: { dur: 3.4, trans: 'wipe', turn: 0.5 }, build(S) {
+    { id: 's-beforeafter', name: '비포·애프터 (향상왕)', desc: '전 → 후 사진을 나란히, 기록이 쾅 · 꾸준함 강조', music: 'm-bright', sizes: ['916', '45'], video: { dur: 3.4, trans: 'wipe', turn: 0.5 }, build(S) {
       const g = geo(S), u = g.u, half = (g.W - u * 15) / 2;
       const out = [scene(NAVY, [T('BEFORE → AFTER', 0, u * 54, g.W, u * 9, { font: 'Anton', weight: 400, color: YEL, anim: an('slam', 0, 0.45) }), T('3개월 동안\n이만큼 달라졌어요', 0, u * 70, g.W, u * 7, { font: 'YeogiOttaeJalnan', lh: 1.25, anim: an('wordpop', 0.4, 0.9) })], { vdur: 2.6 }),
         scene(CREAM, [PH(u * 5, u * 34, half, u * 62, { radius: u * 3, anim: an('left', 0, 0.5) }), PH(u * 10 + half, u * 34, half, u * 62, { radius: u * 3, anim: an('right', 0.25, 0.5) }), R(u * 5, u * 34, u * 20, u * 7, INK, { radius: u * 1.5, anim: an('pop', 0.5, 0.3) }), T('BEFORE', u * 5, u * 35.3, u * 20, u * 4, { font: 'Anton', weight: 400, anim: an('pop', 0.5, 0.3) }), R(u * 10 + half, u * 34, u * 18, u * 7, RED, { radius: u * 1.5, anim: an('pop', 0.7, 0.3) }), T('AFTER', u * 10 + half, u * 35.3, u * 18, u * 4, { font: 'Anton', weight: 400, anim: an('pop', 0.7, 0.3) }), T('줄넘기 1분', 0, u * 102, g.W, u * 5.4, { color: '#5B6170', weight: 700, anim: an('fade', 1, 0.4) }), T('20회', u * 5, u * 110, half, u * 11, { font: 'Anton', weight: 400, color: '#8A90A0', anim: an('mask', 1.2, 0.4) }), T('→', g.cx - u * 5, u * 112, u * 10, u * 8, { color: INK, anim: an('swipe', 1.5, 0.3) }), T('82회', u * 10 + half, u * 108, half, u * 14, { font: 'Anton', weight: 400, color: RED, anim: an('slam', 1.7, 0.45), animLoop: { t: 'pulse', T: 0.8, a: 1.5 } })], { vdur: 4.6 }),
@@ -61,21 +61,21 @@ NC.vtpl = (function () {
       out[2].els[1].anim = an('fade', 0.9, 0.5);
       return { pages: out, sfx: [{ ref: 'b:hit', at: 0.05 }, { ref: 'b:hit', at: 4.9 }, { ref: 'b:tada', at: 5.4 }] };
     } },
-    { id: 's-quiz', name: '태권도 퀴즈 (재미)', desc: '질문 → 3·2·1 → 정답 → 댓글 유도', music: 'm-kids', sizes: ['916'], video: { dur: 3, trans: 'pullin', turn: 0.3 }, build(S) {
+    { id: 's-quiz', name: '태권도 퀴즈 (재미)', desc: '질문 → 3·2·1 → 정답 → 댓글 유도', music: 'm-kids', sizes: ['916', '45'], video: { dur: 3, trans: 'pullin', turn: 0.3 }, build(S) {
       const g = geo(S), u = g.u;
       const out = [scene(YEL, [T('Q.', 0, u * 40, g.W, u * 26, { font: 'Anton', weight: 400, color: NAVY, anim: an('slam', 0, 0.45) }), T('노란 띠는\n무엇을 뜻할까요?', u * 6, u * 72, g.W - u * 12, u * 8, { font: 'YeogiOttaeJalnan', color: INK, lh: 1.25, anim: an('wordpop', 0.4, 1) }), R(g.cx - u * 30, u * 102, u * 60, u * 6, '#F6C915', { stroke: '#B89200', strokeW: 0.6, radius: u * 1, anim: an('stretch', 1.2, 0.6), animLoop: { t: 'wiggle', T: 0.9, a: 1 } })], { vdur: 3.6 })];
       ['3', '2', '1'].forEach((n, i) => out.push(scene([NAVY, RED, '#2F7D5B'][i], [T(n, 0, u * 60, g.W, u * 38, { font: 'Anton', weight: 400, anim: an('punch', 0, 0.3), animOut: { t: 'pop', s: 0.2, at: 0 } })], { vtrans: 'flash', vdur: 0.7 })));
       out.push(scene(CREAM, [T('정답!', 0, u * 42, g.W, u * 10, { font: 'YeogiOttaeJalnan', color: RED, anim: an('flash', 0, 0.5) }), T('땅을 뚫고 나온 새싹처럼\n기초를 다지는 단계', u * 6, u * 62, g.W - u * 12, u * 6.4, { color: INK, lh: 1.35, anim: an('mask', 0.4, 0.6) }), T('🌱', 0, u * 86, g.W, u * 12, { anim: an('pop', 0.9, 0.5), animLoop: { t: 'tilt', T: 1.4, a: 1 } }), T('다음 퀴즈는 댓글로 맞혀 보세요 👇', u * 6, u * 108, g.W - u * 12, u * 4.8, { color: '#3B4253', weight: 700, anim: an('wordpop', 1.3, 0.8) })], { vdur: 4.2 }));
       return { pages: out, sfx: [{ ref: 'b:pop', at: 0.4 }, { ref: 'b:click', at: 3.9 }, { ref: 'b:click', at: 4.9 }, { ref: 'b:click', at: 5.9 }, { ref: 'b:tada', at: 6.9 }] };
     } },
-    { id: 's-deadline', name: '모집 마감 D-3 (긴박감)', desc: 'D-3 쾅 → 남은 자리 깜빡 → 지금 신청', music: 'm-energy', sizes: ['916'], video: { dur: 2.4, trans: 'glitch', turn: 0.25 }, build(S) {
+    { id: 's-deadline', name: '모집 마감 D-3 (긴박감)', desc: 'D-3 쾅 → 남은 자리 깜빡 → 지금 신청', music: 'm-energy', sizes: ['916', '45'], video: { dur: 2.4, trans: 'glitch', turn: 0.25 }, build(S) {
       const g = geo(S), u = g.u;
       const out = [scene(RED, [T('마감 임박', 0, u * 44, g.W, u * 7, { color: YEL, anim: an('flash', 0, 0.4), animLoop: { t: 'blink', T: 0.6, a: 1 } }), T('D-3', 0, u * 56, g.W, u * 34, { font: 'Anton', weight: 400, anim: an('slam', 0.25, 0.45), animLoop: { t: 'beat', T: 0.8, a: 1.6 } }), T('겨울 특강 모집', 0, u * 100, g.W, u * 8, { font: 'YeogiOttaeJalnan', anim: an('wordslam', 0.8, 0.7) })], { vdur: 2.8, vcam: 'in', vcamA: 0.06 }),
         scene(INK, [T('남은 자리', 0, u * 52, g.W, u * 7, { color: 'rgba(255,255,255,.8)', weight: 700, anim: an('mask', 0, 0.4) }), T('3', 0, u * 64, g.W, u * 30, { font: 'Anton', weight: 400, color: YEL, anim: an('glitch', 0.3, 0.5), animLoop: { t: 'shake', T: 1, a: 0.4 } }), T('자리', 0, u * 98, g.W, u * 7, { weight: 800, anim: an('fade', 0.6, 0.3) })], { vtrans: 'flash', vdur: 2.4 }),
         scene(CREAM, [T('12/22(월) ~ 1/16(금)', 0, u * 46, g.W, u * 6, { color: NAVY, weight: 800, anim: an('swipe', 0, 0.4) }), T('줄넘기 · 체력 · 품새\n집중 특강', u * 6, u * 58, g.W - u * 12, u * 8, { font: 'YeogiOttaeJalnan', color: INK, lh: 1.25, anim: an('wordpop', 0.3, 0.8) }), R(g.cx - u * 30, u * 92, u * 60, u * 13, RED, { radius: u * 6.5, anim: an('punch', 1.1, 0.4), animLoop: { t: 'pulse', T: 0.7, a: 1.6 } }), T('지금 바로 신청', g.cx - u * 30, u * 95.5, u * 60, u * 5.4, { anim: an('punch', 1.1, 0.4), animLoop: { t: 'pulse', T: 0.7, a: 1.6 } }), T('☎ 010-0000-0000', 0, u * 112, g.W, u * 5, { color: '#3B4253', weight: 700, anim: an('fade', 1.4, 0.4) })], { vtrans: 'whip', vdur: 3.6 })];
       return { pages: out, sfx: [{ ref: 'b:boom', at: 0.25 }, { ref: 'b:riser', at: 2.2 }, { ref: 'b:hit', at: 3.3 }, { ref: 'b:pop', at: 6.6 }] };
     } },
-    { id: 's-vlog', name: '오늘의 수련 브이로그', desc: '시각 표시 + 사진 빠른 컷 + 한 줄 자막', music: 'm-lofi', sizes: ['916'], video: { dur: 1.5, trans: 'whip', turn: 0.2 }, build(S) {
+    { id: 's-vlog', name: '오늘의 수련 브이로그', desc: '시각 표시 + 사진 빠른 컷 + 한 줄 자막', music: 'm-lofi', sizes: ['916', '45'], video: { dur: 1.5, trans: 'whip', turn: 0.2 }, build(S) {
       const g = geo(S), u = g.u, cuts = [['16:00', '도복 입고 출석 체크 ✔'], ['16:10', '몸풀기 스트레칭'], ['16:25', '품새 연습 집중!'], ['16:40', '발차기 미트 타격 💥'], ['16:55', '마무리 인사 🙇']];
       const out = [scene(CREAM, [T('VLOG', 0, u * 50, g.W, u * 16, { font: 'Anton', weight: 400, color: NAVY, anim: an('stretch', 0, 0.6) }), T('나라차의 하루', 0, u * 72, g.W, u * 8, { font: 'YeogiOttaeJalnan', color: INK, anim: an('mask', 0.4, 0.5) }), T('🥋', 0, u * 88, g.W, u * 10, { anim: an('pop', 0.8, 0.4), animLoop: { t: 'bob', T: 0.8, a: 1 } })], { vdur: 2.2 })];
       cuts.forEach(([tm, cap], i) => out.push(scene(INK, [PH(0, u * 22, g.W, u * 118, { radius: 0, anim: an('punch', 0, 0.3) }), R(u * 6, u * 26, u * 22, u * 7, 'rgba(0,0,0,.55)', { radius: u * 3.5, anim: an('fade', 0.1, 0.2) }), T(tm, u * 6, u * 27.3, u * 22, u * 4.2, { font: 'Anton', weight: 400, anim: an('fade', 0.1, 0.2) }), R(u * 6, u * 120, g.W - u * 12, u * 11, 'rgba(255,255,255,.92)', { radius: u * 3, anim: an('swipe', 0.15, 0.35) }), T(cap, u * 8, u * 122.6, g.W - u * 16, u * 5.2, { color: INK, weight: 800, anim: an('wordpop', 0.25, 0.5) })], { vtrans: i % 2 ? 'whip' : 'flash', vcam: 'in', vcamA: 0.06 })));
@@ -83,7 +83,7 @@ NC.vtpl = (function () {
       out[out.length - 1].els[1].anim = an('fade', 0.8, 0.5);
       return { pages: out, sfx: [{ ref: 'b:shutter', at: 2.2 }, { ref: 'b:shutter', at: 3.9 }, { ref: 'b:shutter', at: 5.6 }, { ref: 'b:shutter', at: 7.3 }, { ref: 'b:shutter', at: 9 }] };
     } },
-    { id: 's-contest', name: '대회 하이라이트', desc: '대회 이름 쾅 → 사진 → 메달 결과가 차례로', music: 'm-drum', sizes: ['916'], video: { dur: 2.6, trans: 'flash', turn: 0.3 }, build(S) {
+    { id: 's-contest', name: '대회 하이라이트', desc: '대회 이름 쾅 → 사진 → 메달 결과가 차례로', music: 'm-drum', sizes: ['916', '45'], video: { dur: 2.6, trans: 'flash', turn: 0.3 }, build(S) {
       const g = geo(S), u = g.u;
       const out = [scene(INK, [T('🏆', 0, u * 40, g.W, u * 16, { anim: an('slam', 0, 0.45), animLoop: { t: 'glow', T: 1, a: 1.5 } }), T('2026 ○○○배\n태권도 대회', u * 6, u * 62, g.W - u * 12, u * 8.4, { font: 'YeogiOttaeJalnan', lh: 1.2, anim: an('wordslam', 0.4, 0.8) }), T('HIGHLIGHT', 0, u * 92, g.W, u * 7, { font: 'Anton', weight: 400, color: YEL, ls: 0.2, anim: an('swipe', 1.1, 0.4) })], { vdur: 3, vcam: 'in', vcamA: 0.05 }),
         scene(INK, [PH(0, u * 22, g.W, u * 118, { radius: 0, anim: an('flash', 0, 0.4) }), T('품새 개인전', u * 6, u * 122, g.W - u * 12, u * 6.4, { font: 'YeogiOttaeJalnan', anim: an('mask', 0.3, 0.4) })], { vcam: 'in', vcamA: 0.07 }),
@@ -93,14 +93,14 @@ NC.vtpl = (function () {
       out[4].els[2].anim = an('fade', 1, 0.5);
       return { pages: out, sfx: [{ ref: 'b:boom', at: 0.05 }, { ref: 'b:shutter', at: 3.3 }, { ref: 'b:shutter', at: 6.2 }, { ref: 'b:hit', at: 9.9 }, { ref: 'b:hit', at: 10.25 }, { ref: 'b:hit', at: 10.6 }, { ref: 'b:clap', at: 13 }] };
     } },
-    { id: 's-welcome', name: '신입 환영', desc: '환영합니다! 쫀득 → 이름 → 첫 수업 응원', music: 'm-kids', sizes: ['916'], video: { dur: 3, trans: 'pullin', turn: 0.4 }, build(S) {
+    { id: 's-welcome', name: '신입 환영', desc: '환영합니다! 쫀득 → 이름 → 첫 수업 응원', music: 'm-kids', sizes: ['916', '45'], video: { dur: 3, trans: 'pullin', turn: 0.4 }, build(S) {
       const g = geo(S), u = g.u;
       const out = [scene(YEL, [T('🎉', 0, u * 40, g.W, u * 14, { anim: an('pop', 0, 0.4), animLoop: { t: 'tilt', T: 1, a: 1.2 } }), T('환영합니다!', 0, u * 58, g.W, u * 13, { font: 'YeogiOttaeJalnan', color: NAVY, anim: an('stretch', 0.3, 0.7) }), T('새 친구가 왔어요', 0, u * 78, g.W, u * 6, { color: INK, weight: 800, anim: an('wordpop', 0.9, 0.6) })], { vdur: 3 }),
         scene(CREAM, [PH(u * 20, u * 30, g.W - u * 40, g.W - u * 40, { radius: g.W, anim: an('punch', 0, 0.45) }), T('○○○ 친구', 0, u * 98, g.W, u * 10, { font: 'YeogiOttaeJalnan', color: NAVY, anim: an('mask', 0.4, 0.5) }), T('초등 1학년 · 흰띠', 0, u * 112, g.W, u * 5, { color: '#5B6170', weight: 700, anim: an('fade', 0.8, 0.4) })], { vdur: 3.4 }),
         scene(NAVY, [T('첫 수업도', 0, u * 52, g.W, u * 7, { anim: an('rise', 0, 0.4) }), T('씩씩하게 화이팅!', 0, u * 64, g.W, u * 10, { font: 'YeogiOttaeJalnan', color: YEL, anim: an('slam', 0.4, 0.45), animLoop: { t: 'jelly', T: 0.8, a: 1.2 } }), T('나라차 가족이 된 걸 축하해요', 0, u * 84, g.W, u * 5, { color: 'rgba(255,255,255,.85)', weight: 700, anim: an('wordpop', 1, 0.7) })], { vdur: 3.4 })];
       return { pages: out, sfx: [{ ref: 'b:tada', at: 0.3 }, { ref: 'b:pop', at: 3.4 }, { ref: 'b:hit', at: 7.6 }] };
     } },
-    { id: 's-holiday', name: '명절 인사 · 휴관 안내', desc: '보름달 반짝 → 인사 → 휴관 날짜', music: 'm-calm', sizes: ['916'], video: { dur: 3.4, trans: 'soft', turn: 0.7 }, build(S) {
+    { id: 's-holiday', name: '명절 인사 · 휴관 안내', desc: '보름달 반짝 → 인사 → 휴관 날짜', music: 'm-calm', sizes: ['916', '45'], video: { dur: 3.4, trans: 'soft', turn: 0.7 }, build(S) {
       const g = geo(S), u = g.u;
       const out = [scene(NAVY, [C(g.cx - u * 24, u * 34, u * 48, '#FFE7A3', { anim: an('zoom', 0, 1.2), animLoop: { t: 'glow', T: 2, a: 1 } }), T('풍성한 한가위', 0, u * 92, g.W, u * 10, { font: 'YeogiOttaeJalnan', color: '#FFE7A3', anim: an('mask', 0.8, 0.7) }), T('보내세요', 0, u * 106, g.W, u * 7, { anim: an('fade', 1.4, 0.6) })], { vdur: 3.6, vcam: 'in', vcamA: 0.04 }),
         scene(CREAM, [T('나라차태권도 가족 모두', 0, u * 52, g.W, u * 6, { color: '#5B6170', weight: 700, anim: an('fade', 0, 0.5) }), T('건강하고 행복한\n명절 되세요', u * 6, u * 64, g.W - u * 12, u * 8.4, { font: 'YeogiOttaeJalnan', color: NAVY, lh: 1.25, anim: an('wordpop', 0.4, 1) })], { vdur: 3.4 }),
@@ -223,11 +223,23 @@ NC.vtpl = (function () {
     }
     if (Math.abs(d) > 0.5) els.forEach(e => { e.y = Math.round((e.y + d) * 100) / 100; });
   }
+  /* 숏츠(9:16로 짠 장면)를 4:5(인스타 피드)로: 화면을 덮는 큰 요소(배경·사진)는 높이를 비율대로 맞추고, 나머지 내용은 한 묶음으로 4:5 안(위아래 6%)에 옮기거나 비율대로 줄임 */
+  function fit45(pg, A, B) {
+    const ky = B.h / A.h, r2 = v => Math.round(v * 100) / 100, big = e => e.h > A.h * 0.45 || (e.w >= A.w * 0.98 && e.h > A.h * 0.3);
+    const rest = [];
+    (pg.els || []).forEach(e => { if (big(e)) { e.y = r2(e.y * ky); e.h = r2(e.h * ky); } else if (e.y + e.h > A.h + 0.5 || e.y < -0.5) { if (e.y + e.h > A.h * 0.5) e.y = r2(e.y + B.h - A.h); } else rest.push(e); });
+    if (!rest.length) return;
+    const top = B.h * 0.06, bot = B.h * 0.94, minY = Math.min(...rest.map(e => e.y)), maxB = Math.max(...rest.map(e => e.y + e.h));
+    if (maxB - minY > bot - top) { const k = (bot - top) / (maxB - minY), cx = B.w / 2; rest.forEach(e => { const ncx = cx + (e.x + e.w / 2 - cx) * k; e.w = r2(e.w * k); e.h = r2(e.h * k); e.x = r2(ncx - e.w / 2); e.y = r2(top + (e.y - minY) * k); if (e.size) e.size = Math.round(e.size * k * 10) / 10; if (e.strokeW) e.strokeW = r2(e.strokeW * k); if (e.radius) e.radius = r2(e.radius * k); }); return; }
+    const hh = maxB - minY, c0 = (minY + maxB) / 2 * ky, c = Math.max(top + hh / 2, Math.min(bot - hh / 2, c0)), d = c - (minY + maxB) / 2; rest.forEach(e => { e.y = r2(e.y + d); });  /* 화면 속 높이 비율을 지킴(사진 아래 자막은 아래에, 제목은 위에) */
+  }
   function make(id, sizeKey) {
     const t = LIST.find(x => x.id === id); if (!t) return null; const S = SIZES[sizeKey] || SIZES['169'];
-    const r = t.build(S);
+    const as916 = sizeKey === '45' && t.sizes && t.sizes[0] === '916', B0 = as916 ? SIZES['916'] : S;  /* 숏츠 템플릿은 9:16로 짠 뒤 4:5로 맞춤 */
+    const r = t.build(B0);
     r.pages.forEach(pg => { pg.els = JSON.parse(JSON.stringify(pg.els || [])); });  /* 여러 장면이 같은 요소(머리 띠 등)를 함께 쓰면 장면마다 옮길 때 여러 번 옮겨졌음 — 장면마다 따로 */
-    if (sizeKey === '916') r.pages.forEach(pg => safeShorts(pg, S));
+    if (sizeKey === '916' || as916) r.pages.forEach(pg => safeShorts(pg, B0));
+    if (as916) r.pages.forEach(pg => fit45(pg, B0, S));
     return { w: S.w, h: S.h, fmt: sizeKey === '916' ? 'story' : sizeKey === '45' ? 'ig45' : '', name: t.name, pages: r.pages, sfx: (r.sfx || []).map(x => Object.assign({ vol: 1, name: (NC.media.SOUNDS.find(s => 'b:' + s.id === x.ref) || {}).name || '효과음' }, x)), audio: t.music ? { src: 'b:' + t.music, name: (NC.media.SOUNDS.find(s => s.id === t.music) || {}).name || '', vol: 0.7, from: 0, fin: 0.5, fout: 2 } : null, video: Object.assign({ q: '1080', fps: 30, loop: false }, t.video) };
   }
   const total = (id, sizeKey) => { const r = make(id, sizeKey); if (!r) return 0; return r.pages.reduce((a, p, i) => a + Number(p.vdur || r.video.dur) + (i < r.pages.length - 1 || r.video.loop ? Number(r.video.turn || 0) : 0), 0); };
