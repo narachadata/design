@@ -5124,21 +5124,17 @@ const CERT_FRAME_JPG = 'assets/cert/naracha-cert-frame.jpg', CERT_FRAME_PDF = 'a
    출력이 모두 굵게 나오던 것 → 기억된 배치·이미 만든 상장의 굵기를 보통으로 ② 제목(상장 이름)은 선에서 1cm 더 위로 (기본 자리 105 → 95mm, 기억된 자리·만든 상장도 10mm 위로)
    제목·이름·급수는 ExtraBold(800) 그대로. 문서마다 한 번만 (doc.cert.wv) */
 function certMigrate(C) {  /* 처음 불러올 때 이 줄보다 먼저 불릴 수 있어 상수 대신 함수 안에 */
-  const CERT_WV = 3, CERT_BOLD = ['title', 'name', 'grade'], v0 = C.wv || 0;
+  const CERT_WV = 4, v0 = C.wv || 0;
   if (v0 >= CERT_WV) return; const ky = doc.h / 297;
-  /* 판 3 (11/18 팀장님 "나눔명조 ExtraBold체로"): 제목·이름·급수는 글꼴 목록에 따로 있는 「나눔명조 ExtraBold」 글꼴로 */
-  const xb = o => { if (o && (!o.font || /^(Nanum Myeongjo|Noto Sans KR)$/.test(o.font))) { o.font = 'Nanum Myeongjo ExtraBold'; o.weight = 800; } };
-  Object.entries(C.layout || {}).forEach(([k, L]) => { const key = String(k.split(':')[1] || '').split('@')[0]; if (CERT_BOLD.includes(key) && L && typeof L === 'object') xb(L); });
-  (doc.pages || []).forEach(p => { if (p.cert) p.els.forEach(e => { if (e.type === 'text' && CERT_BOLD.includes(e.certKey)) xb(e); }); });
-  if (v0 >= 2) { C.wv = CERT_WV; return; }  /* 판 2(굵기·제목 자리)는 이미 함 */
-  Object.entries(C.layout || {}).forEach(([k, L]) => { if (!L || typeof L !== 'object') return; const key = String(k.split(':')[1] || '').split('@')[0];
-    if (!CERT_BOLD.includes(key) && Number(L.weight) >= 600) L.weight = 400; if (key === 'title' && typeof L.y === 'number') L.y = r1(L.y - 10 * ky); });
-  (doc.pages || []).forEach(p => { if (!p.cert) return; p.els.forEach(e => { if (!e.certKey || e.type !== 'text') return;
-    if (!CERT_BOLD.includes(e.certKey) && Number(e.weight) >= 600) e.weight = 400; if (e.certKey === 'title' && typeof e.y === 'number') e.y = r1(e.y - 10 * ky); }); });
+  const each = fn => { Object.entries(C.layout || {}).forEach(([k, L]) => { if (L && typeof L === 'object') fn(L, String(k.split(':')[1] || '').split('@')[0]); }); (doc.pages || []).forEach(p => { if (p.cert) p.els.forEach(e => { if (e.type === 'text' && e.certKey) fn(e, e.certKey); }); }); };
+  /* 판 2 (11/18): 제목(상장 이름) 1cm 위로 */
+  if (v0 < 2) each((o, key) => { if (key === 'title' && typeof o.y === 'number') o.y = r1(o.y - 10 * ky); });
+  /* 판 4 (11/18 팀장님 "상장에 쓰이는 모든 글꼴을 나눔명조 ExtraBold로"): 모든 상장 글(제목·이름·기록·본문·날짜·번호)을 「나눔명조 ExtraBold」로 — 직접 고른 다른 글꼴은 그대로 */
+  each(o => { if (!o.font || /^(Nanum Myeongjo|Noto Sans KR|Nanum Myeongjo ExtraBold)$/.test(o.font)) { o.font = 'Nanum Myeongjo ExtraBold'; o.weight = 800; } });
   C.wv = CERT_WV;
 }
 function certState() {
-  if (!doc.cert) doc.cert = { form: 'record', printFrame: true, data: {}, layout: {}, wv: 3 };  /* wv: certMigrate 판 */
+  if (!doc.cert) doc.cert = { form: 'record', printFrame: true, data: {}, layout: {}, wv: 4 };  /* wv: certMigrate 판 */
   const C = doc.cert; certMigrate(C); C.data = C.data || {}; C.layout = C.layout || {}; if (!C.frame) { C.frame = CERT_FRAME_JPG; C.framePdf = CERT_FRAME_PDF; } /* 틀은 기본으로 내장 틀 */
   Object.entries(CERT_FORMS).forEach(([k, f]) => { if (!C.data[k]) C.data[k] = { common: Object.fromEntries(f.common.map(([a, , v]) => [a, a === 'date' ? CERT_TODAY() : v])), body: f.body, rows: [] }; });
   return C;
@@ -5154,8 +5150,8 @@ function certEls(form, r) {
   const recN = certRecN(form, r);
   const T = (key, text, o) => { if (!String(text || '').trim()) return; const L = C.layout[certLKey(form, key, recN)] || {}; const base = Object.assign({}, TEXT_DEF, { id: uid(), text, font: 'Noto Sans KR', size: 15, weight: 700, color: '#1a1a1a', align: 'center', lh: 1.45, ls: 0, name: '상장 · ' + o.label, certKey: key }, o, { x: r1(o.x * kx), y: r1(o.y * ky), w: r1(o.w * kx), h: r1((o.h || 8) * ky), size: Math.round(o.size * k * 2) / 2 });
     delete base.label; Object.assign(base, L); if (base.fitText) base.fitMax = Number(L.fitMax) || base.size; out.push(base); };
-  const sans = 'Noto Sans KR', serif = 'Nanum Myeongjo', serifXB = 'Nanum Myeongjo ExtraBold', fill = t => String(t || '').replace(/\{([^{}\n]+)\}/g, (m, nm) => { if (nm.trim() === '이름') return r && r.name ? String(r.name) : m; const c = F.common.find(x => x[1].replace(/ \(.*\)$/, '') === nm.trim()); return c ? certVal(D, r, c[0]) : m; });
-  /* 글꼴: 관장님 상장과 같게 나눔명조 — 제목(상장 이름)·이름·급수는 「나눔명조 ExtraBold」 글꼴(글꼴 목록에 따로, 800), 본문·기록·날짜는 나눔명조 보통(400) */
+  const sans = 'Noto Sans KR', serifXB = 'Nanum Myeongjo ExtraBold', serif = serifXB,  /* 11/18 팀장님: 상장 글 모두 나눔명조 ExtraBold */ fill = t => String(t || '').replace(/\{([^{}\n]+)\}/g, (m, nm) => { if (nm.trim() === '이름') return r && r.name ? String(r.name) : m; const c = F.common.find(x => x[1].replace(/ \(.*\)$/, '') === nm.trim()); return c ? certVal(D, r, c[0]) : m; });
+  /* 글꼴: 상장의 모든 글(제목·이름·급수·기록·본문·날짜·번호)은 「나눔명조 ExtraBold」(글꼴 목록에 따로, 800) — 11/18 팀장님 */
   T('title', certVal(D, r, 'title'), { label: '상장 이름', x: 15, y: 95, w: 180, h: 22, size: 42, weight: 800, font: serifXB, ls: 0.06, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'bottom' }); /* 틀의 'THIS CERTIFICATE IS PRESENTED TO' 선(133.5mm) 위 약 16mm에 앉게 (11/17 관장님: 선 위 6mm → 11/18 팀장님: 1cm 더 위로) */
   T('name', certVal(D, r, 'name'), { label: '이름', x: 30, y: 139, w: 150, h: 17, size: 34, weight: 800, font: serifXB, ls: 0.04, lh: 1.2, sizing: 'fixed', fitText: true, valign: 'middle' });
   let bodyY = 180, bodySz = 15;
@@ -5165,24 +5161,24 @@ function certEls(form, r) {
     /* 종목 3개까지: 종목 이름과 기록을 두 줄로 나란히(1~3칸). 4개 이상: '종목  기록 → 기록' 한 줄씩 두 칸 — 본문이 아래 KTA 로고(약 222mm)에 닿지 않게 */
     const n = recs.length, line = q => `${certRec(q.a, q.u != null ? q.u : u)} → ${certRec(q.b, q.u != null ? q.u : u)}`;
     if (n <= 3) { const cw = n === 1 ? 100 : n === 2 ? 78 : 58, gap = n === 3 ? 3 : 10, tw = n * cw + (n - 1) * gap;
-      recs.forEach((q, i) => T('rec' + (i + 1), `${q.k}\n${line(q)}`, { label: '기록 ' + (i + 1), x: 105 - tw / 2 + i * (cw + gap), y: 159, w: cw, h: 14, size: n === 3 ? 15 : 16, font: serif, weight: 400, lh: 1.4 })); bodyY = 180; }
+      recs.forEach((q, i) => T('rec' + (i + 1), `${q.k}\n${line(q)}`, { label: '기록 ' + (i + 1), x: 105 - tw / 2 + i * (cw + gap), y: 159, w: cw, h: 14, size: n === 3 ? 15 : 16, font: serif, weight: 800, lh: 1.4 })); bodyY = 180; }
     else { /* 표처럼: 4~6개 두 칸, 7개 이상 세 칸 — 칸마다 종목 이름(오른쪽 맞춤) | 기록(왼쪽 맞춤) */
       const nc = n >= 7 ? 3 : 2, rows_ = Math.ceil(n / nc), sz = nc === 3 ? 11.5 : 13, lh = nc === 3 ? 1.4 : 1.45, rowH = sz * 0.3528 * lh, cw = 174 / nc, nw = nc === 3 ? 31 : 44, vw = cw - nw - 2;
       for (let c = 0; c < nc; c++) { const list = recs.slice(c * rows_, (c + 1) * rows_); if (!list.length) continue; const x0 = 18 + c * cw;
-        T('recN' + (c + 1), list.map(q => q.k).join('\n'), { label: `기록 ${c + 1}칸 종목`, x: x0, y: 158, w: nw, h: rowH * list.length, size: sz, font: serif, weight: 400, lh, align: 'right' });
-        T('recV' + (c + 1), list.map(line).join('\n'), { label: `기록 ${c + 1}칸 기록`, x: x0 + nw + 2, y: 158, w: vw, h: rowH * list.length, size: sz, font: serif, weight: 400, lh, align: 'left' }); }
+        T('recN' + (c + 1), list.map(q => q.k).join('\n'), { label: `기록 ${c + 1}칸 종목`, x: x0, y: 158, w: nw, h: rowH * list.length, size: sz, font: serif, weight: 800, lh, align: 'right' });
+        T('recV' + (c + 1), list.map(line).join('\n'), { label: `기록 ${c + 1}칸 기록`, x: x0 + nw + 2, y: 158, w: vw, h: rowH * list.length, size: sz, font: serif, weight: 800, lh, align: 'left' }); }
       bodyY = 158 + rows_ * rowH + 5; bodySz = 14; }
   } else if (form === 'grade') { T('grade', r.grade, { label: '급수', x: 40, y: 158, w: 130, h: 11, size: 24, weight: 800, font: serifXB }); bodyY = 182; }
-  else if (form === 'free') { T('line', r.line, { label: '이름 아래 한 줄', x: 25, y: 160, w: 160, h: 9, size: 15, font: serif, weight: 400 }); }
-  T('body', fill(D.body), { label: '본문', x: 18, y: bodyY, w: 174, h: 30, size: bodySz, font: serif, weight: 400, lh: bodySz < 15 ? 1.65 : 1.75 });
-  T('date', certVal(D, r, 'date'), { label: '날짜', x: 24, y: 229.5, w: 60, h: 8, size: 14, font: serif, weight: 400 });
-  if (form === 'grade') T('note', r.note, { label: '작은 글', x: 24, y: 241, w: 90, h: 5, size: 9, font: serif, weight: 400, align: 'left' });
+  else if (form === 'free') { T('line', r.line, { label: '이름 아래 한 줄', x: 25, y: 160, w: 160, h: 9, size: 15, font: serif, weight: 800 }); }
+  T('body', fill(D.body), { label: '본문', x: 18, y: bodyY, w: 174, h: 30, size: bodySz, font: serif, weight: 800, lh: bodySz < 15 ? 1.65 : 1.75 });
+  T('date', certVal(D, r, 'date'), { label: '날짜', x: 24, y: 229.5, w: 60, h: 8, size: 14, font: serif, weight: 800 });
+  if (form === 'grade') T('note', r.note, { label: '작은 글', x: 24, y: 241, w: 90, h: 5, size: 9, font: serif, weight: 800, align: 'left' });
   return out;
 }
 /* 상장 번호: '제 2026-001 호' — 다음 번호는 PC끼리 동기화(naracal-cert-serial: 앞 글자별 마지막 번호) */
 function certNo(C, i) { const S = C.serial || {}; return `제 ${S.prefix || new Date().getFullYear()}-${String((Number(S.start) || 1) + i).padStart(3, '0')} 호`; }
 function certNextSerial(prefix) { try { const m = JSON.parse(localStorage.getItem('naracal-cert-serial') || '{}'); return (Number(m[prefix]) || 0) + 1; } catch (e) { return 1; } }
-function certSerialEl(C, form, i) { const L = C.layout[form + ':no'] || {}, kx = doc.w / 210, ky = doc.h / 297, k = Math.min(kx, ky); return Object.assign({}, TEXT_DEF, { id: uid(), text: certNo(C, i), font: 'Nanum Myeongjo', size: Math.round(11 * k * 2) / 2, weight: 400, color: '#1a1a1a', align: 'left', lh: 1.3, ls: 0.02, name: '상장 · 번호', certKey: 'no', x: r1(26 * kx), y: r1(30 * ky), w: r1(70 * kx), h: r1(6 * ky) }, L); }
+function certSerialEl(C, form, i) { const L = C.layout[form + ':no'] || {}, kx = doc.w / 210, ky = doc.h / 297, k = Math.min(kx, ky); return Object.assign({}, TEXT_DEF, { id: uid(), text: certNo(C, i), font: 'Nanum Myeongjo ExtraBold', size: Math.round(11 * k * 2) / 2, weight: 800, color: '#1a1a1a', align: 'left', lh: 1.3, ls: 0.02, name: '상장 · 번호', certKey: 'no', x: r1(26 * kx), y: r1(30 * ky), w: r1(70 * kx), h: r1(6 * ky) }, L); }
 function certLogCSV() { const C = certState(), L = C.log || []; if (!L.length) { toast('아직 발급 기록이 없습니다 — 상장 번호를 켜고 상장을 만들면 쌓입니다', true); return; }
   const q = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`, rows = [['번호', '이름', '상장', '날짜', '만든 때']].concat(L.map(x => [x.no, x.name, x.title, x.date, new Date(x.t).toLocaleString('ko-KR')]));
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv' })); { const t = new Date(), p2 = n => String(n).padStart(2, '0'); a.download = `상장 발급 대장 ${t.getFullYear()}-${p2(t.getMonth() + 1)}-${p2(t.getDate())}.csv`; } document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast(`발급 대장 ${rows.length - 1}건을 내려받았습니다 (엑셀에서 열립니다)`); }
