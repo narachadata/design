@@ -1371,3 +1371,53 @@ dialog.setdlg[open]{display:flex}
 .setrow input.sw:checked{background:#2f5bea}.setrow input.sw:checked::after{left:21px}
 .setcolors{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.setcolors i{width:18px;height:18px;border-radius:5px;border:1px solid rgba(0,0,0,.15);display:inline-block}
 @media (max-width:640px){.setbody{grid-template-columns:1fr}#setNav{flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--ui-line,#e3e6ee)}}
+/* 단축키 창: 긴 단축키(Control + Shift + S (Alt + Shift + S))가 왼쪽 칸을 넓혀 설명이 한두 글자씩 접히던 것 */
+dialog.keys-dlg{width:min(680px,94vw)}
+.keys{table-layout:fixed}.keys td:first-child{white-space:normal;width:44%;line-height:1.9}.keys td:first-child kbd{white-space:nowrap;margin:1px 0}.keys td:last-child{line-height:1.45}
+/* 매뉴얼 */
+dialog.mandlg{width:min(1180px,96vw);height:min(860px,92vh);padding:0;display:flex;flex-direction:column}dialog.mandlg[open]{display:flex}
+dialog.mandlg .dhead h2 small{font-size:12.5px;font-weight:500;color:var(--ui-muted);margin-left:6px}
+.manbody{display:grid;grid-template-columns:250px 1fr;flex:1;min-height:0}
+#manNav{border-right:1px solid var(--ui-line,#e3e6ee);overflow:auto;padding:10px 8px;display:flex;flex-direction:column;gap:4px;background:var(--ui-field,#f6f7fa)}
+#manNav button{display:flex;gap:10px;align-items:center;text-align:left;border:1px solid transparent;background:none;border-radius:10px;padding:10px;cursor:pointer;font:inherit;color:inherit}
+#manNav button:hover{background:#fff;border-color:var(--ui-line,#e3e6ee)}#manNav button.on{background:#fff;border-color:#2f5bea;box-shadow:0 1px 3px rgba(47,91,234,.15)}
+#manNav .mi{font-size:22px;flex:none;width:30px;text-align:center}#manNav b{display:block;font-size:13.5px;line-height:1.3}#manNav small{font-size:11.5px;color:var(--ui-muted)}
+#manMain{overflow:auto;padding:14px 22px 30px}.mantitle{margin:4px 0 4px;font-size:20px}.mansum{color:var(--ui-muted);margin:0 0 14px;font-size:14px}
+.manstep{border:1px solid var(--ui-line,#e3e6ee);border-radius:14px;padding:14px 16px;margin-bottom:16px;background:#fff}
+.mshead{display:flex;align-items:center;gap:10px;margin-bottom:6px}.mshead b{font-size:16px}.msn{width:28px;height:28px;border-radius:50%;background:#2f5bea;color:#fff;display:grid;place-items:center;font-weight:800;flex:none}
+.manstep>p{margin:0 0 10px;line-height:1.65;font-size:14px}
+.mimg{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--ui-line,#e3e6ee);cursor:zoom-in;background:#f3f4f7}.mimg img{display:block;width:100%;height:auto}
+.mk{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:#e5323f;color:#fff;font:800 13px/26px sans-serif;text-align:center;font-style:normal;box-shadow:0 0 0 3px #fff,0 2px 8px rgba(0,0,0,.35);pointer-events:none;transition:transform .15s}
+.mk.hot{transform:translate(-50%,-50%) scale(1.45);background:#2f5bea}
+.mzoom{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.6);color:#fff;font-size:12px;padding:3px 8px;border-radius:12px}
+.mklist{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:4px 14px}
+.mklist li{display:flex;gap:6px;align-items:flex-start;font-size:13.5px;line-height:1.45;padding:3px 4px;border-radius:6px;cursor:default}.mklist li:hover{background:#eef3ff}.mklist li span{color:#e5323f;font-weight:800;flex:none}
+.mgo{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}.mannext{text-align:right;margin-top:4px}
+#manZoom{position:absolute;inset:0;background:rgba(10,14,30,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:5;cursor:zoom-out;padding:16px}
+#manZoom .mzwrap{position:relative;max-width:100%;max-height:calc(100% - 50px)}#manZoom .mzwrap img{display:block;max-width:100%;max-height:calc(92vh - 90px);border-radius:8px}
+#manZoom .mk{width:32px;height:32px;font-size:15px;line-height:32px}
+@media (max-width:760px){.manbody{grid-template-columns:1fr}#manNav{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--ui-line,#e3e6ee)}#manNav button{flex:none}}
+/* 숏츠용 새 움직임 미리보기 아이콘 (마우스를 올리면 움직임) */
+.anim-grid button:hover .am-slam,.vfx-grid button:hover .am-slam{animation:amSlam .7s cubic-bezier(.2,.8,.3,1) infinite}
+.anim-grid button:hover .am-punch,.vfx-grid button:hover .am-punch{animation:amPunch .7s ease-out infinite}
+.anim-grid button:hover .am-stretch,.vfx-grid button:hover .am-stretch{animation:amStretch .9s ease-out infinite}
+.anim-grid button:hover .am-swipe,.vfx-grid button:hover .am-swipe{animation:amSwipe .6s cubic-bezier(.1,.9,.2,1) infinite}
+.anim-grid button:hover .am-mask,.vfx-grid button:hover .am-mask{animation:amMask .8s ease-out infinite}
+.anim-grid button:hover .am-glitch,.vfx-grid button:hover .am-glitch{animation:amGlitch .5s steps(5) infinite}
+.anim-grid button:hover .am-flash,.vfx-grid button:hover .am-flash{animation:amFlash .7s ease-out infinite}
+.anim-grid button:hover .am-roll,.vfx-grid button:hover .am-roll{animation:amRoll .9s ease-out infinite}
+.anim-grid button:hover .am-tilt,.vfx-grid button:hover .am-tilt{animation:amTilt .8s ease-out infinite}
+.anim-grid button:hover .am-wordpop,.anim-grid button:hover .am-charpop{animation:amPunch .6s ease-out infinite}
+.anim-grid button:hover .am-wordslam{animation:amSlam .6s ease-out infinite}.anim-grid button:hover .am-charup{animation:amMask .7s ease-out infinite}
+@keyframes amSlam{0%{opacity:0;transform:scale(2.2)}55%{opacity:.75;transform:scale(1)}65%{transform:translateX(2px)}75%{transform:translateX(-2px)}100%{opacity:.75;transform:none}}
+@keyframes amPunch{0%{opacity:0;transform:scale(1.5)}60%{opacity:.75;transform:scale(.92)}100%{opacity:.75;transform:none}}
+@keyframes amStretch{0%{opacity:0;transform:scale(.2,1.4)}60%{opacity:.75;transform:scale(1.12,.92)}100%{opacity:.75;transform:none}}
+@keyframes amSwipe{0%{opacity:0;transform:translateX(-14px) scaleX(1.3);filter:blur(2px)}100%{opacity:.75;transform:none;filter:none}}
+@keyframes amMask{0%{clip-path:inset(0 0 0 0);transform:translateY(16px)}100%{transform:none}}
+@keyframes amGlitch{0%{opacity:.75;transform:translateX(-3px)}25%{opacity:.2;transform:translateX(3px)}50%{opacity:.75;transform:translateX(-1px) scaleX(1.2)}75%{opacity:.3}100%{opacity:.75;transform:none}}
+@keyframes amFlash{0%{opacity:0;filter:brightness(3)}100%{opacity:.75;filter:none}}
+@keyframes amRoll{0%{opacity:0;transform:translateX(-12px) rotate(-360deg)}100%{opacity:.75;transform:none}}
+@keyframes amTilt{0%{opacity:0;transform:rotate(-20deg) translateY(4px)}70%{transform:rotate(4deg)}100%{opacity:.75;transform:none}}
+.am-mask{overflow:hidden}
+/* 출력 창: 화면이 낮아도 '출력' 단추가 늘 보이게 (아래에 붙음) */
+.row:has(> #prGo){position:sticky;bottom:0;background:var(--ui-bg,#fff);padding:8px 0 4px;z-index:2;box-shadow:0 -8px 10px -10px rgba(0,0,0,.25)}
