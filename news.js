@@ -334,7 +334,8 @@ NC.news = (function () {
         if (mask) { const k = cw / dw; x.setTransform(k, 0, 0, k, -mask.ox * k, -mask.oy * k); x.fill(new Path2D(dStr(mask.d, 0, 0)), 'nonzero'); x.setTransform(1, 0, 0, 1, 0, 0); x.globalCompositeOperation = 'source-in'; }
         x.imageSmoothingQuality = 'high';
         x.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
-        const opaque = !mask && /^data:image\/jpe?g/.test(s0);
+        let opaque = !mask && /^data:image\/jpe?g/.test(s0);
+        if (!mask && !opaque) { try { const dd = x.getImageData(0, 0, cw, ch).data; opaque = true; for (let i = 3; i < dd.length; i += 4 * 7) if (dd[i] < 250) { opaque = false; break; } } catch (e) {} }  /* 투명한 곳이 없으면 사진(JPEG)으로 */
         url = opaque ? cv.toDataURL('image/jpeg', 0.92) : cv.toDataURL('image/png');
       }
     } catch (e) { return null; }

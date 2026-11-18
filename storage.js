@@ -118,7 +118,7 @@ NC.store = (function () {
     const t = new Date(), p2 = n => String(n).padStart(2, '0'); const stamp = `${t.getFullYear()}${p2(t.getMonth() + 1)}${p2(t.getDate())}-${p2(t.getHours())}${p2(t.getMinutes())}${p2(t.getSeconds())}`;
     // 그림(data URL)은 그림 폴더에 한 번만 두고, 버전 파일에는 그림 이름만 (사진 많은 캘린더도 드라이브를 덜 차지)
     let j = null; try { j = JSON.parse(text); } catch (e) {}
-    if (j && j.assets && Object.keys(j.assets).length) { const ad = await d.getDirectoryHandle('그림', { create: true }); for (const [k, v] of Object.entries(j.assets)) { try { await ad.getFileHandle(k + '.txt'); } catch (e) { const fh = await ad.getFileHandle(k + '.txt', { create: true }); const ww = await fh.createWritable(); await ww.write(v); await ww.close(); } } j.assetRefs = Object.keys(j.assets); delete j.assets; text = JSON.stringify(j); }
+    if (j && j.assets && Object.keys(j.assets).length) { const ad = await d.getDirectoryHandle('그림', { create: true }); for (const [k, v] of Object.entries(j.assets)) { let ok = false; try { ok = (await (await ad.getFileHandle(k + '.txt')).getFile()).size > 0; } catch (e) {} if (!ok && v) { const fh = await ad.getFileHandle(k + '.txt', { create: true }); const ww = await fh.createWritable(); await ww.write(v); await ww.close(); } } j.assetRefs = Object.keys(j.assets); delete j.assets; text = JSON.stringify(j); }
     const h = await d.getFileHandle(`${stamp}_${clean(pcName())}${memo ? '_' + clean(memo) : ''}.json`, { create: true }); const w = await h.createWritable(); await w.write(text); await w.close();
     const all = (await listSnapshots(docId)); const days = new Set(); for (const x of all.slice(SNAP_KEEP)) { const day = new Date(x.time).toDateString(); if (x.memo || (Date.now() - x.time < 30 * 864e5 && !days.has(day))) { days.add(day); continue; } try { await d.removeEntry(x.name); } catch (e) {} } /* 메모 붙은 판과 최근 30일 하루 한 판은 남김 */
     return true;
@@ -131,7 +131,7 @@ NC.store = (function () {
   }
   async function readSnapshot(x, docId) {
     const f = await x.handle.getFile(); const j = Object.assign(JSON.parse(await f.text()), { _size: f.size });
-    if (j.assetRefs) { j.assets = {}; let ad = null; try { ad = await (await snapDir(docId || j.docId, false)).getDirectoryHandle('그림'); } catch (e) {} for (const k of j.assetRefs) { try { j.assets[k] = await (await (await ad.getFileHandle(k + '.txt')).getFile()).text(); } catch (e) {} } delete j.assetRefs; }
+    if (j.assetRefs) { j.assets = {}; let ad = null; try { ad = await (await snapDir(docId || j.docId, false)).getDirectoryHandle('그림'); } catch (e) {} for (const k of j.assetRefs) { try { const tx = await (await (await ad.getFileHandle(k + '.txt')).getFile()).text(); if (tx) j.assets[k] = tx; } catch (e) {} }  /* 빈 조각은 건너뜀 — 되살릴 때 지금 문서의 같은 그림을 씀 */ delete j.assetRefs; }
     return j;
   }
   async function disconnect() { state.handle = null; state.fileName = ''; state.lastMod = 0; adopt(null); await idbDel('fileHandle'); }

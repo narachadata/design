@@ -449,7 +449,7 @@ let tbObs = null, tbMaxH = 0; addEventListener('resize', () => { tbMaxH = 0; });
 function fitCanvas() {
   watchToolbar();
   // 위에 떠 있는 도구 막대와 아래 쪽 이동 막대에 페이지가 가리지 않게 그 높이만큼 비워 두고 맞춤
-  const st = $('#stage'); { const was = st.classList.contains('compact'); st.classList.toggle('compact', st.clientHeight < 470); if (was !== st.classList.contains('compact')) tbMaxH = 0; } /* 낮은 작업 화면(노트북 + 큰 타임라인): 도구 막대를 아이콘 한 줄로 */
+  const st = $('#stage'); { const was = st.classList.contains('compact'); st.classList.toggle('compact', st.clientHeight < 470 || st.clientWidth < 480);  /* 낮거나 좁은 작업 화면(노트북+큰 타임라인, 800px 창) */ if (was !== st.classList.contains('compact')) tbMaxH = 0; } /* 낮은 작업 화면(노트북 + 큰 타임라인): 도구 막대를 아이콘 한 줄로 */
   const tb = st.querySelector('.toolbar'); if (tb) tbMaxH = Math.max(tbMaxH, tb.offsetHeight); const top = tb ? tb.offsetTop + tbMaxH + (st.classList.contains('compact') ? 6 : 14) : 24, bot = st.classList.contains('tlon') && $('#vtl') && !document.body.classList.contains('tl-wide') ? $('#vtl').offsetHeight + 18 : 64;
   st.style.setProperty('--pgm-top', Math.max(0, top - 6) + 'px');  /* 나란히 보기: 결과 화면도 도구 막대 아래에서 시작 */
   const w = st.classList.contains('pgm-on') ? st.clientWidth / 2 - 64 : st.clientWidth - 80, h = st.clientHeight - top - bot - 4;
@@ -3545,9 +3545,12 @@ async function keepCurrentDoc() {
   return true;
 }
 const keepNote = () => store.state.handle ? '지금 문서는 파일에 저장됩니다' : '지금 문서는 파일로 저장하지 않았지만 저장 ▾ → 직전 문서 되살리기로 되살릴 수 있습니다';
-async function restorePrevDoc(pick) {
-  let j = null, L = []; try { L = ((await store.idbGet('doc-prevs')) || []).filter(x => x && x.pages); } catch (e) {}
+/* 이 브라우저에만 있는 문서: 파일로 저장하지 않은 채 넘어간 '직전 문서'(최근 6개) + 같은 브라우저 다른 탭에서 쓰던 문서(문서별 칸) */
+async function prevDocList() { let L = []; try { L = ((await store.idbGet('doc-prevs')) || []).filter(x => x && x.pages); } catch (e) {}
   try { const ix = (await store.idbGet('doc-slots')) || []; for (const x of ix) { if (!x || !x.id || x.id === doc.docId || L.some(y => y.docId === x.id)) continue; const s2 = await store.idbGet('doc@' + x.id); if (s2 && s2.pages) L.push(Object.assign(s2, { _keptAt: x.t, _tab: true })); } } catch (e) {}  /* 다른 탭에서 쓰던 문서 */
+  return L; }
+async function restorePrevDoc(pick) {
+  let j = null; const L = await prevDocList();
   if (pick != null) j = L[pick]; else if (L.length > 1) { /* 여러 개면 고르게 */
     let d = $('#dlgPrev'); if (d) d.remove(); d = document.createElement('dialog'); d.id = 'dlgPrev'; d.className = 'nw-dlg';
     d.innerHTML = `<div class="dhead"><h2>직전 문서 되살리기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="max-width:520px"><p class="hint">파일로 저장하지 않은 채 다른 문서로 넘어간 문서와, 같은 브라우저의 다른 탭에서 쓰던 문서입니다.</p>${L.map((x, i) => `<button class="btn full" data-prev="${i}" style="justify-content:space-between;margin-bottom:6px"><span>${esc(x.name || '디자인')} <small>${x.pages.length}쪽${x._tab ? ' · 다른 탭에서 쓰던 문서' : x.docId && x.docId === doc.docId ? ' · 지금 연 문서의 예전 상태' : ''}</small></span><small>${x._keptAt ? new Date(x._keptAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</small></button>`).join('')}</div>`;
@@ -3592,9 +3595,11 @@ function openDrive(path) {
 }
 async function renderDrive() {
   const ready = await store.folderReady();
-  $('#dvNav').innerHTML = [['drive', '내 드라이브', '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'], ['recent', '최근 디자인', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'], ['trash', '휴지통', '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>']]
+  $('#dvNav').innerHTML = [['drive', '내 드라이브', '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'], ['recent', '최근 디자인', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'], ['trash', '휴지통', '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'], ['local', '이 브라우저에만', '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>']]
     .map(([k, t, ic]) => `<button data-dvnav="${k}" class="${drv.view === k ? 'on' : ''}"><svg viewBox="0 0 24 24">${ic}</svg>${t}</button>`).join('') + `<hr><button data-dvnav="sync"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5l2-2v6h-6l2.3-2.3A5.5 5.5 0 0 0 6.5 12M20 12a8 8 0 0 1-14 5l-2 2v-6h6l-2.3 2.3A5.5 5.5 0 0 0 17.5 12"/></svg>저장·동기화 설정</button>`;
   const main = $('#dvMain');
+  if (drv.view === 'local') { const L = await prevDocList(); const tm = x => x._keptAt ? new Date(x._keptAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    main.innerHTML = `<h3 style="margin:0 0 4px">이 브라우저에만 있는 문서</h3><p class="hint">파일·드라이브에 저장하지 않은 채 다른 문서로 넘어간 문서와, 같은 브라우저의 다른 탭에서 쓰던 문서입니다. 열어서 <b>저장</b>하면 드라이브에 들어갑니다. (이 PC 브라우저에만 있으므로 다른 PC에서는 보이지 않습니다)</p>${L.length ? `<div class="dvlocal">${L.map((x, i) => `<button class="btn full" data-dvlocal="${i}" style="justify-content:space-between;margin-bottom:6px"><span>${esc(x.name || '디자인')} <small>${x.pages.length}쪽${x._tab ? ' · 다른 탭에서 쓰던 문서' : x.docId && x.docId === doc.docId ? ' · 지금 연 문서의 예전 상태' : ''}</small></span><small>${tm(x)}</small></button>`).join('')}</div>` : '<div class="dvempty"><p class="hint">없습니다 — 모든 문서가 파일·드라이브에 저장되어 있습니다.</p></div>'}`; return; }
   if (!ready) { main.innerHTML = `<div class="dvempty"><h3>동기화 폴더가 연결되어 있지 않습니다</h3><p class="hint">구글 드라이브의 나라차디자인공방 폴더를 연결하면 폴더별로 디자인을 정리할 수 있습니다.</p><button class="btn primary" data-dvnav="sync">동기화 폴더 연결</button> <button class="btn" data-dvact="other">다른 위치의 파일 열기</button></div>`; return; }
   main.innerHTML = '<p class="hint"><span class="spin"></span> 불러오는 중…</p>';
   const cur = store.state.handle ? store.state.fileName : null, curPath = await curDocPath();
@@ -3647,6 +3652,7 @@ async function fillThumb(box, x) {
 async function driveClick(e) {
   const t = e.target;
   const nav = t.closest('[data-dvnav]'); if (nav) { const v = nav.dataset.dvnav; if (v === 'sync') { $('#dlgDrive').close(); openSaveDialog(); return; } drv.view = v; drv.q = ''; if (v === 'drive') drv.path = drv.path || []; renderDrive(); return; }
+  const lc = t.closest('[data-dvlocal]'); if (lc) { $('#dlgDrive').close(); restorePrevDoc(Number(lc.dataset.dvlocal)); return; }
   const cr = t.closest('[data-crumb]'); if (cr) { drv.path = drv.path.slice(0, Number(cr.dataset.crumb)); drv.view = 'drive'; renderDrive(); return; }
   const tb = t.closest('[data-dvtab]'); if (tb) { drv.tab = tb.dataset.dvtab; renderDrive(); return; }
   const act = t.closest('[data-dvact]'); if (act) {
