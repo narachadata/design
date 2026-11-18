@@ -2616,7 +2616,7 @@ function renderCalSide(body) {
   $('#wzOpen').onclick = () => openWizard(yearNow);
   if ($('#wzVirtue')) $('#wzVirtue').onclick = () => {   /* [나라차 R4.505] 인성덕목 2년 계획 문구를 연도에 맞게 */
       const VP = virtuePlanFor(yearNow), tr = VP.tr, P = VP.P; if (!P.length || !doc.calendar.months) return;
-      if (!confirm(`${yearNow}년은 ${tr === '극기' ? '1년차 극기(나의 가치)' : '2년차 홍익(우리·모두의 가치)'}입니다.\n12달의 덕목·영문·명언·실천 2가지·사자성어를 나라차 인성덕목 2년 계획으로 바꿉니다.\n(그림·일정·디자인은 그대로 — 덕목이 바뀐 달은 그림을 새로 넣어 주세요)${VP.edits ? (VP.changed.length ? `\n\n관리 앱에서 고친 덕목도 반영합니다: ${VP.changed.join(', ')}\n(이 달들의 영문·명언·실천·풀이는 원래 덕목 기준 문구이니 확인해 주세요)` : '\n\n관리 앱에서 고친 덕목: 없음 — 계획표 그대로') : '\n\n※ 관리 앱에서 고친 덕목까지 반영하려면 나라차 → 소식지에서 데이터를 한 번 불러온 뒤 다시 누르세요.'}`)) return;
+      if (!confirm(`${yearNow}년은 ${tr === '극기' ? '1년차 극기(나의 가치)' : '2년차 홍익(우리·모두의 가치)'}입니다.\n12달의 덕목·영문·명언·실천 2가지·사자성어를 메인 프로그램의 인성덕목 2년 계획${VP.src === 'main' ? '(한 원본 virtue24.js)' : '(공방 사본 — 원본을 못 읽음)'}으로 바꿉니다.\n(그림·일정·디자인은 그대로 — 덕목이 바뀐 달은 그림을 새로 넣어 주세요)${VP.edits ? (VP.changed.length ? `\n\n메인 프로그램에서 고친 내용도 반영합니다: ${VP.changed.join(', ')}` : '\n\n메인 프로그램에서 고친 내용: 없음 — 계획표 그대로') : '\n\n※ 메인 프로그램에서 고친 내용까지 반영하려면 이 브라우저에서 메인 프로그램을 한 번 열거나, 나라차 → 소식지에서 데이터를 불러온 뒤 다시 누르세요.'}`)) return;
       let n = 0; P.forEach((x, k) => { if (doc.calendar.months[k]) n += applyMonthContent(k, x); });
       commit(); rerender(); toast(n ? `인성 문구를 넣었습니다 (글 상자 ${n}곳)` : '이 문서에는 인성 문구 자리가 없습니다 — 캘린더 마법사로 만든 달력 문서에서 쓰세요', !n);
     };
@@ -4096,14 +4096,34 @@ let aiCtx = { tab: 'content', monthIdx: 0 };
 $('#btnAI').onclick = () => openAI(selEls()[0] && selEls()[0].type === 'image' ? 'image' : 'content');
 function openAI(tab) { aiCtx.tab = tab; const el = selEls()[0]; if (el && el.month) aiCtx.monthIdx = el.month - 1; if (!chatMode() && !AI.cfg.anthropicKey && !AI.cfg.geminiKey && tab !== 'keys') aiCtx.tab = 'keys'; renderAI(); $('#dlgAI').showModal(); }
 $$('#dlgAI [role=tab]').forEach(b => b.onclick = () => { aiCtx.tab = b.dataset.tab; renderAI(); });
-/* 인성 데이터 한 원본 원칙: 공방의 캘린더 문구(NARACAL_VPLAN)는 메인 프로그램 VIRTUE24의 cal과 같은 내용(2026-11-18 점검 — 24달 모두 같음).
-   관리 앱 [⚙ 설정 → 📖 인성덕목]에서 고친 내용(업무 창고 virtueEdits — 관리·학부모·소식지 공통)은 소식지 엔진이 자료를 불러왔을 때 함께 반영(덕목·사자성어·한자).
-   캘린더 전용 문구(영문·명언·실천·풀이)는 고친 내용에 없으므로, 덕목이 바뀐 달은 알려 줌 */
+/* 인성 데이터 한 원본 (2026-11-18, 팀장님: "메인 프로그램에 있는 내용이 기준"): 관리 앱 저장소의 naracha/virtue24.js(VIRTUE24·virtueTrack·virtueOf)를
+   같은 주소(../naracha/)에서 읽어 캘린더 문구(cal)를 씀 — defaults.js의 NARACAL_VPLAN은 그 파일을 못 읽을 때(오프라인)만 쓰는 사본(같은 내용으로 맞춰 둠).
+   관리 앱 [⚙ 설정 → 📖 인성덕목]에서 고친 내용(업무 창고 virtueEdits)은 소식지 엔진 자료 → 없으면 같은 주소 localStorage 'naracha-work'에서 읽기만 해서 덮음.
+   1년차 = 홀수 해 = 극기, 2년차 = 짝수 해 = 홍익 */
+const VPLAN_LOCAL = window.NARACAL_VPLAN;
+const vplanFromV24 = V => { const out = {}; ['극기', '홍익'].forEach(tr => { out[tr] = (V[tr] || []).map(o => ({ virtue: o.v, en: (o.cal || {}).en || '', quote: (o.cal || {}).q || '', practice: ((o.cal || {}).p || o.act || []).slice(0, 2), idiom: o.id, hanja: o.hj, meaning: (o.cal || {}).mn || o.mean || '' })); }); return out; };
+let virtueSrc = 'local';
+(function loadVirtue24() {
+  if (location.protocol === 'file:') return;
+  loadScript('../naracha/virtue24.js?v=' + (window.NARACAL_VER || Date.now()), () => window.VIRTUE24 && typeof window.virtueOf === 'function')
+    .then(() => { if (window.VIRTUE24 && window.VIRTUE24['극기'] && window.VIRTUE24['홍익']) { window.NARACAL_VPLAN = vplanFromV24(window.VIRTUE24); virtueSrc = 'main'; } })
+    .catch(() => { window.NARACAL_VPLAN = VPLAN_LOCAL; });
+})();
+function virtueEditsNow() {
+  try { const w = newsWin; if (w && w.DATA && w.DATA.loaded && !w.DATA.demo && w.DATA.work && w.DATA.work.virtueEdits) return w.DATA.work.virtueEdits; } catch (e) {}
+  try { const wk = JSON.parse(localStorage.getItem('naracha-work') || 'null'); if (wk && wk.virtueEdits && typeof wk.virtueEdits === 'object') return wk.virtueEdits; } catch (e) {} /* 관리 앱이 이 브라우저에 남긴 업무 창고 — 읽기만 */
+  return null;
+}
 function virtuePlanFor(year) {
-  const tr = window.NARACAL_VTRACK ? window.NARACAL_VTRACK(year) : '극기', P = clone(((window.NARACAL_VPLAN || {})[tr]) || []); let edits = null;
-  try { const w = newsWin; if (w && w.DATA && w.DATA.loaded && !w.DATA.demo && w.DATA.work) edits = w.DATA.work.virtueEdits || {}; } catch (e) {}
-  const changed = []; if (edits) P.forEach((x, k) => { const e = edits[tr + '-' + (k + 1)]; if (!e || e._reset) return; const c = []; if (typeof e.v === 'string' && e.v.trim() && e.v.trim() !== x.virtue) { x.virtue = e.v.trim(); c.push('덕목'); } if (typeof e.id === 'string' && e.id.trim() && e.id.trim() !== x.idiom) { x.idiom = e.id.trim(); c.push('사자성어'); } if (typeof e.hj === 'string' && e.hj.trim() && e.hj.trim() !== x.hanja) { x.hanja = e.hj.trim(); if (!c.includes('사자성어')) c.push('한자'); } if (c.length) changed.push(`${k + 1}월 ${c.join('·')}`); });
-  return { tr, P, edits: !!edits, changed };
+  const tr = window.NARACAL_VTRACK ? window.NARACAL_VTRACK(year) : (Number(year) % 2 === 0 ? '홍익' : '극기'), edits = virtueEditsNow(), changed = [];
+  let P;
+  if (virtueSrc === 'main' && typeof window.virtueOf === 'function') { /* 원본 + 고친 내용(관리 앱과 같은 계산) */
+    P = Array.from({ length: 12 }, (_, k) => { const o = window.virtueOf(year, k + 1, edits || {}) || {}; const c = o.cal || {}; if (o.edited) changed.push(`${k + 1}월`); return { virtue: o.v, en: c.en || '', quote: c.q || '', practice: (c.p || o.act || []).slice(0, 2), idiom: o.id, hanja: o.hj, meaning: c.mn || o.mean || '' }; });
+  } else {
+    P = clone(((window.NARACAL_VPLAN || {})[tr]) || []);
+    if (edits) P.forEach((x, k) => { const e = edits[tr + '-' + (k + 1)]; if (!e || e._reset) return; const c = []; if (typeof e.v === 'string' && e.v.trim() && e.v.trim() !== x.virtue) { x.virtue = e.v.trim(); c.push('덕목'); } if (typeof e.id === 'string' && e.id.trim() && e.id.trim() !== x.idiom) { x.idiom = e.id.trim(); c.push('사자성어'); } if (typeof e.hj === 'string' && e.hj.trim() && e.hj.trim() !== x.hanja) { x.hanja = e.hj.trim(); if (!c.includes('사자성어')) c.push('한자'); } if (e.cal && typeof e.cal === 'object') { if (e.cal.en) x.en = e.cal.en; if (e.cal.q) x.quote = e.cal.q; if (Array.isArray(e.cal.p)) x.practice = e.cal.p.slice(0, 2); if (e.cal.mn) x.meaning = e.cal.mn; c.push('캘린더 문구'); } if (c.length) changed.push(`${k + 1}월 ${c.join('·')}`); });
+  }
+  return { tr, P, edits: !!edits, changed, src: virtueSrc };
 }
 const VFIELD = { virtue: '덕목', idiom: '사자성어', hanja: '한자', en: '영문', quote: '명언', practice: '실천', meaning: '풀이' };
 function virtueDiff(year) { const m = doc.calendar && doc.calendar.months; if (!Array.isArray(m) || !m.length) return null; const { P } = virtuePlanFor(year), out = [];
