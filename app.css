@@ -1441,3 +1441,12 @@ dialog.mandlg .dhead h2 small{font-size:12.5px;font-weight:500;color:var(--ui-mu
 /* 상장 틀 출력 선택 (2026-11-18) */
 .cfseg button{display:inline-flex;flex-direction:column;align-items:center;line-height:1.15;padding:5px 10px}.cfseg button small{font-size:10.5px;font-weight:500;opacity:.8}
 .prframe{background:#fff8e6;border:1px solid #f1d58a;border-radius:10px;padding:8px 10px}
+
+/* 출력 여백 (워드 여백 대화창처럼, 2026-11-18) */
+.prmg{align-items:flex-start!important}.prmg-box{flex:1;min-width:0}
+.prmg-pre{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}.prmg-pre .btn{display:inline-flex;flex-direction:column;align-items:center;line-height:1.1;padding:4px 9px}.prmg-pre .btn small{font-size:10px;font-weight:500;color:var(--ui-muted)}.prmg-pre .btn.on{border-color:var(--ui-accent);background:var(--ui-accent-soft,#eef2fb);color:var(--ui-accent)}
+.prmg-grid{display:grid;grid-template-columns:1fr auto 1fr;grid-template-areas:". t ." "l f r" ". b .";align-items:center;justify-items:center;gap:4px 8px;padding:6px;border:1px solid var(--ui-line);border-radius:10px;background:var(--ui-field)}
+.prmg-t{grid-area:t}.prmg-b{grid-area:b}.prmg-l{grid-area:l;justify-self:end}.prmg-r{grid-area:r;justify-self:start}.prmg-fig{grid-area:f;line-height:0}
+.prmg-grid label{display:flex;align-items:center;gap:4px;font-size:12.5px;color:var(--ui-fg2)}.prmg-grid label span{min-width:2.6em;text-align:right}.prmg-grid input{width:64px;padding:4px 6px;border:1px solid var(--ui-line2);border-radius:6px;font-size:13.5px;text-align:right;background:#fff}.prmg-grid i{font-style:normal;font-size:11.5px;color:var(--ui-muted)}
+.prmg-link{margin-top:6px}
+.prpaper .prmgline{position:absolute;border:1px dashed #3b6fd8;pointer-events:none;z-index:3}
