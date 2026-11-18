@@ -1437,3 +1437,7 @@ dialog.mandlg .dhead h2 small{font-size:12.5px;font-weight:500;color:var(--ui-mu
 /* 연결점(파이널컷 ⌥⌘+클릭으로 옮긴 자리) */
 .tl-cp{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:#fff;opacity:.9;pointer-events:none;z-index:2}
 .tl-cp::before{content:'';position:absolute;left:-3px;bottom:-1px;width:8px;height:8px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+
+/* 상장 틀 출력 선택 (2026-11-18) */
+.cfseg button{display:inline-flex;flex-direction:column;align-items:center;line-height:1.15;padding:5px 10px}.cfseg button small{font-size:10.5px;font-weight:500;opacity:.8}
+.prframe{background:#fff8e6;border:1px solid #f1d58a;border-radius:10px;padding:8px 10px}
