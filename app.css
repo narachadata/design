@@ -1459,3 +1459,6 @@ dialog.mandlg .dhead h2 small{font-size:12.5px;font-weight:500;color:var(--ui-mu
 .prpaper .prmgh-l,.prpaper .prmgh-r{width:12px;cursor:ew-resize}.prpaper .prmgh-l{transform:translateX(-6px)}.prpaper .prmgh-r{transform:translateX(6px)}
 .prpaper .prmgh:hover,body.prmg-drag .prpaper .prmgh{background:rgba(59,111,216,.18)}
 body.prmg-drag{cursor:grabbing;-webkit-user-select:none;user-select:none}
+
+/* 출석부 (2026-11-18) */
+.att .ctable{table-layout:auto;width:auto}.att .ctable .ci{width:22px}.att .ctable td:first-child input{margin:0}.att .ctable tr.off input[data-ak]{opacity:.45;text-decoration:line-through}.attmode button small{display:block;font-size:10px;opacity:.7;font-weight:400}#dlgAttPick .seg button{white-space:nowrap}.attbans{gap:6px 14px;flex-wrap:wrap;margin:6px 0}.attbans .chk{margin:0}.attpeople .mper span{flex-basis:100%;font-size:11.5px;color:var(--ui-muted,#667)}
