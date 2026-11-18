@@ -186,6 +186,7 @@ async function loadDoc(j, from, quiet) {
   doc = Object.assign(newDoc(), j); doc.assets = doc.assets || {}; doc.holidays = doc.holidays || {}; doc.fonts = doc.fonts || [];
   if (!doc.calendar.theme || !doc.calendar.theme.id) doc.calendar.theme = Object.assign({ id: 'classic' }, doc.calendar.theme || {});
   const m8 = doc.calendar.months && doc.calendar.months[7]; if (m8 && !m8.image && /우정/.test(m8.virtue || '')) { m8.image = 'asset:illu-08-friendship'; doc.pages.forEach(p => p.els.forEach(e => { if (e.type === 'image' && e.role === 'illust' && e.month === 8 && !e.src) e.src = m8.image; })); }
+  if (doc.calendar && doc.calendar.months) virtueArtFix(doc.calendar, doc.pages, doc.calendar.year || 2027, true);  /* 빈 삽화 자리 = 그 해 덕목 그림 */
   cur = 0; sel = []; selDay = null; hist = []; histMeta = []; hptr = -1;
   await registerDocFonts(); ensureAllHolidays();
   $('#pname').value = doc.name || '';
@@ -2610,15 +2611,15 @@ function renderNaraSide(body) {
 /* 나라차 → 캘린더: 연도·캘린더 마법사·인성 문구 넣기 + 반복 일정·공휴일·달력 테마 (템플릿 패널에서 옮겨 옴 — 템플릿 패널은 템플릿만) */
 function renderCalSide(body) {
   const yearNow = doc.calendar.year || 2027, hasCal = doc.pages.some(p => p.els.some(e => e.type === 'cal'));
-  body.innerHTML = `<div class="wz-card"><div class="wz-year">${yearNow}<small>년</small></div><p class="hint" style="margin:0 0 8px">연도별 달력 모양과 테마를 미리 보며 표지·인성·달력 26쪽을 한 번에 만듭니다.</p><button class="btn primary full" id="wzOpen"><svg class="ic"><use href="#i-cal"/></svg>캘린더 마법사 열기</button>${window.NARACAL_VPLAN ? `<button class="btn full" id="wzVirtue" style="margin-top:6px" title="나라차 인성덕목 2년 계획(메인 프로그램과 같은 내용)의 덕목·명언·실천·사자성어를 12달에 넣습니다. 그림은 그대로 둡니다.">📖 ${yearNow}년 인성 문구 넣기 · ${window.NARACAL_VTRACK(yearNow) === '극기' ? '1년차 극기' : '2년차 홍익'}</button>` : ''}</div>
+  body.innerHTML = `<div class="wz-card"><div class="wz-year">${yearNow}<small>년</small></div><p class="hint" style="margin:0 0 8px">연도별 달력 모양과 테마를 미리 보며 표지·인성·달력 26쪽을 한 번에 만듭니다.</p><button class="btn primary full" id="wzOpen"><svg class="ic"><use href="#i-cal"/></svg>캘린더 마법사 열기</button>${window.NARACAL_VPLAN ? `<button class="btn full" id="wzVirtue" style="margin-top:6px" title="나라차 인성덕목 2년 계획(메인 프로그램과 같은 내용)의 덕목·명언·실천·사자성어를 12달에 넣습니다. 삽화는 기본 그림이면 그 해 덕목 그림으로 바꿉니다.">📖 ${yearNow}년 인성 문구 넣기 · ${window.NARACAL_VTRACK(yearNow) === '극기' ? '1년차 극기' : '2년차 홍익'}</button>` : ''}</div>
   ${(() => { const df = virtueDiff(yearNow); if (!df || !doc.pages.some(p => p.els.some(e => e.role === 'virtue'))) return ''; return df.length ? `<div class="vcheck warn">⚠ 이 문서의 인성 문구가 ${yearNow}년 계획표${virtuePlanFor(yearNow).edits ? '(관리 앱에서 고친 덕목 포함)' : ''}와 <b>${df.length}달</b> 다릅니다: ${df.slice(0, 6).map(x => `${x.m}월(${x.f.map(k => VFIELD[k]).join('·')})`).join(', ')}${df.length > 6 ? ' …' : ''}<br><small>메인 프로그램·소식지·학부모앱과 같은 문구로 맞추려면 위 '인성 문구 넣기'를 누르세요. 일부러 바꾼 문구라면 그대로 두세요.</small></div>` : `<div class="vcheck ok">✓ 이 문서의 인성 문구가 ${yearNow}년 계획표${virtuePlanFor(yearNow).edits ? '(관리 앱에서 고친 덕목 포함)' : ''}와 같습니다</div>`; })()}
   <div class="nara-list" style="margin-top:10px"><button class="nara-card" data-calx="rules"><svg class="ic"><use href="#i-cal"/></svg><span><b>반복 일정 · 연간 행사</b><small>매주 수련·승급심사·생일·원비 날 — 달력에 넣는 목록 (휴일 빼기)</small></span><i>›</i></button><button class="nara-card" data-calx="hol"><svg class="ic"><use href="#i-cal"/></svg><span><b>공휴일</b><small>${yearNow}년 공휴일 확인·고치기 (대체 휴일 포함)</small></span><i>›</i></button><button class="nara-card" data-calx="theme" ${hasCal ? '' : 'disabled title="이 문서에 달력이 없습니다"'}><svg class="ic"><use href="#i-theme"/></svg><span><b>달력 테마 바꾸기</b><small>${hasCal ? '지금 달력의 색·글꼴·배치를 한 번에' : '마법사로 만든 달력 문서에서 쓸 수 있습니다'}</small></span><i>›</i></button></div>`;
   $('#wzOpen').onclick = () => openWizard(yearNow);
   if ($('#wzVirtue')) $('#wzVirtue').onclick = () => {   /* [나라차 R4.505] 인성덕목 2년 계획 문구를 연도에 맞게 */
       const VP = virtuePlanFor(yearNow), tr = VP.tr, P = VP.P; if (!P.length || !doc.calendar.months) return;
-      if (!confirm(`${yearNow}년은 ${tr === '극기' ? '1년차 극기(나의 가치)' : '2년차 홍익(우리·모두의 가치)'}입니다.\n12달의 덕목·영문·명언·실천 2가지·사자성어를 메인 프로그램의 인성덕목 2년 계획${VP.src === 'main' ? '(한 원본 virtue24.js)' : '(공방 사본 — 원본을 못 읽음)'}으로 바꿉니다.\n(그림·일정·디자인은 그대로 — 덕목이 바뀐 달은 그림을 새로 넣어 주세요)${VP.edits ? (VP.changed.length ? `\n\n메인 프로그램에서 고친 내용도 반영합니다: ${VP.changed.join(', ')}` : '\n\n메인 프로그램에서 고친 내용: 없음 — 계획표 그대로') : '\n\n※ 메인 프로그램에서 고친 내용까지 반영하려면 이 브라우저에서 메인 프로그램을 한 번 열거나, 나라차 → 소식지에서 데이터를 불러온 뒤 다시 누르세요.'}`)) return;
-      let n = 0; P.forEach((x, k) => { if (doc.calendar.months[k]) n += applyMonthContent(k, x); });
-      commit(); rerender(); toast(n ? `인성 문구를 넣었습니다 (글 상자 ${n}곳)` : '이 문서에는 인성 문구 자리가 없습니다 — 캘린더 마법사로 만든 달력 문서에서 쓰세요', !n);
+      if (!confirm(`${yearNow}년은 ${tr === '극기' ? '1년차 극기(나의 가치)' : '2년차 홍익(우리·모두의 가치)'}입니다.\n12달의 덕목·영문·명언·실천 2가지·사자성어를 메인 프로그램의 인성덕목 2년 계획${VP.src === 'main' ? '(관리 앱이 이 브라우저에 남긴 최신 표 — 설정에서 고친 내용 포함)' : '(공방 안의 기본표 — 관리 앱을 이 브라우저에서 한 번 열면 고친 내용까지 든 최신 표를 씁니다)'}으로 바꿉니다.\n(일정·디자인은 그대로 · 삽화는 기본 그림이면 그 해 덕목 그림으로 바꾸고, 직접 넣은 그림은 그대로 둡니다)${VP.edits ? (VP.changed.length ? `\n\n메인 프로그램에서 고친 내용도 반영합니다: ${VP.changed.join(', ')}` : '\n\n메인 프로그램에서 고친 내용: 없음 — 계획표 그대로') : '\n\n※ 메인 프로그램에서 고친 내용까지 반영하려면 이 브라우저에서 메인 프로그램을 한 번 열거나, 나라차 → 소식지에서 데이터를 불러온 뒤 다시 누르세요.'}`)) return;
+      let n = 0; P.forEach((x, k) => { if (doc.calendar.months[k]) n += applyMonthContent(k, x); }); const na = virtueArtFix(doc.calendar, doc.pages, yearNow);
+      commit(); rerender(); toast(n ? `인성 문구를 넣었습니다 (글 상자 ${n}곳${na ? ` · ${tr} 삽화 ${na}곳` : ''})` : '이 문서에는 인성 문구 자리가 없습니다 — 캘린더 마법사로 만든 달력 문서에서 쓰세요', !n);
     };
   body.onclick = e => { const b = e.target.closest('[data-calx]'); if (!b || b.disabled) return; const k = b.dataset.calx; if (k === 'rules') openRules(); else if (k === 'hol') $('#btnHoliday').click(); else if (k === 'theme') { sideTab = 'theme'; renderRail(); renderSide(); } };
 }
@@ -2647,7 +2648,7 @@ function renderManual() {
 function manZoom(im) { let z = $('#manZoom'); if (z) z.remove(); z = document.createElement('div'); z.id = 'manZoom'; z.innerHTML = `<div class="mzwrap">${im.innerHTML.replace('<span class="mzoom">🔍 크게</span>', '')}</div><button class="btn" data-mzc>닫기 (Esc)</button>`; $('#dlgManual').appendChild(z); const close = () => { z.remove(); document.removeEventListener('keydown', key, true); }; const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }; document.addEventListener('keydown', key, true); z.onclick = close; }
 /* 매뉴얼의 '바로 해 보기' */
 function manualGo(g) { const rail = k => { const b = $(`#rail [data-tab="${k}"]`); if (b) b.click(); };
-  ({ tpl: () => rail('tpl'), nara: () => rail('naracha'), elems: () => rail('elems'), video: () => rail('video'), settings: () => openSettings(), cert: () => naraGo('cert'), news: () => naraGo('news'), calendar: () => naraGo('calendar'), pages: () => rail('pages'), book: () => { rail('pages'); openBook(); }, resize: () => openResize(), print: () => openPrint(), qr: () => openQr(), dday: () => openDday(), dojang: () => openDojang(), wizard: () => openWizard(doc.calendar.year || 2027), rules: () => openRules(), download: () => openDownload(), vkeys: () => tlKeysHelp(), filemenu: () => $('#btnFileMenu').click() }[g] || (() => {}))(); }
+  ({ tpl: () => rail('tpl'), virtueTpl: () => { tplCat = 'all'; tplQ = ''; tplF = { format: '', season: '', age: '', occasion: '인성', biz: '' }; rail('tpl'); }, photo: () => rail('photo'), nara: () => rail('naracha'), elems: () => rail('elems'), video: () => rail('video'), settings: () => openSettings(), cert: () => naraGo('cert'), news: () => naraGo('news'), calendar: () => naraGo('calendar'), pages: () => rail('pages'), book: () => { rail('pages'); openBook(); }, resize: () => openResize(), print: () => openPrint(), qr: () => openQr(), dday: () => openDday(), dojang: () => openDojang(), wizard: () => openWizard(doc.calendar.year || 2027), rules: () => openRules(), download: () => openDownload(), vkeys: () => tlKeysHelp(), filemenu: () => $('#btnFileMenu').click() }[g] || (() => {}))(); }
 /* ---- 설정 (세로 메뉴 맨 아래 ⚙): 여러 곳에 흩어져 있던 설정을 한곳에. 바꾸면 바로 적용되고 이 PC에 기억(일부는 동기화 폴더로 두 PC 같이) ---- */
 let setTab = 'view';
 function openSettings(tab) {
@@ -2783,12 +2784,13 @@ function renderSide0() {
     <p class="hint">글 상자를 두 번 누르면 바로 고칩니다. 오른쪽 속성 패널에서 그라데이션·외곽선·그림자·광선·3D·휘기 등 효과를 더합니다.</p>`;
     body.onclick = e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.add) { const a = b.dataset.add.split(':')[1]; if (a === 'v') addText('s', { vertical: true, text: '세로로 쓰는 글', w: 14, h: 60 }); else addText(a); } if (b.dataset.tstyle) { const p = FX.TEXT_PRESETS.find(x => x.id === b.dataset.tstyle); addText('h', Object.assign({ font: 'Jua', size: 32 }, p.st)); } if (b.dataset.pair) { const [a, bb] = b.dataset.pair.split('|'); lastTextStyle = Object.assign({}, lastTextStyle || {}, { font: a }); noteFont(a); noteFont(bb); const t = addText('h', { font: a }); setTimeout(() => { endEdit(); const s2 = addText('b', { font: bb, text: '본문은 ' + bb + ' 글꼴로 씁니다.' }); s2.y = t.y + t.h + 4; rerender(); }, 120); } if (b.dataset.usefont) { const els = selEls().filter(x => x.type === 'text'); if (els.length) { els.forEach(x => x.font = b.dataset.usefont); commit(); rerender(); } else { lastTextStyle = Object.assign({}, lastTextStyle || {}, { font: b.dataset.usefont }); toast('새 글자의 기본 글꼴로 정했습니다'); } } };
   } else if (sideTab === 'photo') {
-    const groups = [['2026 삽화', k => k.startsWith('illu-')], ['마스코트', k => k.startsWith('mascot-')], ['로고·아이콘', k => !k.startsWith('illu-') && !k.startsWith('mascot-')]];
+    const groups = [['홍익(2년차·짝수 해) 삽화', k => k.startsWith('illu-')], ['마스코트', k => k.startsWith('mascot-')], ['로고·아이콘', k => !k.startsWith('illu-') && !k.startsWith('mascot-')]];
     const mine = Object.keys(doc.assets);
     body.innerHTML = `<div class="row" style="margin-bottom:6px"><label class="btn sm">파일 올리기<input type="file" accept="image/*" id="imgFile" hidden multiple></label><button class="btn sm ai" id="imgAI">AI로 만들기</button></div>
     <p class="hint">그림을 누르면 페이지에 추가됩니다. 이미지 요소를 선택한 상태면 그 그림을 바꿉니다.</p>
     ${mine.length ? `<h3>내 이미지 (${mine.length})</h3><div class="picker">${mine.map(k => `<button data-img="a:${k}" draggable="true"><img src="${doc.assets[k]}" alt="" draggable="false"></button>`).join('')}</div>` : ''}
     ${libPhotoHTML()}
+    ${(() => { const A = window.NARACAL_VIRTUE_ART; if (!A) return ''; const ks = A['극기'].concat(A.extra.map(x => x[0])), vn = ((window.NARACAL_VPLAN || {})['극기'] || []).map(x => x.virtue); return `<h3>극기(1년차·홀수 해) 삽화</h3><div class="picker">${ks.map((k, i) => `<button data-img="${k}" title="${i < 12 ? `${i + 1}월 ${esc(vn[i] || '')}` : esc(A.extra[i - 12][1])} — 누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${k}" alt="" loading="lazy" draggable="false"></button>`).join('')}</div>`; })()}
     ${groups.map(([t, f]) => { const ks = Object.keys(ASSETS).filter(f); return `<h3>${t}</h3><div class="picker">${ks.map(k => `<button data-img="asset:${k}" title="누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${ASSETS[k]}" alt="" draggable="false"></button>`).join('')}</div>`; }).join('')}`;
     body.onclick = async e => {
       const pc = e.target.closest('[data-pcat]'); if (pc) { photoCat = pc.dataset.pcat; renderSide(); return; }
@@ -3093,7 +3095,7 @@ function renderGallery() {
     const rec = recentTpls().map(id => byId[id]).filter(Boolean);
     const sNow = NC.tpl.seasonNow(); const seasonal = items.filter(t => t.tags.season === sNow).slice(0, 6);
     const nextH = (NC.tpl.nextHolidays ? NC.tpl.nextHolidays() : []).slice(0, 2); const holOrder = NC.tpl.nextHolidays ? NC.tpl.nextHolidays() : [];
-    const rows = [['최근 사용', rec, null], [`다가오는 휴일 휴관 카드${nextH.length ? ' · ' + nextH.map(k => k === '크리스마스' ? '성탄절' : k).join('·') : ''}`, items.filter(t => t.holiday && nextH.includes(t.holiday)).sort((a, b) => nextH.indexOf(a.holiday) - nextH.indexOf(b.holiday)), { occasion: '휴관' }], ['나라차 브랜드', items.filter(t => t.lib), null], [`${sNow} 추천`, seasonal, { season: sNow }], ['달력 테마', items.filter(t => t.theme), null, 'calendar'], ['모집·홍보', items.filter(t => t.tags.occasion === '모집').slice(0, 6), { occasion: '모집' }], ['행사·축하', items.filter(t => ['행사', '축하', '심사·대회'].includes(t.tags.occasion)).slice(0, 6), { occasion: '행사' }], ['명절·인사·감사', items.filter(t => ['명절·인사', '감사'].includes(t.tags.occasion)).slice(0, 6), { occasion: '명절·인사' }], ['다른 직종', items.filter(t => t.tags.biz !== '태권도장').slice(0, 6), { biz: '학원' }], ['SNS·카드뉴스', items.filter(t => ['SNS', '카드뉴스'].includes(t.tags.format)).slice(0, 6), { format: 'SNS' }], ['포스터', items.filter(t => t.tags.format === '포스터').slice(0, 6), { format: '포스터' }], ['안내문·서식', items.filter(t => ['안내문', '서식·활동지'].includes(t.tags.format)).slice(0, 6), { format: '안내문' }]];
+    const rows = [['최근 사용', rec, null], [`다가오는 휴일 휴관 카드${nextH.length ? ' · ' + nextH.map(k => k === '크리스마스' ? '성탄절' : k).join('·') : ''}`, items.filter(t => t.holiday && nextH.includes(t.holiday)).sort((a, b) => nextH.indexOf(a.holiday) - nextH.indexOf(b.holiday)), { occasion: '휴관' }], ['나라차 브랜드', items.filter(t => t.lib), null], (() => { const d = new Date(), y = d.getFullYear() + (d.getMonth() === 11 ? 1 : 0), tr = virtueTrackOf(y); /* 12월부터는 새해 덕목을 먼저 */ return [`인성덕목 · ${y}년 ${tr}`, items.filter(t => t.tags && t.tags.occasion === '인성').sort((a, b) => (b.name.includes(tr) ? 1 : 0) - (a.name.includes(tr) ? 1 : 0)), { occasion: '인성' }]; })(), [`${sNow} 추천`, seasonal, { season: sNow }], ['달력 테마', items.filter(t => t.theme), null, 'calendar'], ['모집·홍보', items.filter(t => t.tags.occasion === '모집').slice(0, 6), { occasion: '모집' }], ['행사·축하', items.filter(t => ['행사', '축하', '심사·대회'].includes(t.tags.occasion)).slice(0, 6), { occasion: '행사' }], ['명절·인사·감사', items.filter(t => ['명절·인사', '감사'].includes(t.tags.occasion)).slice(0, 6), { occasion: '명절·인사' }], ['다른 직종', items.filter(t => t.tags.biz !== '태권도장').slice(0, 6), { biz: '학원' }], ['SNS·카드뉴스', items.filter(t => ['SNS', '카드뉴스'].includes(t.tags.format)).slice(0, 6), { format: 'SNS' }], ['포스터', items.filter(t => t.tags.format === '포스터').slice(0, 6), { format: '포스터' }], ['안내문·서식', items.filter(t => ['안내문', '서식·활동지'].includes(t.tags.format)).slice(0, 6), { format: '안내문' }]];
     rows.forEach(([title, list, facet, cat]) => { if (!list.length) return; h += `<div class="esec"><h3>${title} <small>${list.length}</small></h3><button class="more" ${facet ? `data-more='${JSON.stringify(facet)}'` : cat ? `data-morecat="${cat}"` : ''}>${facet || cat ? '더보기 ›' : ''}</button></div><div class="tgal-row">${list.map(tplCard).join('')}</div>`; });
     g.innerHTML = h;
   } else {
@@ -3152,7 +3154,7 @@ function openWizard(year, themeId) {
   renderWizard(); d.showModal(); d.querySelectorAll('.dbody, .wz-left, .wz-right').forEach(x => { x.scrollTop = 0; });
 }
 function wizardTheme() { const th = clone(CAL.THEMES.find(x => x.id === wz.themeId) || CAL.THEMES[0]); th.colorA = wz.colorA; th.colorB = wz.colorB; return th; }
-function wizardDoc() { const t = Object.assign({}, doc, { calendar: clone(doc.calendar), w: 224, h: 154, bleed: 0, cropMarks: false }); t.calendar.year = wz.year; t.calendar.theme = wizardTheme(); return t; }
+function wizardDoc() { const t = Object.assign({}, doc, { calendar: clone(doc.calendar), w: 224, h: 154, bleed: 0, cropMarks: false }); t.calendar.year = wz.year; t.calendar.theme = wizardTheme(); virtueTextFix(t.calendar, wz.year); virtueArtFix(t.calendar, null, wz.year); return t; }
 // 크기를 바꾼 달력 쪽: 달력 칸이 위 요소들 바로 아래부터 아래 요소(로고 등) 바로 위까지 차지 (세로로 긴 A3에서 생기던 큰 빈칸)
 function calFillGap(pg) {
   const c = pg.els.find(e => e.type === 'cal'); if (!c) return;
@@ -3201,10 +3203,10 @@ function renderWizard() {
       keepCurrentDoc.kept = ''; if (doc.pages.some(p => p.els.length) && !(await keepCurrentDoc())) return; const kept = keepCurrentDoc.kept, wasFile = store.state.fileName;
       const hol0 = clone(doc.holidays || {}), cal0 = clone(doc.calendar || null), showHol0 = doc.showHolidays;  /* 앞 문서에서 손본 공휴일·달력 설정(인성 문구·반복 일정 규칙)은 새 문서로 가져감 */
       await store.disconnect(); const nm = `${wz.year} 인성 캘린더`; doc = newDoc(['custom', nm, 224, 154]); doc.name = nm; doc.bleed = 3; doc.pages = []; doc.holidays = Object.assign({}, doc.holidays, hol0); if (cal0) doc.calendar = cal0; if (showHol0 != null) doc.showHolidays = showHol0; doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = nm; clearTimeout(fileTimer);
-      doc.calendar.year = wz.year; doc.calendar.theme = theme; const pages = wizardPages(wz.kind); doc.pages.push(...pages); ensureAllHolidays(); commit(); zoom = 0; renderAll(); updateSaveBadge(); fitCanvas(); goto(0);
+      doc.calendar.year = wz.year; doc.calendar.theme = theme; virtueTextFix(doc.calendar, wz.year); virtueArtFix(doc.calendar, null, wz.year); const pages = wizardPages(wz.kind); doc.pages.push(...pages); ensureAllHolidays(); commit(); zoom = 0; renderAll(); updateSaveBadge(); fitCanvas(); goto(0);
       $('#dlgWizard').close(); toast(`새 문서 "${nm}" ${pages.length}쪽을 만들었습니다 — 저장(Ctrl+S)으로 내 드라이브에 저장하세요${kept ? ` · 저장하지 않은 "${kept}"는 직전 문서로 보관` : wasFile ? ` · 앞 문서는 "${wasFile}"에 그대로` : ''}`);
       if (!doc.holidays[wz.year]) setTimeout(() => openHoliday(wz.year), 400); return; }
-    doc.calendar.year = wz.year; doc.calendar.theme = theme;
+    doc.calendar.year = wz.year; doc.calendar.theme = theme; virtueTextFix(doc.calendar, wz.year); virtueArtFix(doc.calendar, null, wz.year);
     let pages = wizardPages(wz.kind); const odd = Math.abs(doc.w - 224) > 0.5 || Math.abs(doc.h - 154) > 0.5; if (odd) { pages = resizedDoc({ w: 224, h: 154, pages }, doc.w, doc.h, 'fit', [0.5, 0.5]).pages; pages.forEach(calFillGap); }  /* 다른 크기 문서에 덧붙일 때 그 크기로 + 달력이 머리 아래 빈칸까지 채움 */
     doc.pages.push(...pages); ensureAllHolidays(); commit(); goto(doc.pages.length - pages.length);
     $('#dlgWizard').close(); { const nm0 = oldName, w0 = oldW, h0 = oldH; toastUndo(`${wz.year}년 ${pages.length}쪽을 만들었습니다${odd ? ` — 이 문서 크기(${Math.round(doc.w)}×${Math.round(doc.h)}mm)에 맞췄습니다` : ''}`, () => { doc.name = nm0; doc.w = w0; doc.h = h0; $('#pname').value = nm0; zoom = 0; renderAll(); fitCanvas(); }); }
@@ -4096,35 +4098,51 @@ let aiCtx = { tab: 'content', monthIdx: 0 };
 $('#btnAI').onclick = () => openAI(selEls()[0] && selEls()[0].type === 'image' ? 'image' : 'content');
 function openAI(tab) { aiCtx.tab = tab; const el = selEls()[0]; if (el && el.month) aiCtx.monthIdx = el.month - 1; if (!chatMode() && !AI.cfg.anthropicKey && !AI.cfg.geminiKey && tab !== 'keys') aiCtx.tab = 'keys'; renderAI(); $('#dlgAI').showModal(); }
 $$('#dlgAI [role=tab]').forEach(b => b.onclick = () => { aiCtx.tab = b.dataset.tab; renderAI(); });
-/* 인성 데이터 한 원본 (2026-11-18, 팀장님: "메인 프로그램에 있는 내용이 기준"): 관리 앱 저장소의 naracha/virtue24.js(VIRTUE24·virtueTrack·virtueOf)를
-   같은 주소(../naracha/)에서 읽어 캘린더 문구(cal)를 씀 — defaults.js의 NARACAL_VPLAN은 그 파일을 못 읽을 때(오프라인)만 쓰는 사본(같은 내용으로 맞춰 둠).
-   관리 앱 [⚙ 설정 → 📖 인성덕목]에서 고친 내용(업무 창고 virtueEdits)은 소식지 엔진 자료 → 없으면 같은 주소 localStorage 'naracha-work'에서 읽기만 해서 덮음.
+/* 인성 데이터 (2026-11-18 관장님 결정): 표는 각 프로그램 안에 두고, 기준은 메인 프로그램 데이터(기본표 VIRTUE24 + 설정에서 고친 virtueEdits).
+   ① 관리 앱(R4.819~)이 업무 창고를 받은 뒤 '고친 내용까지 적용된 24달 표'를 같은 주소 localStorage 'naracha-virtue24'에 써 둠 → 공방은 이것을 먼저 읽음(읽기만)
+   ② 없으면(이 브라우저에서 관리 앱을 연 적 없음) defaults.js의 NARACAL_VPLAN(메인 기본표와 같은 값으로 맞춰 둠) + 업무 창고 virtueEdits
    1년차 = 홀수 해 = 극기, 2년차 = 짝수 해 = 홍익 */
 const VPLAN_LOCAL = window.NARACAL_VPLAN;
-const vplanFromV24 = V => { const out = {}; ['극기', '홍익'].forEach(tr => { out[tr] = (V[tr] || []).map(o => ({ virtue: o.v, en: (o.cal || {}).en || '', quote: (o.cal || {}).q || '', practice: ((o.cal || {}).p || o.act || []).slice(0, 2), idiom: o.id, hanja: o.hj, meaning: (o.cal || {}).mn || o.mean || '' })); }); return out; };
-let virtueSrc = 'local';
-(function loadVirtue24() {
-  if (location.protocol === 'file:') return;
-  loadScript('../naracha/virtue24.js?v=' + (window.NARACAL_VER || Date.now()), () => window.VIRTUE24 && typeof window.virtueOf === 'function')
-    .then(() => { if (window.VIRTUE24 && window.VIRTUE24['극기'] && window.VIRTUE24['홍익']) { window.NARACAL_VPLAN = vplanFromV24(window.VIRTUE24); virtueSrc = 'main'; } })
-    .catch(() => { window.NARACAL_VPLAN = VPLAN_LOCAL; });
-})();
+const vplanRow = o => { const c = o.cal || {}; return { virtue: o.v, en: c.en || '', quote: c.q || '', practice: (c.p || o.act || []).slice(0, 2), idiom: o.id, hanja: o.hj, meaning: c.mn || o.mean || '' }; };
+function virtueLS() { try { const t = JSON.parse(localStorage.getItem('naracha-virtue24') || 'null'); if (t && t.src === 'naracha-admin' && ['극기', '홍익'].every(k => Array.isArray(t[k]) && t[k].length === 12 && t[k].every(o => o && o.v))) return t; } catch (e) {} return null; }
 function virtueEditsNow() {
   try { const w = newsWin; if (w && w.DATA && w.DATA.loaded && !w.DATA.demo && w.DATA.work && w.DATA.work.virtueEdits) return w.DATA.work.virtueEdits; } catch (e) {}
   try { const wk = JSON.parse(localStorage.getItem('naracha-work') || 'null'); if (wk && wk.virtueEdits && typeof wk.virtueEdits === 'object') return wk.virtueEdits; } catch (e) {} /* 관리 앱이 이 브라우저에 남긴 업무 창고 — 읽기만 */
   return null;
 }
 function virtuePlanFor(year) {
-  const tr = window.NARACAL_VTRACK ? window.NARACAL_VTRACK(year) : (Number(year) % 2 === 0 ? '홍익' : '극기'), edits = virtueEditsNow(), changed = [];
-  let P;
-  if (virtueSrc === 'main' && typeof window.virtueOf === 'function') { /* 원본 + 고친 내용(관리 앱과 같은 계산) */
-    P = Array.from({ length: 12 }, (_, k) => { const o = window.virtueOf(year, k + 1, edits || {}) || {}; const c = o.cal || {}; if (o.edited) changed.push(`${k + 1}월`); return { virtue: o.v, en: c.en || '', quote: c.q || '', practice: (c.p || o.act || []).slice(0, 2), idiom: o.id, hanja: o.hj, meaning: c.mn || o.mean || '' }; });
-  } else {
+  const tr = window.NARACAL_VTRACK ? window.NARACAL_VTRACK(year) : (Number(year) % 2 === 0 ? '홍익' : '극기'), changed = [], T = virtueLS();
+  if (T) { /* 관리 앱이 남긴 적용된 표 — 고친 내용이 이미 들어 있음 */
+    const P = T[tr].map(vplanRow), L0 = (VPLAN_LOCAL || {})[tr] || [];
+    P.forEach((x, k) => { const b = L0[k]; if (b && ['virtue', 'idiom', 'hanja', 'en', 'quote', 'meaning'].some(f => String(x[f] || '') !== String(b[f] || '')) || (b && JSON.stringify(x.practice) !== JSON.stringify(b.practice))) changed.push(`${k + 1}월`); });
+    return { tr, P, edits: changed.length > 0, changed, src: 'main', at: T.t || 0 };
+  }
+  const edits = virtueEditsNow(); let P;
     P = clone(((window.NARACAL_VPLAN || {})[tr]) || []);
     if (edits) P.forEach((x, k) => { const e = edits[tr + '-' + (k + 1)]; if (!e || e._reset) return; const c = []; if (typeof e.v === 'string' && e.v.trim() && e.v.trim() !== x.virtue) { x.virtue = e.v.trim(); c.push('덕목'); } if (typeof e.id === 'string' && e.id.trim() && e.id.trim() !== x.idiom) { x.idiom = e.id.trim(); c.push('사자성어'); } if (typeof e.hj === 'string' && e.hj.trim() && e.hj.trim() !== x.hanja) { x.hanja = e.hj.trim(); if (!c.includes('사자성어')) c.push('한자'); } if (e.cal && typeof e.cal === 'object') { if (e.cal.en) x.en = e.cal.en; if (e.cal.q) x.quote = e.cal.q; if (Array.isArray(e.cal.p)) x.practice = e.cal.p.slice(0, 2); if (e.cal.mn) x.meaning = e.cal.mn; c.push('캘린더 문구'); } if (c.length) changed.push(`${k + 1}월 ${c.join('·')}`); });
-  }
-  return { tr, P, edits: !!edits, changed, src: virtueSrc };
+  return { tr, P, edits: !!edits, changed, src: 'local' };
 }
+/* 그 해 덕목에 맞는 삽화 (defaults.js NARACAL_VIRTUE_ART) — 비었거나 '다른 덕목 해의 기본 그림'일 때만 바꿈, 직접 넣은 그림은 그대로
+   onlyEmpty: 문서를 열 때는 빈 자리만 채움 */
+function virtueTrackOf(year) { return window.NARACAL_VTRACK ? window.NARACAL_VTRACK(year) : (Number(year) % 2 === 0 ? '홍익' : '극기'); }
+function virtueArtFix(cal, pages, year, onlyEmpty) {
+  const A = window.NARACAL_VIRTUE_ART, ms = cal && cal.months; if (!A || !Array.isArray(ms)) return 0;
+  const tr = virtueTrackOf(year), mine = A[tr] || [], other = A[tr === '극기' ? '홍익' : '극기'] || [];
+  const swap = s => !s || (!onlyEmpty && other.includes(s));
+  let n = 0;
+  ms.forEach((mo, k) => { const want = mine[k]; if (!want) return; if (swap(mo.image)) { mo.image = want; n++; }
+    (pages || []).forEach(p => p.els.forEach(e => { if (e.type === 'image' && e.role === 'illust' && e.month === k + 1 && swap(e.src)) { e.src = want; delete e.srcOrig; n++; } })); });
+  return n;
+}
+/* 마법사에서 해를 바꿀 때: 12달 덕목이 '다른 덕목 해의 기본 문구' 그대로면 이 해 문구로 (직접 고친 문구가 하나라도 있으면 그대로) */
+function virtueTextFix(cal, year) {
+  const ms = cal && cal.months; if (!Array.isArray(ms) || ms.length < 12) return 0;
+  const P = virtuePlanFor(year).P, O = virtuePlanFor(Number(year) + 1).P; if (P.length < 12 || O.length < 12) return 0;
+  if (ms.every((mo, k) => mo.virtue === P[k].virtue) || !ms.every((mo, k) => mo.virtue === O[k].virtue)) return 0;
+  ms.forEach((mo, k) => Object.assign(mo, { virtue: P[k].virtue, en: P[k].en, quote: P[k].quote, practice: P[k].practice.slice(0, 2), idiom: P[k].idiom, hanja: P[k].hanja, meaning: P[k].meaning }));
+  return 12;
+}
+NC.virtuePlanFor = virtuePlanFor; NC.virtueTrackOf = virtueTrackOf;  /* templates5.js(인성 템플릿)가 같은 문구·고친 내용을 씀 */
 const VFIELD = { virtue: '덕목', idiom: '사자성어', hanja: '한자', en: '영문', quote: '명언', practice: '실천', meaning: '풀이' };
 function virtueDiff(year) { const m = doc.calendar && doc.calendar.months; if (!Array.isArray(m) || !m.length) return null; const { P } = virtuePlanFor(year), out = [];
   P.forEach((x, k) => { const c = m[k]; if (!c) return; const f = ['virtue', 'idiom', 'hanja', 'en', 'quote', 'meaning'].filter(key => String(c[key] || '').trim() !== String(x[key] || '').trim()); if (JSON.stringify((c.practice || []).slice(0, 2)) !== JSON.stringify((x.practice || []).slice(0, 2))) f.push('practice'); if (f.length) out.push({ m: k + 1, f }); });

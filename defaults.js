@@ -295,6 +295,13 @@ window.NARACAL_VPLAN = {
  ]
 };
 window.NARACAL_VTRACK = function (y) { return (Number(y) % 2 === 0) ? '홍익' : '극기'; };
+/* 인성덕목 삽화 (달마다 1장) — 극기 = 팀장님이 만든 그림(assets/virtue, 2026-11), 홍익 = 2026 캘린더 그림(assets.js)
+   달력의 그 달 삽화가 비었거나 '다른 해 덕목의 기본 그림'이면 그 해 덕목 그림으로 바꿔 넣음(직접 넣은 그림은 그대로) */
+window.NARACAL_VIRTUE_ART = {
+  '극기': ['self-respect', 'initiative', 'courage', 'passion', 'courtesy', 'gratitude', 'patience', 'self-control', 'justice', 'honesty', 'service', 'love'].map((k, i) => 'assets/virtue/kg-' + String(i + 1).padStart(2, '0') + '-' + k + '.webp'),
+  '홍익': ['pride', 'morality', 'consideration', 'responsibility', 'respect', 'humility', 'forgiveness', 'friendship', 'justice', 'honesty', 'fairness', 'cooperation'].map((k, i) => 'asset:illu-' + String(i + 1).padStart(2, '0') + '-' + k),
+  extra: [['assets/virtue/racha-kick.webp', '라차 발차기']],
+};
 // 기본 프로젝트 데이터: 2026년 캘린더 내용을 바탕으로 2027년 초안을 만듭니다.
 window.NARACAL_DEFAULTS = (function () {
   const M = [
@@ -336,7 +343,7 @@ window.NARACAL_DEFAULTS = (function () {
       idiom: '십시일반', hanja: '十匙一飯', meaning: '여러 사람이 힘을 합치면 큰 일을 이룰수 있습니다.', image: 'asset:illu-12-cooperation', mascot: 'asset:mascot-11' },
   ];
   const VP = window.NARACAL_VPLAN && window.NARACAL_VPLAN[window.NARACAL_VTRACK(2027)];   /* 2027 = 1년차 극기 */
-  const months = M.map((x0, i) => { const p = VP && VP[i]; const x = p ? Object.assign({}, x0, p, { image: '' }) : x0; return ({
+  const months = M.map((x0, i) => { const p = VP && VP[i]; const x = p ? Object.assign({}, x0, p, { image: window.NARACAL_VIRTUE_ART['극기'][i] }) : x0; return ({
     m: i + 1, virtue: x.virtue, en: x.en, quote: x.quote, practice: x.practice.slice(),
     idiom: x.idiom, hanja: x.hanja, meaning: x.meaning,
     bg: i % 2 === 0 ? 'A' : 'B',
