@@ -487,8 +487,9 @@ NC.video = (function () {
       if (!aOk) throw new Error('이 브라우저는 AAC 소리 인코딩을 지원하지 않습니다');
     }
     const aBuf = hasA;
-    const target = new Mp4Muxer.ArrayBufferTarget();
-    const muxer = new Mp4Muxer.Muxer({ target, video: { codec: 'avc', width: W, height: H, frameRate: fps }, audio: aBuf ? { codec: 'aac', numberOfChannels: 2, sampleRate: 48000 } : undefined, fastStart: 'in-memory', firstTimestampBehavior: 'offset' });
+    const fileOut = !!(o.writable && Mp4Muxer.FileSystemWritableFileStreamTarget);  /* 긴 영상: 고른 파일에 바로 씀 (메모리에 몇 GB를 모으지 않음) */
+    const target = fileOut ? new Mp4Muxer.FileSystemWritableFileStreamTarget(o.writable) : new Mp4Muxer.ArrayBufferTarget();
+    const muxer = new Mp4Muxer.Muxer({ target, video: { codec: 'avc', width: W, height: H, frameRate: fps }, audio: aBuf ? { codec: 'aac', numberOfChannels: 2, sampleRate: 48000 } : undefined, fastStart: fileOut ? false : 'in-memory', firstTimestampBehavior: 'offset' });
     let err = null; const aq = []; let ai = 0, aP = 0;
     if (aBuf) {
       const ae = new AudioEncoder({ output: (c, m) => aq.push([c, m]), error: e => { err = e; } });
@@ -515,7 +516,9 @@ NC.video = (function () {
     muxer.finalize();
     if (o.onProgress) o.onProgress(1, V.total);
     const prof = { '42': 'Baseline', '4d': 'Main', '64': 'High' }[codec.slice(5, 7)] || '', lvl = (parseInt(codec.slice(9, 11), 16) / 10).toFixed(1);
-    return { blob: new Blob([target.buffer], { type: 'video/mp4' }), ext: 'mp4', note: `MP4 · H.264 ${prof} ${lvl} · ${W}×${H} · ${fps}fps · ${V.total.toFixed(1)}초${aBuf ? ' · 소리(AAC)' : ''}` };
+    const note = `MP4 · H.264 ${prof} ${lvl} · ${W}×${H} · ${fps}fps · ${V.total.toFixed(1)}초${aBuf ? ' · 소리(AAC)' : ''}`;
+    if (fileOut) { await o.writable.close(); return { file: true, ext: 'mp4', note }; }
+    return { blob: new Blob([target.buffer], { type: 'video/mp4' }), ext: 'mp4', note };
   }
 
   /* ---------- 여러 트랙(영상+소리) 조각난 MP4 → 일반 MP4 ----------
