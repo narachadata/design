@@ -5113,7 +5113,7 @@ const CERT_FORMS = {
   record: { name: '기록 향상왕', desc: '줄넘기·체력 향상왕 — 종목별 기록 전→후', common: [['title', '상장 이름', '줄넘기 향상왕'], ['event', '측정 이름', '2026년 나라차태권도 줄넘기측정'], ['date', '날짜', ''], ['k1', '종목 1', '앞으로 뛰기왕'], ['k2', '종목 2 (없으면 비움)', '뒤로 뛰기왕'], ['unit', '단위', '회']],
     body: '위 사람은 평소 성실한 태도로 태권도 수련에 임하고,\n<{측정 이름}>에서 위와 같이\n좋은 성과를 얻게 되었기에\n이에 칭찬하며 상장을 수여합니다.',
     cols: [['name', '이름', 7], ['a1', '종목1 전', 4], ['b1', '종목1 후', 4], ['a2', '종목2 전', 4], ['b2', '종목2 후', 4]] },
-  grade: { name: '급증', desc: '승급·승품 — 이름·급수·다음 예정일', common: [['title', '상장 이름', '급증'], ['date', '날짜', ''], ['org', '심사 기관', '대한민국 태권도 협회'], ['cycle', '유품자 승급 주기 (개월, 예정일 계산)', '7']],
+  grade: { name: '급증', desc: '승급·승품 — 이름·급수·다음 예정일', common: [['title', '상장 이름', '급증'], ['date', '날짜', ''], ['org', '심사 기관', '대한민국 태권도 협회'], ['cycle', '승급 주기 고정 (개월 — 비우면 운영규정대로 사람마다 자동)', '']],
     body: '위 사람은 {심사 기관} 심사 규정에 의하여\n승급심사 결과 위와 같이 자격을 인정합니다.',
     cols: [['name', '이름', 7], ['grade', '급수 (예: 1품 10급)', 8], ['note', '아래 작은 글 (비우면 자동: 2품 승품 예정일 : 29년 3월)', 14]] },
   free: { name: '일반 상장', desc: '모범상·개근상·우수상 — 문구 자유', common: [['title', '상장 이름', '모범상'], ['date', '날짜', '']],
@@ -5126,20 +5126,22 @@ const CERT_FRAME_JPG = 'assets/cert/naracha-cert-frame.jpg', CERT_FRAME_PDF = 'a
    출력이 모두 굵게 나오던 것 → 기억된 배치·이미 만든 상장의 굵기를 보통으로 ② 제목(상장 이름)은 선에서 1cm 더 위로 (기본 자리 105 → 95mm, 기억된 자리·만든 상장도 10mm 위로)
    제목·이름·급수는 ExtraBold(800) 그대로. 문서마다 한 번만 (doc.cert.wv) */
 function certMigrate(C) {  /* 처음 불러올 때 이 줄보다 먼저 불릴 수 있어 상수 대신 함수 안에 */
-  const CERT_WV = 4, v0 = C.wv || 0;
+  const CERT_WV = 5, v0 = C.wv || 0;
   if (v0 >= CERT_WV) return; const ky = doc.h / 297;
   const each = fn => { Object.entries(C.layout || {}).forEach(([k, L]) => { if (L && typeof L === 'object') fn(L, String(k.split(':')[1] || '').split('@')[0]); }); (doc.pages || []).forEach(p => { if (p.cert) p.els.forEach(e => { if (e.type === 'text' && e.certKey) fn(e, e.certKey); }); }); };
   /* 판 2 (11/18): 제목(상장 이름) 1cm 위로 */
   if (v0 < 2) each((o, key) => { if (key === 'title' && typeof o.y === 'number') o.y = r1(o.y - 10 * ky); });
   /* 판 4 (11/18 팀장님 "상장에 쓰이는 모든 글꼴을 나눔명조 ExtraBold로"): 모든 상장 글(제목·이름·기록·본문·날짜·번호)을 「나눔명조 ExtraBold」로 — 직접 고른 다른 글꼴은 그대로 */
-  each(o => { if (!o.font || /^(Nanum Myeongjo|Noto Sans KR|Nanum Myeongjo ExtraBold)$/.test(o.font)) { o.font = 'Nanum Myeongjo ExtraBold'; o.weight = 800; } });
+  if (v0 < 4) each(o => { if (!o.font || /^(Nanum Myeongjo|Noto Sans KR|Nanum Myeongjo ExtraBold)$/.test(o.font)) { o.font = 'Nanum Myeongjo ExtraBold'; o.weight = 800; } });
+  /* 판 5 (11/19 팀장님 "품·단 승급 원칙대로"): 예전 기본 주기 7개월 → 비움(운영규정대로 자동) */
+  if (v0 < 5 && C.data && C.data.grade && C.data.grade.common && String(C.data.grade.common.cycle || '') === '7') C.data.grade.common.cycle = '';
   C.wv = CERT_WV;
 }
 /* 상장 틀을 함께 출력할지 (11/18 팀장님: 틀이 인쇄된 상장 용지에는 글자만) — 상장 패널·미리 보기·출력 창이 모두 이 값 하나를 씀 */
 function certSetFrame(on, quiet) { const C = certState(); C.printFrame = !!on; doc.pages.forEach(p => p.els.forEach(x => { if (x.certFrame && !x.attFrame) x.hidden = !on; })); commit(); renderAll(); if (!quiet) toast(on ? '상장 틀까지 함께 출력합니다 (흰 종이)' : '틀은 빼고 글자만 출력합니다 (틀이 인쇄된 상장 용지)'); }
 const certFrameSeg = (on, attr) => `<div class="seg cfseg" title="틀이 미리 인쇄된 상장 용지면 '글자만'"><button type="button" ${attr}="1" aria-pressed="${on}">🖼 틀까지 출력 <small>흰 종이</small></button><button type="button" ${attr}="0" aria-pressed="${!on}">✍ 글자만 <small>틀 인쇄된 용지</small></button></div>`;
 function certState() {
-  if (!doc.cert) doc.cert = { form: 'record', printFrame: true, data: {}, layout: {}, wv: 4 };  /* wv: certMigrate 판 */
+  if (!doc.cert) doc.cert = { form: 'record', printFrame: true, data: {}, layout: {}, wv: 5 };  /* wv: certMigrate 판 */
   const C = doc.cert; certMigrate(C); C.data = C.data || {}; C.layout = C.layout || {}; if (!C.frame) { C.frame = CERT_FRAME_JPG; C.framePdf = CERT_FRAME_PDF; } /* 틀은 기본으로 내장 틀 */
   Object.entries(CERT_FORMS).forEach(([k, f]) => { if (!C.data[k]) C.data[k] = { common: Object.fromEntries(f.common.map(([a, , v]) => [a, a === 'date' ? CERT_TODAY() : v])), body: f.body, rows: [] }; });
   return C;
@@ -5177,7 +5179,7 @@ function certEls(form, r) {
   else if (form === 'free') { T('line', r.line, { label: '이름 아래 한 줄', x: 25, y: 160, w: 160, h: 9, size: 15, font: serif, weight: 800 }); }
   T('body', fill(D.body), { label: '본문', x: 18, y: bodyY, w: 174, h: 30, size: bodySz, font: serif, weight: 800, lh: bodySz < 15 ? 1.65 : 1.75 });
   T('date', certVal(D, r, 'date'), { label: '날짜', x: 24, y: 229.5, w: 60, h: 8, size: 14, font: serif, weight: 800 });
-  if (form === 'grade') T('note', String(r.note || '').trim() || certGradeNote(certVal(D, r, 'grade'), certVal(D, r, 'date'), certVal(D, r, 'cycle')), { label: '작은 글', x: 20, y: 242.5, w: 68, h: 6, size: 10.5, font: serif, weight: 800, align: 'center' });  /* 틀의 날짜 밑 점선(약 240mm) 아래 가운데 (팀장님 급증 견본) */
+  if (form === 'grade') T('note', String(r.note || '').trim() || certGradeNote(certVal(D, r, 'grade'), certVal(D, r, 'date'), String(D.common.cycle || '').trim() || r.per, r.kd), { label: '작은 글', x: 20, y: 242.5, w: 68, h: 6, size: 10.5, font: serif, weight: 800, align: 'center' });  /* 틀의 날짜 밑 점선(약 240mm) 아래 가운데 (팀장님 급증 견본) */
   return out;
 }
 /* 상장 번호: '제 2026-001 호' — 다음 번호는 PC끼리 동기화(naracal-cert-serial: 앞 글자별 마지막 번호) */
@@ -5200,13 +5202,24 @@ async function fitTextOffscreen(els) {
   const box = document.createElement('div'); box.className = 'sheet'; box.style.cssText = `position:fixed;left:-20000px;top:0;visibility:hidden;--pw:${doc.w};--ph:${doc.h};--b:0mm`; box.innerHTML = '<div class="page"></div>'; document.body.appendChild(box);
   try { list.forEach(el => { fitCache.delete(el.id); const t = document.createElement('div'); t.innerHTML = elHTML(el, 'edit'); const d = t.firstElementChild; box.firstChild.appendChild(d); autoFitText(d, el); }); } finally { box.remove(); }
 }
-/* 급증 왼쪽 아래 '다음 품(단) 예정일' (11/18 팀장님: 남은 승급 횟수 × 주기)
-   N품(단) s급 → 2급(국기원 응시 단계)까지 2급씩 (s-2)/2번 승급 × 주기(개월, 기본 7 — 견본 1품 10급 26.11 → 29년 3월) */
-function certGradeNote(grade, date, cycle) {
+/* 급증 왼쪽 아래 '다음 품(단) 예정일' — 관리프로그램·운영규정 제24조의 승급 원칙대로 (11/19 팀장님)
+   · 도장 심사 한 번에 2급씩 (관리 nextGrade: 1품 10급 → 8급 … → 2급) · 1·2급이 되면 국기원 승품(단) 단계(kkwPromoted)
+   · 심사 간격 = 「승급 후 두 달 이상 + 24회 이상」(제24조 ③ 1호) → 등록 횟수로 달 수: 주1 6 · 주2 3 · 주3 2 · 프리패스 2
+     3품 이상 중학생(중학 재학, 학년 모르면 만 13~15세)은 16회 · 두 달 조건 없음(제24조 ⑤): 주1 4 · 주2 2 · 주3 2 · 프리패스 1  (심사는 매월 마지막 주)
+   · 국기원 연한: 지금 품·단 숫자만큼 해(관리 「연한(국기원 표준)」 — 취득일 기준)가 지나야 다음 품(단)
+   예정일 = 늦은 쪽(심사일 + 남은 심사 수 × 간격, 품 취득일 + 연한). cycle을 숫자로 주면(상장 패널 '승급 주기 고정') 그 값으로 */
+function certExamMonths(st) {
+  const t = String((st && st.t) || '').trim(), per = /프리/.test(t) ? 16 : (+((t.match(/주\s*(\d)/) || [])[1]) || 2) * 4;
+  const g = String((st && st.grade) || ''), up3 = /단/.test(g) || +((g.match(/(\d+)\s*품/) || [])[1] || 0) >= 3;
+  const ms3 = up3 && /^중/.test(attGrade(st || {}));  /* 제24조 ⑤ 3품 이상 중학생 */
+  return Math.max(ms3 ? 1 : 2, Math.ceil((ms3 ? 16 : 24) / Math.min(16, per)));
+}
+function certGradeNote(grade, date, cycle, kd) {
   const m = String(grade || '').match(/^(\d+)\s*(품|단)\s*(\d+)\s*급/); if (!m) return '';
-  const N = +m[1], unit = m[2], sg = +m[3], n = Math.max(0, Math.ceil((sg - 2) / 2)), cyc = Math.max(1, Number(cycle) || 7);
+  const N = +m[1], unit = m[2], sg = +m[3], n = Math.max(0, Math.ceil((sg - 2) / 2)), cyc = Math.max(1, Number(cycle) || 3);  /* 모르면 주2회 기준 3개월 */
   const dm = String(date || '').match(/(\d{4})\D+(\d{1,2})/), y0 = dm ? +dm[1] : new Date().getFullYear(), m0 = dm ? +dm[2] - 1 : new Date().getMonth();
-  const t = y0 * 12 + m0 + n * cyc, yy = Math.floor(t / 12), mm = t % 12 + 1;
+  let t = y0 * 12 + m0 + n * cyc; const km = String(kd || '').match(/^(\d{4})-(\d\d)/); if (km) t = Math.max(t, +km[1] * 12 + (+km[2] - 1) + N * 12);  /* 국기원 연한 */
+  const yy = Math.floor(t / 12), mm = t % 12 + 1;
   const next = unit === '품' ? (N >= 4 ? '4단 승단' : `${N + 1}품 승품`) : `${N + 1}단 승단`;
   return `${next} 예정일 : ${String(yy).slice(2)}년 ${mm}월`;
 }
@@ -5518,22 +5531,23 @@ async function openGradeImport() {
   await measFetch(); const a = measAtt(), L = a && a.roster && a.roster.list, enrolled = measEnrolledFn();
   if (!Array.isArray(L) || !L.length) { d.querySelector('.dbody').innerHTML = `<p><b>관리프로그램 명단을 읽지 못했습니다.</b></p><p class="hint">${measSrv && measSrv.err === 'nokey' ? '이 브라우저에서 관리프로그램을 한 번 열어 로그인해 주세요(접속 키가 필요합니다).' : '인터넷 연결을 확인하고 다시 시도해 주세요.'}</p>`; return; }
   const RX = /^\d+\s*(품|단)\s*\d+\s*급$/, byDate = {};
-  L.forEach(st => { if (!st || !st.n || (enrolled && !enrolled(st.n))) return; (st.promos || []).forEach(p => { if (!p || p._del || !p.d || !RX.test(String(p.g || '').trim()) || p.src === '국기원') return; const dd = String(p.d).slice(0, 10); (byDate[dd] = byDate[dd] || []).push({ name: st.n, grade: String(p.g).trim(), now: String(st.grade || '').trim() }); }); });
+  L.forEach(st => { if (!st || !st.n || (enrolled && !enrolled(st.n))) return; (st.promos || []).forEach(p => { if (!p || p._del || !p.d || !RX.test(String(p.g || '').trim()) || p.src === '국기원') return; const dd = String(p.d).slice(0, 10); const N0 = (String(p.g).match(/^(\d+)\s*(품|단)/) || []), kp = (st.promos || []).filter(q => q && !q._del && q.src === '국기원' && q.d && String(q.g || '').startsWith(N0[1] + N0[2])).map(q => String(q.d).slice(0, 10)).sort()[0] || '';
+      (byDate[dd] = byDate[dd] || []).push({ name: st.n, grade: String(p.g).trim(), now: String(st.grade || '').trim(), per: certExamMonths(Object.assign({}, st, { grade: p.g })), kd: kp, t: String(st.t || '') }); }); });
   const dates = Object.keys(byDate).sort().reverse().slice(0, 12);
   if (!dates.length) { d.querySelector('.dbody').innerHTML = '<p><b>승급 이력이 있는 유품(단)자가 없습니다.</b></p><p class="hint">관리프로그램 심사 메뉴에서 합격 처리하면 여기에 날짜별로 나옵니다.</p>'; return; }
   if (!dates.includes(gradeImp.date)) { gradeImp.date = dates[0]; gradeImp.off = {}; }
   const C = certState(), D = C.data.grade;
   const draw = () => {
-    const list = (byDate[gradeImp.date] || []).slice().sort((x, y) => x.name.localeCompare(y.name, 'ko')), on = list.filter(x => !gradeImp.off[x.name]), cyc = D.common.cycle || '7', fmt = dd => { const [y, m, dy] = dd.split('-').map(Number); return `${y}년 ${m}월 ${dy}일`; };
+    const list = (byDate[gradeImp.date] || []).slice().sort((x, y) => x.name.localeCompare(y.name, 'ko')), on = list.filter(x => !gradeImp.off[x.name]), cyc = String(D.common.cycle || '').trim(), fmt = dd => { const [y, m, dy] = dd.split('-').map(Number); return `${y}년 ${m}월 ${dy}일`; };
     d.innerHTML = `<div class="dhead"><h2>📥 최근 심사에서 급증 만들기 <small>${measSrv && measSrv.att ? '관리프로그램 서버 최신' : '이 브라우저에 남은 자료'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
-      <p class="hint" style="margin-top:0">심사일에 승급한 <b>유품(단)자</b>(예: 1품 10급)를 그 급수로 급증에 넣습니다. 지금 재원생만, 국기원 승품(단) 합격은 뺍니다. 왼쪽 아래 예정일은 <b>남은 승급 횟수 × ${esc(cyc)}개월</b>로 자동 계산됩니다(주기는 상장 패널 ②에서 바꿈).</p>
+      <p class="hint" style="margin-top:0">심사일에 승급한 <b>유품(단)자</b>(예: 1품 10급)를 그 급수로 급증에 넣습니다. 지금 재원생만, 국기원 승품(단) 합격은 뺍니다. 왼쪽 아래 예정일은 ${cyc ? `<b>남은 심사 수 × ${esc(cyc)}개월</b>(상장 패널 ②에서 고정한 값)` : '<b>운영규정대로 사람마다</b> 계산합니다 — 심사 한 번에 2급씩, 간격은 「두 달 이상 + 24회」(등록 횟수로 주1 6·주2 3·주3 2·프리패스 2개월, 3품 이상 중학생은 16회), 국기원 연한(지금 품 숫자만큼 해)도 봄'}.</p>
       <label class="f"><span>심사일</span><select id="giDate">${dates.map(dd => `<option value="${dd}" ${dd === gradeImp.date ? 'selected' : ''}>${dd} · ${byDate[dd].length}명</option>`).join('')}</select></label>
       <h3>${list.length}명 <small>체크를 풀면 빠짐</small></h3>
-      <div class="mpeople">${list.map(x => `<label class="mper ${gradeImp.off[x.name] ? 'off' : ''}"><input type="checkbox" data-gioff="${esc(x.name)}" ${gradeImp.off[x.name] ? '' : 'checked'}><b>${esc(x.name)}</b> <small>${esc(x.grade)}${x.now && x.now !== x.grade ? ` (지금 ${esc(x.now)})` : ''}</small><span>${esc(certGradeNote(x.grade, gradeImp.date, cyc))}</span></label>`).join('')}</div>
+      <div class="mpeople">${list.map(x => `<label class="mper ${gradeImp.off[x.name] ? 'off' : ''}"><input type="checkbox" data-gioff="${esc(x.name)}" ${gradeImp.off[x.name] ? '' : 'checked'}><b>${esc(x.name)}</b> <small>${esc(x.grade)}${x.now && x.now !== x.grade ? ` (지금 ${esc(x.now)})` : ''}${cyc ? '' : ` · ${esc(x.t || '등록?')} ${x.per}개월마다`}</small><span>${esc(certGradeNote(x.grade, gradeImp.date, cyc || x.per, x.kd))}</span></label>`).join('')}</div>
       <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="giReplace" ${D.rows.some(r => String(r.name || '').trim()) ? '' : 'checked'}> 지금 명단을 바꾸기 (끄면 뒤에 더함)</label><button class="btn" id="giGo" ${on.length ? '' : 'disabled'}>명단에 넣기</button><button class="btn primary" id="giGoMake" ${on.length ? '' : 'disabled'}>넣고 ${on.length}장 미리 보기</button></div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
     d.onchange = e => { const t = e.target; if (t.id === 'giDate') { gradeImp.date = t.value; gradeImp.off = {}; draw(); } if (t.dataset.gioff) { if (t.checked) delete gradeImp.off[t.dataset.gioff]; else gradeImp.off[t.dataset.gioff] = 1; draw(); } };
-    const go = async make => { C.form = 'grade'; D.common.title = D.common.title || '급증'; D.common.date = fmt(gradeImp.date); const rows = on.map(x => ({ name: x.name, grade: x.grade })); D.rows = $('#giReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; commit(); d.close(); sideTab = 'cert'; renderRail(); renderSide(); toast(`급증 ${rows.length}명을 명단에 넣었습니다 — 날짜 ${D.common.date}`); if (make) openCertPreview(); };
+    const go = async make => { C.form = 'grade'; D.common.title = D.common.title || '급증'; D.common.date = fmt(gradeImp.date); const rows = on.map(x => ({ name: x.name, grade: x.grade, per: x.per, kd: x.kd })); D.rows = $('#giReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; commit(); d.close(); sideTab = 'cert'; renderRail(); renderSide(); toast(`급증 ${rows.length}명을 명단에 넣었습니다 — 날짜 ${D.common.date}`); if (make) openCertPreview(); };
     $('#giGo').onclick = () => go(false); $('#giGoMake').onclick = () => go(true);
   };
   draw();
@@ -5588,7 +5602,7 @@ async function openMeasImport(again) {
 /* ======================= 출석부 (메일머지) — 2026-11-18 팀장님 요청 =======================
    이미 인쇄된 출석부 용지(가로 209 × 세로 150mm)의 위쪽 빈칸에 학생 정보를 찍음. 아래쪽 12달×31일 출석 칸은 건드리지 않음.
    자리(mm)는 팀장님 빈 틀·채운 예시 사진을 종이 가장자리로 원근을 펴서 잼(두 사진 차이 1mm 안): 밑줄 21.0·32.3·43.2·54.5mm, 칸 66~162mm, 이름 줄 170.5~200.5mm, 표 위 62mm
-   doc.att = { rows:[{name,st,bd,reg,addr,tel,days,school,guard,no,photo,join,b,off}], year, stMode:'auto'|'old'|'year'|'none', printFrame:false, showFrame:false, layout:{[칸]:{x,y,w,h,font,size,…}} }
+   doc.att = { rows:[{name,st,bd,reg,addr,tel,days,school,guard,no,photo,join,b,off}], year, stMode:'join'(등록일, 기본)|'auto'|'old'|'year'|'none', fv:2, printFrame:false, showFrame:false, layout:{[칸]:{x,y,w,h,font,size,…}} }
    만든 쪽은 pg.att={i}. 틀 그림(assets/att/naracha-att-frame.jpg, 빈 틀 사진을 펴서 만든 맞춰 보기용)은 certFrame+attFrame 표시 — 출력 창의 틀 켜기·끄기(elVisOv)를 상장과 함께 씀
    자료: 관리프로그램 명단(store=att의 roster.list·퇴관 quitMapAtt·휴관 closedMapAtt·시간표 weeks)과 사진(이 PC IndexedDB naracha-media/kv/photo → 없으면 서버 store=photo)을 읽기만 함 — 관리 앱 작업방 확인(2026-11-18) */
 const ATT_W = 209, ATT_H = 150, ATT_FRAME = 'assets/att/naracha-att-frame.jpg';
@@ -5602,14 +5616,20 @@ const ATT_PHOTO = { x: 168.5, y: 23, w: 33, h: 35.5 };  /* 이름 아래 오른�
 const attDefYear = () => { const t = new Date(); return t.getFullYear() + (t.getMonth() >= 10 ? 1 : 0); };  /* 11·12월엔 다음 해 출석부 (연말 일괄) */
 const attIsDoc = () => Math.abs(doc.w - ATT_W) < 1 && Math.abs(doc.h - ATT_H) < 1;
 function attState() {
-  if (!doc.att) doc.att = { rows: [], year: attDefYear(), stMode: 'auto', printFrame: false, showFrame: false, layout: {} };
-  const A = doc.att; A.rows = A.rows || []; A.layout = A.layout || {}; if (!A.year) A.year = attDefYear(); if (!A.stMode) A.stMode = 'auto'; return A;
+  if (!doc.att) doc.att = { rows: [], year: attDefYear(), stMode: 'join', printFrame: false, showFrame: false, layout: {}, fv: 2 };
+  const A = doc.att; A.rows = A.rows || []; A.layout = A.layout || {}; if (!A.year) A.year = attDefYear(); if (!A.stMode) A.stMode = 'join';
+  if (A.fv !== 2) { /* 11/19 팀장님: 주소는 지역까지만·보호자 이름 가운데 O·학교 글자 겹침 빼기·연도 칸은 등록일 — 이미 넣은 명단도 한 번 맞춤 */
+    A.fv = 2; if (A.stMode === 'auto') A.stMode = 'join';
+    A.rows.forEach(r => { r.addr = attAddrShort(r.addr); r.guard = attMask(r.guard); r.school = attSchoolFix(r.school); if (r.src) r.st = attStatus(r.join, A); });
+  }
+  return A;
 }
 const attRowsOn = () => attState().rows.filter(r => String(r.name || '').trim() && !r.off);
 let attPrev = 0;
 /* 연도 칸: 자동이면 이번 달(오늘이 든 달) 등록생은 '신규', 아니면 '기등록' (11/18 팀장님 "신규는 이번달 등록생") */
 function attStatus(join, A) {
   if (A.stMode === 'old') return '기등록'; if (A.stMode === 'year') return String(A.year); if (A.stMode === 'none') return '';
+  if (A.stMode === 'join') { const m = String(join || '').match(/^(\d{4})-(\d\d)-(\d\d)/); return m ? `${m[1]}-${m[2]}-${m[3]}` : ''; }  /* 등록일 (11/19 팀장님) */
   const j = String(join || ''); if (!/^\d{4}-\d\d-\d\d/.test(j)) return '기등록';
   const t = new Date(), ym = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`; return j.slice(0, 7) === ym ? '신규' : '기등록';
 }
@@ -5617,6 +5637,26 @@ const attTel = p => { const d = String(p || '').replace(/\D/g, ''); if (d.length
 const attReg = t => { t = String(t || '').trim(); if (/프리/.test(t)) return '프리패스'; const m = t.match(/주\s*(\d)/); return m ? (Number(m[1]) >= 4 ? '프리패스' : `주${m[1]}회`) : t; };
 const attAddr = note => { const L = String(note || '').split('\n').map(l => (l.match(/주소\s*[:：]\s*(.+)$/) || [])[1]).filter(Boolean); return L.length ? L[L.length - 1].trim() : ''; };  /* 관리 앱엔 주소 칸이 따로 없고 등록 설문의 「주소: …」 메모 줄뿐 */
 const attSchool = sc => String(sc || '').trim().replace(/초등학교$/, '초').replace(/중학교$/, '중').replace(/고등학교$/, '고');
+/* 학교/학년: '늘푸른초/초3'처럼 학교 끝 글자와 학년 첫 글자(초·중·고)가 겹치면 학교 쪽을 뺌 → '늘푸른/초3' */
+const attSchoolFix = v => { const t = String(v || '').trim(), m = t.match(/^(.+?)\s*(초|중|고)\s*\/\s*((초|중|고)\s*\d.*)$/); return m && m[2] === m[4] && m[1].trim() ? `${m[1].trim()}/${m[3].replace(/\s+/g, '')}` : t; };
+/* 보호자 이름: 가운데 글자를 O로 (김영희 → 김O희, 남궁민수 → 남OO수), 두 글자면 뒤 글자를 O로 (김영 → 김O) */
+const attMask = v => { const t = String(v || '').trim(); if (!t || /\s/.test(t) || !/^[가-힣]+$/.test(t)) return t; const a = [...t]; if (a.length === 1) return t; if (a.length === 2) return a[0] + 'O'; return a[0] + 'O'.repeat(a.length - 2) + a[a.length - 1]; };
+/* 주소: 세부 주소(동·호·층 등)는 빼고 어디 사는지만 — 아파트면 아파트 이름까지, 도로명이면 도로명과 건물 번호까지, 지번이면 동·리 이름까지 */
+const ATT_APT = /(아파트|APT|apt|빌라|맨션|타운|주공|래미안|자이|힐스테이트|푸르지오|e편한세상|이편한세상|아이파크|롯데캐슬|더샵|센트레빌|위브|꿈에그린|호반|SK뷰|sk뷰|데시앙|베르디움|스위첸|해링턴|어울림|하늘채|수자인|오피스텔)/;
+function attAddrShort(v) {
+  let t = String(v || '').replace(/\s+/g, ' ').trim(); if (!t) return '';
+  const extra = (t.match(/\(([^)]*)\)/) || [])[1] || ''; t = t.replace(/\([^)]*\)/g, ' ').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+  const tk = t.split(' '), isDetail = w => /^(\d+|[A-Za-z]?\d+[A-Za-z]?)(동|호|층|호실)$|^(지하|B)\d+층?$|^\d+-\d+호$/.test(w);
+  const ai = tk.findIndex(w => ATT_APT.test(w) && !isDetail(w)); if (ai >= 0) return tk.slice(0, ai + 1).join(' ');
+  const ri = tk.findIndex(w => /(로|길)$/.test(w) && !/^\d/.test(w)); if (ri >= 0) {
+    let end = ri; if (tk[end + 1] && /^\d+번?길$/.test(tk[end + 1])) end++; if (tk[end + 1] && /^(지하)?\d+(-\d+)?$/.test(tk[end + 1])) end++;  /* '세권로 12번길 33'처럼 띄어 쓴 길 이름 */
+    const ex = extra.split(/[,\s]+/).filter(Boolean), apt = ex.find(w => ATT_APT.test(w)), dong = ex.find(w => /(동|리|읍|면|가)$/.test(w) && !/^\d/.test(w));
+    if (apt) return tk.slice(0, ri).concat(dong ? [dong] : [], [apt]).join(' ');  /* 괄호 속 아파트: 지역 + 동 + 아파트 이름 */
+    return tk.slice(0, end + 1).join(' ');
+  }
+  const di = tk.map((w, i) => /(동|리|읍|면|가)$/.test(w) && !isDetail(w) && !/^\d/.test(w) ? i : -1).filter(i => i >= 0).pop(); if (di != null && di >= 0) return tk.slice(0, di + 1).join(' ');
+  return tk.filter(w => !isDetail(w)).join(' ');
+}
 /* 학년: 관리 앱 studentGrade와 같게 (학년 기록 + 지난 학년도 수, 없으면 생년). 3월이 새 학년 */
 function attGrade(s) {
   const t = new Date(), sy = t.getMonth() + 1 >= 3 ? t.getFullYear() : t.getFullYear() - 1;
@@ -5636,7 +5676,7 @@ function attRegDays(a) {
 function attRowFrom(s, A, daysOf) {
   const gds = (s.gd || []).filter(g => g && String(g.p || '').replace(/\D/g, '').length >= 9), g0 = gds.find(g => String(g.r || '').trim() === '모') || gds[0];
   const ph = g0 ? g0.p : s.sp, dig = String(ph || '').replace(/\D/g, '');
-  return { name: String(s.n || '').trim(), join: s.joinDate || '', st: attStatus(s.joinDate, A), bd: /^\d{4}-\d\d-\d\d/.test(String(s.by || '')) ? String(s.by).slice(0, 10) : '', reg: attReg(s.t), addr: attAddr(s.note), tel: attTel(ph), days: daysOf(s.n), school: [attSchool(s.school), attGrade(s)].filter(Boolean).join('/'), guard: g0 ? String(g0.n || '').trim() : '', no: dig.length >= 4 ? dig.slice(-4) : '', b: s.b || '', src: 1 };
+  return { name: String(s.n || '').trim(), join: s.joinDate || '', st: attStatus(s.joinDate, A), bd: /^\d{4}-\d\d-\d\d/.test(String(s.by || '')) ? String(s.by).slice(0, 10) : '', reg: attReg(s.t), addr: attAddrShort(attAddr(s.note)), tel: attTel(ph), days: daysOf(s.n), school: attSchoolFix([attSchool(s.school), attGrade(s)].filter(Boolean).join('/')), guard: attMask(g0 ? String(g0.n || '').trim() : ''), no: dig.length >= 4 ? dig.slice(-4) : '', b: s.b || '', src: 1 };
 }
 function attEls(r) {
   const A = attState(), out = [];
@@ -5766,8 +5806,8 @@ function renderAttSide(body) {
   <label class="chk"><input type="checkbox" data-ax="show" ${A.showFrame ? 'checked' : ''}> 화면에 틀 그림 보이기 <small class="hint" style="margin:0">(맞춰 보기용 — 출력은 위 설정대로)</small></label>
   <h3>② 명단 <small>${rows.length}명 중 ${nOn}명 출력 · 체크를 풀면 빠짐</small></h3>
   <div class="row" style="gap:6px;align-items:flex-end;flex-wrap:wrap"><label class="f" style="margin:0;width:6.5em"><span>출석부 연도</span><input type="number" min="2000" max="2100" data-aset="year" value="${Number(A.year)}"></label>
-    <label class="f" style="margin:0;flex:1;min-width:12em"><span>'연도' 칸에 넣을 글</span><select data-aset="stMode">${[['auto', '자동: 신규 / 기등록'], ['old', '모두 기등록'], ['year', `연도 숫자 (${Number(A.year)})`], ['none', '비움']].map(([k, t]) => `<option value="${k}" ${A.stMode === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
-  ${A.stMode === 'auto' ? `<p class="hint" style="margin:4px 0 0">자동: 이번 달(${new Date().getMonth() + 1}월)에 등록한 사람은 「신규」, 그 전에 등록한 사람은 「기등록」. 칸을 직접 고쳐도 됩니다.</p>` : ''}
+    <label class="f" style="margin:0;flex:1;min-width:12em"><span>'연도' 칸에 넣을 글</span><select data-aset="stMode">${[['join', '등록일'], ['auto', '자동: 신규 / 기등록'], ['old', '모두 기등록'], ['year', `연도 숫자 (${Number(A.year)})`], ['none', '비움']].map(([k, t]) => `<option value="${k}" ${A.stMode === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
+  ${A.stMode === 'join' ? `<p class="hint" style="margin:4px 0 0">관리프로그램의 등록일(예: 2026-11-03). 등록일이 없는 사람은 비어 있으니 칸을 직접 채우세요.</p>` : ''}${A.stMode === 'auto' ? `<p class="hint" style="margin:4px 0 0">자동: 이번 달(${new Date().getMonth() + 1}월)에 등록한 사람은 「신규」, 그 전에 등록한 사람은 「기등록」. 칸을 직접 고쳐도 됩니다.</p>` : ''}
   <div class="ctable-wrap" style="margin-top:6px"><table class="ctable"><tr><th title="출력">✓</th><th>#</th>${cols.map(([, l]) => `<th>${esc(l)}</th>`).join('')}<th title="관리프로그램 사진">📷</th><th></th></tr>
   ${rows.map((r, i) => `<tr class="${i === attPrev ? 'cur' : ''} ${r.off ? 'off' : ''}"><td><input type="checkbox" data-aon="${i}" ${r.off ? '' : 'checked'} title="체크를 풀면 출력에서 빠짐"></td><td class="ci" data-apick="${i}" title="미리 보기">${i + 1}</td>${cols.map(([k]) => `<td><input data-ar="${i}" data-ak="${k}" value="${esc(r[k] || '')}" style="min-width:${W[k]}em"></td>`).join('')}<td>${r.photo ? `<button class="x" data-aphdel="${i}" title="사진 빼기">📷</button>` : `<button class="x" data-aphadd="${i}" title="사진 넣기 (그림 파일)">＋</button>`}</td><td><button class="x" data-adel="${i}" title="이 줄 지우기">×</button></td></tr>`).join('')}</table></div>
   <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" data-ax="add">+ 한 명 (손으로)</button>${rows.length ? '<button class="btn sm" data-ax="allon">모두 체크</button><button class="btn sm" data-ax="alloff">모두 해제</button><button class="btn sm" data-ax="clear">명단 비우기</button>' : ''}</div>
