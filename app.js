@@ -5553,10 +5553,12 @@ async function openMeasImport(again) {
    만든 쪽은 pg.att={i}. 틀 그림(assets/att/naracha-att-frame.jpg, 빈 틀 사진을 펴서 만든 맞춰 보기용)은 certFrame+attFrame 표시 — 출력 창의 틀 켜기·끄기(elVisOv)를 상장과 함께 씀
    자료: 관리프로그램 명단(store=att의 roster.list·퇴관 quitMapAtt·휴관 closedMapAtt·시간표 weeks)과 사진(이 PC IndexedDB naracha-media/kv/photo → 없으면 서버 store=photo)을 읽기만 함 — 관리 앱 작업방 확인(2026-11-18) */
 const ATT_W = 209, ATT_H = 150, ATT_FRAME = 'assets/att/naracha-att-frame.jpg';
-/* 칸: 키, 이름, x, 밑줄 y, 너비, 정렬, 크기(pt), 굵기, 색 — 채운 예시처럼 글자 아래가 밑줄 약 1mm 위 */
-const ATT_F = [['st', '연도 칸', 70, 21.0, 27, 'center', 13, 700], ['bd', '생일', 101, 21.0, 27, 'center', 13, 700], ['reg', '등록구분', 132, 21.0, 29.5, 'right', 13, 700], ['name', '이름', 171, 20.5, 29.5, 'center', 20, 800],
-  ['addr', '주소', 72.5, 32.3, 46, 'left', 10.5, 700], ['tel', '연락처', 124, 32.3, 37.5, 'right', 13, 700], ['days', '수련요일', 80, 43.2, 38, 'right', 13, 700], ['school', '학교/학년', 124, 43.2, 37.5, 'right', 13, 700],
-  ['guard', '보호자', 80, 54.5, 36, 'right', 13, 700], ['no', '출석번호', 124, 54.5, 37.5, 'right', 14, 800, '#2B63B5']];
+/* 칸: 키, 이름, x, 밑줄 y, 너비, 정렬, 크기(pt), 굵기, 색 — 글자 아래가 밑줄 약 1mm 위.
+   가로 자리·정렬·크기는 팀장님이 쓰던 워드 메일머지 파일(11/18 화면: 표 62~197.5mm, 칸 경계 95·127·163mm, 아래 두 줄은 115mm)과 같게:
+   주소만 왼쪽 맞춤, 나머지는 칸 오른쪽 맞춤(글자 끝 93.3·125.6·161·195.5mm, 수련요일·보호자 113.9mm), 값 11.5pt · 이름 16pt · 주소 8pt, 출석번호 파랑 */
+const ATT_F = [['st', '연도 칸', 66, 21.0, 27.3, 'right', 11.5, 700], ['bd', '생일', 96, 21.0, 29.6, 'right', 11.5, 700], ['reg', '등록구분', 129, 21.0, 32, 'right', 11.5, 700], ['name', '이름', 165, 20.5, 30.5, 'right', 16, 800],
+  ['addr', '주소', 73.5, 32.3, 52, 'left', 8, 700], ['tel', '연락처', 129, 32.3, 32, 'right', 11.5, 700], ['days', '수련요일', 70, 43.2, 43.9, 'right', 11.5, 700], ['school', '학교/학년', 117, 43.2, 44, 'right', 11.5, 700],
+  ['guard', '보호자', 70, 54.5, 43.9, 'right', 11.5, 700], ['no', '출석번호', 117, 54.5, 44, 'right', 11.5, 800, '#2B63B5']];
 const ATT_PHOTO = { x: 168.5, y: 23, w: 33, h: 35.5 };  /* 이름 아래 오른쪽 사진 상자 (밑줄 20.5 ~ 표 위 62mm 사이) */
 const attDefYear = () => { const t = new Date(); return t.getFullYear() + (t.getMonth() >= 10 ? 1 : 0); };  /* 11·12월엔 다음 해 출석부 (연말 일괄) */
 const attIsDoc = () => Math.abs(doc.w - ATT_W) < 1 && Math.abs(doc.h - ATT_H) < 1;
