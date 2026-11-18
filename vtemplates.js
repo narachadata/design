@@ -59,10 +59,11 @@ NC.vtpl = (function () {
       return { pages: out, sfx: [{ ref: 'b:pop', at: 3.5 }, { ref: 'b:pop', at: 7 }, { ref: 'b:pop', at: 10.6 }] };
     } },
     { id: 'monthly', name: '이달의 일정 (TV)', desc: '도장 TV 반복 재생용 안내', music: 'm-calm', video: { dur: 6, trans: 'soft', turn: 1, loop: true }, sizes: ['169', '916'], build(S) {
-      const g = geo(S), band = R(0, 0, g.W, g.u * 16, NAVY), head = (t) => [band, T(t, g.u * 8, g.u * 4, g.W, g.u * 7, { align: 'left', font: 'GMarketSans', weight: 700 }), logo(g.W - g.u * 26, g.u * 4.5, g.u * 34, true)];
-      const rows = (list, y0) => list.map(([d, t], i) => [T(d, g.u * 10, y0 + i * g.u * 12, g.u * 30, g.u * 5.4, { color: RED, align: 'left', font: 'GMarketSans', weight: 700, anim: an('left', 0.3 + i * 0.25, 0.5) }), T(t, g.u * 42, y0 + i * g.u * 12, g.W - g.u * 52, g.u * 5.4, { color: INK, align: 'left', weight: 600, anim: an('left', 0.3 + i * 0.25, 0.5) })]).flat();
+      const g = geo(S), band = R(0, 0, g.W, g.u * (g.L ? 16 : 26), NAVY), head = (t) => g.L ? [band, T(t, g.u * 8, g.u * 4, g.W, g.u * 7, { align: 'left', font: 'GMarketSans', weight: 700 }), logo(g.W - g.u * 26, g.u * 4.5, g.u * 34, true)] : [band, logo(g.cx, g.u * 4, g.u * 34, true), T(t, g.u * 5, g.u * 13, g.W - g.u * 10, g.u * 9, { align: 'center', font: 'GMarketSans', weight: 700 })];  /* 세로 화면: 로고 위·제목 아래 가운데 (같은 줄이면 제목과 로고가 겹쳤음) */
+      const rows = (list, y0) => list.map(([d, t], i) => g.L ? [T(d, g.u * 10, y0 + i * g.u * 12, g.u * 30, g.u * 5.4, { color: RED, align: 'left', font: 'GMarketSans', weight: 700, anim: an('left', 0.3 + i * 0.25, 0.5) }), T(t, g.u * 42, y0 + i * g.u * 12, g.W - g.u * 52, g.u * 5.4, { color: INK, align: 'left', weight: 600, anim: an('left', 0.3 + i * 0.25, 0.5) })]
+        : [T(d, g.u * 10, y0 + i * g.u * 16, g.W - g.u * 20, g.u * 5.4, { color: RED, align: 'left', font: 'GMarketSans', weight: 700, anim: an('left', 0.3 + i * 0.25, 0.5) }), T(t, g.u * 10, y0 + i * g.u * 16 + g.u * 6.5, g.W - g.u * 20, g.u * 5.4, { color: INK, align: 'left', weight: 600, anim: an('left', 0.35 + i * 0.25, 0.5) })]).flat();  /* 세로 화면: 날짜 아래 내용(한 줄에 두면 내용이 두 줄로 접혀 다음 줄과 겹쳤음) */
       return { pages: [
-        scene('#F6F8FC', head('11월 주요 일정').concat(rows([['11/3 (월)', '11월 수련 시작 · 인성 덕목 「배려」'], ['11/14 (금)', '승급심사 신청서 마감'], ['11/24 (월)', '정기 승급심사'], ['11/29 (토)', '가족 초청 시범 공연']], g.u * 26)), { vcam: 'in', vcamA: 0.03 }),
+        scene('#F6F8FC', head('11월 주요 일정').concat(rows([['11/3 (월)', '11월 수련 시작 · 인성 덕목 「배려」'], ['11/14 (금)', '승급심사 신청서 마감'], ['11/24 (월)', '정기 승급심사'], ['11/29 (토)', '가족 초청 시범 공연']], g.u * (g.L ? 26 : 36))), { vcam: 'in', vcamA: 0.03 }),
         scene('#FFF6F4', head('휴관 안내').concat([T('11월 17일 (월)', 0, g.cy - g.u * 10, g.W, g.u * 10, { font: 'YeogiOttaeJalnan', color: RED, anim: an('pop', 0.2, 0.5) }), T('도장 내부 공사로 하루 쉽니다', 0, g.cy + g.u * 4, g.W, g.u * 5.4, { color: INK, weight: 600, anim: an('fade', 0.6, 0.6) })]), { vcam: 'in', vcamA: 0.03 }),
         scene('#F6FBF6', head('이달의 인성 덕목').concat([mascot(g.L ? g.u * 14 : g.cx - g.u * 20, g.L ? g.u * 26 : g.u * 22, g.u * 50, '04'), T('배려', g.L ? g.cx - g.u * 10 : 0, g.L ? g.u * 34 : g.u * 76, g.L ? g.W * 0.55 : g.W, g.u * 16, { font: 'YeogiOttaeJalnan', color: '#2F5D3A', anim: an('char', 0.3, 0.8) }), T('다른 사람의 마음을 먼저 생각해요', g.L ? g.cx - g.u * 10 : 0, g.L ? g.u * 56 : g.u * 98, g.L ? g.W * 0.55 : g.W, g.u * 5.4, { color: INK, weight: 600, anim: an('type', 1, 1.2) })]), { vcam: 'in', vcamA: 0.03 }),
       ], sfx: [] };
@@ -124,6 +125,7 @@ NC.vtpl = (function () {
   function safeShorts(pg, S) {
     const top = S.h * 0.12, bot = S.h * 0.78, big = e => e.h > S.h * 0.45 || (e.w >= S.w * 0.98 && e.h > S.h * 0.3);
     const inFrame = e => e.x >= -0.5 && e.y >= -0.5 && e.x + e.w <= S.w + 0.5 && e.y + e.h <= S.h + 0.5;  // 화면 밖으로 일부러 걸친 장식은 빼고
+    (pg.els || []).forEach(e => { if (e.type === 'text' && e.x >= -0.5 && e.x < S.w * 0.5 && e.x + e.w > S.w + 0.5) e.w = Math.round(Math.max(20, S.w - e.x - Math.max(e.x, S.w * 0.05)) * 100) / 100; });  /* 화면 폭보다 넓은 글 상자(가로 화면용 제목)는 화면 안으로 줄여서 함께 옮김 — 전에는 '화면 밖 장식'으로 보고 맨 위 가려지는 곳에 남았음 */
     const els = (pg.els || []).filter(e => !big(e) && inFrame(e)); if (!els.length) return;
     const minY = Math.min(...els.map(e => e.y)), maxB = Math.max(...els.map(e => e.y + e.h));
     let d = 0; if (maxB > bot) d = -(maxB - bot); if (minY + d < top) d = top - minY; if (maxB + d > bot && minY + d > top) d = Math.max(top - minY, bot - maxB);  // 내용 묶음 전체를 같은 거리만큼 옮겨 간격 유지
@@ -137,6 +139,7 @@ NC.vtpl = (function () {
   function make(id, sizeKey) {
     const t = LIST.find(x => x.id === id); if (!t) return null; const S = SIZES[sizeKey] || SIZES['169'];
     const r = t.build(S);
+    r.pages.forEach(pg => { pg.els = JSON.parse(JSON.stringify(pg.els || [])); });  /* 여러 장면이 같은 요소(머리 띠 등)를 함께 쓰면 장면마다 옮길 때 여러 번 옮겨졌음 — 장면마다 따로 */
     if (sizeKey === '916') r.pages.forEach(pg => safeShorts(pg, S));
     return { w: S.w, h: S.h, fmt: sizeKey === '916' ? 'story' : sizeKey === '45' ? 'ig45' : '', name: t.name, pages: r.pages, sfx: (r.sfx || []).map(x => Object.assign({ vol: 1, name: (NC.media.SOUNDS.find(s => 'b:' + s.id === x.ref) || {}).name || '효과음' }, x)), audio: t.music ? { src: 'b:' + t.music, name: (NC.media.SOUNDS.find(s => s.id === t.music) || {}).name || '', vol: 0.7, from: 0, fin: 0.5, fout: 2 } : null, video: Object.assign({ q: '1080', fps: 30, loop: false }, t.video) };
   }
