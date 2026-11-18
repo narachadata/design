@@ -2105,7 +2105,7 @@ function fadeDrag(e, host, which) {
 }
 function vkHTML(o, d, px, def) {
   const W = Math.max(18, d * px), vk = (o.vk || []).filter(k => k[0] >= 0 && k[0] <= d);
-  const pts = [[0, vkVal(o, 0, def)], ...vk, [d, vkVal(o, d, def)]], poly = pts.map(([q, v]) => `${(q * px).toFixed(1)},${(vkY(v) * 100).toFixed(2)}`).join(' ');
+  const pts = [[0, vkVal(o, 0, def)], ...vk, [d, vkVal(o, d, def)]], dense = []; pts.forEach((pt, i) => { if (i) { const [q0, v0] = pts[i - 1], [q1, v1] = pt, m = Math.abs(v1 - v0) > 1e-4 ? Math.min(24, Math.ceil((q1 - q0) * px / 5)) : 1; for (let k = 1; k < m; k++) { const f = k / m; dense.push([q0 + (q1 - q0) * f, v0 + (v1 - v0) * f]); } } dense.push(pt); }); const poly = dense.map(([q, v]) => `${(q * px).toFixed(1)},${(vkY(v) * 100).toFixed(2)}`).join(' ');  /* 소리는 점 사이를 배율로 곧게 바꾸므로, dB 눈금에서는 휘어 보이는 실제 모양대로 그림 (전에는 곧은 선이라 들리는 것과 달랐음) */
   return `<div class="tl-vk"><svg viewBox="0 0 ${W.toFixed(1)} 100" preserveAspectRatio="none"><polyline class="ln" points="${poly}"/><polyline class="hit" data-vline="1" points="${poly}"><title>음량 ${vkDb(vkVal(o, 0, def))} — 위아래로 끌기: 음량 · ⌘/Ctrl(또는 Shift)+끌기: 곱게 · ⌥(Alt)+누르기: 점 찍기 · ⌥+Shift+누르기: 처음대로 · Control+= / −(또는 Alt+= / −): 1dB씩</title></polyline></svg>${vk.map(k => `<i data-vkp="${(o.vk || []).indexOf(k)}" style="left:${k[0] * px}px;top:${vkY(k[1]) * 100}%" title="${vkDb(k[1])} — 끌어 옮기기 · 두 번 눌러 지우기"></i>`).join('')}</div>`;
 }
 // 음량 선·점 끌기: 끄는 동안 옆에 dB 표시, 놓으면 실행 취소 한 단계
