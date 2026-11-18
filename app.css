@@ -1346,3 +1346,7 @@ dialog:focus{outline:none}
 .nara-card span{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}.nara-card b{font-size:14px}.nara-card small{font-size:12px;color:var(--ui-muted);line-height:1.4}
 .nara-card i{font-style:normal;font-size:20px;color:#9aa3b8}
 .nara-back{margin:0 0 8px}
+/* 상장 명단 표: 패널 폭에 맞춤 — 기록 상장(이름·종목1 전후·종목2 전후)·일반 상장 3번째 열이 가로 스크롤 뒤로 숨던 것 */
+.ctable{width:100%;table-layout:fixed}.ctable th{overflow:hidden;text-overflow:ellipsis}.ctable th:first-child{width:20px}.ctable th:last-child{width:20px}.ctable th:nth-child(2){width:30%}
+.ctable input{width:100%!important;min-width:0;box-sizing:border-box;padding:3px 2px}.ctable td{overflow:hidden}.ctable .crecs{white-space:normal;word-break:keep-all;line-height:1.35;padding:2px 4px}
+.ctable th{white-space:normal;word-break:keep-all;line-height:1.15;padding:3px 1px;font-size:10.5px;text-overflow:clip;vertical-align:bottom}
