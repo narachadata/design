@@ -1360,7 +1360,7 @@ async function videoLayers(list, dpi, onProgress, cancelled) {
     const hitC = layerCache.get(key); if (hitC) { out[pi][si] = hitC; return; }
     items.push({ pg: it.pg, st, pi, si, html, key });
   }));
-  if (items.length) await loadScript('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js', () => window.htmlToImage);
+  if (items.length) await loadScript('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js', () => window.htmlToImage, 'sha384-UbfRVKN3/elS1r7JcK2FhmPP+KlJ4CvYwbyYD7tH+uTkbT9bNJr9eJeQ0FoFbAgz');
   for (let s0 = 0; s0 < items.length; s0 += per) {
     if (cancelled && cancelled()) return null;
     if (onProgress) onProgress(s0, items.length);
@@ -4768,12 +4768,12 @@ async function renderPageCanvas0(pg, dpi, mode, bg) {
     await Promise.all(Array.from(tmp.querySelectorAll('img')).map(i => i.complete ? null : new Promise(r => { i.onload = i.onerror = r; })));
     const node = tmp.firstElementChild;
     try {
-      await loadScript('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js', () => window.htmlToImage);
+      await loadScript('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js', () => window.htmlToImage, 'sha384-UbfRVKN3/elS1r7JcK2FhmPP+KlJ4CvYwbyYD7tH+uTkbT9bNJr9eJeQ0FoFbAgz');
       const r = node.getBoundingClientRect();
       return await htmlToImage.toCanvas(node, { pixelRatio: dpi / 96, width: Math.ceil(r.width), height: Math.ceil(r.height), backgroundColor: bg || undefined, fontEmbedCSS: await fontCSSFor(node), cacheBust: false, skipAutoScale: true });
     } catch (err) {
       console.warn('브라우저 렌더링 실패, html2canvas로 대신 그림', err); dlFallback++;
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', () => window.html2canvas);
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', () => window.html2canvas, 'sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H');
       return await html2canvas(node, { scale: dpi / 96, backgroundColor: bg, logging: false, useCORS: true });
     }
   } finally { tmp.remove(); }
@@ -4811,13 +4811,13 @@ async function runDownload() {
       } else if (pages.length === 1) {
         const c = await renderPageCanvas(pgOf(pages[0]), dpi, mode, bg); saveBlob(await toBlob(c), `${base}-${pages[0] + 1}.${ext}`); free(c);
       } else {
-        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', () => window.JSZip);
+        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', () => window.JSZip, 'sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG');
         const zip = new JSZip();
         for (let i = 0; i < pages.length; i++) { say(`${i + 1}/${pages.length} 페이지 그리는 중…`); const c = await renderPageCanvas(pgOf(pages[i]), dpi, mode, bg); zip.file(`${base}-${String(pages[i] + 1).padStart(2, '0')}.${ext}`, await toBlob(c)); free(c); }
         say('ZIP으로 묶는 중…'); saveBlob(await zip.generateAsync({ type: 'blob' }), `${base}.zip`);
       }
     } else {
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => window.jspdf);
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => window.jspdf, 'sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk');
       const cfg = DL_PDF[S.fmt], bleed = cfg.bleed ? (Number(doc.bleed) || 0) : 0;
       // 재단선을 켜면 도련 바깥에 5mm 여백(슬러그)을 더 두고 그곳에 가는 선으로 그림
       const slug = cfg.bleed && doc.cropMarks ? 5 : 0;
@@ -5004,7 +5004,7 @@ function makeToc() {
   page().els.push(title, left, right); commit(); select([title.id, left.id, right.id]); rerender(); toast(`목차 ${rows.length}줄을 만들었습니다 — 쪽 이름을 바꾼 뒤 다시 만들면 됩니다 (Ctrl+Z로 되돌리기)`);
 }
 async function bookletPdf(opt) {
-  try { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => window.jspdf); } catch (e) { toast('PDF 모듈을 불러오지 못했습니다 (인터넷 연결 확인)', true); return; }
+  try { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => window.jspdf, 'sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk'); } catch (e) { toast('PDF 모듈을 불러오지 못했습니다 (인터넷 연결 확인)', true); return; }
   endEdit(); const fitA4 = !!(opt && opt.a4), plist = doc.pages.filter(p => !p.dlOff); /* 숨긴 쪽은 책자에서 뺌 (출력·다운로드와 같게) */
   const n0 = plist.length, N = Math.ceil(n0 / 4) * 4, sides = []; for (let k = 0; k < N / 2; k += 2) { sides.push([N - 1 - k, k]); sides.push([k + 1, N - 2 - k]); }
   const W = fitA4 ? 297 : doc.w * 2, H = fitA4 ? 210 : doc.h, sw = W / 2, sk = Math.min(sw / doc.w, H / doc.h), pw = doc.w * sk, ph = doc.h * sk, dpi = dlDpi(200, 0), pdf = new jspdf.jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
@@ -6484,7 +6484,7 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
     }
   } catch (e) { console.warn(e); }
   updateSaveBadge(); updateToolbarState();
-  NC.live.attach({ canSave: () => !!(store.state.handle && !store.state.needPerm), doc: () => doc, state: () => ({ cur, sel, drag: !!drag, editing: !!editing || !!$('#cellEd') }), afterRemote: liveAfterRemote, saveSoon: () => { if (store.state.dirty) markDirty(); }, openSettings: openSaveDialog, toast });
+  NC.live.attach({ canSave: () => !!(store.state.handle && !store.state.needPerm), doc: () => doc, state: () => ({ cur, sel, drag: !!drag, dragKind: drag && drag.kind, editing: !!editing || !!$('#cellEd') }), afterRemote: liveAfterRemote, saveSoon: () => { if (store.state.dirty) markDirty(); }, openSettings: openSaveDialog, toast });
   document.fonts && document.fonts.ready.then(() => renderAll());
   /* [11/2] 소식지 프로그램의 [🎨 디자인 공방으로 보내기] — 주소에 nlimport=연-월 이 있으면 그 호를 가져온다(같은 호 디자인이 열려 있으면 내용만 반영) */
   const nlm = /[?&]nlimport=(\d{4}-\d{2})/.exec(location.search);
