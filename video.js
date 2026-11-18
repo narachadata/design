@@ -3,10 +3,10 @@
 // (움직이는 층은 요소 상자 크기로 잘라 둠) 매 프레임 층을 변형해 겹쳐 그림. 무작위 효과는 시각으로 정해 미리보기와 저장본이 같음.
 window.NC = window.NC || {};
 NC.video = (function () {
-  const ANIMS = [['none', '없음'], ['fade', '나타나기'], ['rise', '떠오르기'], ['drop', '내려오기'], ['left', '왼쪽에서'], ['right', '오른쪽에서'], ['zoom', '커지며'], ['zoomout', '작아지며'], ['pop', '톡 튀어나오기'], ['bounce', '통통 튀며'], ['spin', '돌며 나타나기'], ['flip', '뒤집으며'], ['blur', '흐릿하게'], ['wipe', '펼치기']];
-  const TEXT_ANIMS = [['type', '타자기'], ['char', '한 글자씩'], ['word', '단어씩'], ['line', '한 줄씩']];
-  const OUTS = [['none', '없음'], ['fade', '사라지기'], ['rise', '위로 사라지기'], ['drop', '아래로 사라지기'], ['left', '왼쪽으로'], ['right', '오른쪽으로'], ['zoom', '작아지며'], ['zoomout', '커지며 사라지기'], ['spin', '돌며 사라지기'], ['blur', '흐릿하게'], ['wipe', '걷어 내기']];
-  const LOOPS = [['none', '없음'], ['pulse', '두근두근'], ['float', '둥실둥실'], ['swing', '흔들흔들'], ['shake', '부르르'], ['blink', '깜빡깜빡'], ['spin', '빙글빙글'], ['beat', '쿵쿵']];
+  const ANIMS = [['none', '없음'], ['fade', '나타나기'], ['rise', '떠오르기'], ['drop', '내려오기'], ['left', '왼쪽에서'], ['right', '오른쪽에서'], ['zoom', '커지며'], ['zoomout', '작아지며'], ['pop', '톡 튀어나오기'], ['bounce', '통통 튀며'], ['spin', '돌며 나타나기'], ['flip', '뒤집으며'], ['blur', '흐릿하게'], ['wipe', '펼치기'], ['slam', '쾅 내려찍기'], ['punch', '줌 펀치'], ['stretch', '쫀득 늘어나기'], ['swipe', '휙 들어오기'], ['mask', '가림막에서 올라오기'], ['glitch', '지지직'], ['flash', '번쩍'], ['roll', '굴러오기'], ['tilt', '기울며 들어오기']];
+  const TEXT_ANIMS = [['type', '타자기'], ['char', '한 글자씩'], ['word', '단어씩'], ['line', '한 줄씩'], ['wordpop', '단어씩 톡 (숏츠 자막)'], ['wordslam', '단어씩 쾅'], ['charpop', '한 글자씩 톡'], ['charup', '한 글자씩 올라오기']];
+  const OUTS = [['none', '없음'], ['fade', '사라지기'], ['rise', '위로 사라지기'], ['drop', '아래로 사라지기'], ['left', '왼쪽으로'], ['right', '오른쪽으로'], ['zoom', '작아지며'], ['zoomout', '커지며 사라지기'], ['spin', '돌며 사라지기'], ['blur', '흐릿하게'], ['wipe', '걷어 내기'], ['pop', '톡 작아지며'], ['punch', '펑 커지며'], ['swipe', '휙 나가기'], ['mask', '아래로 숨기'], ['glitch', '지지직 사라지기'], ['flash', '번쩍 사라지기']];
+  const LOOPS = [['none', '없음'], ['pulse', '두근두근'], ['float', '둥실둥실'], ['swing', '흔들흔들'], ['shake', '부르르'], ['blink', '깜빡깜빡'], ['spin', '빙글빙글'], ['beat', '쿵쿵'], ['wiggle', '꿈틀꿈틀'], ['jelly', '말랑말랑'], ['bob', '통통'], ['tilt', '갸웃갸웃'], ['glow', '반짝반짝']];
   const KBS = [['none', '없음'], ['in', '천천히 다가가기'], ['out', '천천히 물러나기'], ['left', '왼쪽으로 흐르기'], ['right', '오른쪽으로 흐르기'], ['up', '위로 흐르기'], ['down', '아래로 흐르기']];
   const CAMS = [['none', '없음'], ['in', '천천히 다가가기'], ['out', '천천히 물러나기'], ['left', '왼쪽으로 흐르기'], ['right', '오른쪽으로 흐르기']];
   const TRANS = [['soft', '부드럽게 넘김'], ['fade', '겹치며 바뀜'], ['slide', '옆으로 밀기'], ['bounce', '밀고 튕기기'], ['up', '위로 밀기'], ['zoom', '다가오며'], ['pullin', '당겨 들어가기'], ['pullout', '물러나기'], ['whip', '휙 넘기기'], ['spin', '빙글 돌며'], ['blur', '흐려지며 바뀜'], ['flash', '번쩍'], ['black', '검게 넘김'], ['iris', '원으로 열기'], ['wipe', '닦아내기'], ['blinds', '블라인드'], ['glitch', '지지직'], ['shake', '흔들며 바뀜'], ['none', '바로 바뀜'],
@@ -87,8 +87,9 @@ NC.video = (function () {
   function linesOf(units) { const L = []; units.forEach((u, i) => { const l = L[u.line] || (L[u.line] = { x0: Infinity, x1: -Infinity, y: Infinity, y1: -Infinity, first: i, last: i }); l.x0 = Math.min(l.x0, u.x); l.x1 = Math.max(l.x1, u.x + u.w); l.y = Math.min(l.y, u.y); l.y1 = Math.max(l.y1, u.y + u.h); l.last = i; }); return L.filter(Boolean); }
 
   // 한 동작의 모양: 진행률 e(0→1, 1이면 원래 자리)에서 투명도·이동·크기·회전·흐림
+  const cubicOut = p => 1 - Math.pow(1 - p, 3), expoOut = p => p >= 1 ? 1 : 1 - Math.pow(2, -10 * p), elasticOut = p => p <= 0 ? 0 : p >= 1 ? 1 : Math.pow(2, -10 * p) * Math.sin((p * 10 - 0.75) * (2 * Math.PI / 3)) + 1;
   function poseIn(t, e, p, W, H) {
-    const o = { al: 1, dx: 0, dy: 0, s: 1, sx: 1, rot: 0, blur: 0, wipe: 1 };
+    const o = { al: 1, dx: 0, dy: 0, s: 1, sx: 1, sy: 1, rot: 0, blur: 0, wipe: 1, mask: 1, bright: 1 };
     switch (t) {
       case 'fade': o.al = e; break;
       case 'rise': o.al = e; o.dy = (1 - e) * H * 0.06; break;
@@ -103,11 +104,21 @@ NC.video = (function () {
       case 'flip': o.al = clamp01(p * 2); o.sx = Math.max(0.02, Math.sin(Math.PI / 2 * e)); break;
       case 'blur': o.al = e; o.blur = 14 * (1 - e); break;
       case 'wipe': o.wipe = e; break;
+      /* 숏츠용 (캡컷·릴스에서 많이 쓰는 움직임) */
+      case 'slam': { const c = cubicOut(p); o.al = clamp01(p * 5); o.s = 1 + 1.3 * (1 - c); o.blur = 6 * (1 - c); if (p > 0.55 && p < 1) { const k = Math.floor(p * 60); o.dx = (rnd(k, 7) - 0.5) * W * 0.012 * (1 - p) / 0.45; o.dy = (rnd(k, 8) - 0.5) * H * 0.008 * (1 - p) / 0.45; } break; }  /* 크게 날아와 쾅 박히고 살짝 흔들림 */
+      case 'punch': o.al = clamp01(p * 4); o.s = 1.35 - 0.35 * back(p); break;  /* 확 커졌다 제자리 */
+      case 'stretch': { const q = elasticOut(p); o.al = clamp01(p * 4); o.sx = Math.max(0.05, 0.25 + 0.75 * q); o.sy = 1.35 - 0.35 * q; break; }  /* 옆으로 쫀득하게 늘어나며 */
+      case 'swipe': { const q = expoOut(p); o.al = clamp01(p * 3); o.dx = -(1 - q) * W * 0.55; o.sx = 1 + 0.25 * (1 - q); o.blur = 9 * (1 - q); break; }  /* 빠르게 휙 + 잔상 */
+      case 'mask': o.mask = cubicOut(p); break;  /* 보이지 않는 선 아래에서 쑥 올라옴 */
+      case 'glitch': { const k = Math.floor(p * 24); o.dx = (rnd(k, 3) - 0.5) * W * 0.05 * (1 - p); o.al = p < 0.75 ? (rnd(k, 4) > 0.35 ? 1 : 0.25) : 1; o.sx = 1 + (rnd(k, 5) - 0.5) * 0.25 * (1 - p); break; }
+      case 'flash': o.al = clamp01(p * 4); o.bright = 1 + 2.4 * (1 - e); o.s = 1 + 0.06 * (1 - e); break;
+      case 'roll': o.al = e; o.dx = -(1 - e) * W * 0.3; o.rot = -2 * Math.PI * (1 - e); break;
+      case 'tilt': o.al = e; o.rot = -0.3 * (1 - back(p)); o.dy = (1 - e) * H * 0.04; break;
     }
     return o;
   }
   function poseLoop(t, lp, W, H, tt) {
-    const T = Math.max(0.2, Number(lp.T || 1.2)), a = Number(lp.a || 1), o = { al: 1, dx: 0, dy: 0, s: 1, rot: 0, pivotTop: false }, ph = 2 * Math.PI * tt / T;
+    const T = Math.max(0.2, Number(lp.T || 1.2)), a = Number(lp.a || 1), o = { al: 1, dx: 0, dy: 0, s: 1, sx: 1, sy: 1, rot: 0, bright: 1, pivotTop: false }, ph = 2 * Math.PI * tt / T;
     switch (lp.t) {
       case 'pulse': o.s = 1 + 0.04 * a * Math.pow(Math.sin(Math.PI * tt / T), 2); break;
       case 'float': o.dy = 0.012 * H * a * Math.sin(ph); break;
@@ -115,6 +126,11 @@ NC.video = (function () {
       case 'shake': { const k = Math.floor(tt * 20); o.dx = (rnd(k, 1) - 0.5) * 6 * a; o.dy = (rnd(k, 2) - 0.5) * 6 * a; break; }
       case 'blink': o.al = 0.55 + 0.45 * Math.cos(ph); break;
       case 'spin': o.rot = 2 * Math.PI * tt / T; break;
+      case 'wiggle': o.rot = 3 * a * Math.PI / 180 * Math.sin(ph * 2); o.dx = 0.004 * W * a * Math.sin(ph * 3); break;
+      case 'jelly': { const w = Math.sin(ph); o.sx = 1 + 0.05 * a * w; o.sy = 1 - 0.05 * a * w; break; }
+      case 'bob': o.dy = -Math.abs(Math.sin(ph / 2)) * H * 0.014 * a; break;
+      case 'tilt': o.rot = 6 * a * Math.PI / 180 * Math.sin(ph); break;
+      case 'glow': o.bright = 1 + 0.22 * a * (0.5 + 0.5 * Math.sin(ph)); break;
       case 'beat': { const q = (tt % T) / T, b = q < 0.12 ? Math.sin(q / 0.12 * Math.PI) : q > 0.2 && q < 0.32 ? 0.6 * Math.sin((q - 0.2) / 0.12 * Math.PI) : 0; o.s = 1 + 0.06 * a * b; break; }
     }
     return o;
@@ -123,15 +139,16 @@ NC.video = (function () {
   function drawLayer(x, L, t, D, W, H) {
     if (!L.cv && !L.video) return;
     if (!L.video && !L.anim && !L.out && !L.loop && !L.kb) { x.drawImage(L.cv, L.ox, L.oy); return; }
-    let al = 1, dx = 0, dy = 0, s = 1, sx = 1, rot = 0, blur = 0, wipe = 1, unwipe = 0, pivotTop = false, pIn = 1;
-    const mix = o => { al *= o.al; dx += o.dx; dy += o.dy; s *= o.s; sx *= (o.sx || 1); rot += o.rot; blur = Math.max(blur, o.blur || 0); if (o.wipe != null) wipe = Math.min(wipe, o.wipe); if (o.pivotTop) pivotTop = true; };
+    let al = 1, dx = 0, dy = 0, s = 1, sx = 1, sy = 1, rot = 0, blur = 0, wipe = 1, unwipe = 0, mask = 1, bright = 1, pivotTop = false, pIn = 1;
+    const mix = o => { al *= o.al; dx += o.dx; dy += o.dy; s *= o.s; sx *= (o.sx || 1); sy *= (o.sy || 1); rot += o.rot; blur = Math.max(blur, o.blur || 0); if (o.wipe != null) wipe = Math.min(wipe, o.wipe); if (o.mask != null) mask = Math.min(mask, o.mask); if (o.bright) bright *= o.bright; if (o.pivotTop) pivotTop = true; };
     const A = L.anim;
     if (A) { const d = Number(A.d || 0), sp = Math.max(0.05, Number(A.s || 0.8)); pIn = clamp01((t - d) / sp); if (!L.units) { if (pIn <= 0) return; if (pIn < 1) mix(poseIn(A.t, ease(pIn), pIn, W, H)); } }
     if (L.out) { const so = Math.max(0.05, Number(L.out.s || 0.6)), at = Number(L.out.at || 0), pO = clamp01((t - (D - at - so)) / so); if (pO >= 1) return; if (pO > 0) { if (L.out.t === 'wipe') unwipe = ease(pO); else mix(poseIn(L.out.t, ease(1 - pO), 1 - pO, W, H)); } }
     if (L.loop && pIn >= 1) mix(poseLoop(t, L.loop, W, H, t - (A ? Number(A.d || 0) + Number(A.s || 0.8) : 0)));
-    x.save(); if (al < 1) x.globalAlpha = x.globalAlpha * Math.max(0, al); if (blur > 0.3) x.filter = `blur(${blur.toFixed(1)}px)`;
+    x.save(); if (al < 1) x.globalAlpha = x.globalAlpha * Math.max(0, al); { const fl = (blur > 0.3 ? `blur(${blur.toFixed(1)}px) ` : '') + (Math.abs(bright - 1) > 0.01 ? `brightness(${bright.toFixed(2)})` : ''); if (fl) x.filter = fl.trim(); }
+    if (mask < 1 && L.box) { const b = L.box; x.beginPath(); x.rect(b.x - 6, b.y - 6, b.w + 12, b.h + 12); x.clip(); dy += (1 - mask) * (b.h + 12); }  /* 가림막: 상자 밖은 보이지 않고 아래에서 올라옴 */
     const px = L.cx, py = pivotTop ? L.box.y : L.cy;
-    if (dx || dy || s !== 1 || sx !== 1 || rot) { x.translate(px + dx, py + dy); if (rot) x.rotate(rot); x.scale(s * sx, s); x.translate(-px, -py); }
+    if (dx || dy || s !== 1 || sx !== 1 || sy !== 1 || rot) { x.translate(px + dx, py + dy); if (rot) x.rotate(rot); x.scale(s * sx, s * sy); x.translate(-px, -py); }
     if (wipe < 1 || unwipe > 0) { const b = L.box; x.beginPath(); x.rect(b.x - 4 + (b.w + 8) * unwipe, b.y - 4, (b.w + 8) * (wipe - unwipe), b.h + 8); x.clip(); }
     if (L.kb) { // 사진 천천히 움직이기: 사진 상자 안에서 확대·이동
       const b = L.kbox, p0 = L.kb.p0 != null ? Number(L.kb.p0) : 0, p1 = L.kb.p1 != null ? Number(L.kb.p1) : 1, u = p0 + (p1 - p0) * clamp01(t / Math.max(0.1, D)), a = Number(L.kb.a || 0.12), k = L.kb.t; /* p0~p1: 장면을 나눈 조각이 움직임의 어느 구간인지(나눈 자리에서 이어짐) */
@@ -167,10 +184,15 @@ NC.video = (function () {
     if (A.t === 'type') { const n = p * N, k = Math.floor(n); x.beginPath(); L.lines.forEach(l => { if (l.last < k) x.rect(L.ox + l.x0 - 6, L.oy + l.y - 4, l.x1 - l.x0 + 12, l.y1 - l.y + 8); else if (l.first <= k && k < N) { const u = U[k], cut = u.x + u.w * (n - k); x.rect(L.ox + l.x0 - 6, L.oy + l.y - 4, cut - l.x0 + 6, l.y1 - l.y + 8); } }); x.clip(); x.drawImage(L.cv, L.ox, L.oy); return; }
     if (A.t === 'line') { const n = L.lines.length, st = Math.min(0.15, sp * 0.6 / Math.max(1, n)), one = Math.max(0.15, sp - st * (n - 1)); L.lines.forEach((l, i) => { const q = clamp01((t - d - i * st) / one); if (q <= 0) return; const e = ease(q); x.save(); x.globalAlpha *= e; x.beginPath(); x.rect(L.ox + l.x0 - 8, L.oy + l.y - 6, l.x1 - l.x0 + 16, l.y1 - l.y + 12); x.clip(); x.drawImage(L.cv, L.ox, L.oy + (1 - e) * (l.y1 - l.y) * 0.7); x.restore(); }); return; }
     // 한 글자씩·단어씩: 원본의 작은 칸만 옮겨 그림 (빠름)
-    const groups = []; if (A.t === 'word') { let g = null; U.forEach((u, i) => { if (u.sp) { g = null; return; } if (!g || g.line !== u.line) { g = { line: u.line, x: u.x, y: u.y, x1: u.x + u.w, y1: u.y + u.h }; groups.push(g); } else { g.x1 = u.x + u.w; g.y = Math.min(g.y, u.y); g.y1 = Math.max(g.y1, u.y + u.h); } }); }
+    const kind = A.t, byWord = kind === 'word' || kind === 'wordpop' || kind === 'wordslam', fx = kind.replace(/^(word|char)/, '');
+    const groups = []; if (byWord) { let g = null; U.forEach((u, i) => { if (u.sp) { g = null; return; } if (!g || g.line !== u.line) { g = { line: u.line, x: u.x, y: u.y, x1: u.x + u.w, y1: u.y + u.h }; groups.push(g); } else { g.x1 = u.x + u.w; g.y = Math.min(g.y, u.y); g.y1 = Math.max(g.y1, u.y + u.h); } }); }
     else U.forEach(u => { if (!u.sp) groups.push({ x: u.x, y: u.y, x1: u.x + u.w, y1: u.y + u.h }); });
-    const n = groups.length, st = Math.min(A.t === 'word' ? 0.12 : 0.045, sp * 0.7 / Math.max(1, n)), one = Math.max(0.12, sp - st * (n - 1));
-    groups.forEach((g, i) => { const q = clamp01((t - d - i * st) / one); if (q <= 0) return; const e = ease(q), h = g.y1 - g.y, mx = 3, my = Math.round(h * 0.25), sx0 = Math.max(0, g.x - mx), sy0 = Math.max(0, g.y - my), sw = Math.min(L.cv.width - sx0, g.x1 - g.x + mx * 2), sh = Math.min(L.cv.height - sy0, h + my * 2); if (sw <= 0 || sh <= 0) return; x.save(); x.globalAlpha *= e; x.drawImage(L.cv, sx0, sy0, sw, sh, L.ox + sx0, L.oy + sy0 + (1 - e) * h * 0.6, sw, sh); x.restore(); });
+    const n = groups.length, st = Math.min(byWord ? (fx === 'slam' ? 0.16 : 0.12) : 0.045, sp * 0.7 / Math.max(1, n)), one = Math.max(fx ? 0.18 : 0.12, sp - st * (n - 1));
+    groups.forEach((g, i) => { const q = clamp01((t - d - i * st) / one); if (q <= 0) return; const e = ease(q), h = g.y1 - g.y, mx = 3, my = Math.round(h * 0.25), sx0 = Math.max(0, g.x - mx), sy0 = Math.max(0, g.y - my), sw = Math.min(L.cv.width - sx0, g.x1 - g.x + mx * 2), sh = Math.min(L.cv.height - sy0, h + my * 2); if (sw <= 0 || sh <= 0) return; x.save();
+      if (fx === 'pop' || fx === 'slam') { const sc = fx === 'pop' ? Math.max(0.01, 0.3 + 0.7 * back(q)) : 1 + 1.1 * (1 - cubicOut(q)), cxg = L.ox + sx0 + sw / 2, cyg = L.oy + sy0 + sh / 2; x.globalAlpha *= clamp01(q * (fx === 'pop' ? 3 : 5)); x.translate(cxg, cyg); x.scale(sc, sc); x.translate(-cxg, -cyg); x.drawImage(L.cv, sx0, sy0, sw, sh, L.ox + sx0, L.oy + sy0, sw, sh); }  /* 단어(글자)마다 톡 튀어나오거나 쾅 박힘 — 숏츠 자막 */
+      else if (fx === 'up') { x.beginPath(); x.rect(L.ox + sx0, L.oy + sy0, sw, sh); x.clip(); x.drawImage(L.cv, sx0, sy0, sw, sh, L.ox + sx0, L.oy + sy0 + (1 - cubicOut(q)) * sh, sw, sh); }  /* 글자마다 보이지 않는 선 아래에서 쑥 */
+      else { x.globalAlpha *= e; x.drawImage(L.cv, sx0, sy0, sw, sh, L.ox + sx0, L.oy + sy0 + (1 - e) * h * 0.6, sw, sh); }
+      x.restore(); });
   }
   // 한 장면을 장면 시각 t(초)에: 카메라(천천히 다가가기 등)를 건 뒤 층을 차례로
   function drawScene(x, sc, t, W, H) {

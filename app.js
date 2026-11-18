@@ -2615,7 +2615,28 @@ function naraBack() { return '<button class="btn sm nara-back" data-narab title=
 document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-narab]')) { sideTab = 'naracha'; if (newsMode) setNewsMode(false); renderRail(); renderSide(); } });
 function renderRail() { $('#rail').innerHTML = (RAIL.map(([k, t, ic]) => `<button data-tab="${k}" aria-selected="${sideTab === k || (k === 'naracha' && NARA_TABS.includes(sideTab))}" title="${k === 'naracha' ? '나라차 — 캘린더·소식지·상장 등 나라차 전용 기능 모음' : t}"${k === 'naracha' ? ' class="rail-nara"' : ''}><svg class="ic"><use href="#${ic}"/></svg><span>${t}</span></button>`).join('') + '<div class="rail-sp"></div><button data-rx="manual" class="rail-x" title="매뉴얼 — 나라차 운영 상황별 따라 하기 (그림으로)"><svg class="ic"><use href="#i-book"/></svg><span>매뉴얼</span></button><button data-rx="settings" class="rail-x" title="설정 — 화면·영상·저장·도장 정보·출력·정리"><svg class="ic"><use href="#i-settings"/></svg><span>설정</span></button>'); $$('#rail [data-rx]').forEach(b => b.onclick = () => { focusOut(); if (b.dataset.rx === 'settings') openSettings(); else openManual(); }); $$('#rail button[data-tab]').forEach(b => b.onclick = () => { focusOut(); /* 영상 집중 보기에서 왼쪽 메뉴를 누르면 패널이 보이는 보기로 */ sideTab = b.dataset.tab; if (sideTab !== 'news' && newsMode) setNewsMode(false); renderRail(); renderSide(); if (sideTab === 'video') { if (!tlOn()) tlShow(true); } else if (tlOn() && tlOnlyVideo) { if (tl.playing) tlPause(); tlShow(false); } }); }
 /* 매뉴얼 (그림으로 따라 하기) — 준비되기 전까지는 도움말 */
-function openManual() { if (typeof window.NC_openManual === 'function') { window.NC_openManual(); return; } $('#dlgHelp').showModal(); }
+let manCur = (() => { try { return localStorage.getItem('naracal-man-last') || 'start'; } catch (e) { return 'start'; } })();
+function openManual(id) {
+  const M = window.NC_MANUAL || []; if (!M.length) { $('#dlgHelp').showModal(); return; } if (id) manCur = id; if (!M.some(x => x.id === manCur)) manCur = M[0].id;
+  let d = $('#dlgManual');
+  if (!d) { d = document.createElement('dialog'); d.id = 'dlgManual'; d.className = 'mandlg'; d.innerHTML = `<div class="dhead"><h2>📘 매뉴얼 <small>나라차 운영 상황별 따라 하기 — 그림의 번호를 보고 따라 하세요</small></h2><button class="btn sm" data-close>닫기</button></div><div class="manbody"><nav id="manNav"></nav><div id="manMain"></div></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close();
+    d.addEventListener('click', e => { const n = e.target.closest('[data-man]'); if (n) { manCur = n.dataset.man; try { localStorage.setItem('naracal-man-last', manCur); } catch (er) {} renderManual(); $('#manMain').scrollTop = 0; return; }
+      const g = e.target.closest('[data-mgo]'); if (g) { d.close(); manualGo(g.dataset.mgo); return; }
+      const im = e.target.closest('.mimg'); if (im) { manZoom(im); return; }
+      const mk = e.target.closest('[data-mkh]'); if (mk) { const box = mk.closest('.manstep'); box.querySelectorAll('.mk').forEach(x => x.classList.toggle('hot', x.dataset.mk === mk.dataset.mkh)); } });
+    d.addEventListener('mouseover', e => { const li = e.target.closest('[data-mkh]'); if (!li) return; const box = li.closest('.manstep'); box.querySelectorAll('.mk').forEach(x => x.classList.toggle('hot', x.dataset.mk === li.dataset.mkh)); }); }
+  renderManual(); if (!d.open) d.showModal();
+}
+function renderManual() {
+  const M = window.NC_MANUAL || [], S = M.find(x => x.id === manCur) || M[0], i = M.indexOf(S), nx = M[i + 1];
+  $('#manNav').innerHTML = M.map(x => `<button data-man="${x.id}" class="${x.id === S.id ? 'on' : ''}"><span class="mi">${x.icon}</span><span><b>${esc(x.title)}</b><small>${esc(x.when)}</small></span></button>`).join('');
+  const circ = n => '①②③④⑤⑥⑦⑧⑨⑩'[n] || (n + 1);
+  $('#manMain').innerHTML = `<h3 class="mantitle">${S.icon} ${esc(S.title)}</h3><p class="mansum">${esc(S.sum)}</p>` + S.steps.map((st, k) => `<section class="manstep"><div class="mshead"><span class="msn">${k + 1}</span><b>${esc(st.t)}</b></div><p>${st.d}</p>${st.img ? `<div class="mimg" title="누르면 크게 보기"><img src="assets/manual/${st.img}" alt="${esc(st.t)}" loading="lazy">${(st.marks || []).map((m, j) => `<i class="mk" data-mk="${j}" style="left:${m[0]}%;top:${m[1]}%">${j + 1}</i>`).join('')}<span class="mzoom">🔍 크게</span></div>` : ''}${(st.marks || []).length ? `<ol class="mklist">${st.marks.map((m, j) => `<li data-mkh="${j}"><span>${circ(j)}</span>${esc(m[2])}</li>`).join('')}</ol>` : ''}${(st.go || []).length ? `<div class="mgo">${st.go.map(([g, t]) => `<button class="btn sm primary" data-mgo="${g}">${esc(t)} →</button>`).join('')}</div>` : ''}</section>`).join('') + (nx ? `<div class="mannext"><button class="btn" data-man="${nx.id}">다음: ${nx.icon} ${esc(nx.title)} ›</button></div>` : '');
+}
+function manZoom(im) { let z = $('#manZoom'); if (z) z.remove(); z = document.createElement('div'); z.id = 'manZoom'; z.innerHTML = `<div class="mzwrap">${im.innerHTML.replace('<span class="mzoom">🔍 크게</span>', '')}</div><button class="btn" data-mzc>닫기 (Esc)</button>`; $('#dlgManual').appendChild(z); const close = () => { z.remove(); document.removeEventListener('keydown', key, true); }; const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }; document.addEventListener('keydown', key, true); z.onclick = close; }
+/* 매뉴얼의 '바로 해 보기' */
+function manualGo(g) { const rail = k => { const b = $(`#rail [data-tab="${k}"]`); if (b) b.click(); };
+  ({ tpl: () => rail('tpl'), nara: () => rail('naracha'), elems: () => rail('elems'), video: () => rail('video'), settings: () => openSettings(), cert: () => naraGo('cert'), news: () => naraGo('news'), calendar: () => naraGo('calendar'), wizard: () => openWizard(doc.calendar.year || 2027), rules: () => openRules(), download: () => openDownload(), vkeys: () => tlKeysHelp(), filemenu: () => $('#btnFileMenu').click() }[g] || (() => {}))(); }
 /* ---- 설정 (세로 메뉴 맨 아래 ⚙): 여러 곳에 흩어져 있던 설정을 한곳에. 바꾸면 바로 적용되고 이 PC에 기억(일부는 동기화 폴더로 두 PC 같이) ---- */
 let setTab = 'view';
 function openSettings(tab) {
@@ -6377,9 +6398,10 @@ if (/[?&]qa\b/.test(location.search)) window.NCQA = { tlShow, live: NC.live, con
 // 알림은 맨 위층(popover)에 띄움: 대화창이 열려 있어도 어두운 배경 뒤에 깔리지 않게. 글이 길면 더 오래
 function toastShow(t) { t.hidden = false; try { if (t.showPopover) { if (t.matches(':popover-open')) t.hidePopover(); t.showPopover(); } } catch (e) {} }
 function toastHide(t) { t.hidden = true; try { if (t.hidePopover && t.matches(':popover-open')) t.hidePopover(); } catch (e) {} }
-let toastTimer; function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); toastShow(t); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastHide(t), Math.max(err ? 5000 : 2500, String(msg).length * 70)); }
+function toastEl() { let t = $('#toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; t.hidden = true; try { t.setAttribute('popover', 'manual'); } catch (e) {} document.body.appendChild(t); } return t; }  /* 알림 칸이 없어졌어도 다시 만듦 */
+let toastTimer; function toast(msg, err) { const t = toastEl(); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); toastShow(t); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastHide(t), Math.max(err ? 5000 : 2500, String(msg).length * 70)); }
 // 큰 동작 뒤: 알림에 '되돌리기' 단추 (Ctrl+Z와 같음). after: 되돌린 뒤 할 일
-function toastUndo(msg, after) { const t = $('#toast'); t.className = 'toast act'; t.innerHTML = `<span>${esc(msg)}</span><button type="button">되돌리기</button>`; toastShow(t); t.querySelector('button').onclick = () => { toastHide(t); undo(); if (after) after(); toast('되돌렸습니다 (다시 하려면 Ctrl+Shift+Z)'); }; clearTimeout(toastTimer); toastTimer = setTimeout(() => toastHide(t), 7000); }
+function toastUndo(msg, after) { const t = toastEl(); t.className = 'toast act'; t.innerHTML = `<span>${esc(msg)}</span><button type="button">되돌리기</button>`; toastShow(t); t.querySelector('button').onclick = () => { toastHide(t); undo(); if (after) after(); toast('되돌렸습니다 (다시 하려면 Ctrl+Shift+Z)'); }; clearTimeout(toastTimer); toastTimer = setTimeout(() => toastHide(t), 7000); }
 
 /* ---- 시작 ---- */
 // 같은 문서인지 (문서 번호가 있으면 번호로, 없으면 이름으로)
