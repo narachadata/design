@@ -73,13 +73,19 @@ function redo() { flushNudge(); if (hptr < hist.length - 1) { hptr++; if (NC.liv
 function liveStep(a, b, meta) { endEdit(); const keep = pageOrderKeep(); NC.live.step(hist[a], hist[b], histMeta[a], histMeta[b]); if (meta) { cur = meta.cur; sel = meta.sel.slice(); } keep(); cur = clamp(cur, 0, doc.pages.length - 1); sel = sel.filter(id => find(id)); cellSel = null; renderAll(); markDirty(); }
 
 /* ---------- 저장 · 동기화 ---------- */
+/* 같은 브라우저 탭 여러 개: 브라우저 저장 칸('doc')은 하나라 탭끼리 덮어씀 → ① 탭마다 지금 문서 번호를 그 탭에만 기억(sessionStorage — 새로 고쳐도 남음)
+   ② 다른 탭이 열려 있으면 문서별 칸('doc@번호', 최근 8개)에도 저장 ③ 새로 고칠 때 이 탭의 문서를 다시 엶 ④ '직전 문서 되살리기'에 다른 탭에서 쓰던 문서도 나옴 */
+const TAB_KEY = 'naracal-tabdoc'; let tabMulti = false;
+function tabDocMark() { try { if (doc && doc.docId) sessionStorage.setItem(TAB_KEY, doc.docId); } catch (e) {} }
+async function slotSave() { if (!tabMulti || !doc || !doc.docId || freshDraft) return; try { await store.idbSet('doc@' + doc.docId, doc); let ix = (await store.idbGet('doc-slots')) || []; ix = [{ id: doc.docId, name: doc.name || '디자인', n: doc.pages.length, t: Date.now() }].concat(ix.filter(x => x && x.id && x.id !== doc.docId)); const drop = ix.slice(8); await store.idbSet('doc-slots', ix.slice(0, 8)); drop.forEach(x => store.idbDel('doc@' + x.id).catch(() => {})); } catch (e) { console.warn('탭 문서 칸 저장 실패', e); } }
+async function tabPick(saved) { let id = null; try { id = sessionStorage.getItem(TAB_KEY); } catch (e) {} if (!id || (saved && saved.docId === id)) return saved; try { const s2 = await store.idbGet('doc@' + id); if (s2 && s2.pages) return s2; } catch (e) {} return saved; }
 // 창을 닫거나 새로 고칠 때: 미뤄 둔 미세 이동을 기록하고 브라우저 저장을 바로, 파일 저장이 남았으면 경고
-addEventListener('pagehide', () => { try { flushNudge(); if (store.state.dirty) store.idbSet('doc', doc); } catch (e) {} });
-addEventListener('beforeunload', e => { try { flushNudge(); store.idbSet('doc', doc); } catch (err) {} if (store.state.handle && store.state.dirty && !store.state.conflict && !NC.live.deferSave()) { saveFileNow(); e.preventDefault(); e.returnValue = ''; } });
+addEventListener('pagehide', () => { try { flushNudge(); if (store.state.dirty) store.idbSet('doc', doc); if (tabMulti && doc.docId) store.idbSet('doc@' + doc.docId, doc); tabDocMark(); } catch (e) {} });
+addEventListener('beforeunload', e => { try { flushNudge(); store.idbSet('doc', doc); if (tabMulti && doc.docId) store.idbSet('doc@' + doc.docId, doc); tabDocMark(); } catch (err) {} if (store.state.handle && store.state.dirty && !store.state.conflict && !NC.live.deferSave()) { saveFileNow(); e.preventDefault(); e.returnValue = ''; } });
 let idbTimer, fileTimer, freshDraft = false, idbFailShown = false; const liveAssetKeys = new Set(); // freshDraft: 처음 열 때 만든 초안을 아직 고치지 않음
 function markDirty() {
   freshDraft = false; doc.updatedAt = Date.now(); store.state.dirty = true; store.state.seq++;
-  clearTimeout(idbTimer); idbTimer = setTimeout(async () => { try { await store.idbSet('doc', doc); store.idbSet('docMeta', { dirty: !!store.state.dirty, docId: doc.docId || '', base: store.state.lastSaveId || '', t: Date.now() }).catch(() => {}); idbFailShown = false; if (!store.state.handle) setStatus('브라우저에 저장됨 ' + tnow()); } catch (e) { setStatus('브라우저 저장 실패'); if (!idbFailShown) { idbFailShown = true; toast(`브라우저 저장소에 저장하지 못했습니다(${e.name === 'QuotaExceededError' ? '저장 공간 부족' : e.message || e.name}). 저장 ▾ → 동기화 폴더에 저장하거나 내려받아 두세요`, true); } } }, 900);
+  clearTimeout(idbTimer); idbTimer = setTimeout(async () => { try { await store.idbSet('doc', doc); tabDocMark(); slotSave(); store.idbSet('docMeta', { dirty: !!store.state.dirty, docId: doc.docId || '', base: store.state.lastSaveId || '', t: Date.now() }).catch(() => {}); idbFailShown = false; if (!store.state.handle) setStatus('브라우저에 저장됨 ' + tnow()); } catch (e) { setStatus('브라우저 저장 실패'); if (!idbFailShown) { idbFailShown = true; toast(`브라우저 저장소에 저장하지 못했습니다(${e.name === 'QuotaExceededError' ? '저장 공간 부족' : e.message || e.name}). 저장 ▾ → 동기화 폴더에 저장하거나 내려받아 두세요`, true); } } }, 900);
   if (NC.live.deferSave() && store.state.handle && !store.state.needPerm && Object.keys(doc.assets || {}).some(k => !liveAssetKeys.has(k))) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 2500); } /* 실시간 중 이 PC가 넣은 사진은 실시간 통로로 가지 않으므로 이 PC가 직접 파일에 한 번 저장 */
   if (store.state.handle && !store.state.needPerm && !NC.live.deferSave()) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 1500); } // 파일 권한을 다시 받기 전에는 브라우저에만 저장. 실시간 연결 중엔 먼저 들어온 PC가 저장
   updateSaveBadge(); NC.live.changed();
@@ -187,7 +193,7 @@ async function loadDoc(j, from, quiet) {
   try { fixLunarHolidays(); } catch (e) {}
   if ($('#dlPanel')) setTimeout(() => { if ($('#dlPanel')) renderDownload(); }, 0);
   liveAssetKeys.clear(); Object.keys(doc.assets || {}).forEach(k => liveAssetKeys.add(k));
-  renderAll(); if (from) toast(from);
+  tabDocMark(); renderAll(); if (from) toast(from);
   checkMedia(!quiet);
 }
 async function checkExternalChange() {
@@ -3530,14 +3536,15 @@ async function keepCurrentDoc() {
 const keepNote = () => store.state.handle ? '지금 문서는 파일에 저장됩니다' : '지금 문서는 파일로 저장하지 않았지만 저장 ▾ → 직전 문서 되살리기로 되살릴 수 있습니다';
 async function restorePrevDoc(pick) {
   let j = null, L = []; try { L = ((await store.idbGet('doc-prevs')) || []).filter(x => x && x.pages); } catch (e) {}
+  try { const ix = (await store.idbGet('doc-slots')) || []; for (const x of ix) { if (!x || !x.id || x.id === doc.docId || L.some(y => y.docId === x.id)) continue; const s2 = await store.idbGet('doc@' + x.id); if (s2 && s2.pages) L.push(Object.assign(s2, { _keptAt: x.t, _tab: true })); } } catch (e) {}  /* 다른 탭에서 쓰던 문서 */
   if (pick != null) j = L[pick]; else if (L.length > 1) { /* 여러 개면 고르게 */
     let d = $('#dlgPrev'); if (d) d.remove(); d = document.createElement('dialog'); d.id = 'dlgPrev'; d.className = 'nw-dlg';
-    d.innerHTML = `<div class="dhead"><h2>직전 문서 되살리기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="max-width:520px"><p class="hint">파일로 저장하지 않은 채 다른 문서로 넘어간 문서들입니다 (최근 6개).</p>${L.map((x, i) => `<button class="btn full" data-prev="${i}" style="justify-content:space-between;margin-bottom:6px"><span>${esc(x.name || '디자인')} <small>${x.pages.length}쪽</small></span><small>${x._keptAt ? new Date(x._keptAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</small></button>`).join('')}</div>`;
+    d.innerHTML = `<div class="dhead"><h2>직전 문서 되살리기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="max-width:520px"><p class="hint">파일로 저장하지 않은 채 다른 문서로 넘어간 문서와, 같은 브라우저의 다른 탭에서 쓰던 문서입니다.</p>${L.map((x, i) => `<button class="btn full" data-prev="${i}" style="justify-content:space-between;margin-bottom:6px"><span>${esc(x.name || '디자인')} <small>${x.pages.length}쪽${x._tab ? ' · 다른 탭에서 쓰던 문서' : x.docId && x.docId === doc.docId ? ' · 지금 연 문서의 예전 상태' : ''}</small></span><small>${x._keptAt ? new Date(x._keptAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</small></button>`).join('')}</div>`;
     document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); d.onclick = e => { const b = e.target.closest('[data-prev]'); if (b) { d.close(); restorePrevDoc(Number(b.dataset.prev)); } }; d.showModal(); return; }
   else j = L[0];
   if (!j) { try { j = await store.idbGet('doc-prev'); } catch (e) {} }
   if (!j || !j.pages) { toast('되살릴 직전 문서가 없습니다', true); return; }
-  if (!(await keepCurrentDoc())) return; await store.disconnect(); delete j._keptAt; await loadDoc(j, `직전 문서 "${j.name || '디자인'}"를 되살렸습니다 (방금 보던 문서는 다시 '직전 문서'로 보관)`); updateSaveBadge();
+  if (!(await keepCurrentDoc())) return; await store.disconnect(); delete j._keptAt; delete j._tab; await loadDoc(j, `직전 문서 "${j.name || '디자인'}"를 되살렸습니다 (방금 보던 문서는 다시 '직전 문서'로 보관)`); updateSaveBadge();
 }
 async function createDesign(w, h, name, fmtId) {
   if (fmtId) { const r = recentFormats().filter(x => x !== fmtId); r.unshift(fmtId); try { localStorage.setItem('naracal-recent-formats', JSON.stringify(r.slice(0, 6))); } catch (e) {} }
@@ -6238,7 +6245,7 @@ function movedNote(j) { const who = j.savedBy || '다른 PC', at = j.savedAt ? n
 function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.docId : (a.name || '') === (b.name || '')); }
 /* 같은 브라우저에서 공방 탭이 둘 이상이면 알림 — 폴더 없이 쓸 때 '브라우저 저장' 칸을 같이 써서 한쪽 작업이 사라질 수 있음 */
 (function tabWatch() { try { const bc = new BroadcastChannel('naracal-tabs'), me = Math.random().toString(36).slice(2); let warned = false; const warn = (other) => { if (warned || (NC.live.active() && other && other === (doc && doc.docId))) return; warned = true; toast('다른 탭(창)에서도 디자인 공방이 열려 있습니다. 같은 문서를 두 탭에서 고치면 한쪽 작업이 사라질 수 있으니 한 탭만 쓰세요', true); };
-  bc.onmessage = e => { const m = e.data || {}; if (m.id === me) return; if (m.t === 'hi') { bc.postMessage({ t: 'here', id: me, docId: doc && doc.docId }); warn(m.docId); } else if (m.t === 'here') warn(m.docId); }; setTimeout(() => bc.postMessage({ t: 'hi', id: me, docId: doc && doc.docId }), 3000); } catch (e) {} })();
+  bc.onmessage = e => { const m = e.data || {}; if (m.id === me) return; if (!tabMulti) { tabMulti = true; slotSave(); } if (m.t === 'hi') { bc.postMessage({ t: 'here', id: me, docId: doc && doc.docId }); warn(m.docId); } else if (m.t === 'here') warn(m.docId); }; setTimeout(() => bc.postMessage({ t: 'hi', id: me, docId: doc && doc.docId }), 3000); } catch (e) {} })();
 (async function init() {
   doc = newDoc(); renderRail();
   let loaded = false;
@@ -6257,7 +6264,7 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
         await loadDoc(j, '연결된 파일을 열었습니다'); updateSaveBadge();
       }; }
   } catch (e) { console.warn(e); }
-  if (!loaded) { try { const saved = await store.idbGet('doc'); if (saved) { await loadDoc(saved); loaded = true; setStatus('브라우저 저장본을 불러왔습니다'); } } catch (e) {} }
+  if (!loaded) { try { const saved0 = await store.idbGet('doc'), saved = await tabPick(saved0); if (saved) { await loadDoc(saved); loaded = true; setStatus(saved !== saved0 ? '이 탭에서 쓰던 문서를 불러왔습니다' : '브라우저 저장본을 불러왔습니다'); } } catch (e) {} }
   if (!loaded) { doc = newDoc(); doc.calendar.year = 2027; doc.name = '2027 인성 캘린더'; doc.pages = CAL.buildPages(doc, uid, { year: 2027, kind: 'full' }); ensureAllHolidays(); $('#pname').value = doc.name; hist = [snapshot()]; histMeta = [{ cur: 0, sel: [] }]; hptr = 0; renderAll(); setStatus('2027년 캘린더 초안을 만들었습니다. 공휴일은 자동으로 들어갔습니다.'); freshDraft = true; }
   // 동기화 폴더(구글 드라이브): 허락돼 있으면 바로 맞추고, 아니면 한 번 눌러 허락받기
   try {
