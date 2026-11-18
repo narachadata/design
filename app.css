@@ -1333,3 +1333,16 @@ dialog:focus{outline:none}
 #canvas .el.tplf{outline:calc(1.5px / var(--k,1)) dashed #f59e0b;outline-offset:calc(1px / var(--k,1));background:rgba(245,158,11,.12)}
 .cchips{align-items:center}.cchips .cchips-l{font-size:11.5px;color:var(--ui-muted);margin-right:2px}
 .cchips .cchip{border-style:dashed;border-color:#f59e0b;background:rgba(245,158,11,.10)}
+.rnh{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--ui-muted);white-space:nowrap;cursor:pointer}.rnh input{margin:0}
+.el-swap{margin:4px 0 6px;padding:6px 8px;background:#FFF7E0;border:1px solid #F2D27A;border-radius:8px;color:#6B4E00}
+/* 세로 메뉴 '나라차' 모음: 페이지 아래, 위아래 가는 선으로 기본 메뉴와 구분 */
+.rail button.rail-nara{position:relative;margin:3px 0;color:#ffd54a}
+.rail button.rail-nara::before,.rail button.rail-nara::after{content:"";position:absolute;left:10px;right:10px;height:1px;background:rgba(255,255,255,.14)}
+.rail button.rail-nara::before{top:-3px}.rail button.rail-nara::after{bottom:-3px}
+.rail button.rail-nara[aria-selected=true]{color:#fff}
+.nara-list{display:flex;flex-direction:column;gap:8px}
+.nara-card{display:flex;align-items:center;gap:10px;text-align:left;width:100%;padding:12px;border:1px solid var(--ui-line,#e3e6ee);border-radius:12px;background:#fff;cursor:pointer;color:inherit;font:inherit}
+.nara-card:hover{border-color:#2f6fe4;background:#f5f8ff}.nara-card .ic{width:24px;height:24px;color:#2f5bea}
+.nara-card span{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}.nara-card b{font-size:14px}.nara-card small{font-size:12px;color:var(--ui-muted);line-height:1.4}
+.nara-card i{font-style:normal;font-size:20px;color:#9aa3b8}
+.nara-back{margin:0 0 8px}

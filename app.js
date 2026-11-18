@@ -64,11 +64,13 @@ function commit() { tlTimingSnap = null; if (!certTplBusy && doc && doc.cert && 
 function amendCommit() { if (hptr < 0) return commit(); hist[hptr] = snapshot(); histMeta[hptr].rn = NC.live.rn; markDirty(); }
 let nudgeTimer = null; function commitSoon() { clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { nudgeTimer = null; commit(); }, 450); }
 function flushNudge() { if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; commit(); } }
-function restore(s, meta) { const live = {}; HIST_LIVE.forEach(k => { live[k] = doc[k]; }); doc = Object.assign(JSON.parse(s), live); if (meta) { cur = meta.cur; sel = meta.sel.slice(); } cur = clamp(cur, 0, doc.pages.length - 1); sel = sel.filter(id => find(id)); cellSel = null; renderAll(); updateToolbarState(); markDirty(); if (tl.open && !tl.playing) pgmSoon(); }
+/* 쪽 순서만 바뀐 되돌리기·다시 하기는 보고 있던 그 쪽을 따라감 (전에는 같은 번호의 다른 쪽이 보였음) */
+function pageOrderKeep() { const ids = doc.pages.map(p => p.id).join('|'), pid = doc.pages[cur] && doc.pages[cur].id; return () => { const ids2 = doc.pages.map(p => p.id); if (pid && ids2.join('|') !== ids && ids2.slice().sort().join('|') === ids.split('|').sort().join('|')) { const j = ids2.indexOf(pid); if (j >= 0) cur = j; } }; }
+function restore(s, meta) { const keep = pageOrderKeep(), live = {}; HIST_LIVE.forEach(k => { live[k] = doc[k]; }); doc = Object.assign(JSON.parse(s), live); if (meta) { cur = meta.cur; sel = meta.sel.slice(); } keep(); cur = clamp(cur, 0, doc.pages.length - 1); sel = sel.filter(id => find(id)); cellSel = null; renderAll(); updateToolbarState(); markDirty(); if (tl.open && !tl.playing) pgmSoon(); }
 function undo() { flushNudge(); if (hptr > 0) { const m = histMeta[hptr]; hptr--; if (NC.live.peers()) liveStep(hptr + 1, hptr, m); else restore(hist[hptr], m); } }
 function redo() { flushNudge(); if (hptr < hist.length - 1) { hptr++; if (NC.live.peers()) liveStep(hptr - 1, hptr, histMeta[hptr]); else restore(hist[hptr], histMeta[hptr]); } }
 // 실시간 연결 중의 되돌리기: 기록 a→b 사이의 내 변경만 지금 문서에 적용 (그 사이 받은 상대 변경은 건드리지 않음)
-function liveStep(a, b, meta) { endEdit(); NC.live.step(hist[a], hist[b], histMeta[a], histMeta[b]); if (meta) { cur = meta.cur; sel = meta.sel.slice(); } cur = clamp(cur, 0, doc.pages.length - 1); sel = sel.filter(id => find(id)); cellSel = null; renderAll(); markDirty(); }
+function liveStep(a, b, meta) { endEdit(); const keep = pageOrderKeep(); NC.live.step(hist[a], hist[b], histMeta[a], histMeta[b]); if (meta) { cur = meta.cur; sel = meta.sel.slice(); } keep(); cur = clamp(cur, 0, doc.pages.length - 1); sel = sel.filter(id => find(id)); cellSel = null; renderAll(); markDirty(); }
 
 /* ---------- 저장 · 동기화 ---------- */
 // 창을 닫거나 새로 고칠 때: 미뤄 둔 미세 이동을 기록하고 브라우저 저장을 바로, 파일 저장이 남았으면 경고
@@ -442,10 +444,11 @@ function fitCanvas() {
   const k = zoom || Math.max(0.03, Math.min(Math.max(w, 60) / (doc.w * MM), Math.max(h, 60) / (doc.h * MM)));
   // 문서 밖으로 나간 요소가 있으면 그만큼 작업 화면을 넓혀 스크롤로 닿게 함 (좌우·위아래 같은 폭이라 페이지가 가운데에 그대로)
   const ov = pageOverflow(page()), px = Math.ceil(Math.max(ov.l, ov.r) * MM * k), py = Math.ceil(Math.max(ov.t, ov.b) * MM * k);
-  const sc = $('#scroller'), prev = fitCanvas.pad || [0, 0];
+  const sc = $('#scroller'), prev = fitCanvas.pad || [0, 0], padCh = sc && (px !== prev[0] || py !== prev[1]) && prev.k === k, r0 = padCh ? $('#canvasWrap').getBoundingClientRect() : null;
   $('#canvasWrap').style.margin = `${top + py}px ${40 + px}px ${bot + py}px`; // 도구 막대가 두 줄로 접혀도 페이지를 가리지 않게
-  if (sc && (px !== prev[0] || py !== prev[1])) { const ddx = px - prev[0], ddy = py - prev[1]; queueMicrotask(() => { sc.scrollLeft += ddx; sc.scrollTop += ddy; }); } // 크기가 다 정해진 뒤 스크롤을 옮겨 페이지가 제자리에
-  fitCanvas.pad = [px, py];
+  /* 여백이 바뀌면(쪽 밖 요소) 바뀌기 전 페이지 자리를 재 두었다가 스크롤로 되돌림 — 여백 차이만큼만 옮기면 '가운데 정렬 → 넘침'으로 바뀔 때 정렬 기준이 달라져 화면이 튀었음 */
+  if (padCh) queueMicrotask(() => { const r1 = $('#canvasWrap').getBoundingClientRect(); sc.scrollLeft += r1.x - r0.x; sc.scrollTop += r1.y - r0.y; });
+  fitCanvas.pad = [px, py]; fitCanvas.pad.k = k;
   const c = $('#canvas'); c.style.transform = `scale(${k})`; c.dataset.k = k; const gh = $('#ghost'); if (gh) gh.style.transform = `scale(${k})`;
   const wrap = $('#canvasWrap'); wrap.style.width = (doc.w * MM * k) + 'px'; wrap.style.height = (doc.h * MM * k) + 'px';
   const o = $('#ovl'); o.style.transform = `scale(${k})`; o.style.setProperty('--k', k); o.style.width = (doc.w * MM) + 'px'; o.style.height = (doc.h * MM) + 'px';
@@ -1710,8 +1713,8 @@ function addSfx(ref, name, quiet) {
 }
 
 // 영상 편집 단축키 (프리미어·캡컷·필모라와 같은 키). 타임라인이 열려 있을 때만, 글자 입력 중에는 동작하지 않음
-const TL_KEYS = [['Space', '재생 / 멈춤'], ['K', '멈춤'], ['L', '재생 — 거듭 누르면 2·4·8배(소리 없음)'], ['J', '거꾸로 재생 — 거듭 누르면 2·4·8배'], ['← →', '한 프레임 뒤로 / 앞으로'], ['Shift + ← →', '1초 뒤로 / 앞으로'], ['↑ ↓', '앞 장면 / 다음 장면으로'], ['Home / End', '처음 / 끝으로'],
-  ['B  /  Ctrl + B', '재생 헤드에서 자르기 (Ctrl + K도 됨)'], ['S', '훑어보기 켬/끔 — 타임라인 위에서 마우스를 움직여 미리 보기'], ['I  /  O  /  X', '범위 시작 / 끝 / 지금 장면(고른 클립)을 범위로 — Alt + X 지우기'], ['/', '범위만 재생'], ['Control + T  /  Control + Shift + T  (Alt + T)', '제목 넣기 / 하단 이름표 넣기'], ['Alt + F', '정지 화면 넣기 (파이널컷 ⌥F)'], ['Control + D  /  Alt + D', '고른 장면·클립의 길이를 숫자로'], ['Control + =  /  −   (Alt + = / −)', '고른 소리 음량 1dB 올리기 / 내리기'], ['Control + Shift + S  (Alt + Shift + S)', '동영상 소리 분리 (따로 트랙으로)'], ['Shift + N', '동영상 속도 보통(1배)으로'], ['Alt + W', '빈 장면 끼워 넣기'], ['Alt + 끌기', '클립 복제'], ['Shift + Ctrl + B', '모두 자르기: 재생 헤드를 지나는 장면·자막·소리를 한 번에'], ['Q', '장면 앞부분을 재생 헤드까지 잘라내기'], ['W', '장면 뒷부분을 재생 헤드부터 잘라내기'], [';  /  \'', '앞 · 다음 편집점으로 (장면 경계와 클립 시작·끝)'], ['Alt + [  /  Alt + ]', '재생 헤드 앞 · 뒤 잘라내기 (Q · W와 같음, 파이널컷 방식)'], ['Delete', '고른 클립 지우기 · 장면을 고르면 리플 삭제(뒤 장면이 당겨지고, 그 장면에 붙은 자막·소리도 함께)'], ['Shift + Delete', '장면을 빈 틈으로 바꾸기 (길이·뒤 위치는 그대로)'], ['N', '스냅 켜기 / 끄기 (끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙기)'], ['M', '마커 넣기 (재생 중에도 · 두 번 눌러 이름 바꾸기·지우기)'], ['Ctrl + ;  /  Ctrl + \'', '앞 · 다음 마커로'], ['V', '고른 클립 끄기 / 켜기 (지우지 않고 미리보기·저장에서 빼기)'], ['Ctrl + Z', '되돌리기'], ['Ctrl + Shift + Z', '다시'],
+const TL_KEYS = [['Space', '재생 / 멈춤'], ['K', '멈춤'], ['L', '재생 — 거듭 누르면 2·4·8배(소리 없음)'], ['J', '거꾸로 재생 — 거듭 누르면 2·4·8배'], ['K를 누른 채 J / L', '한 프레임 뒤로 / 앞으로'], ['← →', '한 프레임 뒤로 / 앞으로'], ['Shift + ← →', '1초 뒤로 / 앞으로'], ['↑ ↓', '앞 장면 / 다음 장면으로'], ['Home / End', '처음 / 끝으로'],
+  ['B  /  Ctrl + B', '재생 헤드에서 자르기 (Ctrl + K도 됨)'], ['S', '훑어보기 켬/끔 — 타임라인 위에서 마우스를 움직여 미리 보기'], ['I  /  O  /  X', '범위 시작 / 끝 / 지금 장면(고른 클립)을 범위로 — Alt + X 지우기'], ['/', '범위만 재생'], ['Delete (범위가 있을 때)', '범위 잘라 내기 — 뒤 장면·자막·소리·마커가 당겨짐'], ['Control + T  /  Control + Shift + T  (Alt + T)', '제목 넣기 / 하단 이름표 넣기'], ['Alt + F', '정지 화면 넣기 (파이널컷 ⌥F)'], ['Control + D  /  Alt + D', '고른 장면·클립의 길이를 숫자로'], ['Control + =  /  −   (Alt + = / −)', '고른 소리 음량 1dB 올리기 / 내리기'], ['Control + Shift + S  (Alt + Shift + S)', '동영상 소리 분리 (따로 트랙으로)'], ['Shift + N', '동영상 속도 보통(1배)으로'], ['Alt + W', '빈 장면 끼워 넣기'], ['Alt + 끌기', '클립 복제'], ['Alt + 장면 오른쪽 끝 끌기', '롤 편집: 경계만 옮김 (이 장면이 늘면 다음 장면이 줄고 전체 길이는 그대로)'], ['Shift + Ctrl + B', '모두 자르기: 재생 헤드를 지나는 장면·자막·소리를 한 번에'], ['Q', '장면 앞부분을 재생 헤드까지 잘라내기'], ['W', '장면 뒷부분을 재생 헤드부터 잘라내기'], [';  /  \'', '앞 · 다음 편집점으로 (장면 경계와 클립 시작·끝)'], ['Alt + [  /  Alt + ]', '재생 헤드 앞 · 뒤 잘라내기 (Q · W와 같음, 파이널컷 방식)'], ['Delete', '고른 클립 지우기 · 장면을 고르면 리플 삭제(뒤 장면이 당겨지고, 그 장면에 붙은 자막·소리도 함께)'], ['Shift + Delete', '장면을 빈 틈으로 바꾸기 (길이·뒤 위치는 그대로)'], ['N', '스냅 켜기 / 끄기 (끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙기)'], ['M', '마커 넣기 (재생 중에도 · 두 번 눌러 이름 바꾸기·지우기)'], ['Ctrl + ;  /  Ctrl + \'', '앞 · 다음 마커로'], ['V', '고른 클립 끄기 / 켜기 (지우지 않고 미리보기·저장에서 빼기)'], ['Ctrl + Z', '되돌리기'], ['Ctrl + Shift + Z', '다시'],
   ['T', '재생 위치에 글자 넣기'], ['C', '재생 위치에 자막 넣기'], ['R', '음성 녹음 시작 / 멈춤'], ['Ctrl + =  /  Ctrl + −', '타임라인 늘리기 / 줄이기'], ['Shift + Z', '타임라인 전체 보기'], ['F', '크게 미리보기'], ['Ctrl + E', '내보내기 (MP4)'], ['Esc', '미리보기 닫고 편집으로'], ['?', '단축키 목록']];
 document.addEventListener('keydown', e => {
   if (!tlOn() || editing || $('#cellEd') || $('#tlMenu') || $('#trPop') || $('#itPop') || $('#dlPanel') || document.querySelector('.fmenu, [role=menu]') || e.isComposing || e.keyCode === 229 || document.querySelector('dialog[open]') || (e.target.matches && e.target.matches('input,textarea,select,[contenteditable="true"]'))) return;
@@ -1749,11 +1752,11 @@ document.addEventListener('keydown', e => {
   if ((k === 'ArrowUp' || k === 'ArrowDown') && noSel) { stop(); const { list, total } = tlScenes(), eps = 0.01; let to; if (k === 'ArrowUp') { const p = list.filter(x => x.t0 < tl.T - eps).pop(); to = p ? p.t0 : 0; } else { const n = list.find(x => x.t0 > tl.T + eps); to = n ? n.t0 : total; } tlPause(); tlSeek(to); const x = list.find(q => to >= q.t0 && to < q.t0 + q.dur + q.turn); if (x && x.i !== cur) goto(x.i); return; }
   if (k === 'Home') { stop(); tlPause(); tlSeek(0); return; }
   if (k === 'End') { stop(); tlPause(); tlSeek(tlScenes().total); return; }
+  if ((k === 'Delete' || k === 'Backspace') && tl.range && !tl.selIt && !tl.selAu && noSel) { stop(); tlDeleteRange(); return; }  /* 범위가 있으면 범위 지우기 */
   if ((k === 'Delete' || k === 'Backspace') && (tl.selIt || tl.selAu)) { stop(); $('#tlDel').click(); return; }
   if ((k === 'Delete' || k === 'Backspace') && tl.selScene && noSel) { stop(); tlDeleteScene(e.shiftKey); return; }  /* 파이널컷: Delete = 리플 삭제, Shift+Delete = 빈 틈으로 */
-  if (c === 'KeyK') { stop(); tlPause(); return; }
-  if (c === 'KeyL') { stop(); if (!e.repeat) tlShuttle(1); return; }
-  if (c === 'KeyJ') { stop(); if (!e.repeat) tlShuttle(-1); return; }
+  if (c === 'KeyK') { stop(); if (!e.repeat) tlPause(); tl.kHeld = true; return; }
+  if (c === 'KeyL' || c === 'KeyJ') { stop(); if (tl.kHeld) { tlPause(); tlSeek(tl.T + (c === 'KeyL' ? 1 : -1) / fps); return; }  /* 파이널컷: K를 누른 채 J·L = 한 프레임 뒤로·앞으로 */ if (!e.repeat) tlShuttle(c === 'KeyL' ? 1 : -1); return; }
   if (c === 'KeyI' || c === 'KeyO' || c === 'KeyX') { stop(); tlRangeKey(c.slice(3).toLowerCase()); return; }
   if (c === 'Slash' || k === '/') { stop(); tlPlayRange(); return; }
   if (c === 'KeyQ' || c === 'KeyW') { stop(); tlTrim(c === 'KeyQ' ? 'head' : 'tail'); return; }
@@ -1787,8 +1790,9 @@ document.addEventListener('keydown', e => {
   document.addEventListener('pointerdown', () => { if (tip) tip.hidden = true; cur0 = null; }, true);
 })();
 // Q·W: 재생 헤드가 있는 장면의 앞(시작~헤드) 또는 뒤(헤드~끝)를 잘라냄. 뒤 장면은 당겨짐(리플)
+document.addEventListener('keyup', e => { if (e.code === 'KeyK') tl.kHeld = false; }); window.addEventListener('blur', () => { tl.kHeld = false; });
 // 리플: 장면 길이가 바뀌면 그 뒤의 자막·효과음·오디오·오버레이·배경 음악 시작도 함께 밀고 당김 (편집기 표준)
-function tlRippleSnap(cut) { const its = []; tracks().forEach(tr => (tr.items || []).forEach(it => { if (Number(it.at || 0) >= cut - 1e-6) its.push([it, Number(it.at || 0)]); })); const A = doc.audio && Number(doc.audio.start || 0) > 0 && Number(doc.audio.start || 0) >= cut - 1e-6 ? Number(doc.audio.start) : null; return d => { its.forEach(([it, a]) => { it.at = Math.max(0, Math.round((a + d) * 100) / 100); }); if (A != null) doc.audio.start = Math.max(0, Math.round((A + d) * 100) / 100); }; }
+function tlRippleSnap(cut) { const its = []; tracks().forEach(tr => (tr.items || []).forEach(it => { if (Number(it.at || 0) >= cut - 1e-6) its.push([it, Number(it.at || 0)]); })); const A = doc.audio && Number(doc.audio.start || 0) > 0 && Number(doc.audio.start || 0) >= cut - 1e-6 ? Number(doc.audio.start) : null, mks = (doc.markers || []).filter(m => Number(m.t) >= cut - 1e-6).map(m => [m, Number(m.t)]); return (d, floor) => { const f0 = floor == null ? 0 : floor; its.forEach(([it, a]) => { it.at = Math.max(f0, Math.round((a + d) * 100) / 100); }); if (A != null) doc.audio.start = Math.max(0, Math.round((A + d) * 100) / 100); mks.forEach(([m, t]) => { m.t = Math.max(f0, Math.round((t + d) * 1000) / 1000); }); }; }  /* 마커도 장면을 따라 밀리고 당겨짐 */
 // 스냅(파이널컷 N): 끌 때 장면 경계·재생 헤드·다른 클립 시작·끝·마커에 붙음(화면 8px 안), 붙은 자리에 노란 세로선. 안 붙으면 프레임 단위로
 let tlSnapOn = (() => { try { return localStorage.getItem('naracal-snap') !== '0'; } catch (e) { return true; } })();
 function tlSnapPts(skipId, skipScene) { const { list, total } = tlScenes(), p = [0, total, tl.T]; list.forEach(q => { if (q.i !== skipScene) p.push(q.t0, q.t0 + q.dur); }); tracks().forEach(t => (t.items || []).forEach(it => { if (it.id === skipId) return; const d = t.type === 'audio' ? itemDur(it) : Number(it.dur || 3); p.push(Number(it.at || 0), Number(it.at || 0) + d); })); (doc.markers || []).forEach(m => p.push(Number(m.t))); return p; }
@@ -1809,7 +1813,9 @@ function tlConnSnap() {
   const sceneAt = t => list.find(q => t >= q.t0 - 1e-6 && t < q.t0 + q.dur + q.turn - 1e-6) || list[list.length - 1];
   tracks().forEach(tr => (tr.items || []).forEach(it => { const sc = sceneAt(Number(it.at || 0)); recs.push({ tr, it, id: sc.pg.id, off: Number(it.at || 0) - sc.t0 }); }));
   let A = null; if (doc.audio && Number(doc.audio.start || 0) > 0) { const sc = sceneAt(Number(doc.audio.start)); A = { id: sc.pg.id, off: Number(doc.audio.start) - sc.t0 }; }
+  const mks = (doc.markers || []).map(m => { const sc = sceneAt(Number(m.t)); return { m, id: sc.pg.id, off: Number(m.t) - sc.t0 }; });
   return (opt = {}) => { const byId = new Map(tlScenes().list.map(q => [q.pg.id, q])); let gone = 0;
+    mks.forEach(r => { const q = byId.get(r.id); if (!q) { if (opt.dropOrphans) doc.markers = (doc.markers || []).filter(x => x !== r.m); return; } r.m.t = Math.max(0, Math.round((q.t0 + r.off) * 1000) / 1000); }); if (doc.markers) doc.markers.sort((a, b) => a.t - b.t);
     recs.forEach(r => { const q = byId.get(r.id); if (!q) { if (opt.dropOrphans) { r.tr.items = r.tr.items.filter(x => x !== r.it); gone++; } return; } r.it.at = Math.max(0, Math.round((q.t0 + r.off) * 100) / 100); });
     if (A) { const q = byId.get(A.id); if (q) doc.audio.start = Math.max(0, Math.round((q.t0 + A.off) * 100) / 100); }
     return gone; };
@@ -1922,7 +1928,7 @@ function tlToggleSkim() { tlSkimOn = !tlSkimOn; try { localStorage.setItem('nara
 function tlSkimEnd() { const s = $('#tlSkimL'); if (s) s.remove(); if (tl.skimT != null) { tl.skimT = null; if (!tl.playing) tlDraw().catch(() => {}); } }
 function tlUseSkim() { if (tl.skimT != null && !tl.playing) { const t = tl.skimT; tl.skimT = null; const s = $('#tlSkimL'); if (s) s.remove(); tlSeek(t, false); } }  /* 파이널컷: 훑어보는 중에 Space·B·I·O를 누르면 그 자리에서 */
 // ---- 범위(I·O·X): 범위 재생(/), 범위 안에서 음량 선을 끌면 그 구간만 ----
-function tlRangeMsg() { const R = tl.range; return R ? `범위 ${fmtTC(R.a).slice(3)} ~ ${fmtTC(R.b).slice(3)} (${Math.round((R.b - R.a) * 10) / 10}초) — / 범위 재생 · 음량 선을 끌면 이 구간만 · Alt+X 지우기` : ''; }
+function tlRangeMsg() { const R = tl.range; return R ? `범위 ${fmtTC(R.a).slice(3)} ~ ${fmtTC(R.b).slice(3)} (${Math.round((R.b - R.a) * 10) / 10}초) — / 범위 재생 · 음량 선을 끌면 이 구간만 · Delete 범위 잘라 내기(뒤를 당김) · Alt+X 범위 풀기` : ''; }
 function tlSetRange(a, b) { const { total } = tlScenes(); if (a == null || b == null) tl.range = null; else { a = Math.max(0, Math.min(total, tlFrame(a))); b = Math.max(0, Math.min(total, tlFrame(b))); if (b < a) [a, b] = [b, a]; tl.range = b - a >= 0.1 ? { a, b } : null; } renderTimeline(); const mg = $('#tlMsg'); if (mg) mg.textContent = tlRangeMsg(); }
 function tlRangeKey(k) {
   tlUseSkim(); const { list, total } = tlScenes(), R = tl.range;
@@ -1946,7 +1952,7 @@ function tlTrim(which) {
   if (which === 'tail' ? q < 0.3 : x.dur - q < 0.3) { toast('남는 길이가 너무 짧습니다', true); return; }  // 검사를 먼저: 실패하면 동영상 구간도 그대로
   pg.els.forEach(e => { if (e.type !== 'video') return; const d0 = e.anim ? Number(e.anim.d || 0) : 0, used = Math.max(0, q - d0) * Math.max(0.1, Number(e.speed || 1)), tin = Number(e.tin || 0), tout = Number(e.tout || e.dur || 0); if (which === 'tail') e.tout = Math.round(Math.min(tout, tin + used) * 100) / 100; else if (used) e.tin = Math.round(Math.min(tout - 0.1, tin + used) * 100) / 100; });
   if (which === 'tail') { const f = q / Math.max(0.1, x.dur), mid = (P0, P1) => Math.round((P0 + (P1 - P0) * f) * 1000) / 1000; tlRipple(x.t0 + x.dur, q - x.dur); pg.vdur = q; pg.els.forEach(e => { if (e.kb) { const P0 = e.kb.p0 != null ? Number(e.kb.p0) : 0, P1 = e.kb.p1 != null ? Number(e.kb.p1) : 1; e.kb.p0 = P0; e.kb.p1 = mid(P0, P1); } }); if (pg.vcam && pg.vcam !== 'none') { const CP = Array.isArray(pg.vcamP) ? pg.vcamP : [0, 1]; pg.vcamP = [CP[0], mid(CP[0], CP[1])]; } }  /* 뒷부분 자르기(W): 움직임도 자른 곳까지만 */
-  else { const rest = tlFrame(x.dur - q), f = q / Math.max(0.1, x.dur), mid = (P0, P1) => Math.round((P0 + (P1 - P0) * f) * 1000) / 1000; tracks().forEach(tr => (tr.items || []).forEach(it => { const a = Number(it.at || 0); if (a >= x.t0 - 1e-6 && a < x.t0 + q) it.at = x.t0 + q; })); tlRipple(x.t0 + q, -q); pg.vdur = rest;
+  else { const rest = tlFrame(x.dur - q), f = q / Math.max(0.1, x.dur), mid = (P0, P1) => Math.round((P0 + (P1 - P0) * f) * 1000) / 1000; tracks().forEach(tr => (tr.items || []).forEach(it => { const a = Number(it.at || 0); if (a >= x.t0 - 1e-6 && a < x.t0 + q) it.at = x.t0 + q; })); (doc.markers || []).forEach(m => { const a = Number(m.t); if (a >= x.t0 - 1e-6 && a < x.t0 + q) m.t = x.t0 + q; }); tlRipple(x.t0 + q, -q); pg.vdur = rest;
     pg.els.forEach(e => { if (e.kb) { const P0 = e.kb.p0 != null ? Number(e.kb.p0) : 0, P1 = e.kb.p1 != null ? Number(e.kb.p1) : 1; e.kb.p0 = mid(P0, P1); e.kb.p1 = P1; } }); if (pg.vcam && pg.vcam !== 'none') { const CP = Array.isArray(pg.vcamP) ? pg.vcamP : [0, 1]; pg.vcamP = [mid(CP[0], CP[1]), CP[1]]; } pg.els.forEach(el => { if (el.anim) { const d = Number(el.anim.d || 0) - q; if (d + Number(el.anim.s || 0.8) <= 0) delete el.anim; else el.anim.d = Math.max(0, Math.round(d * 10) / 10); } }); tl.T = x.t0; }
   commit(); renderTimeline(); tlTimeLabel(); toastUndo(which === 'tail' ? `${x.i + 1}쪽 뒷부분을 잘라냈습니다 (${q}초 남음)` : `${x.i + 1}쪽 앞부분 ${q}초를 잘라냈습니다`);
 }
@@ -2040,7 +2046,7 @@ function renderTimeline() {
   for (let t = 0; t <= total + stepS; t += minor) { const major = Math.abs(t / stepS - Math.round(t / stepS)) < 1e-6; ruler += `<i class="${major ? 'mj' : ''}" style="left:${t * px}px">${major ? `<span>${fmtTC(t, fps)}</span>` : ''}</i>`; }
   (doc.markers || []).forEach(m => { ruler += `<b class="tl-mk" data-mk="${esc(m.id)}" style="left:${Number(m.t) * px}px" title="${esc(m.name || '마커')} · ${fmtTC(Number(m.t), fps)} — 눌러서 이동, 두 번 눌러 이름 바꾸기·지우기"></b>`; });
   const strips = tl.strips || {};
-  const scenes = list.map((x, k) => { const w = Math.max(6, (x.dur + x.turn) * px - 2), fs = strips[x.pg.id]; const film = fs && fs.length ? fs.map(u => `<img src="${u}" alt="">`).join('') : `<div class="tl-th tbox" data-w="${doc.w}" data-h="${doc.h}">${sheetHTML(x.pg, 'thumb')}</div>`; return `<div class="tl-clip${x.i === cur ? ' on' : ''}" data-ci="${x.i}" data-k="${k}" style="left:${x.t0 * px}px;width:${w}px"><div class="tl-film">${film}</div><span class="tl-cl">${tli('film', 11)} ${x.i + 1}${x.pg.label ? ' · ' + esc(x.pg.label) : ''} <b>${fmtTC(x.dur, fps).slice(3)}</b></span>${x.turn ? `<button class="tl-tr" data-tr="${x.i}" style="left:${x.dur * px - 10}px;width:${Math.max(20, x.turn * px)}px" title="넘김: ${esc((VIDEO.TRANS.find(t => t[0] === x.trans) || [0, ''])[1])} ${x.turn}초 — 눌러서 바꾸기">⇄</button>` : (k < list.length - 1 ? `<button class="tl-tr none" data-tr="${x.i}" style="left:${x.dur * px - 10}px" title="넘김 효과 넣기">＋</button>` : '')}<div class="tl-lh" data-lh="${x.i}" title="끌어서 장면 길이 (앞)"></div><div class="tl-rh" data-rh="${x.i}" title="끌어서 장면 길이"></div></div>`; }).join('');
+  const scenes = list.map((x, k) => { const w = Math.max(6, (x.dur + x.turn) * px - 2), fs = strips[x.pg.id]; const film = fs && fs.length ? fs.map(u => `<img src="${u}" alt="">`).join('') : `<div class="tl-th tbox" data-w="${doc.w}" data-h="${doc.h}">${sheetHTML(x.pg, 'thumb')}</div>`; return `<div class="tl-clip${x.i === cur ? ' on' : ''}" data-ci="${x.i}" data-k="${k}" style="left:${x.t0 * px}px;width:${w}px"><div class="tl-film">${film}</div><span class="tl-cl">${tli('film', 11)} ${x.i + 1}${x.pg.label ? ' · ' + esc(x.pg.label) : ''} <b>${fmtTC(x.dur, fps).slice(3)}</b></span>${x.turn ? `<button class="tl-tr" data-tr="${x.i}" style="left:${x.dur * px - 10}px;width:${Math.max(20, x.turn * px)}px" title="넘김: ${esc((VIDEO.TRANS.find(t => t[0] === x.trans) || [0, ''])[1])} ${x.turn}초 — 눌러서 바꾸기">⇄</button>` : (k < list.length - 1 ? `<button class="tl-tr none" data-tr="${x.i}" style="left:${x.dur * px - 10}px" title="넘김 효과 넣기">＋</button>` : '')}<div class="tl-lh" data-lh="${x.i}" title="끌어서 장면 길이 (앞)"></div><div class="tl-rh" data-rh="${x.i}" title="끌어서 장면 길이 (뒤 장면이 밀리고 당겨짐) · Alt를 누른 채 끌면 경계만 옮김(롤 편집 — 다음 장면 앞이 줄고 전체 길이는 그대로)"></div></div>`; }).join('');
   let anims = '';
   list.forEach(x => { let lane = 0; x.pg.els.forEach(el => { if (el.hidden || !VIDEO.moves(el) || el.type === 'video') return; const a = el.anim, o = el.animOut, l = el.animLoop, d = a ? Number(a.d || 0) : 0, s2 = a ? Number(a.s || 0.8) : 0, so = o ? Number(o.s || 0.6) : 0, at = o ? Number(o.at || 0) : 0; const L = lane++ % 3, y = 4 + L * 15, x0 = (x.t0 + d) * px, endT = x.t0 + x.dur - at, w = Math.max(6, (endT - x.t0 - d) * px); anims += `<div class="tl-an${sel.includes(el.id) ? ' on' : ''}" data-ael="${el.id}" data-ap="${x.i}" style="left:${x0}px;top:${y}px;width:${w}px" title="${esc(elName(el))} — 끌면 시작 시각, 오른쪽 끝을 끌면 나타나는 시간"><i class="in" style="width:${Math.min(w, s2 * px)}px"></i>${l ? '<i class="lp"></i>' : ''}${o ? `<i class="out" style="width:${Math.min(w, so * px)}px"></i>` : ''}<span>${esc(elName(el))}</span>${a ? '<em class="tl-ah" data-ah="1"></em>' : ''}</div>`; }); });
   let audio = '<button class="tl-add" id="tlAddMusic">＋ 배경 음악 넣기</button>';
@@ -2208,8 +2214,13 @@ function tlSplit() {
 }
 function tlSplitScene(quiet) {
   if (videoNeedsGate()) { openVideoGate(); return; }
-  const { list } = tlScenes(), x = list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur); if (!x) { if (!quiet) toast('장면 안에 재생 위치를 두고 나누세요', true); return; }
-  const q = tlFrame(tl.T - x.t0); if (q < 0.3 || x.dur - q < 0.3) { if (!quiet) toast('장면 끝에 너무 가깝습니다', true); return; }
+  const r = tlSplitCore(tl.T); if (typeof r === 'string') { if (!quiet) toast(r, true); return; }
+  commit(); goto(r.x.i + 1); renderTimeline(); if (!quiet) toastUndo(`${r.x.i + 1}쪽을 ${r.q}초에서 나눴습니다`);
+}
+/* 장면 나누기 본체(저장·이동 없이): 범위 지우기 등에서 여러 번 나눈 뒤 한 번에 저장 */
+function tlSplitCore(T) {
+  const { list } = tlScenes(), x = list.find(s2 => T >= s2.t0 && T < s2.t0 + s2.dur); if (!x) return '장면 안에 재생 위치를 두고 나누세요';
+  const q = tlFrame(T - x.t0); if (q < 0.3 || x.dur - q < 0.3) return '장면 끝에 너무 가깝습니다';
   const a = x.pg, b = clone(a); b.id = uid(); const gm = {}; b.els.forEach(e => { e.id = uid(); if (e.group) { gm[e.group] = gm[e.group] || uid(); e.group = gm[e.group]; } if (e.anim) { const d = Number(e.anim.d || 0) - q, s0 = Number(e.anim.s || 0.8); if (d + s0 <= 0.05) delete e.anim; else e.anim.d = Math.round(d * 100) / 100;  /* 음수 = 이미 그만큼 진행된 효과(타자기 등)가 이어서 */ } });  /* 이미 시작한 움직임은 끝난 모습으로 이어짐(뒤 조각에서 처음부터 다시 튀지 않게) */
   // 동영상: 앞 조각은 자른 지점에서 끝나고, 뒤 조각은 자른 지점부터 이어서 재생
   a.els.forEach((e, k) => { if (e.type !== 'video') return; const e2 = b.els[k], d0 = e.anim ? Number(e.anim.d || 0) : 0, used = Math.max(0, q - d0) * Math.max(0.1, Number(e.speed || 1)), tin = Number(e.tin || 0), tout = Number(e.tout || e.dur || 0); if (!used) return; const cut = Math.min(tout, tin + used); e.tout = Math.round(cut * 100) / 100; e2.tin = Math.round(cut * 100) / 100; e2.tout = tout; if (e2.anim) e2.anim.d = 0; });
@@ -2218,7 +2229,19 @@ function tlSplitScene(quiet) {
   a.els.forEach((e, k) => { if (!e.kb || !b.els[k] || !b.els[k].kb) return; const P0 = e.kb.p0 != null ? Number(e.kb.p0) : 0, P1 = e.kb.p1 != null ? Number(e.kb.p1) : 1, m = mid(P0, P1); e.kb.p0 = P0; e.kb.p1 = m; b.els[k].kb.p0 = m; b.els[k].kb.p1 = P1; });
   if (a.vcam && a.vcam !== 'none') { const CP = Array.isArray(a.vcamP) ? a.vcamP : [0, 1], m = mid(CP[0], CP[1]); a.vcamP = [CP[0], m]; b.vcamP = [m, CP[1]]; }
   b.vdur = tlFrame(x.dur - q); a.vdur = q; b.vtrans = a.vtrans; b.vturn = a.vturn; b.vsplit = a.vsplit; a.vtrans = 'none'; a.vsplit = true; /* 나눈 자리: '모든 장면에 같은 넘김'이 건드리지 않음 */ a.els.forEach(e => { delete e.animOut; });
-  doc.pages.splice(x.i + 1, 0, b); commit(); goto(x.i + 1); renderTimeline(); if (!quiet) toastUndo(`${x.i + 1}쪽을 ${q}초에서 나눴습니다`);
+  doc.pages.splice(x.i + 1, 0, b); return { x, q };
+}
+// 범위 지우기(파이널컷: 범위를 잡고 Delete): 범위 시작·끝에서 장면을 나누고 그 사이 장면을 지운 뒤 뒤를 당김. 지운 구간에서 시작하던 자막·소리·마커도 함께 지움
+function tlDeleteRange() {
+  if (videoNeedsGate()) { openVideoGate(); return; }
+  const R = tl.range; if (!R) { toast('범위가 없습니다 — I(시작)·O(끝)로 범위를 잡으세요', true); return; }
+  const edge = T => { const { list, total } = tlScenes(); if (T >= total - 1e-3) return { T: total }; const x = list.find(s => T >= s.t0 - 1e-6 && T < s.t0 + s.dur + s.turn - 1e-6) || list[list.length - 1], q = T - x.t0; if (q < 0.3) return { T: x.t0 }; if (q > x.dur - 0.3) return { T: x.t0 + x.dur + x.turn }; return { T: tlFrame(T), split: true }; };
+  const bak = clone(doc.pages), eb = edge(R.b); if (eb.split) tlSplitCore(eb.T); const ea = edge(R.a); if (ea.split) tlSplitCore(ea.T);
+  const a = ea.T, b = eb.T, { list } = tlScenes(), gone = list.filter(q => q.t0 >= a - 1e-3 && q.t0 < b - 1e-3);
+  if (!gone.length || gone.length >= list.length) { doc.pages = bak; toast(!gone.length ? '범위가 너무 짧습니다 — 0.3초보다 길게 잡으세요' : '범위가 영상 전체라 지울 수 없습니다', true); renderTimeline(); return; }
+  const ids = new Set(gone.map(q => q.pg.id)), snap = tlConnSnap(); doc.pages = doc.pages.filter(p => !ids.has(p.id)); const n = snap({ dropOrphans: true });
+  tl.range = null; commit(); const x = tlScenes().list.find(q => q.t0 >= a - 1e-3) || tlScenes().list.slice(-1)[0]; if (x) goto(x.i); tlSeek(a, false); renderTimeline();
+  toastUndo(`범위 ${Math.round((b - a) * 10) / 10}초를 지우고 뒤를 당겼습니다 (장면 조각 ${gone.length}개${n ? ` · 그 구간 자막·소리 ${n}개` : ''})`);
 }
 function tlWire() {
   const root = $('#vtl');
@@ -2268,7 +2291,7 @@ function tlWire() {
     tl.selIt = null; tl.selAu = false; tl.selScene = false;
     if (tr) { up = () => openTransPop(Number(tr.dataset.tr), tr); }
     else if (lh) { /* 왼쪽 손잡이 = 앞부분 자르기·늘리기 (Q와 같게): 끈 만큼 동영상 시작(tin)과 글자·요소 등장 시각을 함께 당기고 장면 길이를 줄임. 왼쪽으로 끌면 앞을 늘림(동영상은 원본 앞쪽이 남은 만큼만) */
-      const pg = doc.pages[Number(lh.dataset.lh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(lh.dataset.lh)), its0 = s0 ? tlRippleSnap(s0.t0) : null, inSc = new Set(); if (s0) tracks().forEach(tr => (tr.items || []).forEach(it => { if (Number(it.at || 0) >= s0.t0 - 1e-6) inSc.add(it); })); const rip = d => { if (!its0) return; its0(-dq); inSc.forEach(it => { if (Number(it.at) < s0.t0) it.at = s0.t0; }); }; /* 장면 안 클립(자막 등)도 잘라낸 만큼 당김 — 잘린 구간에 있던 것은 장면 시작에 붙임 */
+      const pg = doc.pages[Number(lh.dataset.lh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(lh.dataset.lh)), its0 = s0 ? tlRippleSnap(s0.t0) : null, inSc = new Set(); if (s0) tracks().forEach(tr => (tr.items || []).forEach(it => { if (Number(it.at || 0) >= s0.t0 - 1e-6) inSc.add(it); })); const rip = d => { if (!its0) return; its0(-dq, s0.t0); inSc.forEach(it => { if (Number(it.at) < s0.t0) it.at = s0.t0; }); }; /* 장면 안 클립(자막 등)도 잘라낸 만큼 당김 — 잘린 구간에 있던 것은 장면 시작에 붙임 */
       const base = pg.els.map(e => ({ e, tin: Number(e.tin || 0), tout: Number(e.tout || e.dur || 0), d: e.anim ? Number(e.anim.d || 0) : null })), vids = base.filter(b => b.e.type === 'video'), ext = vids.length ? Math.min(...vids.map(b => b.tin)) : 30;
       let dq = 0; move = ev => { dq = tlFrame(Math.max(-ext, Math.min(d0 - 0.5, (ev.clientX - sx) / tl.pxs))); pg.vdur = tlFrame(d0 - dq);
         base.forEach(b => { const hasD = b.d != null && b.e.anim; if (b.e.type !== 'video') { if (hasD) b.e.anim.d = Math.max(0, Math.round((b.d - dq) * 10) / 10); return; }
@@ -2278,6 +2301,19 @@ function tlWire() {
           b.e.tin = Math.round(Math.max(0, Math.min(b.tout - 0.1, tin)) * 100) / 100; if (hasD) b.e.anim.d = Math.max(0, Math.round(nd * 10) / 10); });
         rip(pg.vdur - d0); renderTimeline(); };
       up = () => { if (!moved) return; base.forEach(b => { if (b.e.type !== 'video' && b.d != null && b.e.anim && b.d - dq + Number(b.e.anim.s || 0.8) <= 0) delete b.e.anim; }); commit(); if (dq) toastUndo(dq > 0 ? `${Number(lh.dataset.lh) + 1}쪽 앞부분 ${dq}초를 잘라냈습니다` : `${Number(lh.dataset.lh) + 1}쪽 앞부분을 ${-dq}초 늘렸습니다`); }; }
+    else if (rh && e.altKey && (() => { const L0 = tlScenes().list, k0 = L0.findIndex(q => q.i === Number(rh.dataset.rh)); return k0 >= 0 && L0[k0 + 1]; })()) {
+      const L0 = tlScenes().list, k0 = L0.findIndex(q => q.i === Number(rh.dataset.rh)), s0 = L0[k0], s1 = L0[k0 + 1], pg = s0.pg, pn = s1.pg, d0 = s0.dur, n0 = s1.dur;
+      const base = pn.els.map(el => ({ e: el, tin: Number(el.tin || 0), tout: Number(el.tout || el.dur || 0), d: el.anim ? Number(el.anim.d || 0) : null, kb: el.kb ? [el.kb.p0 != null ? Number(el.kb.p0) : 0, el.kb.p1 != null ? Number(el.kb.p1) : 1] : null })), vids = base.filter(b => b.e.type === 'video' && !(b.d > 0)), ext = vids.length ? Math.min(...vids.map(b => b.tin / Math.max(0.1, Number(b.e.speed || 1)))) : 30, cam0 = Array.isArray(pn.vcamP) ? pn.vcamP.slice() : null;
+      const sP = tlSnapPts(null, s0.i).filter(v => Math.abs(v - (s0.t0 + d0)) > 0.01 && Math.abs(v - (s1.t0)) > 0.01); let dq = 0;
+      move = ev => { let end = s0.t0 + d0 + (ev.clientX - sx) / tl.pxs; const v = tlSnapTo(end, sP); tl.snapT = v; if (v != null) end = v; dq = tlFrame(Math.max(-Math.min(d0 - 0.5, ext), Math.min(n0 - 0.5, end - s0.t0 - d0))); pg.vdur = tlFrame(d0 + dq); pn.vdur = tlFrame(n0 - dq);
+        base.forEach(b => { const hasD = b.d != null && b.e.anim; if (b.kb) { const f = Math.max(0, dq) / Math.max(0.1, n0); b.e.kb.p0 = Math.round((b.kb[0] + (b.kb[1] - b.kb[0]) * f) * 1000) / 1000; b.e.kb.p1 = b.kb[1]; }
+          if (b.e.type !== 'video') { if (hasD) b.e.anim.d = Math.max(0, Math.round((b.d - dq) * 10) / 10); return; }
+          let rest = dq, nd = hasD ? b.d : 0; if (dq > 0 && nd > 0) { const used = Math.min(nd, dq); nd -= used; rest = dq - used; } else if (dq < 0 && nd > 0) { nd -= dq; rest = 0; }
+          let tin = b.tin + rest * Math.max(0.1, Number(b.e.speed || 1)); if (tin < 0) { if (hasD) nd += -tin; tin = 0; }
+          b.e.tin = Math.round(Math.max(0, Math.min(b.tout - 0.1, tin)) * 100) / 100; if (hasD) b.e.anim.d = Math.max(0, Math.round(nd * 10) / 10); });
+        if (cam0) { const f = Math.max(0, dq) / Math.max(0.1, n0); pn.vcamP = [Math.round((cam0[0] + (cam0[1] - cam0[0]) * f) * 1000) / 1000, cam0[1]]; }
+        renderTimeline(); dragTip(ev, `롤 편집 ${dq > 0 ? '+' : ''}${dq}초 · ${s0.i + 1}쪽 ${pg.vdur}초 / ${s1.i + 1}쪽 ${pn.vdur}초`); };
+      up = () => { tl.snapT = null; const tp = $('#dragTip'); if (tp) tp.hidden = true; if (!moved || !dq) { renderTimeline(); return; } base.forEach(b => { if (b.e.type !== 'video' && b.d != null && b.e.anim && b.d - dq + Number(b.e.anim.s || 0.8) <= 0) delete b.e.anim; }); commit(); renderTimeline(); toastUndo(`장면 경계를 ${dq > 0 ? '뒤로' : '앞으로'} ${Math.abs(dq)}초 옮겼습니다 — 롤 편집: ${s0.i + 1}쪽 ${pg.vdur}초 · ${s1.i + 1}쪽 ${pn.vdur}초, 전체 길이는 그대로`); }; }
     else if (rh) { const pg = doc.pages[Number(rh.dataset.rh)], d0 = Number(pg.vdur || vset().dur), s0 = tlScenes().list.find(q => q.i === Number(rh.dataset.rh)), rip = s0 ? tlRippleSnap(s0.t0 + s0.dur) : () => {}, sP = s0 ? tlSnapPts(null, s0.i).filter(v => v > s0.t0 + s0.dur + 0.01 || v < s0.t0 + s0.dur - 0.01) : []; move = ev => { let end = (s0 ? s0.t0 : 0) + d0 + (ev.clientX - sx) / tl.pxs; const v = s0 ? tlSnapTo(end, sP.filter(x => x < s0.t0 + s0.dur || x > s0.t0 + s0.dur)) : null; tl.snapT = v; if (v != null) end = v; pg.vdur = Math.max(0.5, tlFrame(end - (s0 ? s0.t0 : 0))); rip(pg.vdur - d0); renderTimeline(); }; up = () => { tl.snapT = null; if (moved) commit(); renderTimeline(); }; }
     else if (an) { const pg = doc.pages[Number(an.dataset.ap)], el = pg.els.find(q => q.id === an.dataset.ael), edge = t.closest('[data-ah]'); const a0 = el.anim ? Object.assign({}, el.anim) : null; move = ev => { if (!a0) return; const dt = (ev.clientX - sx) / tl.pxs; if (edge) el.anim.s = Math.max(0.2, Math.round((Number(a0.s || 0.8) + dt) * 10) / 10); else el.anim.d = Math.max(0, Math.round((Number(a0.d || 0) + dt) * 10) / 10); renderTimeline(); }; up = () => { if (moved) { commit(); renderInspector(); } else { const i = doc.pages.indexOf(pg); if (i !== cur) goto(i); select([el.id]); renderTimeline(); } }; }
     else if (au) { if (au.classList.contains('miss')) { relinkMedia(doc.audio.src); return; } tl.selAu = true; const s0 = Number(doc.audio.start || 0); move = ev => { doc.audio.start = Math.max(0, Math.round((s0 + (ev.clientX - sx) / tl.pxs) * 10) / 10); renderTimeline(); }; up = () => { if (moved) commit(); }; }
@@ -2506,8 +2542,18 @@ function openVideoMaker() {
     } catch (e) { pr.textContent = e.message; } finally { busy = false; if (document.body.contains(go)) { go.lastChild.textContent = '영상 만들기'; if (Vp && !stop) { const msg = $('#vidProg').textContent; P = VIDEO.player($('#vidCv'), Vp); P.onTime = t => { seek.value = t; $('#vidTime').textContent = `${fmtT(t)} / ${fmtT(Vp.total)}`; ic(); }; P.seek(0); $('#vidProg').textContent = msg; } } }
   };
 }
-const RAIL = [['pages', '페이지', 'i-pages'], ['tpl', '템플릿', 'i-tpl'], ['news', '소식지', 'i-news'], ['cert', '상장', 'i-award'], ['video', '영상', 'i-video'], ['elems', '요소', 'i-elems'], ['text', '텍스트', 'i-text'], ['photo', '사진', 'i-img'], ['upload', '업로드', 'i-upload'], ['project', '프로젝트', 'i-folder'], ['ai', 'AI 도구', 'i-ai'], ['bg', '배경', 'i-bg'], ['theme', '테마', 'i-theme'], ['chart', '차트', 'i-chart'], ['layers', '레이어', 'i-layers']];
-function renderRail() { $('#rail').innerHTML = RAIL.map(([k, t, ic]) => `<button data-tab="${k}" aria-selected="${sideTab === k}" title="${t}"><svg class="ic"><use href="#${ic}"/></svg><span>${t}</span></button>`).join(''); $$('#rail button').forEach(b => b.onclick = () => { focusOut(); /* 영상 집중 보기에서 왼쪽 메뉴를 누르면 패널이 보이는 보기로 */ sideTab = b.dataset.tab; if (sideTab !== 'news' && newsMode) setNewsMode(false); renderRail(); renderSide(); if (sideTab === 'video') { if (!tlOn()) tlShow(true); } else if (tlOn() && tlOnlyVideo) { if (tl.playing) tlPause(); tlShow(false); } }); }
+const RAIL = [['pages', '페이지', 'i-pages'], ['naracha', '나라차', 'i-naracha'], ['tpl', '템플릿', 'i-tpl'], ['video', '영상', 'i-video'], ['elems', '요소', 'i-elems'], ['text', '텍스트', 'i-text'], ['photo', '사진', 'i-img'], ['upload', '업로드', 'i-upload'], ['project', '프로젝트', 'i-folder'], ['ai', 'AI 도구', 'i-ai'], ['bg', '배경', 'i-bg'], ['theme', '테마', 'i-theme'], ['chart', '차트', 'i-chart'], ['layers', '레이어', 'i-layers']];
+/* 나라차 모음 안의 기능: [탭 또는 동작, 이름, 아이콘, 설명]. 탭(news·cert)은 왼쪽 패널로 열리고 세로 메뉴에서는 '나라차'가 켜진 채로 보임. 새 나라차 기능은 여기에 한 줄 더하면 됨 */
+const NARA = [['cal', '캘린더 만들기', 'i-cal', '연간 인성 캘린더 26쪽 — 연도·테마를 고르면 표지·12개월 인성·달력을 한 번에'], ['news', '소식지', 'i-news', '월간 소식지 만들기 — 일정·인성 덕목·사진을 넣어 인쇄·TV용으로'], ['cert', '상장', 'i-award', '측정 기록을 가져와 상장을 한꺼번에 — 자리 표시 양식으로 위치·크기를 모두에 맞춤'], ['rules', '반복 일정 · 연간 행사', 'i-cal', '매주 수련·승급심사·생일·원비 날 — 달력에 자동으로 넣는 목록'], ['dojang', '도장 정보', 'i-pages', '전화·주소·도장 이름을 저장하면 템플릿에 자동으로 채움'], ['lib', '나라차 자료실 (요소)', 'i-elems', '로고·라차·포즈·일러스트 — 두 PC에서 함께 쓰는 그림']];
+const NARA_TABS = ['naracha', 'news', 'cert'];
+function naraGo(k) { if (k === 'news' || k === 'cert') { sideTab = k; renderRail(); renderSide(); return; } if (k === 'cal') { openWizard(doc.calendar.year || 2027); return; } if (k === 'rules') { openRules(); return; } if (k === 'dojang') { openDojang(); return; } if (k === 'lib') { elCat = 'naracha'; elQ = ''; sideTab = 'elems'; renderRail(); renderSide(); } }
+function renderNaraSide(body) {
+  body.innerHTML = `<p class="hint" style="margin:0 0 8px">나라차태권도에서만 쓰는 기능을 모았습니다.</p><div class="nara-list">${NARA.map(([k, t, ic, d]) => `<button class="nara-card" data-nara="${k}"><svg class="ic"><use href="#${ic}"/></svg><span><b>${esc(t)}</b><small>${esc(d)}</small></span><i>›</i></button>`).join('')}</div>`;
+  body.onclick = e => { const b = e.target.closest('[data-nara]'); if (b) naraGo(b.dataset.nara); };
+}
+function naraBack() { return '<button class="btn sm nara-back" data-narab title="나라차 기능 모음으로">‹ 나라차</button>'; }
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-narab]')) { sideTab = 'naracha'; if (newsMode) setNewsMode(false); renderRail(); renderSide(); } });
+function renderRail() { $('#rail').innerHTML = RAIL.map(([k, t, ic]) => `<button data-tab="${k}" aria-selected="${sideTab === k || (k === 'naracha' && NARA_TABS.includes(sideTab))}" title="${k === 'naracha' ? '나라차 — 캘린더·소식지·상장 등 나라차 전용 기능 모음' : t}"${k === 'naracha' ? ' class="rail-nara"' : ''}><svg class="ic"><use href="#${ic}"/></svg><span>${t}</span></button>`).join(''); $$('#rail button').forEach(b => b.onclick = () => { focusOut(); /* 영상 집중 보기에서 왼쪽 메뉴를 누르면 패널이 보이는 보기로 */ sideTab = b.dataset.tab; if (sideTab !== 'news' && newsMode) setNewsMode(false); renderRail(); renderSide(); if (sideTab === 'video') { if (!tlOn()) tlShow(true); } else if (tlOn() && tlOnlyVideo) { if (tl.playing) tlPause(); tlShow(false); } }); }
 /* TV 발표 화면 (캔바 '발표'처럼): 숨긴 쪽은 빼고 지금 쪽부터 화면 가득. ←/→/스페이스/누르기로 넘김, Esc 끝 */
 function openPresent(from) {
   const list = doc.pages.map((p, i) => i).filter(i => !doc.pages[i].dlOff); if (!list.length) { toast('보여 줄 쪽이 없습니다', true); return; }
@@ -2531,7 +2577,7 @@ function fitBoxes(root, sel_, maxH) { root.querySelectorAll(sel_).forEach(bx => 
 function renderSide() { const b0 = $('#sidebody'), same = renderSide._tab === sideTab, top = b0 ? b0.scrollTop : 0; renderSide0(); renderSide._tab = sideTab; if (same && b0 && top) { b0.scrollTop = top; requestAnimationFrame(() => { b0.scrollTop = top; }); } } /* 같은 탭을 다시 그릴 때 스크롤 위치 유지 */
 function renderSide0() {
   const body = $('#sidebody'); const yearNow = doc.calendar.year || 2027;
-  $('#sideTitle').textContent = (RAIL.find(r => r[0] === sideTab) || [])[1] || '';
+  $('#sideTitle').textContent = (RAIL.find(r => r[0] === sideTab) || NARA.find(r => r[0] === sideTab) || [])[1] || '';
   body.onclick = null; body.oninput = null; body.onchange = null;
   if (sideTab === 'pages') {
     body.innerHTML = `<div class="row pgbar" style="margin-bottom:8px"><button class="btn sm" id="pgAdd">+ 새 페이지</button><button class="btn sm" id="pgDup">복제</button><button class="btn sm icon" id="pgUp" title="위로">↑</button><button class="btn sm icon" id="pgDown" title="아래로">↓</button><button class="btn sm danger" id="pgDel">삭제</button><button class="btn sm" id="pgGrid" title="모든 쪽을 한눈에 (여러 쪽 고르기·끌어서 순서 바꾸기)">모아 보기</button><button class="btn sm" data-book title="쪽 번호·머리글·여백·펼침면·목차·소책자 인쇄 (인디자인처럼)">📖 책자</button></div><div class="hint" id="pgSelInfo" style="margin:-2px 0 6px;min-height:0"></div><div id="thumbs"></div>`;
@@ -2544,10 +2590,12 @@ function renderSide0() {
     $('#pgDel').onclick = () => pageCmd('del');
     $('#pgUp').onclick = () => { if (cur === 0) return; [doc.pages[cur - 1], doc.pages[cur]] = [doc.pages[cur], doc.pages[cur - 1]]; commit(); goto(cur - 1); };
     $('#pgDown').onclick = () => { if (cur >= doc.pages.length - 1) return; [doc.pages[cur + 1], doc.pages[cur]] = [doc.pages[cur], doc.pages[cur + 1]]; commit(); goto(cur + 1); };
+  } else if (sideTab === 'naracha') {
+    renderNaraSide(body);
   } else if (sideTab === 'cert') {
-    renderCertSide(body);
+    renderCertSide(body); body.insertAdjacentHTML('afterbegin', naraBack());
   } else if (sideTab === 'news') {
-    renderNewsSide(body);
+    renderNewsSide(body); body.insertAdjacentHTML('afterbegin', naraBack());
   } else if (sideTab === 'video') {
     if (videoNeedsGate()) { body.innerHTML = `<div class="wz-card"><b style="font-size:14px">영상 편집은 영상용 사본에서</b><p class="hint" style="margin:6px 0 10px">타임라인에서 장면을 지우거나 자르면 이 디자인의 쪽이 함께 바뀝니다. 원본은 그대로 두고 "${esc(doc.name || '디자인')} 영상" 사본을 만들어 편집하세요.</p><button class="btn primary full" id="vgOpen">영상용 사본 만들기</button><button class="btn full" id="vgDirect2" style="margin-top:6px">이 디자인에서 바로 편집 (원본이 바뀜)</button></div>`; $('#vgOpen').onclick = () => makeVideoCopy(); $('#vgDirect2').onclick = () => openVideoGate(); return; }
     renderVideoSide(body);
@@ -2600,7 +2648,7 @@ function renderSide0() {
       const pc = e.target.closest('[data-pcat]'); if (pc) { photoCat = pc.dataset.pcat; renderSide(); return; }
       const b = e.target.closest('[data-img],[data-libimg]'); if (!b) return;
       const ref = b.dataset.libimg ? await libInsert(b.dataset.libimg) : b.dataset.img; if (!ref) return;
-      const s = selEls(); if (s.length === 1 && s[0].type === 'image') { s[0].src = ref; commit(); rerender(); toast('그림을 바꿨습니다'); } else addImage(ref);
+      const s = selEls(); if (s.length === 1 && s[0].type === 'image' && !s[0].locked && !e.shiftKey) { s[0].src = ref; delete s[0].srcOrig; commit(); rerender(); toastUndo('고른 그림 자리에 바꿔 넣었습니다 — 새로 넣으려면 Shift를 누른 채 누르세요'); } else addImage(ref);
     };
     const ps = $('#photoSearch'); if (ps) imeSafe(ps, () => { photoQ = ps.value; const pos = ps.selectionStart; renderSide(); const n = $('#photoSearch'); n.focus(); n.setSelectionRange(pos, pos); });
     $('#imgFile').onchange = async e => { for (const f of e.target.files) addImage(addAsset(await imageFileToURL(f))); e.target.value = ''; renderSide(); };
@@ -2657,7 +2705,7 @@ function renderSide0() {
     const items = NC.elems.items.filter(i => i.cat === 'chart');
     body.innerHTML = `<p class="hint">차트를 넣고 오른쪽 속성 패널에서 항목과 값을 적습니다. 출석률·설문·띠 비율 같은 자료를 그림으로 보여 줄 때 씁니다.</p><div class="egrid" id="chartGrid">${items.map(it => elemCard(it)).join('')}</div>`;
     requestAnimationFrame(() => fitBoxes(body, '.ebox', 70));
-    body.onclick = e => { const b = e.target.closest('[data-el]'); if (b) insertElem(b.dataset.el); };
+    body.onclick = e => { const b = e.target.closest('[data-el]'); if (b) insertElem(b.dataset.el, null, { add: e.shiftKey }); };
   } else if (sideTab === 'layers') {
     const els = page().els.slice().reverse();
     body.innerHTML = `<h3>${cur + 1}쪽 레이어 (${els.length}) · 위가 앞</h3><div>${els.map(el => `<div class="layer ${sel.includes(el.id) ? 'active' : ''}" data-id="${el.id}" draggable="true" title="끌어서 순서 바꾸기 · 이름을 두 번 눌러 바꾸기"><i class="ltype">${({ text: '가', image: '▣', shape: '◆', path: '〰', cal: '▦', mini: '▤', chart: '▥' })[el.type] || '•'}</i><span>${esc(elName(el))}${el.group ? ' <small style="color:#888">(그룹)</small>' : ''}</span><button data-vis="${el.id}" class="${el.hidden ? '' : 'on'}" title="보이기">${el.hidden ? '○' : '◉'}</button><button data-lock="${el.id}" class="${el.locked ? 'on' : ''}" title="잠금">${el.locked ? '🔒' : '🔓'}</button></div>`).join('') || '<p class="hint">요소가 없습니다</p>'}</div>`;
@@ -2688,7 +2736,11 @@ function libElemItems0() {
 const rachaBtn = '<div class="row" style="margin:4px 0 2px"><button class="btn sm ai" data-racha>🐧 라차 동작 한 번에 만들기</button></div>';
 function libHint(short) { const st = NC.lib.st; const msg = store.state.dir ? (st.error === 'none' ? '동기화 폴더에 "디자인자료" 폴더가 없습니다.' : st.ready ? '' : '나라차 자료실을 불러오는 중…') : '저장·동기화에서 구글 드라이브 폴더를 연결하면 나라차 로고·마스코트·사진·템플릿(나라차 자료실)이 여기에 나옵니다.'; return msg ? `<p class="hint">${short ? '<b>나라차 자료실</b> · ' : ''}${msg}</p>` : ''; }
 function getElem(id) { return NC.elems.get(id) || libElemItems().find(x => x.id === id); }
-async function insertElem(id, at) { const it = getElem(id); if (!it) return; let els = it.make(uid, { year: doc.calendar.year || 2027 }); if (it.lib) { setStatus('자료실에서 불러오는 중…'); try { els = await NC.lib.materialize(els, addAsset); } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return; } finally { setStatus(''); } } addEls(els, it.id, at); }
+async function insertElem(id, at, opt = {}) { const it = getElem(id); if (!it) return; let els = it.make(uid, { year: doc.calendar.year || 2027 }); if (it.lib) { setStatus('자료실에서 불러오는 중…'); try { els = await NC.lib.materialize(els, addAsset); } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return; } finally { setStatus(''); } }
+  /* 그림 바꿔 넣기(캔바 방식): 그림 요소 하나를 넣을 때 바꿀 그림(끌어 놓은 곳 또는 고른 그림 하나)이 있으면 자리·크기·자르기를 그대로 두고 그림만 바꿈 */
+  const tgt = opt.target !== undefined ? opt.target : (!at && !opt.add ? (() => { const s = selEls(); return s.length === 1 && s[0].type === 'image' && !s[0].locked ? s[0] : null; })() : null);
+  if (tgt && els.length === 1 && els[0].type === 'image' && els[0].src && page().els.includes(tgt)) { tgt.src = els[0].src; delete tgt.srcOrig; if (els[0].name) tgt.name = els[0].name; commit(); select([tgt.id]); rerender(); noteRecentElem(it.id); toastUndo(opt.target ? '그림을 바꿨습니다 (자리·크기·자르기는 그대로)' : '고른 그림 자리에 바꿔 넣었습니다 — 새로 넣으려면 Shift를 누른 채 누르세요'); return; }
+  addEls(els, it.id, at); }
 // 내 요소 추가: PNG·SVG·JPG를 자료실 '내 그림'에 보관 (동기화 폴더라 두 PC 모두에서 요소로 보임)
 async function addMyElements() {
   const files = await new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.multiple = true; i.accept = 'image/png,image/svg+xml,image/jpeg,image/webp'; i.onchange = () => res([...i.files]); i.click(); }); if (!files.length) return;
@@ -2705,7 +2757,7 @@ function renderElems() {
   const libEls = libElemItems(); const cats = NC.elems.cats.slice(0, 1).concat([['naracha', '나라차']], NC.elems.cats.slice(1));
   const qw = q.split(/\s+/).filter(Boolean), pool = libEls.concat(NC.elems.items), txtOf = i => (i.name + ' ' + i.kw).toLowerCase(), has = (i, w) => { const t = txtOf(i); return t.includes(w) || (EL_SYN[w] || []).some(x => t.includes(x)); }; let all = pool.filter(i => qw.every(w => has(i, w))); if (!all.length && qw.length > 1) { const hits = i => qw.filter(w => has(i, w)).length; all = pool.filter(i => hits(i) > 0).sort((a, b) => hits(b) - hits(a)); }  // 모든 낱말이 맞는 것이 없으면 맞는 낱말이 많은 순
   const recent = recentElems().map(getElem).filter(Boolean);
-  let h = `<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:wrap"><label class="f" style="flex:1 1 100%;margin:0"><input type="text" id="elSearch" placeholder="요소 검색 (예: 로고, 라차, 별, 말풍선)" value="${esc(elQ)}"></label><button class="btn sm" data-addmine title="내 PC의 PNG·SVG·JPG를 요소로 추가 (자료실에 보관돼 두 PC 모두에서 보임)">＋ 내 요소</button><button class="btn sm" data-addqr title="신청서·밴드·유튜브 주소를 QR 코드로 넣기">▦ QR</button><button class="btn sm" data-addcal title="한 달 달력 칸 넣기 (공휴일·일정·음력 표시)">📅 달력</button></div><div class="tcats" id="elcats">${cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+  let h = `<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:wrap"><label class="f" style="flex:1 1 100%;margin:0"><input type="text" id="elSearch" placeholder="요소 검색 (예: 로고, 라차, 별, 말풍선)" value="${esc(elQ)}"></label><button class="btn sm" data-addmine title="내 PC의 PNG·SVG·JPG를 요소로 추가 (자료실에 보관돼 두 PC 모두에서 보임)">＋ 내 요소</button><button class="btn sm" data-addqr title="신청서·밴드·유튜브 주소를 QR 코드로 넣기">▦ QR</button><button class="btn sm" data-addcal title="한 달 달력 칸 넣기 (공휴일·일정·음력 표시)">📅 달력</button></div><div class="tcats" id="elcats">${cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>${(() => { const s0 = selEls(); return s0.length === 1 && s0[0].type === 'image' ? '<p class="hint el-swap">🖼 그림을 골라 두었습니다 — 그림 요소를 누르면 그 자리에 <b>바꿔 넣습니다</b> (Shift+누르기: 새로 넣기)</p>' : ''; })()}`;
   if (elCat === 'naracha' && !q) {
     h += libEls.length ? `<div class="row" style="margin:4px 0 2px;flex-wrap:wrap;gap:6px"><button class="btn sm primary" data-addmine>＋ 내 요소 추가</button><button class="btn sm ai" data-aistudio>✨ AI로 태권도 그림 만들기</button><button class="btn sm ai" data-racha>🐧 라차 동작 한 번에 만들기</button></div><p class="hint">사진 포즈는 배경을 지운 사람만 들어갑니다. 실루엣은 이미지 속성의 "색 입히기"로 색을 바꿀 수 있습니다. AI로 만든 그림은 우클릭으로 이름 바꾸기·삭제를 합니다.</p>` + LIB_ECATS.map(([k, t]) => { const list = libEls.filter(i => i.sub === k); return list.length ? `<h3>${t} <small>${list.length}</small></h3><div class="egrid">${list.map(elemCard).join('')}</div>` : (k === 'mine-el' ? `<h3>내 요소</h3><p class="hint">위의 <b>＋ 내 요소 추가</b>로 PNG·SVG를 올리면 여기에 모입니다 (자료실에 보관되어 두 PC 모두에서 보임).</p>` : ''); }).join('') + (NC.lib.ready ? '' : rachaBtn + libHint()) : rachaBtn + libHint();
   } else if (elCat === 'all' && !q) {
@@ -2719,7 +2771,7 @@ function renderElems() {
   h += `<p class="hint" style="margin-top:12px">요소를 누르면 페이지 가운데에 들어갑니다. 여러 조각으로 된 요소는 자동으로 그룹이 되어 함께 움직입니다 (Ctrl+G로 그룹 해제·묶기).</p>`;
   body.innerHTML = h;
   requestAnimationFrame(() => fitBoxes(body, '.ebox', 64));
-  body.onclick = e => { const aq = e.target.closest('[data-aiq]'); if (aq) { /* 맞는 요소가 없을 때: 검색어를 AI 그림 스튜디오 '더 바라는 점'에 넣고 열기 */ { const q = aq.dataset.aiq, ex = String(stu.extra || '').trim(); stu.extra = ex && ex.indexOf(q) < 0 ? ex + ', ' + q : (ex || q); } stu.step = 7; stuSave(); openAI('image'); return; } if (e.target.closest('[data-addmine]')) { addMyElements(); return; } if (e.target.closest('[data-aistudio]')) { openAI('image'); return; } if (e.target.closest('[data-racha]')) { openRachaMaker(); return; } const c = e.target.closest('[data-ec]'); if (c) { elCat = c.dataset.ec; renderElems(); return; } const b = e.target.closest('[data-el]'); if (b) insertElem(b.dataset.el); };
+  body.onclick = e => { const aq = e.target.closest('[data-aiq]'); if (aq) { /* 맞는 요소가 없을 때: 검색어를 AI 그림 스튜디오 '더 바라는 점'에 넣고 열기 */ { const q = aq.dataset.aiq, ex = String(stu.extra || '').trim(); stu.extra = ex && ex.indexOf(q) < 0 ? ex + ', ' + q : (ex || q); } stu.step = 7; stuSave(); openAI('image'); return; } if (e.target.closest('[data-addmine]')) { addMyElements(); return; } if (e.target.closest('[data-aistudio]')) { openAI('image'); return; } if (e.target.closest('[data-racha]')) { openRachaMaker(); return; } const c = e.target.closest('[data-ec]'); if (c) { elCat = c.dataset.ec; renderElems(); return; } const b = e.target.closest('[data-el]'); if (b) insertElem(b.dataset.el, null, { add: e.shiftKey }); };
   // 내 그림(AI로 만든 그림): 우클릭으로 이름 바꾸기·지우기
   body.oncontextmenu = async e => { const b = e.target.closest('[data-el^="lib-ai-"]'); if (!b) return; e.preventDefault(); const it = getElem(b.dataset.el); if (!it) return;
     const nm = window.prompt(`"${it.name}"\n\n새 이름을 넣으면 이름을 바꿉니다. "삭제"라고 쓰면 내 그림에서 지웁니다 (두 PC 모두에서 사라짐).`, it.name); if (nm == null) return;
@@ -3241,8 +3293,8 @@ function renderInspector() {
     if (b.id === 'calHol') openHoliday(el.year);
     if (b.id === 'evAdd') { el.events = el.events || []; el.events.push({ d: selDay, text: '', color: '' }); commit(); rerender(); const last = $$('#inspector .evrow input').pop(); if (last) last.focus(); }
     if (b.dataset.evdel != null) { el.events.splice(Number(b.dataset.evdel), 1); commit(); rerender(); }
-    if (b.id === 'rulesApply') { const n = CAL.applyRules(el, doc.rules); commit(); rerender(); toast(`${n}개 일정을 넣었습니다`); }
-    if (b.id === 'rulesAll') { let n = 0; doc.pages.forEach(p => p.els.forEach(x => { if (x.type === 'cal') n += CAL.applyRules(x, doc.rules); })); commit(); rerender(); toast(`문서 전체에 ${n}개 일정을 넣었습니다`); }
+    if (b.id === 'rulesApply') { const n = CAL.applyRules(el, doc.rules, doc); commit(); rerender(); toast(`${n}개 일정을 넣었습니다`); }
+    if (b.id === 'rulesAll') { let n = 0; doc.pages.forEach(p => p.els.forEach(x => { if (x.type === 'cal') n += CAL.applyRules(x, doc.rules, doc); })); commit(); rerender(); toast(`문서 전체에 ${n}개 일정을 넣었습니다`); }
     if (b.id === 'rulesEdit') openRules();
   };
   ins.querySelectorAll('li[data-godate]').forEach(li => li.onclick = e => { if (e.target.closest('button')) return; selDay = Number(li.dataset.godate); rerender(); });
@@ -3800,7 +3852,7 @@ function parseRuleLines(txt) { /* "3/2 개학식", "3월 2일 개학", "매월 2
   const out = [], WD = '일월화수목금토', WK = { 첫째: '1', 둘째: '2', 셋째: '3', 넷째: '4', 마지막: 'last' };
   const DIM = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31], ok = (mm, dd) => dd >= 1 && (mm ? mm >= 1 && mm <= 12 && dd <= DIM[mm - 1] : dd <= 31), skipped = [];
   String(txt || '').split(/\n/).map(l => l.trim()).filter(Boolean).forEach(l0 => {
-    let m; const n0 = out.length; const l = l0.replace(/^\d{4}\s*(?:[.\-\/]|년)\s*/, '').replace(/^(\d{1,2})\s*(?:[.\-\/]|월)\s*(\d{1,2})\s*일?\s*\([일월화수목금토]\)/, '$1/$2'); /* 2027-03-02, 2027년 3월 2일, 3/2(월) */
+    let m; const n0 = out.length; const nh = /[\s(\[]*(?:공?휴일|빨간\s*날)\s*(?:제외|빼고|빼기|건너뛰기|없음)[)\]]*\s*$/.test(l0); const l = l0.replace(/[\s(\[]*(?:공?휴일|빨간\s*날)\s*(?:제외|빼고|빼기|건너뛰기|없음)[)\]]*\s*$/, '').replace(/^\d{4}\s*(?:[.\-\/]|년)\s*/, '').replace(/^(\d{1,2})\s*(?:[.\-\/]|월)\s*(\d{1,2})\s*일?\s*\([일월화수목금토]\)/, '$1/$2'); /* 2027-03-02, 2027년 3월 2일, 3/2(월) */
     if ((m = l.match(/^(\d{1,2})\s*(?:[\/.]|월\s*)\s*(\d{1,2})\s*일?\s*(?:~|～|–|\s-\s)\s*(?:(\d{1,2})\s*(?:[\/.]|월\s*)\s*)?(\d{1,2})\s*일?\s+(.+)$/))) { /* 기간: 3/2~3/4 방학, 3월 30일~4월 2일 */
       let mm = Number(m[1]), dd = Number(m[2]); const m2 = m[3] ? Number(m[3]) : mm, d2 = Number(m[4]);
       if (ok(mm, dd) && ok(m2, d2)) for (let k = 0; k < 62; k++) { out.push({ kind: 'date', m: mm, d: dd, text: m[5].trim(), color: '' }); if (mm === m2 && dd === d2) break; dd++; if (dd > DIM[mm - 1]) { dd = 1; mm = mm % 12 + 1; } } }
@@ -3809,26 +3861,27 @@ function parseRuleLines(txt) { /* "3/2 개학식", "3월 2일 개학", "매월 2
     else if ((m = l.match(/^매월\s*(\d{1,2})\s*일?\s+(.+)$/))) out.push({ kind: 'date', m: 0, d: Number(m[1]), text: m[2].trim(), color: '' });
     else if ((m = l.match(/^(\d{1,2})\s*(?:[\/.\-]|월\s*)\s*(\d{1,2})\s*일?\s+(.+)$/))) out.push({ kind: 'date', m: Number(m[1]), d: Number(m[2]), text: m[3].trim(), color: '' });
     else if ((m = l.match(/^(?:매월\s*)?(첫째|둘째|셋째|넷째|마지막)\s*주?\s*([일월화수목금토])요?일?\s+(.+)$/))) out.push({ week: WK[m[1]], dow: WD.indexOf(m[2]), text: m[3].trim(), color: '' });
-    const bad = out.slice(n0).some(r => !r.text || (r.kind === 'date' && !ok(r.m, r.d))); if (out.length === n0 || bad) { out.length = n0; skipped.push(l0); }
+    const bad = out.slice(n0).some(r => !r.text || (r.kind === 'date' && !ok(r.m, r.d))); if (out.length === n0 || bad) { out.length = n0; skipped.push(l0); } else if (nh) out.slice(n0).forEach(r => { r.noHol = true; });
   });
   const res = out.filter(r => r.text && (r.kind !== 'date' || ok(r.m, r.d))); res.skipped = skipped; return res;
 }
 function openRules() {
   let d = $('#dlgRules'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgRules'; d.className = 'wide'; d.innerHTML = `<div class="dhead"><h2>반복 일정 · 연간 행사</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="rulesBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
   const colorSel = (r, k) => `<select data-rk="color" data-r="${k}">${Object.entries(COLOR_NAMES).map(([c, t]) => `<option value="${c}" ${(r.color || '') === c ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  const nhBox = (r, k) => `<label class="rnh" title="그날이 공휴일(빨간 날)이면 이 일정은 넣지 않습니다 — 예: 매주 수련, 원비 납부"><input type="checkbox" data-rk="noHol" data-r="${k}" ${r.noHol ? 'checked' : ''}>휴일 빼기</label>`;
   const row = (r, k) => r.kind === 'date'
-    ? `<div class="evrow" style="grid-template-columns:90px 90px 1fr 80px 28px;margin-bottom:4px"><select data-rk="m" data-r="${k}"><option value="0" ${!Number(r.m) ? 'selected' : ''}>매월</option>${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${Number(r.m) === i + 1 ? 'selected' : ''}>매년 ${i + 1}월</option>`).join('')}</select><label class="rday"><input type="number" min="1" max="31" data-rk="d" data-r="${k}" value="${Number(r.d) || 1}" ${r.last ? 'title="매월 말일 (30일·28일인 달도 마지막 날)"' : ''}>${r.last ? '일(말일)' : '일'}</label><input type="text" data-rk="text" data-r="${k}" value="${esc(r.text)}" placeholder="예: 창립기념일, 원비 납부, 홍길동 생일">${colorSel(r, k)}<button class="x" data-rd="${k}">×</button></div>`
-    : `<div class="evrow" style="grid-template-columns:90px 90px 1fr 80px 28px;margin-bottom:4px"><select data-rk="week" data-r="${k}">${[['every', '매주'], ['1', '첫째'], ['2', '둘째'], ['3', '셋째'], ['4', '넷째'], ['last', '마지막']].map(([v, t]) => `<option value="${v}" ${String(r.week) === v ? 'selected' : ''}>${t}</option>`).join('')}</select><select data-rk="dow" data-r="${k}">${CAL.WD.ko1.map((w, i) => `<option value="${i}" ${Number(r.dow) === i ? 'selected' : ''}>${w}요일</option>`).join('')}</select><input type="text" data-rk="text" data-r="${k}" value="${esc(r.text)}" placeholder="일정 내용">${colorSel(r, k)}<button class="x" data-rd="${k}">×</button></div>`;
+    ? `<div class="evrow" style="grid-template-columns:90px 90px 1fr 80px 70px 28px;margin-bottom:4px"><select data-rk="m" data-r="${k}"><option value="0" ${!Number(r.m) ? 'selected' : ''}>매월</option>${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${Number(r.m) === i + 1 ? 'selected' : ''}>매년 ${i + 1}월</option>`).join('')}</select><label class="rday"><input type="number" min="1" max="31" data-rk="d" data-r="${k}" value="${Number(r.d) || 1}" ${r.last ? 'title="매월 말일 (30일·28일인 달도 마지막 날)"' : ''}>${r.last ? '일(말일)' : '일'}</label><input type="text" data-rk="text" data-r="${k}" value="${esc(r.text)}" placeholder="예: 창립기념일, 원비 납부, 홍길동 생일">${colorSel(r, k)}${nhBox(r, k)}<button class="x" data-rd="${k}">×</button></div>`
+    : `<div class="evrow" style="grid-template-columns:90px 90px 1fr 80px 70px 28px;margin-bottom:4px"><select data-rk="week" data-r="${k}">${[['every', '매주'], ['1', '첫째'], ['2', '둘째'], ['3', '셋째'], ['4', '넷째'], ['last', '마지막']].map(([v, t]) => `<option value="${v}" ${String(r.week) === v ? 'selected' : ''}>${t}</option>`).join('')}</select><select data-rk="dow" data-r="${k}">${CAL.WD.ko1.map((w, i) => `<option value="${i}" ${Number(r.dow) === i ? 'selected' : ''}>${w}요일</option>`).join('')}</select><input type="text" data-rk="text" data-r="${k}" value="${esc(r.text)}" placeholder="일정 내용">${colorSel(r, k)}${nhBox(r, k)}<button class="x" data-rd="${k}">×</button></div>`;
   const render = () => {
     const wk = doc.rules.map((r, k) => [r, k]).filter(([r]) => r.kind !== 'date'), dt = doc.rules.map((r, k) => [r, k]).filter(([r]) => r.kind === 'date');
-    $('#rulesBody').innerHTML = `<p class="hint">달력 요소의 "반복 일정 넣기"(또는 "문서의 모든 달력에")를 누르면 이 목록대로 일정이 들어갑니다. 이미 같은 일정이 있으면 건너뜁니다.</p>
+    $('#rulesBody').innerHTML = `<p class="hint">달력 요소의 "반복 일정 넣기"(또는 "문서의 모든 달력에")를 누르면 이 목록대로 일정이 들어갑니다. 이미 같은 일정이 있으면 건너뜁니다. <b>휴일 빼기</b>를 켠 일정은 공휴일(빨간 날)에는 넣지 않습니다.</p>
     <h3>요일 규칙 <small>매월 몇째 주 무슨 요일</small></h3><div id="rulesList">${wk.map(([r, k]) => row(r, k)).join('') || '<p class="hint">없음</p>'}</div><button class="btn sm" data-radd="week">+ 요일 규칙</button>
     <h3>날짜 규칙 <small>매년 같은 날 · 매월 같은 날 (생일·기념일·원비)</small></h3><div id="rulesList2">${dt.map(([r, k]) => row(r, k)).join('') || '<p class="hint">없음</p>'}</div><button class="btn sm" data-radd="date">+ 날짜 규칙</button>
-    <details class="fx" style="margin-top:10px"><summary><b>여러 줄 한 번에 붙여넣기</b> <small class="hint" style="margin:0">엑셀·메모에서 복사</small></summary><textarea id="rulePaste" rows="5" placeholder="3/2 개학식&#10;5월 5일 어린이날 행사&#10;매월 25일 원비 납부&#10;마지막 화요일 승급심사"></textarea><button class="btn sm" id="rulePasteGo">목록에 더하기</button></details>
+    <details class="fx" style="margin-top:10px"><summary><b>여러 줄 한 번에 붙여넣기</b> <small class="hint" style="margin:0">엑셀·메모에서 복사</small></summary><textarea id="rulePaste" rows="5" placeholder="3/2 개학식&#10;5월 5일 어린이날 행사&#10;매월 25일 원비 납부&#10;마지막 화요일 승급심사&#10;매주 수요일 품새반 (휴일 제외)"></textarea><button class="btn sm" id="rulePasteGo">목록에 더하기</button></details>
     <div class="row" style="margin-top:12px;gap:6px;flex-wrap:wrap"><button class="btn sm primary" id="ruleSave" title="새 문서·다음 해 달력에 이 목록이 자동으로 들어갑니다 (두 PC 설정 동기화)">⭐ 도장 기본 목록으로 저장</button><button class="btn sm" id="ruleLoad" ${savedRules() ? '' : 'disabled'}>저장된 목록 불러오기${savedRules() ? ` (${savedRules().length})` : ''}</button></div>`;
   };
   const B = $('#rulesBody');
-  B.oninput = e => { const t = e.target; if (t.dataset.r != null && t.dataset.rk) { doc.rules[Number(t.dataset.r)][t.dataset.rk] = t.value; if (t.dataset.rk === 'd') delete doc.rules[Number(t.dataset.r)].last; markDirty(); } };
+  B.oninput = e => { const t = e.target; if (t.dataset.r != null && t.dataset.rk) { if (t.type === 'checkbox') { if (t.checked) doc.rules[Number(t.dataset.r)][t.dataset.rk] = true; else delete doc.rules[Number(t.dataset.r)][t.dataset.rk]; markDirty(); return; } doc.rules[Number(t.dataset.r)][t.dataset.rk] = t.value; if (t.dataset.rk === 'd') delete doc.rules[Number(t.dataset.r)].last; markDirty(); } };
   B.onclick = e => {
     const x = e.target.closest('[data-rd]'); if (x) { doc.rules.splice(Number(x.dataset.rd), 1); markDirty(); render(); return; }
     const a = e.target.closest('[data-radd]'); if (a) { doc.rules.push(a.dataset.radd === 'date' ? { kind: 'date', m: 0, d: 1, text: '', color: '' } : { week: 'last', dow: 1, text: '', color: '' }); markDirty(); render(); return; }
@@ -5672,7 +5725,7 @@ window.addEventListener('dragover', e => { if (dropKind(e) === 'file') e.prevent
 window.addEventListener('drop', e => { if (dropKind(e) === 'file' && !e.target.closest('#scroller')) e.preventDefault(); });
 $('#scroller').addEventListener('dragover', e => {
   if (!dropKind(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
-  const el = dropKind(e) === 'el' ? null : dropTarget(e); $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon')); if (el) { const d = $(`#canvas .el[data-id="${el.id}"]`); if (d) d.classList.add('dropon'); }
+  const el = dropTarget(e); $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon')); if (el) { const d = $(`#canvas .el[data-id="${el.id}"]`); if (d) d.classList.add('dropon'); }
 });
 $('#scroller').addEventListener('dragleave', e => { if (!e.relatedTarget || !$('#scroller').contains(e.relatedTarget)) $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon')); });
 // 동영상·소리 파일 끌어다 놓기: 원본은 이 PC에 그대로 두고 위치(손잡이)만 기억 — 길이와 상관없이 편집 가능
@@ -5688,7 +5741,7 @@ document.addEventListener('drop', e => { if (e.target.closest && e.target.closes
 document.addEventListener('dragover', e => { if (e.target.closest && e.target.closest('#vtl') && e.dataTransfer && [...(e.dataTransfer.items || [])].some(it => it.kind === 'file')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }, true);
 $('#scroller').addEventListener('drop', async e => {
   const kind = dropKind(e); if (!kind) return; if (kind === 'file' && mediaDrop(e)) return; e.preventDefault(); $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon'));
-  if (kind === 'el') { await insertElem(e.dataTransfer.getData('text/x-nc-el'), toMM(e)); return; } /* 요소 패널에서 끌어다 놓기 → 놓은 자리에 */
+  if (kind === 'el') { const tg = dropTarget(e); await insertElem(e.dataTransfer.getData('text/x-nc-el'), toMM(e), { target: tg }); return; } /* 요소 패널에서 끌어다 놓기 → 놓은 자리에 (그림 위에 놓으면 그 그림을 바꿈) */
   const tgt = dropTarget(e), p = toMM(e), pg0 = page(); let refs = [];
   if (kind === 'img') { const v = e.dataTransfer.getData('text/x-nc-img'); const r = v.startsWith('lib|') ? await libInsert(v.slice(4)) : v; if (r) refs = [r]; }
   else { const fs = [...e.dataTransfer.files].filter(f => /^image\//.test(f.type)); if (!fs.length) { toast('그림·동영상·소리 파일만 넣을 수 있습니다', true); return; } for (const f of fs) refs.push(addAsset(await imageFileToURL(f))); }
