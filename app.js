@@ -1590,11 +1590,11 @@ function renderVideoSide(body) {
     const vrs = t.closest('[data-vresp]'); if (vrs) { applyRespToVideo(vrs.dataset.vresp); return; }
     const id = (t.closest('button') || {}).id;
     if (id === 'vdPlay') openVideoPlayer(); else if (id === 'vdSave') openVideoMaker();
-    else if (id === 'vdAutoAnim') { let n = 0; doc.pages.forEach(pg => { pg.els.forEach(el => { delete el.anim; }); n += VIDEO.autoAnimate(pg, doc.w, doc.h); }); commit(); renderAll(); toastUndo(`글자·사진·묶음 ${n}개에 '차례로 나타나기'를 넣었습니다`); }
+    else if (id === 'vdAutoAnim') { let n = 0, kept = 0; doc.pages.forEach(pg => { const keep = new Map(); pg.els.forEach(el => { if (el.anim && !el.anim.auto) keep.set(el.id, clone(el.anim)); delete el.anim; }); n += VIDEO.autoAnimate(pg, doc.w, doc.h); pg.els.forEach(el => { if (keep.has(el.id)) el.anim = keep.get(el.id); else if (el.anim) el.anim.auto = true; }); kept += keep.size; }); commit(); renderAll(); toastUndo(`'차례로 나타나기'를 넣었습니다${kept ? ` — 손으로 넣은 효과 ${kept}개는 그대로 두었습니다` : ''}`); }
     else if (id === 'vdCamAll') { doc.pages.forEach(pg => { if (!pg.vcam) pg.vcam = 'in'; }); commit(); renderAll(); toastUndo('모든 장면에 천천히 다가가는 카메라를 넣었습니다'); }
     else if (id === 'vdClrAnim') { doc.pages.forEach(pg => { delete pg.vcam; pg.els.forEach(el => { delete el.anim; delete el.animOut; delete el.animLoop; delete el.kb; }); }); commit(); renderAll(); toastUndo('모든 움직임을 뺐습니다'); }
     else if (id === 'vdTrAll') { const pg = page(); let skip = 0; tlTiming(() => doc.pages.forEach(p2 => { if (p2.vsplit) { skip++; return; } p2.vtrans = pg.vtrans || V.trans; p2.vturn = pg.vturn; })); commit(); renderTimeline(); toastUndo(`모든 장면에 같은 넘김 효과를 넣었습니다${skip ? ` (장면을 나눈 자리 ${skip}곳은 그대로 이어짐)` : ''}`); }
-    else if (id === 'vdDurAll') { tlTiming(() => doc.pages.forEach(pg => { delete pg.vdur; delete pg.vtrans; delete pg.vturn; })); commit(); renderSide(); renderTimeline(); }
+    else if (id === 'vdDurAll') { tlTiming(() => doc.pages.forEach(pg => { delete pg.vdur; delete pg.vtrans; delete pg.vturn; })); commit(); renderSide(); renderTimeline(); toastUndo('모든 장면의 길이·넘김을 기본값으로 되돌렸습니다'); }
     else if (id === 'vdMusicDel') { delete doc.audio; commit(); renderSide(); renderTimeline(); }
     else if (id === 'vdMusicLocal') pickMusicLocal();
     else if (id === 'vdSfxLocal') { try { const list = await NC.media.pick('audio'); list.forEach(m => { doc.media = Object.assign(doc.media || {}, { [m.id]: m }); addSfx('m:' + m.id, m.name.replace(/\.[^.]+$/, ''), true); }); commit(); renderTimeline(); } catch (err) { if (err.name !== 'AbortError') toast(err.message, true); } }
@@ -1628,9 +1628,9 @@ async function placeVideo(m, at) {
   const k = Math.min(doc.w / info.w, doc.h / info.h), w = Math.round(info.w * k * 10) / 10, h = Math.round(info.h * k * 10) / 10;
   const el = addEl({ type: 'video', src: 'm:' + m.id, poster: info.poster ? addAsset(info.poster) : '', name: m.name.replace(/\.[^.]+$/, ''), w, h, x: 0, y: 0, rot: 0, opacity: 1, fit: 'cover', radius: 0, tin: 0, tout: Math.round(info.dur * 100) / 100, dur: info.dur, vol: 1, mute: false });
   const len = Math.round(info.dur * 10) / 10, pg = page();
-  if (info.dur > 0 && Math.abs(Number(pg.vdur || vset().dur) - len) > 0.2) { pg.vdur = len; commit(); }
+  if (info.dur > 0 && Math.abs(Number(pg.vdur || vset().dur) - len) > 0.2) { pg.vdur = len; amendCommit(); }  /* 넣기와 한 단계 */
   if (tlOn()) { tl.fit = true; renderTimeline(); } else if (sideTab !== 'video') { sideTab = 'video'; renderRail(); renderSide(); tlShow(true); }
-  toast(`동영상 '${m.name}' (${fmtT(info.dur)})을 넣었습니다 — 장면 길이를 영상에 맞췄습니다. ✂(Ctrl+B)로 잘라 필요 없는 부분을 지우세요. 원본은 이 PC에만 있습니다.`);
+  toastUndo(`동영상 '${m.name}'(${fmtT(info.dur)})${eul(m.name)} 넣었습니다 — 장면 길이를 영상에 맞췄습니다. ✂(Ctrl+B)로 잘라 필요 없는 부분을 지우세요. 원본은 이 PC에만 있습니다.`);
   return el;
 }
 // 소리 파일을 오디오 트랙 클립으로
