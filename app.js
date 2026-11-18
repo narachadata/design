@@ -309,6 +309,7 @@ function elHTML(el, mode, ext) {
   if (el.type === 'video' && NC.media.isLocal(el.src) && mediaMissing.has(el.src.slice(2))) return `<div class="el el-video vmiss${lock}" data-id="${el.id}" style="${base}">${mode === 'edit' ? `<div class="vmiss-in"><b>원본 영상 없음</b><span>${esc(el.name || '')}</span><small>속성에서 '원본 다시 연결'</small></div>` : ''}</div>`;
   if (el.type === 'video') { const ps = el.poster ? src(el.poster) : ''; const len = Math.max(0, Number(el.tout || el.dur || 0) - Number(el.tin || 0)); return `<div class="el el-video${lock}" data-id="${el.id}" style="${base}${blend}"><div class="imgclip" style="border-radius:${el.radius || 0}mm;background:#1b1f2a">${ps && el.fit === 'blur' ? `<img src="${ps}" alt="" draggable="false" style="object-fit:cover;filter:blur(2mm) brightness(.72)">` : ''}${ps ? `<img src="${ps}" alt="" draggable="false" style="object-fit:${el.fit === 'contain' || el.fit === 'blur' ? 'contain' : 'cover'};${el.fit === 'blur' ? 'position:absolute;inset:0;' : ''}${FX.imageFilter(el).replace(/^filter:/, 'filter:')}">` : ''}${mode === 'edit' ? `<span class="vbadge">▶ ${(len / Math.max(0.1, Number(el.speed || 1))).toFixed(1)}초${Number(el.speed || 1) !== 1 ? ` · ${el.speed}배` : ''}</span>` : ''}</div></div>`; }
   if (el.type === 'shape') return `<div class="el el-shape${lock}" data-id="${el.id}" style="${base}${blend}">${FX.shapeSVG(el)}</div>`;
+  if (el.type === 'path' && el.attIcon === 'bus') return `<div class="el el-path${lock}" data-id="${el.id}" style="${base}">${ATT_BUS_SVG}</div>`;
   if (el.type === 'path' && el.attSvg) return `<div class="el el-path${lock}" data-id="${el.id}" style="${base}">${attFrameSVG()}</div>`;  /* 출석부 틀 */
   if (el.type === 'path') return `<div class="el el-path${lock}" data-id="${el.id}" style="${base}${blend}">${FX.pathSVG(el)}</div>`;
   if (el.type === 'chart') return `<div class="el el-chart${lock}" data-id="${el.id}" style="${base}">${chartSVG(el)}</div>`;
@@ -5506,10 +5507,14 @@ async function measFetch() {
   let key = ''; try { key = localStorage.getItem('naracha_access_key') || ''; } catch (e) {}
   if (!key) return (measSrv = { err: 'nokey' });
   const get = st => fetch(`${MEAS_SERVER}?key=${encodeURIComponent(key)}&store=${st}&v=2&t=${Date.now()}`).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(measJoin);
-  try { const [meas, att] = await Promise.all([get('meas'), get('att').catch(() => null)]); return (measSrv = { meas: meas && meas.measV ? meas : null, att: att && att.attV ? att : null, at: Date.now() }); }
+  try { const [meas, att, work] = await Promise.all([get('meas'), get('att').catch(() => null), get('work').catch(() => null)]); return (measSrv = { meas: meas && meas.measV ? meas : null, att: att && att.attV ? att : null, work: work && work.workV ? work : null, at: Date.now() }); }
   catch (e) { return (measSrv = { err: e.message === 'AUTH' ? 'auth' : 'net' }); }
 }
 function measLocal() { if (measSrv && measSrv.meas && measSrv.meas.map) return measSrv.meas; try { const v = JSON.parse(localStorage.getItem('naracha-meas') || 'null'); return v && v.map ? v : null; } catch (e) { return null; } }
+function measWork() { if (measSrv && measSrv.work) return measSrv.work; try { return JSON.parse(localStorage.getItem('naracha-work') || 'null'); } catch (e) { return null; } }
+/* 차량 이용 수련생: 관리 앱 차량 노선(업무 창고 work.bus — 요일 → courses → stops → riders[].name)에 이름이 있으면 (관리 앱 '이름 옆 🚗'과 같은 규칙, 읽기만) */
+function attBusSet() { const out = new Set(); try { const b = (measWork() || {}).bus || {}; Object.values(b).forEach(d => ((d && d.courses) || []).forEach(c => ((c && c.stops) || []).forEach(st => ((st && st.riders) || []).forEach(r => { const n = String((r && r.name) || '').trim(); if (n) out.add(n); })))); } catch (e) {} return out; }
+const attBusNote = note => { const m = String(note || '').match(/차량\s*[:：]\s*([^\n·]*)/); return !!(m && /편도|왕복|이용|탑승/.test(m[1]) && !/안\s*함|미이용|없음|불필요|X|x/.test(m[1])); };  /* 등록 설문 메모 「차량: 편도…」 */
 function measAtt() { if (measSrv && measSrv.att) return measSrv.att; try { return JSON.parse(localStorage.getItem('naracha-att') || 'null'); } catch (e) { return null; } }
 /* 재원생 판정 (관리프로그램 _measEnrolled와 같게 — 관리프로그램 작업방 확인): 명단 roster.list[].n 에 있고, 퇴관 quitMapAtt.map[이름](del:true가 아님)·휴관 closedMapAtt.map[이름]이 아님. st 꼬리표는 옛 표시라 보조로만 */
 function measEnrolledFn(a0) { try { const a = a0 || measAtt(); const L = a && a.roster && a.roster.list; if (!Array.isArray(L) || !L.length) return null; const quit = (a.quitMapAtt && a.quitMapAtt.map) || {}, closed = (a.closedMapAtt && a.closedMapAtt.map) || {}; const live = new Set(L.filter(x => x && x.n && !(quit[x.n] && !quit[x.n].del) && !closed[x.n] && !/휴관|퇴관/.test(x.st || '')).map(x => x.n)); return nm => live.has(nm); } catch (e) { return null; } }
@@ -5624,13 +5629,14 @@ const ATT_PHOTO = { x: 168.5, y: 23, w: 33, h: 35.5 };  /* 이름 아래 오른�
 const attDefYear = () => { const t = new Date(); return t.getFullYear() + (t.getMonth() >= 10 ? 1 : 0); };  /* 11·12월엔 다음 해 출석부 (연말 일괄) */
 const attIsDoc = () => Math.abs(doc.w - ATT_W) < 1 && Math.abs(doc.h - ATT_H) < 1;
 function attState() {
-  if (!doc.att) doc.att = { rows: [], year: attDefYear(), stMode: 'join', printFrame: false, showFrame: false, layout: {}, fv: 3 };
+  if (!doc.att) doc.att = { rows: [], year: attDefYear(), stMode: 'join', printFrame: false, showFrame: false, layout: {}, fv: 4 };
   const A = doc.att; A.rows = A.rows || []; A.layout = A.layout || {}; if (!A.year) A.year = attDefYear(); if (!A.stMode) A.stMode = 'join';
   if (A.fv !== 2) { /* 11/19 팀장님: 주소는 지역까지만·보호자 이름 가운데 O·학교 글자 겹침 빼기·연도 칸은 등록일 — 이미 넣은 명단도 한 번 맞춤 */
     A.fv = 2; if (A.stMode === 'auto') A.stMode = 'join';
     A.rows.forEach(r => { r.addr = attAddrShort(r.addr); r.guard = attMask(r.guard); r.school = attSchoolFix(r.school); if (r.src) r.st = attStatus(r.join, A); });
   }
   if (A.fv === 2) { A.fv = 3; (doc.pages || []).forEach(p => { p.els = p.els.map(e => e.attFrame && e.type === 'image' ? Object.assign(attFrameEl(A), { id: e.id }) : e); }); }  /* 사진 틀 → 새로 그린 벡터 틀 (11/19) */
+  if (A.fv === 3) { A.fv = 4; const bs = attBusSet(); A.rows.forEach(r => { r.addr = attAddrShort(r.addr); if (r.bus == null) r.bus = bs.has(String(r.name || '').trim()); }); }  /* 주소에 붙은 메모(· 차량: …)·'중앙로55' 정리, 차량 이용 표시 (11/19) */
   return A;
 }
 const attRowsOn = () => attState().rows.filter(r => String(r.name || '').trim() && !r.off);
@@ -5651,12 +5657,14 @@ const attSchoolFix = v => { const t = String(v || '').trim(), m = t.match(/^(.+?
 /* 보호자 이름: 가운데 글자를 O로 (김영희 → 김O희, 남궁민수 → 남OO수), 두 글자면 뒤 글자를 O로 (김영 → 김O) */
 const attMask = v => { const t = String(v || '').trim(); if (!t || /\s/.test(t) || !/^[가-힣]+$/.test(t)) return t; const a = [...t]; if (a.length === 1) return t; if (a.length === 2) return a[0] + 'O'; return a[0] + 'O'.repeat(a.length - 2) + a[a.length - 1]; };
 /* 주소: 세부 주소(동·호·층 등)는 빼고 어디 사는지만 — 아파트면 아파트 이름까지, 도로명이면 도로명과 건물 번호까지, 지번이면 동·리 이름까지 */
-const ATT_APT = /(아파트|APT|apt|빌라|맨션|타운|주공|래미안|자이|힐스테이트|푸르지오|e편한세상|이편한세상|아이파크|롯데캐슬|더샵|센트레빌|위브|꿈에그린|호반|SK뷰|sk뷰|데시앙|베르디움|스위첸|해링턴|어울림|하늘채|수자인|오피스텔)/;
+const ATT_APT = /(아파트|APT|apt|빌라|맨션|타운|주공|단지|래미안|자이|힐스테이트|푸르지오|e편한세상|이편한세상|아이파크|롯데캐슬|더샵|센트레빌|위브|꿈에그린|호반|SK뷰|sk뷰|데시앙|베르디움|스위첸|해링턴|어울림|하늘채|수자인|오피스텔)/;
 function attAddrShort(v) {
   let t = String(v || '').replace(/\s+/g, ' ').trim(); if (!t) return '';
+  t = t.split(/\s*[·•|/]\s*|\s+(?=차량\s*[:：])|\s*[;；]\s*/)[0].trim();  /* 등록 설문 메모가 한 줄에 붙은 것(· 차량: 편도 …) 빼기 */
   const extra = (t.match(/\(([^)]*)\)/) || [])[1] || ''; t = t.replace(/\([^)]*\)/g, ' ').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
   const tk = t.split(' '), isDetail = w => /^(\d+|[A-Za-z]?\d+[A-Za-z]?)(동|호|층|호실)$|^(지하|B)\d+층?$|^\d+-\d+호$/.test(w);
   const ai = tk.findIndex(w => ATT_APT.test(w) && !isDetail(w)); if (ai >= 0) return tk.slice(0, ai + 1).join(' ');
+  const rj = tk.findIndex(w => /[가-힣](로|길)\d+(-\d+)?$/.test(w)); if (rj >= 0 && !tk.slice(0, rj).some(w => /(로|길)$/.test(w) && !/^\d/.test(w))) return tk.slice(0, rj + 1).join(' ');  /* '중앙로55'처럼 도로명에 번호가 붙은 것 */
   const ri = tk.findIndex(w => /(로|길)$/.test(w) && !/^\d/.test(w)); if (ri >= 0) {
     let end = ri; if (tk[end + 1] && /^\d+번?길$/.test(tk[end + 1])) end++; if (tk[end + 1] && /^(지하)?\d+(-\d+)?$/.test(tk[end + 1])) end++;  /* '세권로 12번길 33'처럼 띄어 쓴 길 이름 */
     const ex = extra.split(/[,\s]+/).filter(Boolean), apt = ex.find(w => ATT_APT.test(w)), dong = ex.find(w => /(동|리|읍|면|가)$/.test(w) && !/^\d/.test(w));
@@ -5682,10 +5690,10 @@ function attRegDays(a) {
   return n => D.filter(([d]) => ((cnt[n] || {})[d] || 0) >= 2).map(([, k]) => k).join(',');
 }
 /* 한 사람의 출석부 칸 값 (관리 앱 STUDENTS 한 줄에서) — 보호자는 (모)가 맨 위로 정렬돼 있어 첫 번호가 어머니 */
-function attRowFrom(s, A, daysOf) {
+function attRowFrom(s, A, daysOf, busSet) {
   const gds = (s.gd || []).filter(g => g && String(g.p || '').replace(/\D/g, '').length >= 9), g0 = gds.find(g => String(g.r || '').trim() === '모') || gds[0];
   const ph = g0 ? g0.p : s.sp, dig = String(ph || '').replace(/\D/g, '');
-  return { name: String(s.n || '').trim(), join: s.joinDate || '', st: attStatus(s.joinDate, A), bd: /^\d{4}-\d\d-\d\d/.test(String(s.by || '')) ? String(s.by).slice(0, 10) : '', reg: attReg(s.t), addr: attAddrShort(attAddr(s.note)), tel: attTel(ph), days: daysOf(s.n), school: attSchoolFix([attSchool(s.school), attGrade(s)].filter(Boolean).join('/')), guard: attMask(g0 ? String(g0.n || '').trim() : ''), no: dig.length >= 4 ? dig.slice(-4) : '', b: s.b || '', src: 1 };
+  return { name: String(s.n || '').trim(), join: s.joinDate || '', st: attStatus(s.joinDate, A), bd: /^\d{4}-\d\d-\d\d/.test(String(s.by || '')) ? String(s.by).slice(0, 10) : '', reg: attReg(s.t), addr: attAddrShort(attAddr(s.note)), tel: attTel(ph), days: daysOf(s.n), school: attSchoolFix([attSchool(s.school), attGrade(s)].filter(Boolean).join('/')), guard: attMask(g0 ? String(g0.n || '').trim() : ''), bus: !!((busSet && busSet.has(String(s.n || '').trim())) || attBusNote(s.note)), no: dig.length >= 4 ? dig.slice(-4) : '', b: s.b || '', src: 1 };
 }
 function attEls(r) {
   const A = attState(), out = [];
@@ -5694,6 +5702,7 @@ function attEls(r) {
     const el = Object.assign({}, TEXT_DEF, { id: uid(), text, font: 'Nanum Myeongjo', size, weight, italic: false, color: color || '#1a1a1a', align, lh: 1.2, ls: 0, name: '출석부 · ' + label, attKey: key, x, y: r1(line - 1 - h), w, h, sizing: 'fixed', fitText: true, valign: 'bottom' }, L);
     el.fitMax = Number(L.fitMax) || el.size; out.push(el);
   });
+  if (r.bus) out.push(Object.assign({ type: 'path', attIcon: 'bus', pts: [], id: uid(), x: 196.2, y: 16.6, w: 4.4, h: 3.2, rot: 0, opacity: 1, name: '출석부 · 차량', attKey: 'bus' }, A.layout.bus || {}));  /* 차량 이용 — 이름 오른쪽 작은 차 (11/19 팀장님) */
   if (r.photo) out.push(Object.assign({ type: 'image', id: uid(), src: r.photo, x: ATT_PHOTO.x, y: ATT_PHOTO.y, w: ATT_PHOTO.w, h: ATT_PHOTO.h, rot: 0, fit: 'cover', pos: '50% 30%', flip: false, radius: 0, opacity: 1, name: '출석부 · 사진', attKey: 'photo' }, A.layout.photo || {}));
   return out;
 }
@@ -5729,6 +5738,8 @@ function attFrameSVG() {
   for (let m = 1; m <= NR; m++) o += num(m, TX + MW / 2, TY + HH + RH * (m - 0.5) + 1.55);
   return (attFrameSVG.c = o + '</svg>');
 }
+/* 노란 어린이 통학 차량 (빨간 띠·둥근 창·바퀴) — 22×16 */
+const ATT_BUS_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 16" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible"><path d="M2.2 3.4Q2.2 1.2 4.4 1.2H14.6Q16.4 1.2 17.4 2.8L20 7Q20.6 8 20.6 9.2V11.6Q20.6 12.8 19.4 12.8H2.6Q1.4 12.8 1.4 11.6V4.4Q1.4 3.4 2.2 3.4Z" fill="#FFC83D" stroke="#3B2F2A" stroke-width="0.9" stroke-linejoin="round"/><rect x="3.4" y="3" width="3.6" height="3.4" rx="1" fill="#BFE6FF" stroke="#3B2F2A" stroke-width="0.6"/><rect x="8.2" y="3" width="3.6" height="3.4" rx="1" fill="#BFE6FF" stroke="#3B2F2A" stroke-width="0.6"/><path d="M13 3H15.2Q16 3 16.5 3.8L18.2 6.4H13Z" fill="#BFE6FF" stroke="#3B2F2A" stroke-width="0.6" stroke-linejoin="round"/><rect x="1.8" y="8.2" width="18.4" height="1.3" fill="#E5323F"/><circle cx="19.2" cy="10.8" r="0.7" fill="#FFF6C8"/><circle cx="6" cy="13" r="2.1" fill="#3B2F2A"/><circle cx="6" cy="13" r="0.8" fill="#D9D9D9"/><circle cx="15.6" cy="13" r="2.1" fill="#3B2F2A"/><circle cx="15.6" cy="13" r="0.8" fill="#D9D9D9"/></svg>';
 const attFrameVis = A => !!(A.printFrame || A.showFrame);  /* 틀까지 출력이면 편집 화면에도 틀이 보임 (11/19 팀장님) */
 const attFrameEl = A => ({ type: 'path', attSvg: 1, pts: [], id: uid(), x: 0, y: 0, w: ATT_W, h: ATT_H, rot: 0, opacity: 1, name: '출석부 틀', locked: true, hidden: !attFrameVis(A), certFrame: true, attFrame: true });
 function attPage(r, i) { const A = attState(); return { id: uid(), bg: '#ffffff', els: [attFrameEl(A)].concat(attEls(r)), label: `출석부 ${i + 1} · ${r.name || ''}`, att: { i } }; }
@@ -5826,8 +5837,8 @@ async function openAttPick(again) {
     const go = async make => {
       const picked = list.filter(s => !P.off[s.n]); if (!picked.length) return; d.querySelector('#apGo').disabled = d.querySelector('#apGoMake').disabled = true;
       if (!attIsDoc()) { d.close(); if (!(await attNeedDoc())) return; }  /* 사진을 지금 문서가 아니라 출석부 문서에 넣도록 먼저 옮김 */
-      const A = attState(), pm = await attPhotos(picked.map(s => s.n), true), rows = [];
-      for (const s of picked) { const r = attRowFrom(s, A, daysOf), ph = pm[s.n] && pm[s.n].d; if (ph) { try { r.photo = addAsset(await shrinkDataURL(ph, 900)); } catch (e) { r.photo = addAsset(ph); } } rows.push(r); }
+      const A = attState(), pm = await attPhotos(picked.map(s => s.n), true), rows = [], busSet = attBusSet();
+      for (const s of picked) { const r = attRowFrom(s, A, daysOf, busSet), ph = pm[s.n] && pm[s.n].d; if (ph) { try { r.photo = addAsset(await shrinkDataURL(ph, 900)); } catch (e) { r.photo = addAsset(ph); } } rows.push(r); }
       const before = A.rows.length, keep = P.replace ? [] : A.rows.filter(r => !rows.some(x => x.name === r.name)); A.rows = keep.concat(rows); attPrev = keep.length; commit(); d.close(); sideTab = 'att'; renderRail(); renderSide();
       const noPh = rows.filter(r => !r.photo).length; toast(`${rows.length}명을 출석부 명단에 넣었습니다${P.replace && before ? ` (예전 ${before}명은 바꿈)` : ''}${noPh ? ` · 사진 없는 사람 ${noPh}명은 사진 칸을 비웁니다` : ''}`);
       if (make) { if (await attMerge()) openPrint('att'); }
@@ -5851,8 +5862,8 @@ function renderAttSide(body) {
   <div class="row" style="gap:6px;align-items:flex-end;flex-wrap:wrap"><label class="f" style="margin:0;width:6.5em"><span>출석부 연도</span><input type="number" min="2000" max="2100" data-aset="year" value="${Number(A.year)}"></label>
     <label class="f" style="margin:0;flex:1;min-width:12em"><span>'연도' 칸에 넣을 글</span><select data-aset="stMode">${[['join', '등록일'], ['auto', '자동: 신규 / 기등록'], ['old', '모두 기등록'], ['year', `연도 숫자 (${Number(A.year)})`], ['none', '비움']].map(([k, t]) => `<option value="${k}" ${A.stMode === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
   ${A.stMode === 'join' ? `<p class="hint" style="margin:4px 0 0">관리프로그램의 등록일(예: 2026-11-03). 등록일이 없는 사람은 비어 있으니 칸을 직접 채우세요.</p>` : ''}${A.stMode === 'auto' ? `<p class="hint" style="margin:4px 0 0">자동: 이번 달(${new Date().getMonth() + 1}월)에 등록한 사람은 「신규」, 그 전에 등록한 사람은 「기등록」. 칸을 직접 고쳐도 됩니다.</p>` : ''}
-  <div class="ctable-wrap" style="margin-top:6px"><table class="ctable"><tr><th title="출력">✓</th><th>#</th>${cols.map(([, l]) => `<th>${esc(l)}</th>`).join('')}<th title="관리프로그램 사진">📷</th><th></th></tr>
-  ${rows.map((r, i) => `<tr class="${i === attPrev ? 'cur' : ''} ${r.off ? 'off' : ''}"><td><input type="checkbox" data-aon="${i}" ${r.off ? '' : 'checked'} title="체크를 풀면 출력에서 빠짐"></td><td class="ci" data-apick="${i}" title="미리 보기">${i + 1}</td>${cols.map(([k]) => `<td><input data-ar="${i}" data-ak="${k}" value="${esc(r[k] || '')}" style="min-width:${W[k]}em"></td>`).join('')}<td>${r.photo ? `<button class="x" data-aphdel="${i}" title="사진 빼기">📷</button>` : `<button class="x" data-aphadd="${i}" title="사진 넣기 (그림 파일)">＋</button>`}</td><td><button class="x" data-adel="${i}" title="이 줄 지우기">×</button></td></tr>`).join('')}</table></div>
+  <div class="ctable-wrap" style="margin-top:6px"><table class="ctable"><tr><th title="출력">✓</th><th>#</th>${cols.map(([, l]) => `<th>${esc(l)}</th>`).join('')}<th title="차량 이용 — 이름 오른쪽에 차 표시">🚌</th><th title="관리프로그램 사진">📷</th><th></th></tr>
+  ${rows.map((r, i) => `<tr class="${i === attPrev ? 'cur' : ''} ${r.off ? 'off' : ''}"><td><input type="checkbox" data-aon="${i}" ${r.off ? '' : 'checked'} title="체크를 풀면 출력에서 빠짐"></td><td class="ci" data-apick="${i}" title="미리 보기">${i + 1}</td>${cols.map(([k]) => `<td><input data-ar="${i}" data-ak="${k}" value="${esc(r[k] || '')}" style="min-width:${W[k]}em"></td>`).join('')}<td><input type="checkbox" data-abus="${i}" ${r.bus ? 'checked' : ''} title="차량 이용 (관리프로그램 차량 노선에서 자동)"></td><td>${r.photo ? `<button class="x" data-aphdel="${i}" title="사진 빼기">📷</button>` : `<button class="x" data-aphadd="${i}" title="사진 넣기 (그림 파일)">＋</button>`}</td><td><button class="x" data-adel="${i}" title="이 줄 지우기">×</button></td></tr>`).join('')}</table></div>
   <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" data-ax="add">+ 한 명 (손으로)</button>${rows.length ? '<button class="btn sm" data-ax="allon">모두 체크</button><button class="btn sm" data-ax="alloff">모두 해제</button><button class="btn sm" data-ax="clear">명단 비우기</button>' : ''}</div>
   <h3>③ 미리 보기</h3>
   ${rows.length ? `<div class="row cprevnav"><button class="btn sm icon" data-anav="-1">‹</button><span>${Math.min(attPrev + 1, rows.length)} / ${rows.length} · <b>${esc((rows[attPrev] || {}).name || '(이름 없음)')}</b>${(rows[attPrev] || {}).off ? ' <small>(빠짐)</small>' : ''}</span><button class="btn sm icon" data-anav="1">›</button></div><div class="cprev" id="aprev"></div><p class="hint" style="margin:4px 0 0">${A.printFrame ? '🖼 틀까지 출력 — 흰 종이에 틀과 글자를 함께 찍습니다' : '흐린 틀은 자리를 맞춰 보는 그림 — ✍ 글자만 출력하므로 틀은 찍히지 않습니다'}.</p>` : '<p class="hint">명단을 넣으면 여기에 출석부가 보입니다.</p>'}
@@ -5869,6 +5880,7 @@ function renderAttSide(body) {
   document.addEventListener('input', e => { if (!on() || !sb().contains(e.target)) return; const t = e.target, A = attState(); if (t.dataset.ar != null) { const i = Number(t.dataset.ar); A.rows[i] = A.rows[i] || {}; A.rows[i][t.dataset.ak] = t.value; attPrev = i; soon(); } });
   document.addEventListener('change', e => { if (!on() || !sb().contains(e.target)) return; const t = e.target, A = attState();
     if (t.dataset.aon != null) { const r = A.rows[Number(t.dataset.aon)]; if (r) { r.off = !t.checked; attPrev = Number(t.dataset.aon); markDirty(); renderSide(); } return; }
+    if (t.dataset.abus != null) { const r = A.rows[Number(t.dataset.abus)]; if (r) { r.bus = t.checked; attPrev = Number(t.dataset.abus); markDirty(); renderSide(); } return; }  /* 차량 이용 손으로 */
     if (t.dataset.aset === 'year') { A.year = Number(t.value) || attDefYear(); A.rows.forEach(r => { if (r.src) r.st = attStatus(r.join, A); }); markDirty(); renderSide(); return; }
     if (t.dataset.aset === 'stMode') { A.stMode = t.value; A.rows.forEach(r => { if (r.src) r.st = attStatus(r.join, A); }); markDirty(); renderSide(); toast('관리프로그램에서 가져온 사람의 연도 칸을 새로 채웠습니다'); return; }
     if (t.dataset.ax === 'show') { attShowFrame(t.checked); renderSide(); } });
