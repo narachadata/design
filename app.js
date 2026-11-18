@@ -5629,7 +5629,7 @@ const ATT_PHOTO = { x: 168.5, y: 23, w: 33, h: 35.5 };  /* 이름 아래 오른�
 const attDefYear = () => { const t = new Date(); return t.getFullYear() + (t.getMonth() >= 10 ? 1 : 0); };  /* 11·12월엔 다음 해 출석부 (연말 일괄) */
 const attIsDoc = () => Math.abs(doc.w - ATT_W) < 1 && Math.abs(doc.h - ATT_H) < 1;
 function attState() {
-  if (!doc.att) doc.att = { rows: [], year: attDefYear(), stMode: 'join', printFrame: false, showFrame: false, layout: {}, fv: 4 };
+  if (!doc.att) doc.att = { rows: [], year: attDefYear(), stMode: 'join', printFrame: false, showFrame: false, layout: {}, fv: 5 };
   const A = doc.att; A.rows = A.rows || []; A.layout = A.layout || {}; if (!A.year) A.year = attDefYear(); if (!A.stMode) A.stMode = 'join';
   if (A.fv !== 2) { /* 11/19 팀장님: 주소는 지역까지만·보호자 이름 가운데 O·학교 글자 겹침 빼기·연도 칸은 등록일 — 이미 넣은 명단도 한 번 맞춤 */
     A.fv = 2; if (A.stMode === 'auto') A.stMode = 'join';
@@ -5637,6 +5637,7 @@ function attState() {
   }
   if (A.fv === 2) { A.fv = 3; (doc.pages || []).forEach(p => { p.els = p.els.map(e => e.attFrame && e.type === 'image' ? Object.assign(attFrameEl(A), { id: e.id }) : e); }); }  /* 사진 틀 → 새로 그린 벡터 틀 (11/19) */
   if (A.fv === 3) { A.fv = 4; const bs = attBusSet(); A.rows.forEach(r => { r.addr = attAddrShort(r.addr); if (r.bus == null) r.bus = bs.has(String(r.name || '').trim()); }); }  /* 주소에 붙은 메모(· 차량: …)·'정자일로55' 정리, 차량 이용 표시 (11/19) */
+  if (A.fv === 4) { A.fv = 5; A.rows.forEach(r => { r.addr = attAddrShort(r.addr); }); }  /* 끝 숫자 빼기 (11/19) */
   return A;
 }
 const attRowsOn = () => attState().rows.filter(r => String(r.name || '').trim() && !r.off);
@@ -5658,12 +5659,14 @@ const attSchoolFix = v => { const t = String(v || '').trim(), m = t.match(/^(.+?
 const attMask = v => { const t = String(v || '').trim(); if (!t || /\s/.test(t) || !/^[가-힣]+$/.test(t)) return t; const a = [...t]; if (a.length === 1) return t; if (a.length === 2) return a[0] + 'O'; return a[0] + 'O'.repeat(a.length - 2) + a[a.length - 1]; };
 /* 주소: 세부 주소(동·호·층 등)는 빼고 어디 사는지만 — 아파트면 아파트 이름까지, 도로명이면 도로명과 건물 번호까지, 지번이면 동·리 이름까지 */
 const ATT_APT = /(아파트|APT|apt|빌라|맨션|타운|주공|단지|래미안|자이|힐스테이트|푸르지오|e편한세상|이편한세상|아이파크|롯데캐슬|더샵|센트레빌|위브|꿈에그린|호반|SK뷰|sk뷰|데시앙|베르디움|스위첸|해링턴|어울림|하늘채|수자인|오피스텔)/;
-function attAddrShort(v) {
+/* 따로 떨어진 숫자 낱말(109동·1100호·109-1100·190번지·190, 건물 번호 등)은 빼고 지역만 (11/19 팀장님) — '정자일로55'처럼 도로명에 붙은 번호·'12번길'은 그대로 */
+function attAddrShort(v) { const tk = attAddrShort0(v).split(' ').filter(Boolean), num = w => /^(지하|B)?\d+([-~]\d+)*(동|호|호실|층|번지|번)?$/.test(w), out = tk.filter(w => !num(w)); return (out.length ? out : tk).join(' '); }
+function attAddrShort0(v) {
   let t = String(v || '').replace(/\s+/g, ' ').trim(); if (!t) return '';
   t = t.split(/\s*[·•|/]\s*|\s+(?=차량\s*[:：])|\s*[;；]\s*/)[0].trim();  /* 등록 설문 메모가 한 줄에 붙은 것(· 차량: 편도 …) 빼기 */
   const extra = (t.match(/\(([^)]*)\)/) || [])[1] || ''; t = t.replace(/\([^)]*\)/g, ' ').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
   const tk = t.split(' '), isDetail = w => /^(\d+|[A-Za-z]?\d+[A-Za-z]?)(동|호|층|호실)$|^(지하|B)\d+층?$|^\d+-\d+호$/.test(w);
-  const ai = tk.findIndex(w => ATT_APT.test(w) && !isDetail(w)); if (ai >= 0) return tk.slice(0, ai + 1).join(' ');
+  const ai = tk.findIndex(w => ATT_APT.test(w) && !isDetail(w)); if (ai >= 0) return tk.slice(0, ai + 1 + (tk[ai + 1] && /^\d+(차|단지)$/.test(tk[ai + 1]) ? 1 : 0)).join(' ');  /* '매탄주공 4단지'처럼 띄어 쓴 단지·차 */
   const rj = tk.findIndex(w => /[가-힣](로|길)\d+(-\d+)?$/.test(w)); if (rj >= 0 && !tk.slice(0, rj).some(w => /(로|길)$/.test(w) && !/^\d/.test(w))) return tk.slice(0, rj + 1).join(' ');  /* '정자일로55'처럼 도로명에 번호가 붙은 것 */
   const ri = tk.findIndex(w => /(로|길)$/.test(w) && !/^\d/.test(w)); if (ri >= 0) {
     let end = ri; if (tk[end + 1] && /^\d+번?길$/.test(tk[end + 1])) end++; if (tk[end + 1] && /^(지하)?\d+(-\d+)?$/.test(tk[end + 1])) end++;  /* '세권로 12번길 33'처럼 띄어 쓴 길 이름 */
