@@ -90,6 +90,7 @@ function markDirty() {
   if (store.state.handle && !store.state.needPerm && !NC.live.deferSave()) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 1500); } // 파일 권한을 다시 받기 전에는 브라우저에만 저장. 실시간 연결 중엔 먼저 들어온 PC가 저장
   updateSaveBadge(); NC.live.changed();
   if (sideTab === 'att' && doc.att) attLiveSoon();  /* 출석부: 왼쪽 패널에서 바꾼 것을 오른쪽 쪽에 바로 (11/19 팀장님) */
+  if (sideTab === 'cert' && doc.cert) certLiveSoon();  /* 상장도 같게 (11/19 팀장님) */
 }
 async function saveFileNow() {
   if (store.state.conflict) return false;
@@ -5283,15 +5284,34 @@ async function certEnsureFrame() {
 const certIsA4 = () => Math.abs(doc.w - 210) < 1 && Math.abs(doc.h - 297) < 1;
 /* 상장틀은 A4 — 문서가 A4가 아니면 명단·양식을 그대로 가지고 A4 상장 문서로 옮김 */
 async function certNeedA4() { if (certIsA4()) return true; /* 관장님: 상장은 무조건 A4 — 묻지 않고 명단·양식을 가지고 A4 상장 문서로 옮김 (지금 문서는 그대로 보관) */ const from = `${Math.round(doc.w)}×${Math.round(doc.h)}mm`; await certNewDoc(true); if (certIsA4()) toast(`상장은 A4라서 A4 상장 문서로 옮겨 만듭니다 (전에 열린 ${from} 문서는 그대로 보관)`); return certIsA4(); }
-async function certNewDoc(carry) {
+async function certNewDoc(carry, kept) {
   if (!carry && doc.pages.some(p => p.els.length) && !window.confirm(`A4 상장 문서를 새로 만듭니다. 지금 문서를 닫을까요? (${keepNote()})`)) return;
   const keepCert = carry && doc.cert ? clone(Object.assign({}, doc.cert, { frame: undefined, framePdf: undefined })) : null;
-  await keepCurrentDoc(); await store.disconnect();
+  if (!kept) await keepCurrentDoc(); await store.disconnect();
   const nd = newDoc(SIZES.find(s_ => s_[0] === 'a4p')); nd.fmt = 'a4p'; nd.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); nd.name = `상장 ${new Date().getFullYear()}`; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.rules = doc.rules; nd.fonts = doc.fonts;
   doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; if (keepCert) doc.cert = keepCert; certState();
   try { const fr = await store.idbGet('cert-frame'); if (fr && fr.url) { doc.cert.frame = addAsset(fr.url); if (fr.pdf) doc.cert.framePdf = addAsset(fr.pdf); } } catch (e) {}
   commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다');
   zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); toast(doc.cert.frame ? 'A4 상장 문서를 만들었습니다 — 이 PC에 기억된 상장 틀을 넣었습니다' : 'A4 상장 문서를 만들었습니다 — ① 상장 틀을 불러오세요');
+}
+/* 실시간 상장 (11/19 팀장님 "상장도 출석부처럼 왼쪽에서 고르는 값이 오른쪽 편집 창에 실시간으로"): 양식·명단·공통 글·본문·배치·번호가 바뀌면 이 양식의 상장 쪽을 다시 만듦.
+   명단이 없으면 빈 상장 한 장(출력 '상장 쪽만'에서는 빠짐). 발급 대장(번호 기록)은 「상장 N장 만들기」 때만 씀. 쪽에서 직접 옮긴 자리는 「이 쪽 배치를 모든 상장에」로 기억 */
+let certBuilt = { id: '', sig: '' }, certLiveT = 0, certLiveBusy = false;
+const certSig = C => JSON.stringify([C.form, C.data[C.form], C.layout, C.serial || null, C.frame || '', C.framePdf || '', C.printFrame !== false]);
+function certLiveSoon(now) { clearTimeout(certLiveT); certLiveT = setTimeout(certLive, now ? 0 : 350); }
+async function certLive() {
+  if (!doc.cert || !certIsA4() || certLiveBusy) return; const C = certState(), sig = certSig(C), id = doc.docId || '';
+  if (certBuilt.id === id && certBuilt.sig === sig) return; certLiveBusy = true;
+  try {
+    const rows = certRows(C.form), pages = rows.length ? rows.map((r, i) => certPage(C.form, r, i)) : [Object.assign(certPage(C.form, {}, 0), { label: '상장 (명단 없음)' })];
+    if (!rows.length) pages[0].cert = Object.assign({}, pages[0].cert || { form: C.form, i: 0 }, { empty: true });
+    await fitTextOffscreen(pages.flatMap(p => p.els));
+    if (certSig(C) !== sig || (doc.docId || '') !== id) { certLiveBusy = false; certLiveSoon(); return; }
+    const keep = doc.pages.filter(p => !(p.cert && (p.cert.form === C.form || p.cert.empty)) && !p.certTpl && (p.els.length || p.cert));  /* 다른 양식의 빈 상장도 치움 */
+    doc.pages = keep.concat(pages); cur = keep.length + Math.min(Math.max(0, certPrev), pages.length - 1); sel = []; fitCache.clear();
+    certBuilt = { id, sig }; commit(); const ae = document.activeElement, sb0 = $('#sidebody'), inSide = ae && sb0 && sb0.contains(ae);
+    if (inSide) { renderCanvas(); fitCanvas(); renderOverlay(); renderInspector(); updateSaveBadge(); renderThumbs && renderThumbs(); } else renderAll();
+  } finally { certLiveBusy = false; }
 }
 /* 만들기: 이 양식으로 만든 쪽을 지우고 명단대로 다시 만듦 (다른 쪽은 그대로) */
 async function certMerge(skipAsk) {
@@ -5307,7 +5327,7 @@ async function certMerge(skipAsk) {
     const D = C.data[C.form], now = Date.now(), ent = rows.map((r, i) => ({ no: certNo(C, i), name: r.name || '', title: certVal(D, r, 'title'), date: certVal(D, r, 'date'), t: now })), nos = new Set(ent.map(x => x.no));
     C.log = (C.log || []).filter(x => !nos.has(x.no)).concat(ent).slice(-2000);
     try { const P = C.serial.prefix || String(new Date().getFullYear()), m = JSON.parse(localStorage.getItem('naracal-cert-serial') || '{}'), last = (Number(C.serial.start) || 1) + rows.length - 1; if (!(Number(m[P]) >= last)) { m[P] = last; lsSet('naracal-cert-serial', m); } } catch (e) {} }
-  doc.pages = keep.concat(pages); cur = keep.length; sel = []; fitCache.clear(); commit(); renderAll();
+  doc.pages = keep.concat(pages); cur = keep.length; sel = []; fitCache.clear(); certBuilt = { id: doc.docId || '', sig: certSig(C) }; commit(); renderAll();
   toastUndo(`상장 ${rows.length}장을 만들었습니다${C.serial && C.serial.on ? ` (${certNo(C, 0)} ~ ${certNo(C, rows.length - 1)}, 다음 번호 ${(Number(C.serial.start) || 1) + rows.length})` : ''} — 쪽마다 고칠 수 있고, 다운로드에서 PDF로 한 번에 저장합니다`);
 }
 /* ---- 상장 양식 쪽 (워드 메일 머지의 '주 문서') ----
@@ -5382,7 +5402,25 @@ function certSaveLayout() {
   pg.els.forEach(e => { if (!e.certKey) return; const L = {}; CERT_LP.forEach(kk => { if (e[kk] !== undefined) L[kk] = clone(e[kk]); }); if (e.fitText) { L.size = e.fitMax || e.size; L.fitMax = e.fitMax || e.size; } C.layout[certLKey(form, e.certKey, pg.cert.n || 0)] = L; n++; }); /* 기록 상자는 종목 수가 같은 상장끼리만 */
   commit(); certMerge(); toast(`이 쪽의 글 상자 ${n}개 위치·모양을 양식에 기억하고 모든 상장을 다시 만들었습니다`);
 }
+/* 상장·출석부 패널에 들어오면 바로 그 용지의 편집 화면으로 (11/19 팀장님): 지금 문서에 다른 작업(그림·영상 등)이 있으면 먼저 저장(파일 또는 직전 문서)하고 알림.
+   상장 = A4(상장 쪽·양식 쪽만), 출석부 = 209×150(출석부 쪽만) — 아니면 새 문서로 (명단·양식 설정은 가지고 감) */
+let docEntering = false;
+function noticeDlg(title, html) { let d = $('#dlgNotice'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgNotice'; document.body.appendChild(d); } d.style.maxWidth = '520px'; d.innerHTML = `<div class="dhead"><h2>${title}</h2></div><div class="dbody"><p style="margin-top:0;line-height:1.6">${html}</p><div class="row" style="justify-content:flex-end"><button class="btn primary" data-close>확인</button></div></div>`; d.querySelector('[data-close]').onclick = () => d.close(); if (!d.open) d.showModal(); }
+async function enterDoc(kind) {
+  if (docEntering) return; docEntering = true;
+  try {
+    const had = doc.pages.some(p => p.els.length && !(kind === 'cert' ? (p.cert || p.certTpl) : p.att)), name = doc.name || '디자인', hadFile = !!store.state.handle, fname = store.state.fileName || '';
+    let ok = true; if (had) ok = await keepCurrentDoc(); if (!ok) { sideTab = 'naracha'; renderRail(); renderSide(); return; }
+    if (kind === 'cert') await certNewDoc(true, true); else await attNewDoc(true, true);
+    sideTab = kind; renderRail(); renderSide();
+    if (had) noticeDlg('💾 지금 작업하던 파일은 저장되었습니다', `「<b>${esc(name)}</b>」${hadFile ? ` — 파일(<b>${esc(fname)}</b>)에 저장했습니다.` : ' — 이 브라우저의 <b>직전 문서</b>에 보관했습니다. 위 막대 <b>저장 ▾ → 직전 문서 되살리기</b>로 다시 열 수 있습니다.'}<br>${kind === 'cert' ? '<b>A4 상장</b>' : '<b>출석부(209×150)</b>'} 편집 화면으로 바꿨습니다.`);
+  } finally { docEntering = false; }
+}
+const certDocOk = () => certIsA4() && !doc.pages.some(p => p.els.length && !p.cert && !p.certTpl);
+const attDocOk = () => attIsDoc() && !doc.pages.some(p => p.els.length && !p.att);
 function renderCertSide(body) {
+  if (!certDocOk()) { body.innerHTML = '<p class="hint" style="padding:12px">A4 상장 편집 화면을 준비하는 중…</p>'; enterDoc('cert'); return; }
+  certLiveSoon(true);
   if (!certState().frame && !renderCertSide._tried) { renderCertSide._tried = true; certEnsureFrame().then(ok => { renderCertSide._tried = false; if (ok && sideTab === 'cert') { commit(); renderSide(); toast('이 PC에 기억된 상장 틀을 넣었습니다'); } }); }
   const C = certState(), form = C.form, F = CERT_FORMS[form], D = C.data[form], rows = D.rows, nOk = certRows(form).length, a4 = Math.abs(doc.w - 210) < 1 && Math.abs(doc.h - 297) < 1;
   const fieldChips = F.common.map(([, l]) => l.replace(/ \(.*\)$/, '')).filter(l => !/날짜|단위|종목/.test(l));
@@ -5559,15 +5597,18 @@ async function openGradeImport() {
       <label class="f"><span>심사일</span><select id="giDate">${dates.map(dd => `<option value="${dd}" ${dd === gradeImp.date ? 'selected' : ''}>${dd} · ${byDate[dd].length}명</option>`).join('')}</select></label>
       <h3>${list.length}명 <small>체크를 풀면 빠짐</small></h3>
       <div class="mpeople">${list.map(x => `<label class="mper ${gradeImp.off[x.name] ? 'off' : ''}"><input type="checkbox" data-gioff="${esc(x.name)}" ${gradeImp.off[x.name] ? '' : 'checked'}><b>${esc(x.name)}</b> <small>${esc(x.grade)}${x.now && x.now !== x.grade ? ` (지금 ${esc(x.now)})` : ''}${cyc ? '' : ` · ${esc(x.t || '등록?')} ${x.per}개월마다`}</small><span>${esc(certGradeNote(x.grade, gradeImp.date, cyc || x.per, x.kd))}</span></label>`).join('')}</div>
-      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="giReplace" ${D.rows.some(r => String(r.name || '').trim()) ? '' : 'checked'}> 지금 명단을 바꾸기 (끄면 뒤에 더함)</label><button class="btn" id="giGo" ${on.length ? '' : 'disabled'}>명단에 넣기</button><button class="btn primary" id="giGoMake" ${on.length ? '' : 'disabled'}>넣고 ${on.length}장 미리 보기</button></div></div>`;
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="giReplace" ${D.rows.some(r => String(r.name || '').trim()) ? '' : 'checked'}> 지금 명단을 바꾸기 (끄면 뒤에 더함)</label><button class="btn primary" id="giGo" ${on.length ? '' : 'disabled'}>명단에 넣기 (${on.length}명)</button></div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
     d.onchange = e => { const t = e.target; if (t.id === 'giDate') { gradeImp.date = t.value; gradeImp.off = {}; draw(); } if (t.dataset.gioff) { if (t.checked) delete gradeImp.off[t.dataset.gioff]; else gradeImp.off[t.dataset.gioff] = 1; draw(); } };
-    const go = async make => { C.form = 'grade'; D.common.title = D.common.title || '급증'; D.common.date = fmt(gradeImp.date); const rows = on.map(x => ({ name: x.name, grade: x.grade, per: x.per, kd: x.kd })); D.rows = $('#giReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; commit(); d.close(); sideTab = 'cert'; renderRail(); renderSide(); toast(`급증 ${rows.length}명을 명단에 넣었습니다 — 날짜 ${D.common.date}`); if (make) openCertPreview(); };
-    $('#giGo').onclick = () => go(false); $('#giGoMake').onclick = () => go(true);
+    const go = async make => { C.form = 'grade'; D.common.title = D.common.title || '급증'; D.common.date = fmt(gradeImp.date); const rows = on.map(x => ({ name: x.name, grade: x.grade, per: x.per, kd: x.kd })); D.rows = $('#giReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; commit(); d.close(); sideTab = 'cert'; renderRail(); renderSide(); toast(`급증 ${rows.length}명을 명단에 넣었습니다 — 오른쪽에 바로 만들었습니다 (날짜 ${D.common.date})`); certLiveSoon(true); };
+    $('#giGo').onclick = () => go(false);
   };
   draw();
 }
 let measImp = { year: 0, half: '', kinds: null, off: {} };
+/* 가장 최근에 측정(기록 입력)한 종류만 처음에 체크 (11/19 팀장님 "이번엔 체력 측정이었어") — 관리 앱 측정 회차의 _t(마지막 입력)·date, 3일 안에 함께 한 종류는 같이 */
+function measRecentKinds(all) { const t = s => Number(s._t) || (s.date ? Date.parse(s.date) : 0) || 0, L = (all || []).filter(s => s && s.kind && (s.rows || []).length); if (!L.length) return ['줄넘기', '체력']; const top = L.reduce((a, b) => t(b) > t(a) ? b : a), mt = t(top);
+  return [...new Set(L.filter(s => s.year === top.year && (s.half === 'H2') === (top.half === 'H2') && mt - t(s) <= 3 * 864e5).map(s => s.kind))]; }
 async function openMeasImport(again) {
   let d = $('#dlgMeas'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgMeas'; d.className = 'wide'; document.body.appendChild(d); }
   const box = (msg, hint) => { d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="max-width:560px"><p>${msg}</p>${hint ? `<p class="hint">${hint}</p>` : ''}</div>`; d.querySelector('[data-close]').onclick = () => d.close(); if (!d.open) d.showModal(); };
@@ -5580,7 +5621,7 @@ async function openMeasImport(again) {
   /* 관장님 지시: 지금 휴관·퇴관생은 반드시 제외 — 명단·장부를 못 읽으면 필터 없이 계산하지 않고 멈춤 */
   if (!enrolled) { d.innerHTML = `<div class="dhead"><h2>📥 측정에서 향상왕 가져오기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="max-width:560px"><p><b>수련생 명단을 읽지 못해 멈췄습니다.</b></p><p class="hint">지금 휴관·퇴관한 수련생이 상장에 잘못 들어가지 않도록, 명단·휴관·퇴관 자료가 있어야 향상왕을 계산합니다. 같은 브라우저에서 <b>관리프로그램(narachadata.github.io/naracha)</b>을 열어 명단이 불러와진 뒤 다시 누르세요.</p></div>`; d.querySelector('[data-close]').onclick = () => d.close(); if (!d.open) d.showModal(); return; }
   const years = [...new Set(all.map(s => s.year))].sort((a, b) => b - a);
-  if (!measImp.year || !years.includes(measImp.year)) { measImp.year = all[0].year; measImp.half = all[0].half === 'H2' ? 'H2' : 'H1'; measImp.kinds = ['줄넘기', '체력']; measImp.off = {}; }
+  if (!measImp.year || !years.includes(measImp.year)) { measImp.year = all[0].year; measImp.half = all[0].half === 'H2' ? 'H2' : 'H1'; measImp.kinds = measRecentKinds(all); const lt = all.find(s => measImp.kinds.includes(s.kind)); if (lt) { measImp.year = lt.year; measImp.half = lt.half === 'H2' ? 'H2' : 'H1'; } measImp.off = {}; }
   const draw = () => {
     /* 연도 · 상반기/하반기 · 줄넘기/체력 을 고르면 그 측정 회차들의 향상왕 (관장님: "년도, 전반기, 후반기, 줄넘기, 체력 데이터를 선택") */
     const picked = all.filter(s => s.year === measImp.year && (s.half === 'H2' ? 'H2' : 'H1') === measImp.half && measImp.kinds.includes(s.kind)), res = picked.map(s => ({ s, r: measImprove(s, all, enrolled) }));
@@ -5594,7 +5635,7 @@ async function openMeasImport(again) {
       ${res.some(x => !x.r.prev) ? `<p class="hint" style="color:#b3261e">⚠ ${res.filter(x => !x.r.prev).map(x => esc(`${x.s.year} ${measHalf(x.s)} ${x.s.kind}`)).join(', ')}: 비교할 직전 회차가 없어 향상왕을 계산할 수 없습니다.</p>` : ''}
       <h3>향상왕 ${people.length}명 <small>${people.reduce((t, p) => t + p.recs.length, 0)}개 종목 · 체크를 풀면 빠짐</small></h3>
       <div class="mpeople">${people.map(p => `<label class="mper ${measImp.off[p.name] ? 'off' : ''}"><input type="checkbox" data-moff="${esc(p.name)}" ${measImp.off[p.name] ? '' : 'checked'}><b>${esc(p.name)}</b> <small>${esc(measAgeLabel(p.age))}</small><span>${p.recs.map(q => `${esc(q.k)} ${esc(q.a)}→${esc(q.b)}${esc(q.u)}`).join(' · ')}</span></label>`).join('') || '<p class="hint">향상왕이 없습니다</p>'}</div>
-      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="mReplace" ${certState().data.record.rows.some(r => String(r.name || '').trim() && !(Array.isArray(r.recs) && r.recs.length)) ? '' : 'checked'}> 지금 명단을 바꾸기 (끄면 뒤에 더함 · Ctrl+Z로 되돌리기)</label><button class="btn" id="mGo" ${nOn ? '' : 'disabled'}>명단에 넣기</button><button class="btn primary" id="mGoMake" ${nOn ? '' : 'disabled'}>넣고 ${nOn}장 미리 보기</button></div></div>`;
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="mReplace" ${certState().data.record.rows.some(r => String(r.name || '').trim() && !(Array.isArray(r.recs) && r.recs.length)) ? '' : 'checked'}> 지금 명단을 바꾸기 (끄면 뒤에 더함 · Ctrl+Z로 되돌리기)</label><button class="btn primary" id="mGo" ${nOn ? '' : 'disabled'}>명단에 넣기 (${nOn}명)</button></div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
     d.onclick = e => { const h = e.target.closest('[data-mhalf]'); if (h && !h.disabled) { measImp.half = h.dataset.mhalf; measImp.off = {}; draw(); } };
     d.onchange = e => { const t = e.target; if (t.id === 'mYear') { measImp.year = Number(t.value); const hs = all.filter(s => s.year === measImp.year).map(s => s.half === 'H2' ? 'H2' : 'H1'); if (!hs.includes(measImp.half)) measImp.half = hs[0]; measImp.off = {}; draw(); return; } if (t.dataset.mkind) { const kd = t.dataset.mkind; measImp.kinds = t.checked ? [...new Set(measImp.kinds.concat(kd))] : measImp.kinds.filter(x => x !== kd); measImp.off = {}; draw(); return; } if (t.dataset.moff) { if (t.checked) delete measImp.off[t.dataset.moff]; else measImp.off[t.dataset.moff] = 1; draw(); } };
@@ -5605,11 +5646,10 @@ async function openMeasImport(again) {
       D.common.event = `${s0.year}년${sameHalf ? ' ' + measHalf(s0) : ''} 나라차태권도 ${kinds.join('·')} 측정`;
       const rows = people.filter(p => !measImp.off[p.name]).map(p => ({ name: p.name, recs: p.recs }));
       D.rows = $('#mReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; commit(); d.close(); sideTab = 'cert'; renderRail(); renderSide();
-      toast(`향상왕 ${rows.length}명을 명단에 넣었습니다 — 상장 이름·측정 이름·날짜를 확인하세요`);
-      await certShowTpl(true);  /* 오른쪽에 양식(자리 표시)을 보여 줌 */
-      if (make) openCertPreview(doc.cert.frame ? '' : '상장 틀이 아직 없습니다 — ① 상장 틀을 불러오면 배경이 들어갑니다');
+      toast(`향상왕 ${rows.length}명을 명단에 넣었습니다 — 오른쪽에 바로 만들었습니다 (상장 이름·측정 이름·날짜 확인)`);
+      certLiveSoon(true);  /* 오른쪽에 상장 쪽을 바로 (11/19 팀장님: 출석부처럼 실시간) */
     };
-    $('#mGo').onclick = () => go(false); $('#mGoMake').onclick = () => go(true);
+    $('#mGo').onclick = () => go(false);
   };
   draw(); if (!d.open) d.showModal();
 }
@@ -5768,10 +5808,10 @@ const attModeSeg = (m, attr) => `<div class="seg cfseg" title="흰 종이면 틀
 function attSetMode(m, quiet) { const A = attState(); A.photoOnly = m === 'photo'; A.printFrame = m === 'frame'; attFrameSync(A); commit(); renderAll(); if (!quiet) toast(m === 'frame' ? '출석부 틀까지 함께 출력합니다 (흰 종이)' : m === 'photo' ? '사진만 출력합니다 — 글자가 이미 찍힌 출석부 용지에 (편집 화면의 글자는 흐리게 보임)' : '틀은 빼고 글자·사진을 출력합니다 (출석부 용지)'); }
 function attSetFrame(on, quiet) { const A = attState(); A.printFrame = !!on; attFrameSync(A); commit(); renderAll(); if (!quiet) toast(on ? '출석부 틀까지 함께 출력합니다 (흰 종이) — 편집 화면에도 틀이 보입니다' : '틀은 빼고 글자만 출력합니다 (출석부 용지)'); }
 function attShowFrame(on) { const A = attState(); A.showFrame = !!on; attFrameSync(A); commit(); renderAll(); }
-async function attNewDoc(carry) {
+async function attNewDoc(carry, kept) {
   if (!carry && doc.pages.some(p => p.els.length) && !window.confirm(`출석부 용지(209×150mm) 문서를 새로 만듭니다. 지금 문서를 닫을까요? (${keepNote()})`)) return;
   const keep = carry && doc.att ? clone(doc.att) : null; const keepAssets = keep ? Object.fromEntries(keep.rows.filter(r => r.photo && String(r.photo).startsWith('a:')).map(r => [r.photo.slice(2), doc.assets[r.photo.slice(2)]]).filter(x => x[1])) : {};
-  await keepCurrentDoc(); await store.disconnect();
+  if (!kept) await keepCurrentDoc(); await store.disconnect();
   const nd = newDoc(['att', '출석부 209×150', ATT_W, ATT_H]); nd.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); nd.name = `출석부 ${keep ? keep.year : attDefYear()}`; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.rules = doc.rules; nd.fonts = doc.fonts;
   doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; if (keep) { doc.att = keep; Object.assign(doc.assets, keepAssets); } attState();
   commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다');
@@ -5890,6 +5930,7 @@ async function openAttPick(again) {
 }
 /* ---- 출석부 패널 ---- */
 function renderAttSide(body) {
+  if (!attDocOk()) { body.innerHTML = '<p class="hint" style="padding:12px">출석부 편집 화면을 준비하는 중…</p>'; enterDoc('att'); return; }
   if (doc.att && attIsDoc()) attLiveSoon(true);
   const A = attState(), rows = A.rows, nOn = attRowsOn().length, made = doc.pages.filter(p => p.att).length, cols = ATT_F.filter(f => f[0] === 'name').concat(ATT_F.filter(f => f[0] !== 'name')).map(f => [f[0], f[1]]);  /* 표는 이름이 맨 앞 */
   const W = { name: 5.5, st: 4, bd: 7, reg: 4.5, addr: 10, tel: 8, days: 5, school: 7, guard: 5, no: 4 };
@@ -5974,7 +6015,8 @@ function prRangeText(list) { const a = [...list].sort((x, y) => x - y), out = []
 function prPages() { const L = prPages0(); return doc.att && doc.att.photoOnly ? L.filter(i => !doc.pages[i].att || doc.pages[i].els.some(e => e.attKey === 'photo' && !e.hidden)) : L; }  /* 📷 사진만: 사진 없는 출석부 쪽은 빼고 (빈 종이가 나가지 않게) */
 function prPages0() {
   const n = doc.pages.length, S = prState; if (S.pages === 'cur') return [cur]; if (S.pages === 'sel') return [...pgSel].filter(i => i < n).sort((a, b) => a - b);
-  if (S.pages === 'cert') return doc.pages.map((p, i) => p.cert ? i : -1).filter(i => i >= 0);
+  if (S.pages === 'cert') return doc.pages.map((p, i) => p.cert && !p.cert.empty ? i : -1).filter(i => i >= 0);
+  if (S.pages === 'from') { const only = prKey === 'naracal-print-cert' ? (p => p.cert && !p.cert.empty) : prKey === 'naracal-print-att' ? (p => p.att && !p.att.empty) : (p => !p.dlOff); return doc.pages.map((p, i) => i >= cur && only(p) ? i : -1).filter(i => i >= 0); }  /* 지금 쪽(편집 화면·미리 보기에 보이는 상장)부터 끝까지 (11/19 팀장님) */
   if (S.pages === 'att') return doc.pages.map((p, i) => p.att ? i : -1).filter(i => i >= 0);
   if (S.pages === 'range') return prParse(S.range, n);
   if (S.pages === 'pick') return [...(S.pick || [])].filter(i => i >= 0 && i < n).sort((a, b) => a - b);
@@ -6051,7 +6093,7 @@ function openPrint(pre) {
     d.innerHTML = `<div class="dhead"><h2>🖨 출력 <small>${prKey === 'naracal-print-cert' ? '상장용 설정(따로 기억) · ' : prKey === 'naracal-print-att' ? '출석부용 설정(따로 기억) · ' : ''}${list.length}쪽 · ${esc(S.paper === 'doc' ? '문서 크기' : S.paper)} ${L.pw > L.ph ? '가로' : '세로'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody prdlg2">
       <div class="prpv">${pvHTML_}</div>
       <div class="prset"><div class="prcolA">
-        <div class="grid2"><label class="f"><span>출력할 쪽</span><select id="prPg">${[['all', `모든 쪽${doc.pages.some(p => p.dlOff) ? ' (숨긴 쪽 빼고)' : ''}`], ['cur', `지금 쪽 (${cur + 1})`], ...(hasCert ? [['cert', `상장 쪽만 (${doc.pages.filter(p => p.cert).length}장)`]] : []), ...(hasAtt ? [['att', `출석부 쪽만 (${doc.pages.filter(p => p.att).length}장)`]] : []), ['pick', S.pages === 'pick' ? `골라서 출력 (${list.length}쪽)` : '골라서 출력 (쪽 고르기)']].map(([a, t]) => `<option value="${a}" ${S.pages === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <div class="grid2"><label class="f"><span>출력할 쪽</span><select id="prPg">${[['all', `모든 쪽${doc.pages.some(p => p.dlOff) ? ' (숨긴 쪽 빼고)' : ''}`], ['cur', `지금 쪽 (${cur + 1})`], ['from', `지금 쪽부터 끝까지 (${cur + 1}쪽~)`], ...(hasCert ? [['cert', `상장 쪽만 (${doc.pages.filter(p => p.cert).length}장)`]] : []), ...(hasAtt ? [['att', `출석부 쪽만 (${doc.pages.filter(p => p.att).length}장)`]] : []), ['pick', S.pages === 'pick' ? `골라서 출력 (${list.length}쪽)` : '골라서 출력 (쪽 고르기)']].map(([a, t]) => `<option value="${a}" ${S.pages === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
         ${`<label class="f"><span>용지</span><select id="prPaper">${[['A4', 'A4 (210×297)'], ['A3', 'A3 (297×420)'], ['B5', 'B5 (182×257)'], ['Letter', 'Letter'], ['doc', `문서 크기 (${Math.round(doc.w)}×${Math.round(doc.h)})`]].map(([a, t]) => `<option value="${a}" ${S.paper === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`}</div>
         ${C && C.frame && list.some(i => doc.pages[i].cert) ? `<div class="prrow prframe"><span>상장 틀</span>${certFrameSeg(!!S.frame, 'data-prframe')}<small class="hint" style="margin:0;flex-basis:100%">${S.frame ? '틀과 글자를 함께 찍습니다 — 흰 종이·일반 상장지' : '틀은 빼고 글자만 찍습니다 — 틀이 미리 인쇄된 상장 용지 (크기는 실제 100%)'}</small></div>` : ''}
         ${doc.att && list.some(i => doc.pages[i].att) ? `<div class="prrow prframe"><span>출석부</span>${attModeSeg(attModeOf(doc.att), 'data-pramode')}<small class="hint" style="margin:0;flex-basis:100%">${doc.att.photoOnly ? '사진만 찍습니다 — 글자가 이미 찍힌 출석부 용지에 (자리는 글자와 같은 설정)' : S.frame ? '틀과 글자를 함께 찍습니다 — 흰 종이 (출석부 용지와 같은 모양으로 새로 그린 선명한 틀)' : '틀은 빼고 글자·사진만 찍습니다 — 인쇄된 출석부 용지 (실제 크기 100%, 어긋나면 위치 보정)'}${S.paper === 'A4' && (Number(S.nup) || 1) === 1 ? '<br>📄 출석부 용지(폭 209mm)를 <b>A4처럼 위쪽을 먼저</b> 넣으세요 — 프린터 창 용지는 <b>A4 그대로</b>, A4 쪽 맨 위에 출석부가 찍힙니다.' : ''}</small></div>` : ''}
