@@ -1485,3 +1485,11 @@ body.prmg-drag{cursor:grabbing;-webkit-user-select:none;user-select:none}
 .prr.on{background:#fff;box-shadow:0 0 0 1.5px var(--ui-accent) inset;font-weight:700}
 .prr-at{display:flex;align-items:center;gap:5px;margin-top:8px;flex-wrap:wrap}.prr-at>span{font-size:12.5px;color:var(--ui-fg2);font-weight:600}
 #dlgPrint .prset .prrow{margin:5px 0}
+
+/* 위 막대 정리 (11/19 팀장님 "너무 나열됨"): 크기 조정·공휴일·글꼴·도움말은 ⋯ 더보기 안으로, 문서 크기는 이름 옆 작은 칩 */
+.topbar .tb-more{display:none!important}
+.topbar .docsize{flex:none;border:1px solid var(--ui-line);background:var(--ui-field);color:var(--ui-fg2);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer;font-variant-numeric:tabular-nums}
+.topbar .docsize:hover{border-color:var(--ui-accent);color:var(--ui-accent);background:#fff}
+.tbmenu{position:fixed;z-index:80;min-width:190px;background:#fff;border:1px solid var(--ui-line);border-radius:10px;box-shadow:0 12px 32px rgba(16,24,40,.18);padding:5px}
+.tbmenu button{display:flex;align-items:center;gap:9px;width:100%;border:0;background:none;padding:8px 10px;border-radius:7px;font-size:13.5px;color:var(--ui-fg);cursor:pointer;text-align:left}
+.tbmenu button:hover{background:var(--ui-field)}.tbmenu button small{margin-left:auto;color:var(--ui-muted);font-size:11.5px}

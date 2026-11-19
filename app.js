@@ -146,7 +146,19 @@ function liveAfterRemote() { cur = clamp(cur, 0, doc.pages.length - 1); sel = se
 function tnow() { return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }); }
 function setStatusTitle() { const s = $('#status'); if (s) s.title = s.textContent; }
 function setStatus(t) { setTimeout(setStatusTitle, 0); $('#status').textContent = t; }
-function updateSaveBadge() { const b = $('#btnSave'); if (!b) return; const st = store.state; b.querySelector('span').textContent = '저장'; b.title = st.handle ? `저장 (Ctrl+S) · ${st.dir ? '동기화 폴더' : '파일'}: ${st.fileName}` : '저장 (Ctrl+S) · 아직 파일로 저장하지 않음'; b.classList.toggle('on', !!st.handle); }
+/* 위 막대: 문서 크기 칩 (누르면 크기 조정) · ⋯ 더보기 메뉴 (11/19 팀장님) */
+function updDocSize() { const b = $('#docSize'); if (!b || !doc) return; const pw = doc.w * 96 / 25.4, ph = doc.h * 96 / 25.4, isPx = Math.abs(pw - Math.round(pw)) < 0.05 && Math.abs(ph - Math.round(ph)) < 0.05 && doc.w > 50; const t = isPx ? `${Math.round(pw)} × ${Math.round(ph)} px` : docSizeLabel(' × ').replace(/(px|mm|cm)$/, ' $1');  /* 화면용(px) 문서는 px로 */ if (b.textContent !== t) b.textContent = t; }
+document.addEventListener('click', e => {
+  if (e.target.closest && e.target.closest('#docSize')) { $('#btnResize').click(); return; }
+  const mb = e.target.closest && e.target.closest('#btnMore'); const open = $('#tbMenu');
+  if (mb) { if (open) { open.remove(); return; } const m = document.createElement('div'); m.id = 'tbMenu'; m.className = 'tbmenu';
+    m.innerHTML = [['btnResize', '📐', '크기 조정', '문서 크기 바꾸기'], ['btnHoliday', '📅', '공휴일', '달력 휴일'], ['btnFonts', '🔤', '글꼴 관리', '내 글꼴 올리기'], ['btnHelp', '❓', '도움말', '단축키·사용법']].map(([id, ic, t, d]) => `<button type="button" data-tbm="${id}"><span>${ic}</span>${t}<small>${d}</small></button>`).join('');
+    document.body.appendChild(m); const r = mb.getBoundingClientRect(); m.style.top = (r.bottom + 4) + 'px'; m.style.left = Math.max(8, Math.min(r.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px'; return; }
+  const it = e.target.closest && e.target.closest('[data-tbm]'); if (it) { const id = it.dataset.tbm; if (open) open.remove(); const b = document.getElementById(id); if (b) b.click(); return; }
+  if (open && !(e.target.closest && e.target.closest('#tbMenu'))) open.remove();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#tbMenu')) $('#tbMenu').remove(); });
+function updateSaveBadge() { updDocSize(); const b = $('#btnSave'); if (!b) return; const st = store.state; b.querySelector('span').textContent = '저장'; b.title = st.handle ? `저장 (Ctrl+S) · ${st.dir ? '동기화 폴더' : '파일'}: ${st.fileName}` : '저장 (Ctrl+S) · 아직 파일로 저장하지 않음'; b.classList.toggle('on', !!st.handle); }
 // 이 PC에 원본이 없는 동영상·소리(내 PC 원본 'm:'만 해당 — 공방 그림·기본 소리·공유 자료는 온라인에 있으므로 늘 열림)
 const mediaMissing = new Set();
 function mediaRefs() { const out = []; doc.pages.forEach((pg, i) => pg.els.forEach(el => { if (el.type === 'video' && NC.media.isLocal(el.src)) out.push({ id: el.src.slice(2), where: `${i + 1}쪽 동영상`, kind: 'video' }); })); if (doc.audio && NC.media.isLocal(doc.audio.src)) out.push({ id: doc.audio.src.slice(2), where: '배경 음악', kind: 'audio' }); (doc.tracks || []).forEach(t => (t.items || []).forEach(it => { if (NC.media.isLocal(it.ref)) out.push({ id: it.ref.slice(2), where: `${t.name} 트랙`, kind: 'audio' }); })); return out; }
@@ -526,7 +538,7 @@ function renderThumbs() {
 }
 /* 너비만 바뀌었을 때: 다시 그리지 않고 미리보기 배율만 맞춤 (끌어서 너비 조절·창 크기 바꾸기) */
 function rescaleThumbs() { const box = $('#thumbs'); if (!box || !doc) return; const tb0 = box.querySelector('.thumb .tbox'), wpx = (tb0 && tb0.clientWidth) || (box.clientWidth - 14) || 200, k = wpx / (doc.w * MM), hh = doc.h * MM * k + 'px'; box.querySelectorAll('.thumb .tbox').forEach(b => { b.style.height = hh; const sh = b.querySelector('.sheet'); if (sh) sh.style.transform = `scale(${k})`; }); }
-function renderAll() { renderCanvas(); renderSide(); renderInspector(); if (tlOn()) { if (!tl.playing) tlHidePrev(); renderTimeline(); } }
+function renderAll() { updDocSize(); renderCanvas(); renderSide(); renderInspector(); if (tlOn()) { if (!tl.playing) tlHidePrev(); renderTimeline(); } }
 function rerender(opts) { opts = opts || {}; renderCanvas(); if (!opts.noPanel) renderInspector(); clearTimeout(thumbTimer); thumbTimer = setTimeout(() => { if (sideTab === 'pages') renderThumbs(); else if (sideTab === 'layers') renderSide(); if (tlOn()) { if (!tl.playing) tlHidePrev(); renderTimeline(); } }, 150); }
 function goto(i) { endEdit(); cur = clamp(i, 0, doc.pages.length - 1); sel = []; selDay = null; cellSel = null; renderAll(); }
 function select(ids) { endEdit(); sel = ids.filter(id => find(id)); if (sel.length) { tl.selIt = null; tl.selAu = false; tl.selScene = false; } selDay = null; if (cellSel && !sel.includes(cellSel.id)) cellSel = null; renderOverlay(); renderInspector(); if (sideTab === 'layers' || (sideTab === 'video' && ['text', 'motion', 'trans'].includes(vTab))) renderSide(); updateToolbarState(); }

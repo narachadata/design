@@ -307,7 +307,7 @@ NC.live = (function () {
   }
 
   /* ---------- 화면 표시: 상단 접속 목록 + 다른 PC가 고르는 요소 ---------- */
-  const css = `.livebar{display:inline-flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap}.livebar .lv{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--ui-field,#f3f4f7);border:1px solid var(--ui-line,#dde1ea);cursor:pointer;color:var(--ui-fg,#222)}.livebar .lv i{width:8px;height:8px;border-radius:50%;background:var(--c,#2f9e6b);display:inline-block}.livebar .lv.off i{background:#bbb}.livebar .lv.err i{background:#e0564b}
+  const css = `.livebar .lv.mini{padding:3px;border-color:transparent;background:transparent}.livebar{display:inline-flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap}.livebar .lv{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--ui-field,#f3f4f7);border:1px solid var(--ui-line,#dde1ea);cursor:pointer;color:var(--ui-fg,#222)}.livebar .lv i{width:8px;height:8px;border-radius:50%;background:var(--c,#2f9e6b);display:inline-block}.livebar .lv.off i{background:#bbb}.livebar .lv.err i{background:#e0564b}
 .live-box{position:absolute;pointer-events:none;border:2px solid var(--c);border-radius:2px;box-sizing:border-box}.live-box b{position:absolute;left:-2px;top:-20px;font:600 11px/1 Pretendard,sans-serif;color:#fff;background:var(--c);padding:3px 6px;border-radius:4px;white-space:nowrap}
 .live-ghost{position:absolute;border:2px dashed var(--c);background:color-mix(in srgb,var(--c) 12%,transparent);border-radius:2px;box-sizing:border-box;transform-origin:50% 50%;transition:left .1s linear,top .1s linear,width .1s linear,height .1s linear}
 .live-cur{position:absolute;left:0;top:0;transition:transform .12s linear,opacity .4s;will-change:transform}.live-cur svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}.live-cur b{position:absolute;left:15px;top:15px;font:600 11px/1 Pretendard,sans-serif;color:#fff;background:var(--c);padding:3px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.25)}.live-box.clash{border-style:dashed;animation:lvClash 1s ease-in-out infinite}@keyframes lvClash{50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 35%,transparent)}}
@@ -324,7 +324,8 @@ NC.live = (function () {
     const s = statusText();
     const ps = room ? Array.from(room.peers.values()) : [];
     const show = ps.length || (cfg().fb && cfg().on);
-    b.innerHTML = show ? `<span class="lv ${s.cls}" title="${esc(s.tip || s.t)}"><i></i>${esc(s.t)}${ps.length ? ` · 함께 ${ps.length}` : ''}</span>` + ps.map(p => `<span class="lv" style="--c:${p.color}" title="${esc(p.email || '')}"><i></i>${esc(p.pc)}${pageNo(p.cur)}${p.id === oldest() && p.id !== me.id ? ' (저장 담당)' : ''}</span>`).join('') : '';
+    const mini = !ps.length && s.cls !== 'err';  /* 11/19 팀장님: 혼자 쓸 때는 눈에 띄지 않게 작은 점만 (다른 PC가 들어오거나 오류일 때만 글자로) */
+    b.innerHTML = show ? (mini ? `<span class="lv mini ${s.cls}" title="${esc(s.t + (s.tip ? ' · ' + s.tip : '') + ' — 다른 PC가 같은 문서를 열면 함께 편집됩니다 (누르면 실시간 설정)')}"><i></i></span>` : `<span class="lv ${s.cls}" title="${esc(s.tip || s.t)}"><i></i>${esc(s.t)}${ps.length ? ` · 함께 ${ps.length}` : ''}</span>`) + ps.map(p => `<span class="lv" style="--c:${p.color}" title="${esc(p.email || '')}"><i></i>${esc(p.pc)}${pageNo(p.cur)}${p.id === oldest() && p.id !== me.id ? ' (저장 담당)' : ''}</span>`).join('') : '';
   }
   listeners.add(renderBar);
   function pageNo(pid) { const d = api && api.doc(); if (!d || !pid) return ''; const i = d.pages.findIndex(p => p.id === pid); return i >= 0 ? ` · ${i + 1}쪽` : ''; }
