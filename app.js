@@ -5116,7 +5116,7 @@ document.addEventListener('change', e => { if (!e.target.matches || !e.target.ma
 const CERT_TODAY = () => { const t = new Date(); return `${t.getFullYear()}년 ${t.getMonth() + 1}월 ${t.getDate()}일`; };
 const CERT_FORMS = {
   record: { name: '기록 향상왕', desc: '줄넘기·체력 향상왕 — 종목별 기록 전→후', common: [['title', '상장 이름', '줄넘기 향상왕'], ['event', '측정 이름', '2026년 나라차태권도 줄넘기측정'], ['date', '날짜', ''], ['k1', '종목 1', '앞으로 뛰기왕'], ['k2', '종목 2 (없으면 비움)', '뒤로 뛰기왕'], ['unit', '단위', '회']],
-    body: '위 사람은 평소 성실한 태도로 태권도 수련에 임하고,\n<{측정 이름}>에서 위와 같이\n좋은 성과를 얻게 되었기에\n이에 칭찬하며 상장을 수여합니다.',
+    body: '위 사람은 평소 성실한 태도로 태권도 수련에 임하고,\n<{측정 이름}>에서 위와 같이\n좋은 성과를 얻었기에 이를 칭찬하여 상장을 수여합니다.',  /* 11/19 팀장님: 세 줄로 (3·4째 줄을 한 줄로 — '이를 칭찬하여'로 다듬음) */
     cols: [['name', '이름', 7], ['a1', '종목1 전', 4], ['b1', '종목1 후', 4], ['a2', '종목2 전', 4], ['b2', '종목2 후', 4]] },
   grade: { name: '급증', desc: '승급·승품 — 이름·급수·다음 예정일', common: [['title', '상장 이름', '급증'], ['date', '날짜', ''], ['org', '심사 기관', '대한민국 태권도 협회'], ['cycle', '승급 주기 고정 (개월 — 비우면 운영규정대로 사람마다 자동)', '']],
     body: '위 사람은 {심사 기관} 심사 규정에 의하여\n승급심사 결과 위와 같이 자격을 인정합니다.',
@@ -5147,7 +5147,7 @@ function certSetFrame(on, quiet) { const C = certState(); C.printFrame = !!on; d
 const certFrameSeg = (on, attr) => `<div class="seg cfseg" title="틀이 미리 인쇄된 상장 용지면 '글자만'"><button type="button" ${attr}="1" aria-pressed="${on}">🖼 틀까지 출력 <small>흰 종이</small></button><button type="button" ${attr}="0" aria-pressed="${!on}">✍ 글자만 <small>틀 인쇄된 용지</small></button></div>`;
 function certState() {
   if (!doc.cert) doc.cert = { form: 'record', printFrame: true, data: {}, layout: {}, wv: 5 };  /* wv: certMigrate 판 */
-  const C = doc.cert; certMigrate(C); C.data = C.data || {}; C.layout = C.layout || {}; if (!C.frame) { C.frame = CERT_FRAME_JPG; C.framePdf = CERT_FRAME_PDF; } /* 틀은 기본으로 내장 틀 */
+  const C = doc.cert; certMigrate(C); if (C.data && C.data.record && C.data.record.body === '위 사람은 평소 성실한 태도로 태권도 수련에 임하고,\n<{측정 이름}>에서 위와 같이\n좋은 성과를 얻게 되었기에\n이에 칭찬하며 상장을 수여합니다.') C.data.record.body = '위 사람은 평소 성실한 태도로 태권도 수련에 임하고,\n<{측정 이름}>에서 위와 같이\n좋은 성과를 얻었기에 이를 칭찬하여 상장을 수여합니다.';  /* 예전 기본 본문(네 줄)은 새 기본(세 줄)으로 */ C.data = C.data || {}; C.layout = C.layout || {}; if (!C.frame) { C.frame = CERT_FRAME_JPG; C.framePdf = CERT_FRAME_PDF; } /* 틀은 기본으로 내장 틀 */
   Object.entries(CERT_FORMS).forEach(([k, f]) => { if (!C.data[k]) C.data[k] = { common: Object.fromEntries(f.common.map(([a, , v]) => [a, a === 'date' ? CERT_TODAY() : v])), body: f.body, rows: [] }; });
   return C;
 }
@@ -5182,6 +5182,7 @@ function certEls(form, r) {
       bodyY = 158 + rows_ * rowH + 5; bodySz = 14; }
   } else if (form === 'grade') { T('grade', r.grade, { label: '급수', x: 40, y: 158, w: 130, h: 11, size: 24, weight: 800, font: serifXB }); bodyY = 182; }
   else if (form === 'free') { T('line', r.line, { label: '이름 아래 한 줄', x: 25, y: 160, w: 160, h: 9, size: 15, font: serif, weight: 800 }); }
+  if (form === 'record' && bodyY === 180) { const nl = String(fill(D.body)).split('\n').length; if (nl < 4) bodyY = r1(bodyY + (4 - nl) * bodySz * 0.3528 * 1.75 / 2); }  /* 본문이 세 줄이면 네 줄일 때의 가운데에 오게 조금 내림 (11/19 팀장님) */
   T('body', fill(D.body), { label: '본문', x: 18, y: bodyY, w: 174, h: 30, size: bodySz, font: serif, weight: 800, lh: bodySz < 15 ? 1.65 : 1.75 });
   T('date', certVal(D, r, 'date'), { label: '날짜', x: 24, y: 229.5, w: 60, h: 8, size: 14, font: serif, weight: 800 });
   if (form === 'grade') T('note', String(r.note || '').trim() || certGradeNote(certVal(D, r, 'grade'), certVal(D, r, 'date'), String(D.common.cycle || '').trim() || r.per, r.kd), { label: '작은 글', x: 20, y: 242.5, w: 68, h: 6, size: 10.5, font: serif, weight: 800, align: 'center' });  /* 틀의 날짜 밑 점선(약 240mm) 아래 가운데 (팀장님 급증 견본) */
