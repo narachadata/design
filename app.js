@@ -5708,7 +5708,7 @@ function attRegDays(a) {
 function attRowFrom(s, A, daysOf, busSet) {
   const gds = (s.gd || []).filter(g => g && String(g.p || '').replace(/\D/g, '').length >= 9), g0 = gds.find(g => String(g.r || '').trim() === '모') || gds[0];
   const ph = g0 ? g0.p : s.sp, dig = String(ph || '').replace(/\D/g, '');
-  return { name: String(s.n || '').trim(), join: s.joinDate || '', st: attStatus(s.joinDate, A), bd: /^\d{4}-\d\d-\d\d/.test(String(s.by || '')) ? String(s.by).slice(0, 10) : '', reg: attReg(s.t), addr: attAddrShort(attAddr(s.note)), tel: attTel(ph), days: daysOf(s.n), school: attSchoolFix([attSchool(s.school), attGrade(s)].filter(Boolean).join('/')), guard: attMask(g0 ? String(g0.n || '').trim() : ''), bus: !!((busSet && busSet.has(String(s.n || '').trim())) || attBusNote(s.note)), no: dig.length >= 4 ? dig.slice(-4) : '', b: s.b || '', src: 1 };
+  return { name: String(s.n || '').trim(), join: s.joinDate || '', st: attStatus(s.joinDate, A), bd: /^\d{4}-\d\d-\d\d/.test(String(s.by || '')) ? String(s.by).slice(0, 10) : '', reg: attReg(s.t), addr: attAddrShort(String(s.addr || '').trim() || attAddr(s.note)),  /* 학적부 주소 칸(관리 앱 s.addr, 11/19 팀장님 요청으로 관리 앱에 새로 만듦) 먼저, 없으면 학적부 로그의 주소 줄 */ tel: attTel(ph), days: daysOf(s.n), school: attSchoolFix([attSchool(s.school), attGrade(s)].filter(Boolean).join('/')), guard: attMask(g0 ? String(g0.n || '').trim() : ''), bus: !!((busSet && busSet.has(String(s.n || '').trim())) || attBusNote(s.note)), no: dig.length >= 4 ? dig.slice(-4) : '', b: s.b || '', src: 1 };
 }
 function attEls(r) {
   const A = attState(), out = [];
