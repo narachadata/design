@@ -5369,7 +5369,7 @@ function certTplRow(form, rows, n) {
 function certTplPage(form, n) {
   const C = certState(), rows = certRows(form), r0 = certTplRow(form, rows, n), els = [];
   if (C.frame) els.push({ type: 'image', id: uid(), src: C.frame, pdfSrc: C.framePdf || undefined, x: 0, y: 0, w: doc.w, h: doc.h, rot: 0, fit: 'cover', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '상장 틀', locked: true, hidden: C.printFrame === false, certFrame: true });
-  const body = certEls(form, r0).concat(C.serial && C.serial.on ? [certSerialEl(C, form, 0)] : []); body.forEach(e => { if (certTplField(form, e.certKey, rows)) e.tplField = true; e.name = (e.name || '').replace('상장 · ', '양식 · '); });
+  const body = certEls(form, r0).concat(C.serial && C.serial.on ? [certSerialEl(C, form, 0)] : []); body.forEach(e => { if (certTplField(form, e.certKey, rows)) e.tplField = true; e.name = (e.name || '').replace('상장 · ', '양식 · '); if (e.type === 'text') e.certGen = String(e.text || ''); });
   return { id: uid(), bg: '#ffffff', els: els.concat(body), label: '0쪽 · 양식 (출력 안 됨 — 고치면 모든 상장에)', certTpl: { form, n: certRecN(form, r0) }, dlOff: true, vOff: true };
 }
 /* 양식 쪽을 만들거나 새로 고쳐 그 쪽으로 감 */
@@ -5389,7 +5389,7 @@ function certTplCommit() {
   if (cur === ti) { /* 지금 고치는 쪽이 양식: 기본 배치와 달라진 상자만 기억 */
     const gen = fresh(), changed = [];
     { const D0 = C.data[form], F0 = CERT_FORMS[form], back = [];
-      tp.els.forEach(e => { if (!e.certKey || e.tplField || e.type !== 'text') return; const g = gen.find(q => q.certKey === e.certKey); const t = String(e.text || '').trim(); if (!g || !t || t === String(g.text || '').trim()) return;
+      tp.els.forEach(e => { if (!e.certKey || e.tplField || e.type !== 'text') return; const g = gen.find(q => q.certKey === e.certKey); const t = String(e.text || '').trim(); if (!g || !t || t === String(g.text || '').trim()) return; if (e.certGen != null && t === String(e.certGen).trim()) return;  /* 화면에서 고친 글이 아님 — 명단 가져오기·왼쪽 칸이 값을 바꾼 것(11/19 체력 향상왕이 옛 '줄넘기 향상왕'으로 되돌아가던 것) */
         if (e.certKey === 'title' || e.certKey === 'date') { D0.common[e.certKey] = t; back.push(e.certKey === 'title' ? '상장 이름' : '날짜'); }
         else if (e.certKey === 'body') { let b = t.replace(/《이름》/g, '{이름}'); /* 본문에 채워져 있던 공통 값(측정 이름 등)은 다시 {자리}로 되돌려 둠 — 나중에 그 값을 바꿔도 따라오게 */ (String(D0.body || '').match(/\{([^{}\n]+)\}/g) || []).forEach(tok => { const nm = tok.slice(1, -1).trim(); if (nm === '이름') return; const c = F0.common.find(x => x[1].replace(/ \(.*\)$/, '') === nm), v = c ? certVal(D0, null, c[0]) : ''; if (v && b.split(v).length === 2) b = b.replace(v, tok); }); D0.body = b; back.push('본문'); } });
       if (back.length) { doc.pages.forEach(p => { if (!p.cert || p.cert.form !== form) return; const r = rows[p.cert.i]; if (!r) return; const f2 = certEls(form, r); p.els.forEach(e => { if (!['title', 'date', 'body'].includes(e.certKey)) return; const g = f2.find(q => q.certKey === e.certKey); if (g && g.text !== e.text) { e.text = g.text; delete e.html; fitCache.delete(e.id); } }); });
@@ -5411,10 +5411,12 @@ function certTplCommit() {
   }
   /* 양식 쪽의 글·배치를 지금 값으로 (요소 번호는 그대로 — 고른 상태가 풀리지 않게) */
   const gen2 = fresh(), old = tp.els, frame = old.find(e => e.certFrame), extra = old.filter(e => !e.certKey && !e.certFrame);
-  gen2.forEach(g => { const o = old.find(q => q.certKey === g.certKey); if (o) g.id = o.id; if (certTplField(form, g.certKey, rows)) g.tplField = true; g.name = (g.name || '').replace('상장 · ', '양식 · '); });
+  gen2.forEach(g => { const o = old.find(q => q.certKey === g.certKey); if (o) g.id = o.id; if (certTplField(form, g.certKey, rows)) g.tplField = true; g.name = (g.name || '').replace('상장 · ', '양식 · '); if (g.type === 'text') g.certGen = String(g.text || ''); });
   if (frame) frame.hidden = C.printFrame === false;
   tp.els = (frame ? [frame] : []).concat(gen2, extra); if (cur === ti) sel = sel.filter(id => tp.els.some(e => e.id === id));
 }
+/* 지금 0쪽 양식 글을 '만든 그대로'로 표시 — 명단 가져오기·왼쪽 칸 입력은 화면에서 고친 것이 아니므로 다음 commit에서 옛 글로 되돌리지 않게 */
+function certTplMark() { const tp = doc && doc.pages.find(p => p.certTpl); if (tp) tp.els.forEach(e => { if (e.type === 'text' && e.certKey) e.certGen = String(e.text || ''); }); }
 function certRecN(form, r) { return form === 'record' && r ? ((Array.isArray(r.recs) && r.recs.length) || [r.a1 || r.b1, r.a2 || r.b2].filter(Boolean).length) : 0; }
 /* 이 쪽에서 옮기거나 바꾼 글 상자 위치·모양을 양식에 기억 → 모든 상장에 (워드의 '양식 고치기') */
 function certSaveLayout() {
@@ -5532,7 +5534,7 @@ function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEa
   let tmr; const soon = () => { clearTimeout(tmr); tmr = setTimeout(() => { if (on()) { const a = document.activeElement, id = a && a.dataset ? JSON.stringify(a.dataset) : '', pos = a && a.selectionStart; markDirty(); renderSide(); if (id) { const n = [...sb().querySelectorAll('input,textarea')].find(x => JSON.stringify(x.dataset) === id); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} } } } }, 350); };
   document.addEventListener('input', e => {
     if (!on() || !sb().contains(e.target)) return; const C = certState(), D = C.data[C.form], t = e.target;
-    if (t.dataset.cc) { D.common[t.dataset.cc] = t.value; soon(); } else if (t.hasAttribute('data-cbody')) { D.body = t.value; soon(); }
+    if (t.dataset.cc) { certTplMark(); D.common[t.dataset.cc] = t.value; soon(); } else if (t.hasAttribute('data-cbody')) { certTplMark(); D.body = t.value; soon(); }
     else if (t.dataset.cr != null) { const i = Number(t.dataset.cr); D.rows[i] = D.rows[i] || {}; D.rows[i][t.dataset.ck] = t.value; certPrev = i; soon(); }
   });
   document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-cframe]'); if (!b || !on() || !sb().contains(b)) return; certSetFrame(b.dataset.cframe === '1'); renderSide(); });
@@ -5656,7 +5658,7 @@ async function openGradeImport() {
       <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="giReplace" ${D.rows.some(r => String(r.name || '').trim()) ? '' : 'checked'}> 지금 명단을 바꾸기 (끄면 뒤에 더함)</label><button class="btn primary" id="giGo" ${on.length ? '' : 'disabled'}>명단에 넣기 (${on.length}명)</button></div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
     d.onchange = e => { const t = e.target; if (t.id === 'giYm') { gradeImp.ym = t.value; gradeImp.off = {}; gradeImp.date = ''; draw(); } if (t.id === 'giDate' && /^\d{4}-\d\d-\d\d$/.test(t.value)) { gradeImp.date = t.value; draw(); } if (t.dataset.gioff) { if (t.checked) delete gradeImp.off[t.dataset.gioff]; else gradeImp.off[t.dataset.gioff] = 1; draw(); } };
-    $('#giGo').onclick = () => { C.form = 'grade'; D.common.title = D.common.title || '급증'; D.common.date = fmt(gradeImp.date);
+    $('#giGo').onclick = () => { certTplMark(); C.form = 'grade'; D.common.title = D.common.title || '급증'; D.common.date = fmt(gradeImp.date);
       const rows = on.map(x => Object.assign({ name: x.name, grade: x.grade, per: x.per, kd: x.kd }, x.how === 'done' && x.d !== gradeImp.date ? { date: fmt(x.d) } : {}));
       D.rows = $('#giReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; commit(); d.close(); sideTab = 'cert'; renderRail(); renderSide();
       toast(`급증 ${rows.length}명을 명단에 넣었습니다 — 오른쪽에 바로 만들었습니다 (날짜 ${D.common.date})`); certLiveSoon(true); };
@@ -5698,7 +5700,7 @@ async function openMeasImport(again) {
     d.onclick = e => { const h = e.target.closest('[data-mhalf]'); if (h && !h.disabled) { measImp.half = h.dataset.mhalf; measImp.off = {}; draw(); } };
     d.onchange = e => { const t = e.target; if (t.id === 'mYear') { measImp.year = Number(t.value); const hs = all.filter(s => s.year === measImp.year).map(s => s.half === 'H2' ? 'H2' : 'H1'); if (!hs.includes(measImp.half)) measImp.half = hs[0]; measImp.off = {}; draw(); return; } if (t.dataset.mkind) { const kd = t.dataset.mkind; measImp.kinds = t.checked ? [...new Set(measImp.kinds.concat(kd))] : measImp.kinds.filter(x => x !== kd); measImp.off = {}; draw(); return; } if (t.dataset.moff) { if (t.checked) delete measImp.off[t.dataset.moff]; else measImp.off[t.dataset.moff] = 1; draw(); } };
     const go = async make => {
-      const C = certState(); C.form = 'record'; const D = C.data.record, s0 = picked[0];
+      certTplMark(); const C = certState(); C.form = 'record'; const D = C.data.record, s0 = picked[0];
       const sameHalf = picked.every(s => measSc(s) === measSc(s0));
       D.common.title = kinds.length === 1 ? `${kinds[0]} 향상왕` : '향상왕';
       D.common.event = `${s0.year}년${sameHalf ? ' ' + measHalf(s0) : ''} 나라차태권도 ${kinds.join('·')} 측정`;
