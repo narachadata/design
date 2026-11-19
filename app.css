@@ -1472,3 +1472,5 @@ body.prmg-drag{cursor:grabbing;-webkit-user-select:none;user-select:none}
 @media (max-width:1100px){#dlgPrint .prset{grid-template-columns:1fr}}
 @media (max-width:860px){#dlgPrint .prdlg2{grid-template-columns:1fr}#dlgPrint .prpv{position:static}}
 .prpaper .prcut{position:absolute;border-left:1px dashed #9aa0aa;border-top:1px dashed #9aa0aa;pointer-events:none;z-index:3}
+
+.cfseg button small{white-space:nowrap}

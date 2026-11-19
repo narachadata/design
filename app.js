@@ -291,6 +291,7 @@ const elSrcOv = new Map(), elVisOv = new Map(); /* 내보내기·출력 중에�
 const elHidden = el => elVisOv.has(el.id) ? !elVisOv.get(el.id) : !!el.hidden;
 function elHTML(el, mode, ext) {
   if (elHidden(el)) return '';
+  if (el.attKey && el.attKey !== 'photo' && doc.att && doc.att.photoOnly) { if (mode !== 'edit') return ''; el = Object.assign({}, el, { opacity: (el.opacity == null ? 1 : el.opacity) * 0.3 }); }  /* 출석부 📷 사진만: 출력·PDF·미리 보기엔 사진만, 편집 화면엔 글자를 흐리게 (11/19 팀장님 — 사진을 늦게 찍어 사진만 따로 찍을 때) */
   let { x, y, w, h } = el;
   if (ext && mode === 'print' && ((el.type === 'image' && el.fit !== 'contain' && !el.rot && (!el.clip || el.clip === 'none') && !el.radius && !el.borderW) || (el.type === 'shape' && el.kind === 'rect' && !el.radius && !el.strokeW && !el.rot))) { const b = doc.bleed || 0; if (x <= 0.3) { x -= b; w += b; } if (x + w >= doc.w - 0.3) w += b; if (y <= 0.3) { y -= b; h += b; } if (y + h >= doc.h - 0.3) h += b; }
   const tx = el.type === 'text' && !isWarp(el); /* 글 상자 크기 방식: 자동 높이(기본, min-height) · 고정(height) · 자동 너비(max-content) */
@@ -5761,6 +5762,10 @@ const attFrameEl = A => ({ type: 'path', attSvg: 1, pts: [], id: uid(), x: 0, y:
 function attPage(r, i) { const A = attState(); return { id: uid(), bg: '#ffffff', els: [attFrameEl(A)].concat(attEls(r)), label: `출석부 ${i + 1} · ${r.name || ''}`, att: { i } }; }
 /* 출력할 때 틀 (흰 종이에 틀까지 / 틀 인쇄된 용지에 글자만 — 기본 글자만) */
 function attFrameSync(A) { doc.pages.forEach(p => p.els.forEach(e => { if (e.attFrame) e.hidden = !attFrameVis(A); })); }
+/* 출석부 출력 세 가지: 🖼 틀까지(흰 종이) · ✍ 글자만(인쇄된 출석부 용지) · 📷 사진만(글자는 이미 찍은 출석부 용지에 사진만 나중에) */
+const attModeOf = A => A.photoOnly ? 'photo' : A.printFrame ? 'frame' : 'text';
+const attModeSeg = (m, attr) => `<div class="seg cfseg" title="흰 종이면 틀까지 · 인쇄된 출석부 용지면 글자만 · 사진만 나중에 찍을 때는 사진만"><button type="button" ${attr}="frame" aria-pressed="${m === 'frame'}">🖼 틀까지 출력 <small>흰 종이</small></button><button type="button" ${attr}="text" aria-pressed="${m === 'text'}">✍ 글자만 <small>출석부 용지</small></button><button type="button" ${attr}="photo" aria-pressed="${m === 'photo'}">📷 사진만 <small>사진 늦게 찍을 때</small></button></div>`;
+function attSetMode(m, quiet) { const A = attState(); A.photoOnly = m === 'photo'; A.printFrame = m === 'frame'; attFrameSync(A); commit(); renderAll(); if (!quiet) toast(m === 'frame' ? '출석부 틀까지 함께 출력합니다 (흰 종이)' : m === 'photo' ? '사진만 출력합니다 — 글자가 이미 찍힌 출석부 용지에 (편집 화면의 글자는 흐리게 보임)' : '틀은 빼고 글자·사진을 출력합니다 (출석부 용지)'); }
 function attSetFrame(on, quiet) { const A = attState(); A.printFrame = !!on; attFrameSync(A); commit(); renderAll(); if (!quiet) toast(on ? '출석부 틀까지 함께 출력합니다 (흰 종이) — 편집 화면에도 틀이 보입니다' : '틀은 빼고 글자만 출력합니다 (출석부 용지)'); }
 function attShowFrame(on) { const A = attState(); A.showFrame = !!on; attFrameSync(A); commit(); renderAll(); }
 async function attNewDoc(carry) {
@@ -5892,7 +5897,7 @@ function renderAttSide(body) {
   ${attIsDoc() ? '' : `<div class="wz-card"><b>출석부 만들기</b><p class="hint" style="margin:4px 0 8px">인쇄된 출석부 용지(가로 209×150mm) 위쪽 빈칸에 학생 정보와 사진을 찍습니다. 아래쪽 출석 칸은 그대로 둡니다.</p><button class="btn full" data-ax="newdoc">출석부 용지 문서 새로 만들기</button></div>`}
   <div class="cquick"><b>빠른 길</b> 명단 고르기 → 만들기 → 바로 출력<button class="btn primary full" data-ax="pick" style="margin-top:6px">📥 관리프로그램 명단에서 고르기</button></div>
   <h3>① 용지 · 틀 <small>209×150mm 가로</small></h3>
-  <div class="f"><span>출력할 때 출석부 틀</span>${certFrameSeg(!!A.printFrame, 'data-aframe')}</div>
+  <div class="f"><span>출력할 것</span>${attModeSeg(attModeOf(A), 'data-amode')}</div>
   <label class="chk"><input type="checkbox" data-ax="show" ${A.showFrame ? 'checked' : ''}> 화면에 틀 그림 보이기 <small class="hint" style="margin:0">(맞춰 보기용 — 출력은 위 설정대로)</small></label>
   <h3>② 명단 <small>${rows.length}명 중 ${nOn}명 출력 · 체크를 풀면 빠짐</small></h3>
   <div class="row" style="gap:6px;align-items:flex-end;flex-wrap:wrap"><label class="f" style="margin:0;width:6.5em"><span>출석부 연도</span><input type="number" min="2000" max="2100" data-aset="year" value="${Number(A.year)}"></label>
@@ -5923,6 +5928,7 @@ function renderAttSide(body) {
   document.addEventListener('click', async e => {
     if (!on() || !e.target.closest || !sb().contains(e.target)) return; const A = attState();
     const fr = e.target.closest('[data-aframe]'); if (fr) { attSetFrame(fr.dataset.aframe === '1'); renderSide(); return; }
+    const am = e.target.closest('[data-amode]'); if (am) { attSetMode(am.dataset.amode); renderSide(); return; }
     const pk = e.target.closest('[data-apick]'); if (pk) { attPrev = Number(pk.dataset.apick); const nm = (A.rows[attPrev] || {}).name, i = doc.pages.findIndex(p => p.att && String(p.label || '').endsWith('· ' + nm)); if (i >= 0) goto(i); renderSide(); return; }
     const nv = e.target.closest('[data-anav]'); if (nv) { attPrev = (attPrev + Number(nv.dataset.anav) + A.rows.length) % Math.max(1, A.rows.length); renderSide(); return; }
     const dl = e.target.closest('[data-adel]'); if (dl) { A.rows.splice(Number(dl.dataset.adel), 1); attPrev = Math.max(0, Math.min(attPrev, A.rows.length - 1)); markDirty(); renderSide(); return; }
@@ -5956,16 +5962,17 @@ function prUse(cert) {
   const keep = { pages: prState.pages, range: prState.range, pick: prState.pick }; let o = prLoad(k);
   /* 출석부 (11/19 팀장님: 프린터 창 용지는 A4 그대로, 출석부 용지(폭 209 ≈ A4 폭)를 A4처럼 넣음 — 209×150 가로 쪽을 보내면 맥이 A4 세로에 맞춰 90° 돌려 찍었음):
      A4 세로 쪽 맨 위에 실제 크기 100%로(워드 메일머지와 같게) · 여백 0 · 돌리지 않음. 예전 설정(판 없음)은 한 번 이 값으로 */
-  const ATT_PR = { paper: 'A4', orient: 'p', fit: 'actual', margin: 0, mt: 5, mb: 0, ml: 0, mr: 0, ax: 0.5, ay: 0, dx: 0, dy: 0, feed: 'none', nup: 1, attV: 5 };  /* 위 여백 5mm: 팀장님 엡손 실제 출력으로 맞춘 자리(11/19 "5mm 위 여백을 주니 맞았어") */  /* dy: 11/19 +5mm 해 보니 너무 아래 → 팀장님 "5mm 다시 올려" → 0 */
+  const ATT_PR = { paper: 'A4', orient: 'p', fit: 'actual', margin: 0, mt: 0, mb: 0, ml: 0, mr: 0, ax: 0.5, ay: 0, dx: 0, dy: 0, feed: 'none', nup: 1, attV: 6 };  /* 팀장님 엡손으로 맞춘 '위 5mm'는 ATT_BASE_Y로 자리에 넣어 두고, 칸 숫자는 모두 0에서 시작 (11/19 "그 위치 그냥 두고 0으로") */  /* 위 여백 5mm: 팀장님 엡손 실제 출력으로 맞춘 자리(11/19 "5mm 위 여백을 주니 맞았어") */  /* dy: 11/19 +5mm 해 보니 너무 아래 → 팀장님 "5mm 다시 올려" → 0 */
   if (cert === 'att' && (!o || (o.attV || 0) < 2)) o = Object.assign({}, o || {}, ATT_PR);
-  else if (cert === 'att' && (o.attV || 0) < 5) o = Object.assign({}, o, { mt: 5, dy: 0, attV: 5 });  /* 기본 자리 = 위 여백 5mm·세로 보정 0 (예전 판에서 오면 이 값으로) */
+  else if (cert === 'att' && (o.attV || 0) < 6) o = Object.assign({}, o, { mt: Math.max(0, (Number(o.mt) || 0) - ((o.attV || 0) === 5 ? 5 : 0)), dy: 0, attV: 6 });  /* 판 5의 위 여백 5mm는 기본 자리로 들어갔으니 칸에서는 뺌 */  /* 기본 자리 = 위 여백 5mm·세로 보정 0 (예전 판에서 오면 이 값으로) */
   else if (!o && cert) { const g = prLoad('naracal-print') || {}; o = (Number(g.dx) || Number(g.dy)) ? g : { fit: 'actual', margin: 0, mt: 0, mb: 0, ml: 0, mr: 0 }; }  /* 처음: 예전에 맞춰 둔 위치 보정이 있으면 그대로 이어받음, 없으면 실제 크기 */
   prKey = k; prState = Object.assign({}, PR_DEF, o || {}, keep);
 }
 /* 쪽 번호 글 ↔ 쪽 목록 ("1-3, 5" ↔ [0,1,2,4]) — 쉼표·띄어쓰기·물결(~)·'쪽' 모두 됨 */
 function prParse(str, n) { const out = []; String(str || '').replace(/쪽/g, '').split(/[,\s]+/).forEach(p => { const m = p.trim().match(/^(\d+)(?:[-~](\d+))?$/); if (!m) return; const a = Number(m[1]), b = Number(m[2] || m[1]); for (let i = Math.min(a, b); i <= Math.max(a, b); i++) if (i >= 1 && i <= n) out.push(i - 1); }); return [...new Set(out)].sort((a, b) => a - b); }
 function prRangeText(list) { const a = [...list].sort((x, y) => x - y), out = []; for (let i = 0; i < a.length; i++) { let j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++; out.push(j > i + 1 ? `${a[i] + 1}-${a[j] + 1}` : j === i + 1 ? `${a[i] + 1}, ${a[j] + 1}` : `${a[i] + 1}`); i = j; } return out.join(', '); }
-function prPages() {
+function prPages() { const L = prPages0(); return doc.att && doc.att.photoOnly ? L.filter(i => !doc.pages[i].att || doc.pages[i].els.some(e => e.attKey === 'photo' && !e.hidden)) : L; }  /* 📷 사진만: 사진 없는 출석부 쪽은 빼고 (빈 종이가 나가지 않게) */
+function prPages0() {
   const n = doc.pages.length, S = prState; if (S.pages === 'cur') return [cur]; if (S.pages === 'sel') return [...pgSel].filter(i => i < n).sort((a, b) => a - b);
   if (S.pages === 'cert') return doc.pages.map((p, i) => p.cert ? i : -1).filter(i => i >= 0);
   if (S.pages === 'att') return doc.pages.map((p, i) => p.att ? i : -1).filter(i => i >= 0);
@@ -5977,12 +5984,14 @@ function prPages() {
 /* 여백 (워드 '페이지 설정 → 여백'처럼 위·아래·왼쪽·오른쪽 mm) — 예전 한 값(margin)만 있던 설정은 네 쪽에 같게 */
 function prMg(S) { const m0 = Math.max(0, Number(S.margin) || 0), v = k => { const n = Number(S[k]); return S[k] == null || S[k] === '' || isNaN(n) ? m0 : Math.max(0, Math.min(100, n)); }; return { t: v('mt'), b: v('mb'), l: v('ml'), r: v('mr') }; }
 function prSetMg(S, t, b, l, r) { Object.assign(S, { mt: t, mb: b == null ? t : b, ml: l == null ? t : l, mr: r == null ? (l == null ? t : l) : r }); S.margin = Math.min(S.mt, S.mb, S.ml, S.mr); }
+const ATT_BASE_Y = 5;  /* 출석부 용지를 A4처럼 넣을 때 맞는 자리 (11/19 팀장님 엡손: 위 5mm) — 출력 창 여백·위치 보정은 0에서 시작 */
 function prLayout() {
   const S = prState; let [pw, ph] = S.paper === 'doc' ? [doc.w, doc.h] : (PR_PAPERS[S.paper] || PR_PAPERS.A4);
   const land = S.orient === 'l' || (S.orient === 'auto' && doc.w > doc.h); if (land !== pw > ph) [pw, ph] = [ph, pw];
   const M = prMg(S), m = Math.min(M.t, M.b, M.l, M.r), bw = Math.max(1, pw - M.l - M.r), bh = Math.max(1, ph - M.t - M.b);
   const k = S.fit === 'actual' ? 1 : S.fit === 'custom' ? Math.max(0.05, (Number(S.pct) || 100) / 100) : Math.min(bw / doc.w, bh / doc.h);
-  const w = doc.w * k, h = doc.h * k, x = M.l + (bw - w) * S.ax + (Number(S.dx) || 0), y = M.t + (bh - h) * S.ay + (Number(S.dy) || 0);
+  const baseY = prKey === 'naracal-print-att' && (Number(S.nup) || 1) === 1 && S.paper === 'A4' ? ATT_BASE_Y : 0;  /* 출석부 기본 자리: A4 맨 위에서 5mm 아래 (엡손 실제 출력으로 맞춤) */
+  const w = doc.w * k, h = doc.h * k, x = M.l + (bw - w) * S.ax + (Number(S.dx) || 0), y = M.t + (bh - h) * S.ay + (Number(S.dy) || 0) + baseY;
   const over = x < -0.1 || y < -0.1 || x + w > pw + 0.1 || y + h > ph + 0.1; let note = over ? '종이 밖으로 나갑니다' : '';
   /* 상장: 틀을 빼고 찍으면(틀이 인쇄된 상장 용지) 글자만 종이 안에 있으면 됨. 틀까지 찍는데 위치 보정 때문이면 그렇게 알려 줌 */
   const cp = doc.pages.find(p => p.cert); if (over && cp) { const els = cp.els.filter(e => !e.certFrame && !e.hidden && e.type !== 'image' || (e.type === 'image' && !e.certFrame && !e.hidden)); if (els.length) { const bx0 = Math.min(...els.map(e => e.x)), by0 = Math.min(...els.map(e => e.y)), bx1 = Math.max(...els.map(e => e.x + e.w)), by1 = Math.max(...els.map(e => e.y + e.h)), cOver = x + bx0 * k < -0.1 || y + by0 * k < -0.1 || x + bx1 * k > pw + 0.1 || y + by1 * k > ph + 0.1;
@@ -6045,7 +6054,7 @@ function openPrint(pre) {
         <div class="grid2"><label class="f"><span>출력할 쪽</span><select id="prPg">${[['all', `모든 쪽${doc.pages.some(p => p.dlOff) ? ' (숨긴 쪽 빼고)' : ''}`], ['cur', `지금 쪽 (${cur + 1})`], ...(hasCert ? [['cert', `상장 쪽만 (${doc.pages.filter(p => p.cert).length}장)`]] : []), ...(hasAtt ? [['att', `출석부 쪽만 (${doc.pages.filter(p => p.att).length}장)`]] : []), ['pick', S.pages === 'pick' ? `골라서 출력 (${list.length}쪽)` : '골라서 출력 (쪽 고르기)']].map(([a, t]) => `<option value="${a}" ${S.pages === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
         ${`<label class="f"><span>용지</span><select id="prPaper">${[['A4', 'A4 (210×297)'], ['A3', 'A3 (297×420)'], ['B5', 'B5 (182×257)'], ['Letter', 'Letter'], ['doc', `문서 크기 (${Math.round(doc.w)}×${Math.round(doc.h)})`]].map(([a, t]) => `<option value="${a}" ${S.paper === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`}</div>
         ${C && C.frame && list.some(i => doc.pages[i].cert) ? `<div class="prrow prframe"><span>상장 틀</span>${certFrameSeg(!!S.frame, 'data-prframe')}<small class="hint" style="margin:0;flex-basis:100%">${S.frame ? '틀과 글자를 함께 찍습니다 — 흰 종이·일반 상장지' : '틀은 빼고 글자만 찍습니다 — 틀이 미리 인쇄된 상장 용지 (크기는 실제 100%)'}</small></div>` : ''}
-        ${doc.att && list.some(i => doc.pages[i].att) ? `<div class="prrow prframe"><span>출석부 틀</span>${certFrameSeg(!!S.frame, 'data-prframe')}<small class="hint" style="margin:0;flex-basis:100%">${S.frame ? '틀과 글자를 함께 찍습니다 — 흰 종이 (출석부 용지와 같은 모양으로 새로 그린 선명한 틀)' : '틀은 빼고 글자·사진만 찍습니다 — 인쇄된 출석부 용지 (실제 크기 100%, 어긋나면 위치 보정)'}${S.paper === 'A4' && (Number(S.nup) || 1) === 1 ? '<br>📄 출석부 용지(폭 209mm)를 <b>A4처럼 위쪽을 먼저</b> 넣으세요 — 프린터 창 용지는 <b>A4 그대로</b>, A4 쪽 맨 위에 출석부가 찍힙니다.' : ''}</small></div>` : ''}
+        ${doc.att && list.some(i => doc.pages[i].att) ? `<div class="prrow prframe"><span>출석부</span>${attModeSeg(attModeOf(doc.att), 'data-pramode')}<small class="hint" style="margin:0;flex-basis:100%">${doc.att.photoOnly ? '사진만 찍습니다 — 글자가 이미 찍힌 출석부 용지에 (자리는 글자와 같은 설정)' : S.frame ? '틀과 글자를 함께 찍습니다 — 흰 종이 (출석부 용지와 같은 모양으로 새로 그린 선명한 틀)' : '틀은 빼고 글자·사진만 찍습니다 — 인쇄된 출석부 용지 (실제 크기 100%, 어긋나면 위치 보정)'}${S.paper === 'A4' && (Number(S.nup) || 1) === 1 ? '<br>📄 출석부 용지(폭 209mm)를 <b>A4처럼 위쪽을 먼저</b> 넣으세요 — 프린터 창 용지는 <b>A4 그대로</b>, A4 쪽 맨 위에 출석부가 찍힙니다.' : ''}</small></div>` : ''}
         ${S.pages === 'pick' ? (() => { const P = S.pick || new Set(), n = doc.pages.length, lbl = (p, i) => { if (p.att) return String(p.label || '').replace(/^출석부\s*\d+\s*·\s*/, '').trim() || `출석부 ${(p.att.i || 0) + 1}`; if (!p.cert) return p.label || p.name || ''; const r = (((doc.cert && doc.cert.data && doc.cert.data[p.cert.form]) || {}).rows || [])[p.cert.i] || {}, nm = String(r.name || '').trim() || String(p.label || '').replace(/^상장\s*\d+\s*·\s*/, '').trim(); return nm || `상장 ${(p.cert.i || 0) + 1}`; };  /* 상장 쪽은 학생 이름 (팀장님) */ return `<div class="prpick">
           <div class="prpick-top"><label class="f" style="margin:0;flex:1"><span>쪽 번호 <small>예: 1-3, 5, 8 — 아래에서 눌러 골라도 됩니다</small></span><input id="prRange" value="${esc(prRangeText(P))}" placeholder="예: 1-3, 5, 8" autocomplete="off"></label></div>
           <div class="prpick-q">${[['all', '전체'], ['none', '모두 해제'], ['odd', '홀수 쪽'], ['even', '짝수 쪽'], ...(hasCert ? [['cert', '상장 쪽만']] : []), ...(hasAtt ? [['att', '출석부 쪽만']] : []), ['inv', '반대로']].map(([k, t]) => `<button type="button" class="btn sm" data-pickq="${k}">${t}</button>`).join('')}<span class="hint" style="margin:0 0 0 auto">${P.size}/${n}쪽 · Shift+누르기 = 사이 쪽 모두</span></div>
@@ -6093,12 +6102,13 @@ function openPrint(pre) {
     if (t.id === 'prFrame') { S.frame = t.checked; if (doc.cert) { doc.cert.printFrame = t.checked; doc.pages.forEach(p => p.els.forEach(x => { if (x.certFrame && !x.attFrame) x.hidden = !t.checked; })); commit(); renderAll(); } if (!t.checked) preset('exact'); }
     S.pv = 0; prSave(); draw(); };
   d.onclick = e => {
-    const sb = e.target.closest('[data-pk]'); if (sb) { prState[sb.dataset.pk] = sb.dataset.pv; if (sb.dataset.pk === 'nup' && sb.dataset.pv === '1' && prKey === 'naracal-print-att') { Object.assign(prState, { paper: 'A4', orient: 'p', fit: 'actual', ax: 0.5, ay: 0, feed: 'none' }); prSetMg(prState, 5, 0, 0, 0); }  /* 출석부 1쪽 = A4 맨 위 100% (출석부 용지에) */ if (sb.dataset.pk === 'mode' && sb.dataset.pv === 'vec') prState.paper = 'doc'; prSave(); draw(); return; }
+    const sb = e.target.closest('[data-pk]'); if (sb) { prState[sb.dataset.pk] = sb.dataset.pv; if (sb.dataset.pk === 'nup' && sb.dataset.pv === '1' && prKey === 'naracal-print-att') { Object.assign(prState, { paper: 'A4', orient: 'p', fit: 'actual', ax: 0.5, ay: 0, feed: 'none' }); prSetMg(prState, 0); }  /* 출석부 1쪽 = A4 맨 위 100% (출석부 용지에) */ if (sb.dataset.pk === 'mode' && sb.dataset.pv === 'vec') prState.paper = 'doc'; prSave(); draw(); return; }
     const pa = e.target.closest('[data-pra]'); if (pa) { const [x, y] = pa.dataset.pra.split(',').map(Number); prState.ax = x; prState.ay = y; prSave(); draw(); return; }
     const ps = e.target.closest('[data-prset]'); if (ps) { preset(ps.dataset.prset); prSave(); draw(); return; }
     const nv = e.target.closest('[data-prnav]'); if (nv && !nv.disabled) { prState.pv += Number(nv.dataset.prnav); draw(); return; }
     const nb = e.target.closest('[data-prnup]'); if (nb) { Object.assign(prState, { paper: 'A4', orient: 'auto', nup: '2', nupOrder: 'row', fit: 'fit', feed: 'none', ax: 0.5, ay: 0.5 }); prSetMg(prState, 0); prState.nupGap = 0; prState.nupCut = true; prState.pv = 0; prSave(); draw(); toast('A4 한 장에 출석부 2장 (위아래) — 프린터 창 용지 A4·배율 100%'); return; }
     const mp = e.target.closest('[data-mgpre]'); if (mp) { const p0 = PR_MG_PRE.find(x => x[0] === mp.dataset.mgpre); if (p0) { prSetMg(prState, p0[2], p0[2], p0[3], p0[3]); prSave(); draw(); } return; }
+    const pm = e.target.closest('[data-pramode]'); if (pm) { const m = pm.dataset.pramode; prState.frame = m === 'frame'; attSetMode(m, true); prState.pv = Math.min(prState.pv, Math.max(0, prPages().length - 1)); prSave(); draw(); return; }
     const pf = e.target.closest('[data-prframe]'); if (pf) { const on = pf.dataset.prframe === '1'; prState.frame = on; if (prKey === 'naracal-print-att') attSetFrame(on, true); else { if (doc.cert) certSetFrame(on, true); if (!on) preset('exact'); } prState.pv = Math.min(prState.pv, Math.max(0, prPages().length - 1)); prSave(); draw(); return; }
     const pk = e.target.closest('[data-pick]'); if (pk) { const S = prState, i = Number(pk.dataset.pick); S.pick = S.pick || new Set(); const on = !S.pick.has(i);
       if (e.shiftKey && pickAnchor >= 0) { for (let j = Math.min(pickAnchor, i); j <= Math.max(pickAnchor, i); j++) on ? S.pick.add(j) : S.pick.delete(j); } else on ? S.pick.add(i) : S.pick.delete(i);
