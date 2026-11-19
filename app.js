@@ -5945,7 +5945,7 @@ function renderAttSide(body) {
    엡손 잉크젯: 배율 100%(실제 크기)·테두리 없음·용지 종류·품질 안내 */
 /* 출력 설정: 이 PC에 기억. paper = 'doc'(문서 크기) | 'A4' | 'A3' | 'B5' | 'Letter', orient = 'auto'|'p'|'l', fit = 'fit'(용지에 맞춤)|'actual'(실제 크기 100%)|'custom'(배율), margin mm, ax·ay 정렬(0·0.5·1), dx·dy 위치 보정 mm */
 const PR_PAPERS = { A4: [210, 297], A3: [297, 420], B5: [182, 257], Letter: [215.9, 279.4] };
-const PR_DEF = { pages: 'all', range: '', mode: 'img', dpi: 300, frame: true, paper: 'A4', orient: 'auto', fit: 'fit', pct: 100, margin: 4, ax: 0.5, ay: 0.5, dx: 0, dy: 0, pv: 0 };
+const PR_DEF = { pages: 'all', range: '', mode: 'img', dpi: 300, frame: true, paper: 'A4', orient: 'auto', fit: 'fit', pct: 100, margin: 4, ax: 0.5, ay: 0.5, dx: 0, dy: 0, pv: 0, feed: 'none' };
 const prLoad = k => { try { const o = JSON.parse(localStorage.getItem(k) || 'null'); if (!o) return null; delete o.pages; delete o.range; delete o.pv; delete o.pick; return o; } catch (e) { return null; } };
 let prKey = 'naracal-print';  /* 상장은 'naracal-print-cert'에 따로 기억 (이 PC 프린터 값이라 동기화하지 않음) */
 let prState = Object.assign({}, PR_DEF, prLoad(prKey) || {});
@@ -6028,6 +6028,7 @@ function openPrint(pre) {
           <div class="prpick-grid">${doc.pages.map((p, i) => `<button type="button" class="prpk ${P.has(i) ? 'on' : ''} ${pvI === i ? 'pv' : ''}" data-pick="${i}" title="${esc(`${i + 1}쪽${lbl(p, i) ? ' · ' + lbl(p, i) : ''}`)} — 누르면 넣기/빼기"><b>${i + 1}</b><small>${esc(lbl(p, i)) || '&nbsp;'}</small></button>`).join('')}</div></div>`; })() : ''}
         <div class="prrow"><span>빠른 설정</span><div class="row" style="gap:4px;flex-wrap:wrap"><button class="btn sm" data-prset="safe" title="프린터가 못 찍는 가장자리를 피해 여백 4mm 안에 맞춤">여백 안에 맞춤 (추천)</button><button class="btn sm" data-prset="full" title="프린터에서 '테두리 없음'을 켠 경우">꽉 채움 (테두리 없음)</button><button class="btn sm" data-prset="exact" title="틀이 인쇄된 상장 용지에 글자만 — 크기 그대로">실제 크기 100%</button></div></div>
         <div class="prrow"><span>방향</span>${seg('orient', [['auto', '자동'], ['p', '세로'], ['l', '가로']])}</div>
+        <div class="prrow prfeed"><span>종이 넣는 방향</span>${seg('feed', [['none', '그대로'], ['cw', '↻ 오른쪽으로 90°', '찍힌 글자의 윗부분이 왼쪽을 보며 누웠을 때 — 쪽을 시계 방향으로 돌려 세로 종이로 보냄'], ['ccw', '↺ 왼쪽으로 90°', '찍힌 글자의 윗부분이 오른쪽을 보며 누웠을 때 — 쪽을 시계 반대 방향으로 돌려 세로 종이로 보냄']])}<small class="hint" style="margin:0;flex-basis:100%">${S.feed && S.feed !== 'none' ? `쪽을 돌려 <b>세로 ${Math.round(L.ph)}×${Math.round(L.pw)}mm</b>로 보냅니다 — 프린터 창의 용지도 세로(${Math.round(Math.min(L.pw, L.ph))}×${Math.round(Math.max(L.pw, L.ph))})로 두세요.` : '글자가 <b>옆으로 누워 찍히면</b>(프린터가 종이를 세워 넣어 쪽을 돌린 경우) 여기서 돌려 보내세요. 글자 윗부분이 왼쪽을 보면 ↻, 오른쪽을 보면 ↺.'}</small></div>
         <div class="prrow"><span>크기</span>${seg('fit', [['fit', '용지에 맞춤'], ['actual', '실제 크기'], ['custom', '배율']])}${S.fit === 'custom' ? `<input type="number" id="prPct" min="5" max="400" step="1" value="${S.pct}" style="width:64px"> %` : ''}</div>
         ${(() => { const M = L.M, cur = (PR_MG_PRE.find(([, , tb, lr]) => M.t === tb && M.b === tb && M.l === lr && M.r === lr) || [])[0], inp = (k, t) => `<label class="prmg-${k}"><span>${t}</span><input type="number" data-mg="${k}" min="0" max="100" step="0.5" value="${M[k]}" inputmode="decimal"><i>mm</i></label>`;
           return `<div class="prrow prmg"><span>여백</span><div class="prmg-box">
@@ -6082,18 +6083,23 @@ async function runPrint(list) {
   if (!list.length) return; const S = prState, L = prLayout();
   const frIds = []; doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { frIds.push(e.id); elVisOv.set(e.id, !!S.frame); } })); /* 이번 출력에만 (문서는 그대로) */
   const restore = () => frIds.forEach(id => elVisOv.delete(id));
-  if (S.mode === 'vec') { try { await printVector(list, { noBleed: true }); } finally { setTimeout(restore, 1500); } return; }
+  if (S.mode === 'vec' && !(S.feed === 'cw' || S.feed === 'ccw')) { try { await printVector(list, { noBleed: true }); }  /* 돌려 보내기는 그림 방식으로 */ finally { setTimeout(restore, 1500); } return; }
+  const feed = S.feed === 'cw' || S.feed === 'ccw' ? S.feed : '';
+  /* 돌려 보낼 때: 종이 = 세로(높이↔너비), 디자인 자리도 같이 돌림 — 시계 방향 (x,y) → (ph−y−h, x) · 반대 (y, pw−x−w) */
+  const P = feed ? { pw: L.ph, ph: L.pw, x: feed === 'cw' ? L.ph - L.y - L.h : L.y, y: feed === 'cw' ? L.x : L.pw - L.x - L.w, w: L.h, h: L.w } : { pw: L.pw, ph: L.ph, x: L.x, y: L.y, w: L.w, h: L.h };
   let dpi = S.dpi; if (dpi > 300 && list.length > 5) { dpi = 300; toast('6쪽 이상은 300dpi로 출력합니다 (600dpi는 5쪽까지 — 엡손에는 300dpi로 충분)'); }
   const urls = []; try {
-    for (let i = 0; i < list.length; i++) { setStatus(`출력 준비 ${i + 1}/${list.length}쪽…`); const c = await renderPageCanvas(doc.pages[list[i]], dlDpi(dpi * Math.min(1, L.k) || dpi, 0), 'thumb', '#ffffff'); const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95)); urls.push(URL.createObjectURL(b)); c.width = c.height = 0; }
+    for (let i = 0; i < list.length; i++) { setStatus(`출력 준비 ${i + 1}/${list.length}쪽…`); let c = await renderPageCanvas(doc.pages[list[i]], dlDpi(dpi * Math.min(1, L.k) || dpi, 0), 'thumb', '#ffffff');
+      if (feed) { const r = document.createElement('canvas'); r.width = c.height; r.height = c.width; const g = r.getContext('2d'); if (feed === 'cw') { g.translate(r.width, 0); g.rotate(Math.PI / 2); } else { g.translate(0, r.height); g.rotate(-Math.PI / 2); } g.drawImage(c, 0, 0); c.width = c.height = 0; c = r; }  /* 종이를 세워 넣는 프린터: 쪽을 미리 돌려 세로 쪽으로 */
+      const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95)); urls.push(URL.createObjectURL(b)); c.width = c.height = 0; }
   } catch (e) { toast('출력 준비 중 문제가 생겼습니다: ' + e.message, true); urls.forEach(u => URL.revokeObjectURL(u)); restore(); setStatus(''); return; }
   restore(); setStatus('');
   const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'; document.body.appendChild(f);
-  const fd = f.contentDocument; fd.open(); fd.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(doc.name || '출력')}</title><style>@page{size:${L.pw}mm ${L.ph}mm;margin:0}html,body{margin:0;padding:0;background:#fff}.pg{position:relative;width:${L.pw}mm;height:calc(${L.ph}mm - 0.5mm);overflow:hidden;break-after:page;page-break-after:always}.pg:last-child{break-after:auto;page-break-after:auto}img{position:absolute;left:${L.x}mm;top:${L.y}mm;width:${L.w}mm;height:${L.h}mm;display:block}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>${urls.map(u => `<div class="pg"><img src="${u}"></div>`).join('')}</body></html>`); fd.close();
+  const fd = f.contentDocument; fd.open(); fd.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(doc.name || '출력')}</title><style>@page{size:${P.pw}mm ${P.ph}mm;margin:0}html,body{margin:0;padding:0;background:#fff}.pg{position:relative;width:${P.pw}mm;height:calc(${P.ph}mm - 0.5mm);overflow:hidden;break-after:page;page-break-after:always}.pg:last-child{break-after:auto;page-break-after:auto}img{position:absolute;left:${P.x}mm;top:${P.y}mm;width:${P.w}mm;height:${P.h}mm;display:block}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>${urls.map(u => `<div class="pg"><img src="${u}"></div>`).join('')}</body></html>`); fd.close();
   await Promise.all([...fd.images].map(im => im.complete ? null : new Promise(r => { im.onload = im.onerror = r; })));
   const cleanup = () => { setTimeout(() => { f.remove(); urls.forEach(u => URL.revokeObjectURL(u)); }, 1000); };
   f.contentWindow.addEventListener('afterprint', cleanup, { once: true }); setTimeout(cleanup, 600000);
-  f.contentWindow.focus(); f.contentWindow.print(); toast(`프린터 창을 열었습니다 — ${list.length}쪽 · 용지 ${S.paper === 'doc' ? '사용자 지정' : S.paper} · 배율 100%로 두고 인쇄하세요`);
+  f.contentWindow.focus(); f.contentWindow.print(); toast(`프린터 창을 열었습니다 — ${list.length}쪽 · 용지 ${S.paper === 'doc' ? '사용자 지정' : S.paper}${feed ? ` (세로 ${Math.round(P.pw)}×${Math.round(P.ph)}mm로 돌려 보냄)` : ''} · 배율 100%로 두고 인쇄하세요`);
 }
 $('#btnPrint').onclick = () => openPrint();
 document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.code === 'KeyP' || (e.key || '').toLowerCase() === 'p')) { e.preventDefault(); e.stopPropagation(); /* 브라우저 기본 인쇄는 빈 장이 나오므로 늘 공방 출력 창으로 */ if (editing) endEdit(); document.querySelectorAll('dialog[open]').forEach(x => { if (x.id !== 'dlgPrint') x.close(); }); openPrint(); } }, true);
