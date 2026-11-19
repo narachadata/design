@@ -5239,7 +5239,7 @@ function certExamMonths(st) {
 }
 function certGradeNote(grade, date, cycle, kd) {
   const m = String(grade || '').match(/^(\d+)\s*(품|단)\s*(\d+)\s*급/); if (!m) return '';
-  const N = +m[1], unit = m[2], sg = +m[3], n = Math.max(0, Math.ceil((sg - 2) / 2)), cyc = Math.max(1, Number(cycle) || 3);  /* 모르면 주2회 기준 3개월 */
+  const N = +m[1], unit = m[2], sg = +m[3], n = Math.max(1, Math.ceil((sg - 2) / 2)),  /* 2급이 돼도 다음 응시는 적어도 다음 심사 때(11/19) */ cyc = Math.max(1, Number(cycle) || 3);  /* 모르면 주2회 기준 3개월 */
   const dm = String(date || '').match(/(\d{4})\D+(\d{1,2})/), y0 = dm ? +dm[1] : new Date().getFullYear(), m0 = dm ? +dm[2] - 1 : new Date().getMonth();
   let t = y0 * 12 + m0 + n * cyc; const km = String(kd || '').match(/^(\d{4})-(\d\d)/); if (km) t = Math.max(t, +km[1] * 12 + (+km[2] - 1) + N * 12);  /* 국기원 연한 */
   const yy = Math.floor(t / 12), mm = t % 12 + 1;
@@ -5449,7 +5449,7 @@ function renderCertSide(body) {
   const fieldChips = F.common.map(([, l]) => l.replace(/ \(.*\)$/, '')).filter(l => !/날짜|단위|종목/.test(l));
   body.innerHTML = `<div class="cert">
   ${a4 && (doc.cert.frame || doc.pages.some(p => p.cert)) ? '' : `<div class="wz-card"><b>상장 만들기</b><p class="hint" style="margin:4px 0 8px">양식은 한 번만 정하고, 명단만 바꿔 여러 명의 상장을 한 번에 만듭니다.</p>${a4 ? '' : '<button class="btn primary full" data-cx="newdoc">A4 상장 문서 새로 만들기</button>'}</div>`}
-  ${form === 'record' ? '<div class="cquick"><b>빠른 길</b> 측정 가져오기 → 미리 보기 → 만들기·인쇄<button class="btn primary full" data-cx="meas" style="margin-top:6px">📥 측정에서 향상왕 상장 만들기</button></div>' : ''}${form === 'grade' ? '<div class="cquick"><b>빠른 길</b> 심사 결과 가져오기 → 미리 보기 → 만들기·인쇄<button class="btn primary full" data-cx="gradeImp" style="margin-top:6px">📥 최근 심사 유품(단)자로 급증 만들기</button></div>' : ''}
+  ${form === 'record' ? '<div class="cquick"><b>빠른 길</b> 측정 가져오기 → 미리 보기 → 만들기·인쇄<button class="btn primary full" data-cx="meas" style="margin-top:6px">📥 측정에서 향상왕 상장 만들기</button></div>' : ''}${form === 'grade' ? '<div class="cquick"><b>빠른 길</b> 심사 결과 가져오기 → 미리 보기 → 만들기·인쇄<button class="btn primary full" data-cx="gradeImp" style="margin-top:6px">📥 심사 회차(확정자·완료자)로 급증 만들기</button></div>' : ''}
   <h3>① 상장 틀 <small>배경</small></h3>
   <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm ${C.frame ? '' : 'primary'}" data-cx="frame">${C.frame ? '틀 바꾸기' : '📄 상장 틀 불러오기 (PDF·그림)'}</button></div>${C.frame ? `<div class="f" style="margin-top:6px"><span>출력할 때 상장 틀</span>${certFrameSeg(C.printFrame !== false, 'data-cframe')}</div>` : ''}
   ${C.frame === CERT_FRAME_JPG ? '<p class="hint">나라차 상장틀(A4, 원본 PDF)이 기본으로 들어갑니다 — 출력·PDF 때 원본 선 그대로. 다른 틀은 "틀 바꾸기".</p>' : C.frame ? (C.framePdf ? '<p class="hint">원본 PDF 틀 — 출력·PDF 때 원본 선 그대로 다시 그립니다. <button class="btn sm" data-cx="framedef">기본 나라차 틀로</button></p>' : '<p class="hint" style="color:#b3261e">그림으로 바꾼 틀입니다. "틀 바꾸기"로 원본 PDF를 다시 불러오면 가는 선까지 선명하게 출력됩니다.</p>') : '<p class="hint">한 번 불러오면 이 PC가 기억해 어느 상장 문서에도 자동으로 들어갑니다. 틀은 이 PC와 관장님 드라이브(비공개)에만 보관되고 공개 사이트에는 올리지 않습니다 (관장 직인).</p>'}
@@ -5600,31 +5600,66 @@ function measImprove(s, all, enrolled) {
 }
 /* ---- 관리프로그램 심사 결과 → 급증 (11/18 팀장님: 최근 심사 완료자 중 유품(단)자) ----
    명단(roster.list)의 승급 이력 promos[{g,d,src,_del}] — 심사일마다 그날 승급한 유품·유단자(급수가 'N품/단 M급')를 고름. 국기원 승품(단) 합격(src 국기원)은 단증이라 뺌. 지금 재원생만 */
-let gradeImp = { date: '', off: {} };
+let gradeImp = { ym: '', date: '', off: {} };
+/* 관리 앱 nextGrade()와 같은 규칙(진급 규칙 단일 원천 — 관리 index.html nextGrade): N품/단 K급 → K-2급, 2급 이하 → 국기원 대비 · N급 → N-1급 */
+function gradeNextOf(g) { g = String(g || '').trim(); let m = g.match(/^(\d+)품\s*(\d+)급$/); if (m) { const k = +m[2] - 2; return k > 0 ? `${m[1]}품 ${k}급` : `${m[1]}품 (국기원 대비)`; } m = g.match(/^(\d+)단\s*(\d+)급$/); if (m) { const k = +m[2] - 2; return k > 0 ? `${m[1]}단 ${k}급` : `${m[1]}단 (국기원 대비)`; } m = g.match(/^(\d+)급$/); if (m) { const k = +m[1] - 1; return k > 0 ? `${k}급` : '1품 후보(국기원)'; } return g; }
+/* 심사 회차 묶기 (11/19 팀장님: 회차별 심사완료자 또는 심사확정자 — 심사 본 뒤 바로 주므로 확정자로 미리 만듦)
+   · 확정자 = 관리 앱 출석 창고 examConfirm.map[이름].conf (국기원확정 kconf·미응시 빼고). 회차 = e.examYm, 없으면 확정한 날 뒤 75일 안의 「승급심사」 일정 달(관리 examYmFor와 같음)
+     → 합격했다고 보고 급수 = gradeNextOf(지금 급수). 결과가 「N품(단) K급」인 사람만(국기원 대비로 넘어가는 2급 이하는 따로 표시)
+   · 완료자 = 학적부 승급 이력 promos(심사·수동, 국기원 빼고)의 날짜 달 — 그 회차에 이미 승급 기록이 있으면 확정보다 이것이 우선(실제 결과)
+   · 지금 재원생만(measEnrolledFn). 공방은 읽기만 */
+function gradeRounds() {
+  const a = measAtt(), L = (a && a.roster && a.roster.list) || [], enrolled = measEnrolledFn(), conf = (a && a.examConfirm && a.examConfirm.map) || {};
+  const RX = /^\d+\s*(품|단)\s*\d+\s*급$/, R = {};
+  const ev = Object.values((measWork() || {}).events || {}).filter(e => e && !e.del && !e._del && e.type === '승급심사' && /^\d{4}-\d\d-\d\d/.test(String(e.date || ''))).map(e => String(e.date).slice(0, 10)).sort();
+  const ymdOf = ms => { const d = new Date(Number(ms) || Date.now()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const ymFor = ms => { const ds = ymdOf(ms), best = ev.find(d => d >= ds); return best && (Date.parse(best) - Date.parse(ds)) / 864e5 <= 75 ? best.slice(0, 7) : ds.slice(0, 7); };
+  const box = ym => R[ym] || (R[ym] = { ym, done: {}, conf: {}, kkw: [], days: ev.filter(d => d.startsWith(ym)) });
+  const kdOf = (st, g) => { const N0 = String(g).match(/^(\d+)\s*(품|단)/) || []; return (st.promos || []).filter(q => q && !q._del && q.src === '국기원' && q.d && String(q.g || '').startsWith(N0[1] + N0[2])).map(q => String(q.d).slice(0, 10)).sort()[0] || ''; };
+  L.forEach(st => {
+    if (!st || !st.n || (enrolled && !enrolled(st.n))) return;
+    (st.promos || []).forEach(p => { if (!p || p._del || !p.d || p.src === '국기원' || !RX.test(String(p.g || '').trim())) return; const d = String(p.d).slice(0, 10), g = String(p.g).trim();
+      box(d.slice(0, 7)).done[st.n] = { name: st.n, grade: g, d, how: 'done', per: certExamMonths(Object.assign({}, st, { grade: g })), kd: kdOf(st, g), t: String(st.t || '') }; });
+    const e = conf[st.n];
+    if (e && e.conf && !e.kconf) {
+      const ym = /^\d{4}-\d\d$/.test(String(e.examYm || '')) ? e.examYm : ymFor(e.confT || e.t), from = String(st.grade || '').trim(), g = gradeNextOf(from);
+      if (RX.test(g)) box(ym).conf[st.n] = { name: st.n, grade: g, from, how: 'conf', per: certExamMonths(Object.assign({}, st, { grade: g })), kd: kdOf(st, g), t: String(st.t || '') };
+      else if (/^\d+\s*(품|단)/.test(from)) box(ym).kkw.push({ name: st.n, from, to: g });
+    }
+  });
+  return Object.keys(R).sort().reverse().slice(0, 14).map(k => { const o = R[k]; Object.keys(o.done).forEach(n => delete o.conf[n]); o.list = Object.values(o.done).concat(Object.values(o.conf)).sort((x, y) => x.name.localeCompare(y.name, 'ko')); return o; }).filter(o => o.list.length || o.kkw.length);
+}
 async function openGradeImport() {
   let d = $('#dlgGradeImp'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgGradeImp'; d.className = 'wide'; document.body.appendChild(d); }
-  d.innerHTML = '<div class="dhead"><h2>📥 최근 심사에서 급증 만들기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><p class="hint">관리프로그램 명단을 받는 중…</p></div>'; d.querySelector('[data-close]').onclick = () => d.close(); if (!d.open) d.showModal();
-  await measFetch(); const a = measAtt(), L = a && a.roster && a.roster.list, enrolled = measEnrolledFn();
+  d.innerHTML = '<div class="dhead"><h2>📥 심사 회차에서 급증 만들기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><p class="hint"><span class="spin"></span> 관리프로그램 심사관리 자료를 받는 중…</p></div>'; d.querySelector('[data-close]').onclick = () => d.close(); if (!d.open) d.showModal();
+  await measFetch(); const a = measAtt(), L = a && a.roster && a.roster.list;
   if (!Array.isArray(L) || !L.length) { d.querySelector('.dbody').innerHTML = `<p><b>관리프로그램 명단을 읽지 못했습니다.</b></p><p class="hint">${measSrv && measSrv.err === 'nokey' ? '이 브라우저에서 관리프로그램을 한 번 열어 로그인해 주세요(접속 키가 필요합니다).' : '인터넷 연결을 확인하고 다시 시도해 주세요.'}</p>`; return; }
-  const RX = /^\d+\s*(품|단)\s*\d+\s*급$/, byDate = {};
-  L.forEach(st => { if (!st || !st.n || (enrolled && !enrolled(st.n))) return; (st.promos || []).forEach(p => { if (!p || p._del || !p.d || !RX.test(String(p.g || '').trim()) || p.src === '국기원') return; const dd = String(p.d).slice(0, 10); const N0 = (String(p.g).match(/^(\d+)\s*(품|단)/) || []), kp = (st.promos || []).filter(q => q && !q._del && q.src === '국기원' && q.d && String(q.g || '').startsWith(N0[1] + N0[2])).map(q => String(q.d).slice(0, 10)).sort()[0] || '';
-      (byDate[dd] = byDate[dd] || []).push({ name: st.n, grade: String(p.g).trim(), now: String(st.grade || '').trim(), per: certExamMonths(Object.assign({}, st, { grade: p.g })), kd: kp, t: String(st.t || '') }); }); });
-  const dates = Object.keys(byDate).sort().reverse().slice(0, 12);
-  if (!dates.length) { d.querySelector('.dbody').innerHTML = '<p><b>승급 이력이 있는 유품(단)자가 없습니다.</b></p><p class="hint">관리프로그램 심사 메뉴에서 합격 처리하면 여기에 날짜별로 나옵니다.</p>'; return; }
-  if (!dates.includes(gradeImp.date)) { gradeImp.date = dates[0]; gradeImp.off = {}; }
-  const C = certState(), D = C.data.grade;
+  const RD = gradeRounds();
+  if (!RD.length) { d.querySelector('.dbody').innerHTML = '<p><b>급증을 만들 유품(단)자가 없습니다.</b></p><p class="hint">관리프로그램 출석현황에서 <b>심사확정</b>을 체크하거나, 심사관리에서 합격(완료) 처리하면 여기에 회차별로 나옵니다. 지금 재원생 가운데 「N품(단) K급」 승급 대상만 나옵니다.</p>'; return; }
+  const today = new Date().toISOString().slice(0, 7);
+  if (!RD.some(o => o.ym === gradeImp.ym)) { const open = RD.filter(o => o.ym >= today && o.list.length).sort((x, y) => x.ym.localeCompare(y.ym))[0]; gradeImp.ym = (open || RD.find(o => o.list.length) || RD[0]).ym; gradeImp.off = {}; gradeImp.date = ''; }
+  const C = certState(), D = C.data.grade, fmt = dd => { const [y, m, dy] = dd.split('-').map(Number); return `${y}년 ${m}월 ${dy}일`; }, md = dd => `${+dd.slice(5, 7)}/${+dd.slice(8, 10)}`;
   const draw = () => {
-    const list = (byDate[gradeImp.date] || []).slice().sort((x, y) => x.name.localeCompare(y.name, 'ko')), on = list.filter(x => !gradeImp.off[x.name]), cyc = String(D.common.cycle || '').trim(), fmt = dd => { const [y, m, dy] = dd.split('-').map(Number); return `${y}년 ${m}월 ${dy}일`; };
-    d.innerHTML = `<div class="dhead"><h2>📥 최근 심사에서 급증 만들기 <small>${measSrv && measSrv.att ? '관리프로그램 서버 최신' : '이 브라우저에 남은 자료'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
-      <p class="hint" style="margin-top:0">심사일에 승급한 <b>유품(단)자</b>(예: 1품 10급)를 그 급수로 급증에 넣습니다. 지금 재원생만, 국기원 승품(단) 합격은 뺍니다. 왼쪽 아래 예정일은 ${cyc ? `<b>남은 심사 수 × ${esc(cyc)}개월</b>(상장 패널 ②에서 고정한 값)` : '<b>운영규정대로 사람마다</b> 계산합니다 — 심사 한 번에 2급씩, 간격은 「두 달 이상 + 24회」(등록 횟수로 주1 6·주2 3·주3 2·프리패스 2개월, 3품 이상 중학생은 16회), 국기원 연한(지금 품 숫자만큼 해)도 봄'}.</p>
-      <label class="f"><span>심사일</span><select id="giDate">${dates.map(dd => `<option value="${dd}" ${dd === gradeImp.date ? 'selected' : ''}>${dd} · ${byDate[dd].length}명</option>`).join('')}</select></label>
-      <h3>${list.length}명 <small>체크를 풀면 빠짐</small></h3>
-      <div class="mpeople">${list.map(x => `<label class="mper ${gradeImp.off[x.name] ? 'off' : ''}"><input type="checkbox" data-gioff="${esc(x.name)}" ${gradeImp.off[x.name] ? '' : 'checked'}><b>${esc(x.name)}</b> <small>${esc(x.grade)}${x.now && x.now !== x.grade ? ` (지금 ${esc(x.now)})` : ''}${cyc ? '' : ` · ${esc(x.t || '등록?')} ${x.per}개월마다`}</small><span>${esc(certGradeNote(x.grade, gradeImp.date, cyc || x.per, x.kd))}</span></label>`).join('')}</div>
+    const o = RD.find(x => x.ym === gradeImp.ym) || RD[0], cyc = String(D.common.cycle || '').trim();
+    const nConf = o.list.filter(x => x.how === 'conf').length, nDone = o.list.length - nConf;
+    const dates = [...new Set(o.days.concat(o.list.filter(x => x.d).map(x => x.d)))].sort();
+    if (!gradeImp.date || !gradeImp.date.startsWith(o.ym)) gradeImp.date = (nConf ? o.days[0] : '') || dates[0] || `${o.ym}-${o.ym === today ? String(new Date().getDate()).padStart(2, '0') : '28'}`;
+    const on = o.list.filter(x => !gradeImp.off[x.name]);
+    const when = x => x.how === 'done' ? x.d : gradeImp.date;
+    d.innerHTML = `<div class="dhead"><h2>📥 심사 회차에서 급증 만들기 <small>${measSrv && measSrv.att ? '관리프로그램 서버 최신' : '이 브라우저에 남은 자료'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
+      <p class="hint" style="margin-top:0">관리프로그램 <b>심사확정자</b>는 <b>합격했다고 보고</b> 승급할 급수(관리 앱 규칙: 한 번에 2급씩)로, 이미 <b>심사 완료</b>(학적부 승급 이력)된 사람은 실제 급수로 넣습니다. 지금 재원생 · 품(단) 승급 대상만, 국기원 확정자는 뺍니다. 왼쪽 아래 다음 품(단) 응시 예정일은 ${cyc ? `<b>남은 심사 수 × ${esc(cyc)}개월</b>(상장 패널에서 고정한 값)` : '운영규정대로 사람마다(심사 한 번에 2급 · 등록 횟수로 간격 · 국기원 연한)'} 계산합니다.</p>
+      <div class="grid2"><label class="f"><span>심사 회차</span><select id="giYm">${RD.map(x => { const c = x.list.filter(y => y.how === 'conf').length; return `<option value="${x.ym}" ${x.ym === o.ym ? 'selected' : ''}>${x.ym.slice(2, 4)}-${x.ym.slice(5, 7)}회차 · ${c ? `확정 ${c}명` : ''}${c && x.list.length - c ? ' · ' : ''}${x.list.length - c ? `완료 ${x.list.length - c}명` : ''}${!x.list.length ? '대상 없음' : ''}${x.ym >= today ? ' (진행 중)' : ''}</option>`; }).join('')}</select></label>
+      <label class="f"><span>급증 날짜 = 심사일 ${o.days.length ? `<small>(일정: ${o.days.map(md).join('·')})</small>` : ''}</span><input type="date" id="giDate" value="${esc(gradeImp.date)}"></label></div>
+      <h3>${o.list.length}명 <small>${nConf ? `확정 ${nConf}명(합격 가정)` : ''}${nConf && nDone ? ' · ' : ''}${nDone ? `완료 ${nDone}명` : ''} — 체크를 풀면 빠짐</small></h3>
+      <div class="mpeople">${o.list.map(x => `<label class="mper ${gradeImp.off[x.name] ? 'off' : ''}"><input type="checkbox" data-gioff="${esc(x.name)}" ${gradeImp.off[x.name] ? '' : 'checked'}><b>${esc(x.name)}</b> <small>${x.how === 'conf' ? `<em class="gi-conf">확정</em> ${esc(x.from)} → <b>${esc(x.grade)}</b>` : `<em class="gi-done">완료 ${md(x.d)}</em> ${esc(x.grade)}`}${cyc ? '' : ` · ${esc(x.t || '등록?')} ${x.per}개월마다`}</small><span>${esc(certGradeNote(x.grade, when(x), cyc || x.per, x.kd))}</span></label>`).join('') || '<p class="hint">이 회차에는 급증 대상이 없습니다.</p>'}</div>
+      ${o.kkw.length ? `<p class="hint">국기원 승품(단) 대비로 넘어가 급증에서 뺀 확정자 ${o.kkw.length}명: ${o.kkw.map(x => `${esc(x.name)}(${esc(x.from)})`).join(' · ')}</p>` : ''}
       <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><label class="chk" style="margin-right:auto"><input type="checkbox" id="giReplace" ${D.rows.some(r => String(r.name || '').trim()) ? '' : 'checked'}> 지금 명단을 바꾸기 (끄면 뒤에 더함)</label><button class="btn primary" id="giGo" ${on.length ? '' : 'disabled'}>명단에 넣기 (${on.length}명)</button></div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
-    d.onchange = e => { const t = e.target; if (t.id === 'giDate') { gradeImp.date = t.value; gradeImp.off = {}; draw(); } if (t.dataset.gioff) { if (t.checked) delete gradeImp.off[t.dataset.gioff]; else gradeImp.off[t.dataset.gioff] = 1; draw(); } };
-    const go = async make => { C.form = 'grade'; D.common.title = D.common.title || '급증'; D.common.date = fmt(gradeImp.date); const rows = on.map(x => ({ name: x.name, grade: x.grade, per: x.per, kd: x.kd })); D.rows = $('#giReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; commit(); d.close(); sideTab = 'cert'; renderRail(); renderSide(); toast(`급증 ${rows.length}명을 명단에 넣었습니다 — 오른쪽에 바로 만들었습니다 (날짜 ${D.common.date})`); certLiveSoon(true); };
-    $('#giGo').onclick = () => go(false);
+    d.onchange = e => { const t = e.target; if (t.id === 'giYm') { gradeImp.ym = t.value; gradeImp.off = {}; gradeImp.date = ''; draw(); } if (t.id === 'giDate' && /^\d{4}-\d\d-\d\d$/.test(t.value)) { gradeImp.date = t.value; draw(); } if (t.dataset.gioff) { if (t.checked) delete gradeImp.off[t.dataset.gioff]; else gradeImp.off[t.dataset.gioff] = 1; draw(); } };
+    $('#giGo').onclick = () => { C.form = 'grade'; D.common.title = D.common.title || '급증'; D.common.date = fmt(gradeImp.date);
+      const rows = on.map(x => Object.assign({ name: x.name, grade: x.grade, per: x.per, kd: x.kd }, x.how === 'done' && x.d !== gradeImp.date ? { date: fmt(x.d) } : {}));
+      D.rows = $('#giReplace').checked ? rows : D.rows.concat(rows); certPrev = 0; commit(); d.close(); sideTab = 'cert'; renderRail(); renderSide();
+      toast(`급증 ${rows.length}명을 명단에 넣었습니다 — 오른쪽에 바로 만들었습니다 (날짜 ${D.common.date})`); certLiveSoon(true); };
   };
   draw();
 }
@@ -7061,7 +7096,7 @@ if (NC.aichat) NC.aichat.init({
     if (!F[k]) return false; const r = F[k](); return r !== false;
   },
 });
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { tlShow, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML };
 
 /* ---- 패널 너비 조절 ---- */
 (function () {
