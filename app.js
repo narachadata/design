@@ -5626,11 +5626,11 @@ const ATT_W = 209, ATT_H = 150, ATT_FRAME = 'assets/att/naracha-att-frame.jpg';
 const ATT_F = [['st', '연도 칸', 66, 21.0, 27.3, 'right', 11.5, 700], ['bd', '생일', 96, 21.0, 29.6, 'right', 11.5, 700], ['reg', '등록구분', 129, 21.0, 32, 'right', 11.5, 700], ['name', '이름', 165, 20.5, 30.5, 'right', 16, 800],
   ['addr', '주소', 73.5, 32.3, 52, 'left', 8, 700], ['tel', '연락처', 129, 32.3, 32, 'right', 11.5, 700], ['days', '수련요일', 70, 43.2, 43.9, 'right', 11.5, 700], ['school', '학교/학년', 117, 43.2, 44, 'right', 11.5, 700],
   ['guard', '보호자', 70, 54.5, 43.9, 'right', 11.5, 700], ['no', '출석번호', 117, 54.5, 44, 'right', 11.5, 800, '#2B63B5']];
-const ATT_PHOTO = { x: 168.5, y: 23, w: 33, h: 35.5 };  /* 이름 아래 오른쪽 사진 상자 (밑줄 20.5 ~ 표 위 62mm 사이) */
+const ATT_PHOTO = { x: 170.98, y: 23, w: 28.05, h: 30.18 };  /* 이름 아래 오른쪽 사진 상자 — 11/19 팀장님 "15% 작게, 위는 그대로·좌우·아래만 줄게": 예전 168.5·23·33×35.5를 위쪽 가운데 기준 85% */
 const attDefYear = () => { const t = new Date(); return t.getFullYear() + (t.getMonth() >= 10 ? 1 : 0); };  /* 11·12월엔 다음 해 출석부 (연말 일괄) */
 const attIsDoc = () => Math.abs(doc.w - ATT_W) < 1 && Math.abs(doc.h - ATT_H) < 1;
 function attState() {
-  if (!doc.att) doc.att = { rows: [], year: attDefYear(), stMode: 'join', printFrame: false, showFrame: false, layout: {}, fv: 6 };
+  if (!doc.att) doc.att = { rows: [], year: attDefYear(), stMode: 'join', printFrame: false, showFrame: false, layout: {}, fv: 7 };
   const A = doc.att; A.rows = A.rows || []; A.layout = A.layout || {}; if (!A.year) A.year = attDefYear(); if (!A.stMode) A.stMode = 'join';
   if (A.fv !== 2) { /* 11/19 팀장님: 주소는 지역까지만·보호자 이름 가운데 O·학교 글자 겹침 빼기·연도 칸은 등록일 — 이미 넣은 명단도 한 번 맞춤 */
     A.fv = 2; if (A.stMode === 'auto') A.stMode = 'join';
@@ -5640,6 +5640,7 @@ function attState() {
   if (A.fv === 3) { A.fv = 4; const bs = attBusSet(); A.rows.forEach(r => { r.addr = attAddrShort(r.addr); if (r.bus == null) r.bus = bs.has(String(r.name || '').trim()); }); }  /* 주소에 붙은 메모(· 차량: …)·'정자일로55' 정리, 차량 이용 표시 (11/19) */
   if (A.fv === 4) { A.fv = 5; A.rows.forEach(r => { r.addr = attAddrShort(r.addr); }); }  /* 끝 숫자 빼기 (11/19) */
   if (A.fv === 5) { A.fv = 6; }  /* 도로명 건물 번호를 남기는 규칙 — 주소는 관리프로그램에서 다시 가져와야 번호가 돌아옴 */
+  if (A.fv === 6) { A.fv = 7; const L = A.layout && A.layout.photo; if (L && L.w && L.h) { const r2 = v => Math.round(v * 100) / 100, cx = (Number(L.x) || 0) + L.w / 2; L.w = r2(L.w * 0.85); L.h = r2(L.h * 0.85); L.x = r2(cx - L.w / 2); } }  /* 사진 15% 작게(위쪽 그대로) — 기억해 둔 사진 배치도 같은 비율로 (11/19) */
   return A;
 }
 const attRowsOn = () => attState().rows.filter(r => String(r.name || '').trim() && !r.off);
