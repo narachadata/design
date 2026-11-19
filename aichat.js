@@ -319,7 +319,7 @@ ${manualText()}`;
     const s = $('#achSet'); if (!s) return;
     const p = S.prov, k = keyOf(p);
     s.innerHTML = `<div class="ach-seg">${[['claude', 'Claude'], ['gemini', 'Gemini']].map(([v, t]) => `<button type="button" data-prov="${v}" class="${p === v ? 'on' : ''}">${t}${keyOf(v) ? '' : ' <small>(키 없음)</small>'}</button>`).join('')}</div>
-      <label class="f"><span>${p === 'gemini' ? 'Gemini' : 'Claude'} API 키</span><input type="password" id="achKey" autocomplete="off" placeholder="${p === 'gemini' ? 'AIza… (aistudio.google.com에서 만든 키)' : 'sk-ant-… (console.anthropic.com에서 만든 키)'}" value="${esc(k)}"></label>
+      <label class="f"><span>${p === 'gemini' ? 'Gemini' : 'Claude'} API 키</span><input type="password" id="achKey" autocomplete="off" placeholder="${p === 'gemini' ? 'AIza… 또는 AQ.… (aistudio.google.com에서 만든 키)' : 'sk-ant-… (console.anthropic.com에서 만든 키)'}" value="${esc(k)}"></label>
       <label class="f"><span>모델</span>${p === 'gemini' ? `<input id="achModel" placeholder="비워 두면 가장 새 Flash를 자동으로" value="${esc(S.geminiModel)}">` : `<select id="achModel">${CLAUDE_MODELS.map(([v, t]) => `<option value="${v}" ${S.claudeModel === v ? 'selected' : ''}>${t}</option>`).join('')}</select>`}</label>
       <p class="hint">API는 쓴 만큼 요금이 듭니다(채팅 요금제와 따로). 키와 대화는 이 브라우저(동기화 폴더가 있으면 그 설정 파일)에만 두고, 문서 내용은 고른 AI 회사로만 보냅니다. 학생 이름이 든 상장·출석부를 열어 둔 채 물으면 그 이름도 함께 보내집니다.</p>
       <div class="row"><button type="button" class="btn sm" id="achKeySave">저장</button>${k ? '<button type="button" class="btn sm" id="achKeyDel">이 PC에서 키 지우기</button>' : ''}<button type="button" class="btn sm" id="achOld">예전 AI 도구 창</button></div>`;
