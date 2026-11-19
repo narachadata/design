@@ -5955,9 +5955,9 @@ function prUse(cert) {
   const keep = { pages: prState.pages, range: prState.range, pick: prState.pick }; let o = prLoad(k);
   /* 출석부 (11/19 팀장님: 프린터 창 용지는 A4 그대로, 출석부 용지(폭 209 ≈ A4 폭)를 A4처럼 넣음 — 209×150 가로 쪽을 보내면 맥이 A4 세로에 맞춰 90° 돌려 찍었음):
      A4 세로 쪽 맨 위에 실제 크기 100%로(워드 메일머지와 같게) · 여백 0 · 돌리지 않음. 예전 설정(판 없음)은 한 번 이 값으로 */
-  const ATT_PR = { paper: 'A4', orient: 'p', fit: 'actual', margin: 0, mt: 0, mb: 0, ml: 0, mr: 0, ax: 0.5, ay: 0, dx: 0, dy: 0, feed: 'none', nup: 1, attV: 4 };  /* dy: 11/19 +5mm 해 보니 너무 아래 → 팀장님 "5mm 다시 올려" → 0 */
+  const ATT_PR = { paper: 'A4', orient: 'p', fit: 'actual', margin: 0, mt: 5, mb: 0, ml: 0, mr: 0, ax: 0.5, ay: 0, dx: 0, dy: 0, feed: 'none', nup: 1, attV: 5 };  /* 위 여백 5mm: 팀장님 엡손 실제 출력으로 맞춘 자리(11/19 "5mm 위 여백을 주니 맞았어") */  /* dy: 11/19 +5mm 해 보니 너무 아래 → 팀장님 "5mm 다시 올려" → 0 */
   if (cert === 'att' && (!o || (o.attV || 0) < 2)) o = Object.assign({}, o || {}, ATT_PR);
-  else if (cert === 'att' && (o.attV || 0) < 4) o = Object.assign({}, o, { dy: (Number(o.dy) || 0) + ((o.attV || 0) < 3 ? 0 : -5), attV: 4 });  /* 판 3에서 더했던 5mm를 다시 뺌 (판 2에서 바로 오면 그대로) */
+  else if (cert === 'att' && (o.attV || 0) < 5) o = Object.assign({}, o, { mt: 5, dy: 0, attV: 5 });  /* 기본 자리 = 위 여백 5mm·세로 보정 0 (예전 판에서 오면 이 값으로) */
   else if (!o && cert) { const g = prLoad('naracal-print') || {}; o = (Number(g.dx) || Number(g.dy)) ? g : { fit: 'actual', margin: 0, mt: 0, mb: 0, ml: 0, mr: 0 }; }  /* 처음: 예전에 맞춰 둔 위치 보정이 있으면 그대로 이어받음, 없으면 실제 크기 */
   prKey = k; prState = Object.assign({}, PR_DEF, o || {}, keep);
 }
@@ -6092,7 +6092,7 @@ function openPrint(pre) {
     if (t.id === 'prFrame') { S.frame = t.checked; if (doc.cert) { doc.cert.printFrame = t.checked; doc.pages.forEach(p => p.els.forEach(x => { if (x.certFrame && !x.attFrame) x.hidden = !t.checked; })); commit(); renderAll(); } if (!t.checked) preset('exact'); }
     S.pv = 0; prSave(); draw(); };
   d.onclick = e => {
-    const sb = e.target.closest('[data-pk]'); if (sb) { prState[sb.dataset.pk] = sb.dataset.pv; if (sb.dataset.pk === 'nup' && sb.dataset.pv === '1' && prKey === 'naracal-print-att') { Object.assign(prState, { paper: 'A4', orient: 'p', fit: 'actual', ax: 0.5, ay: 0, feed: 'none' }); prSetMg(prState, 0); }  /* 출석부 1쪽 = A4 맨 위 100% (출석부 용지에) */ if (sb.dataset.pk === 'mode' && sb.dataset.pv === 'vec') prState.paper = 'doc'; prSave(); draw(); return; }
+    const sb = e.target.closest('[data-pk]'); if (sb) { prState[sb.dataset.pk] = sb.dataset.pv; if (sb.dataset.pk === 'nup' && sb.dataset.pv === '1' && prKey === 'naracal-print-att') { Object.assign(prState, { paper: 'A4', orient: 'p', fit: 'actual', ax: 0.5, ay: 0, feed: 'none' }); prSetMg(prState, 5, 0, 0, 0); }  /* 출석부 1쪽 = A4 맨 위 100% (출석부 용지에) */ if (sb.dataset.pk === 'mode' && sb.dataset.pv === 'vec') prState.paper = 'doc'; prSave(); draw(); return; }
     const pa = e.target.closest('[data-pra]'); if (pa) { const [x, y] = pa.dataset.pra.split(',').map(Number); prState.ax = x; prState.ay = y; prSave(); draw(); return; }
     const ps = e.target.closest('[data-prset]'); if (ps) { preset(ps.dataset.prset); prSave(); draw(); return; }
     const nv = e.target.closest('[data-prnav]'); if (nv && !nv.disabled) { prState.pv += Number(nv.dataset.prnav); draw(); return; }
