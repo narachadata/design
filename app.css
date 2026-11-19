@@ -1462,3 +1462,13 @@ body.prmg-drag{cursor:grabbing;-webkit-user-select:none;user-select:none}
 
 /* 출석부 (2026-11-18) */
 .att .ctable{table-layout:auto;width:auto}.att .ctable .ci{width:22px}.att .ctable td:first-child input{margin:0}.att .ctable tr.off input[data-ak]{opacity:.45;text-decoration:line-through}.attmode button small{display:block;font-size:10px;opacity:.7;font-weight:400}#dlgAttPick .seg button{white-space:nowrap}.attbans{gap:6px 14px;flex-wrap:wrap;margin:6px 0}.attbans .chk{margin:0}.attpeople .mper span{flex-basis:100%;font-size:11.5px;color:var(--ui-muted,#667)}
+
+/* 출력 창: 한 화면에 다 보이게 (11/19) — 넓게·설정 두 단, 모아 찍기 */
+#dlgPrint{max-width:1320px;width:97vw;max-height:96vh}#dlgPrint .dbody{max-height:calc(96vh - 62px)}
+#dlgPrint .prdlg2{width:auto;grid-template-columns:350px minmax(0,1fr)}
+#dlgPrint .prset{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 22px;align-items:start}
+#dlgPrint .prcolA,#dlgPrint .prcolB{min-width:0}#dlgPrint .prgo-row{grid-column:1/-1}
+#dlgPrint .prpv{position:sticky;top:0;align-self:start}
+@media (max-width:1100px){#dlgPrint .prset{grid-template-columns:1fr}}
+@media (max-width:860px){#dlgPrint .prdlg2{grid-template-columns:1fr}#dlgPrint .prpv{position:static}}
+.prpaper .prcut{position:absolute;border-left:1px dashed #9aa0aa;border-top:1px dashed #9aa0aa;pointer-events:none;z-index:3}
