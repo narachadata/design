@@ -5953,10 +5953,10 @@ function renderAttSide(body) {
   <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" data-ax="add">+ 한 명 (손으로)</button>${rows.length ? '<button class="btn sm" data-ax="allon">모두 체크</button><button class="btn sm" data-ax="alloff">모두 해제</button><button class="btn sm" data-ax="clear">명단 비우기</button>' : ''}</div>
   <h3>③ 미리 보기</h3>
   ${rows.length ? `<div class="row cprevnav"><button class="btn sm icon" data-anav="-1">‹</button><span>${Math.min(attPrev + 1, rows.length)} / ${rows.length} · <b>${esc((rows[attPrev] || {}).name || '(이름 없음)')}</b>${(rows[attPrev] || {}).off ? ' <small>(빠짐)</small>' : ''}</span><button class="btn sm icon" data-anav="1">›</button></div><div class="cprev" id="aprev"></div><p class="hint" style="margin:4px 0 0">${A.printFrame ? '🖼 틀까지 출력 — 흰 종이에 틀과 글자를 함께 찍습니다' : '흐린 틀은 자리를 맞춰 보는 그림 — ✍ 글자만 출력하므로 틀은 찍히지 않습니다'}.</p>` : '<p class="hint">명단을 넣으면 여기에 출석부가 보입니다.</p>'}
-  <h3>④ 만들기 · 출력</h3>
-  <button class="btn primary full" data-ax="mergeprint" ${nOn ? '' : 'disabled'}>📋 출석부 ${nOn}장 만들기 → 바로 출력</button>
-  <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn sm" data-ax="merge" ${nOn ? '' : 'disabled'}>만들기만</button><button class="btn sm primary" data-ax="print" ${made ? '' : 'disabled'}>🖨 바로 출력${made ? ` (${made}장)` : ''}</button><button class="btn sm" data-ax="pdf" ${made ? '' : 'disabled'}>PDF로 저장</button><button class="btn sm" data-ax="layout" ${page() && page().att ? '' : 'disabled'} title="지금 출석부 쪽에서 글 상자·사진을 옮기거나 글꼴·크기를 바꾼 뒤 누르면, 모든 출석부에 같은 배치로">이 쪽 배치를 모든 출석부에</button>${Object.keys(A.layout).length ? '<button class="btn sm" data-ax="layoutreset">배치 처음대로</button>' : ''}</div>
-  <p class="hint" style="margin-top:8px">출력 창은 용지 「문서 크기(209×150)」·「실제 크기 100%」로 열립니다. 글자가 칸에서 조금 어긋나면 출력 창의 <b>위치 보정</b>(가로·세로 mm)으로 맞추세요 — 이 PC가 출석부용으로 따로 기억합니다. 이름이 길면 글자가 저절로 줄어듭니다.</p></div>`;
+  <h3>④ 출력</h3>
+  <button class="btn primary full" data-ax="printnow" ${nOn ? '' : 'disabled'} title="출석부는 왼쪽 값대로 이미 오른쪽에 만들어져 있습니다 — 출력 창으로 바로">🖨 출석부 출력하기 (${nOn}장)</button>
+  <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn sm" data-ax="pdf" ${made ? '' : 'disabled'}>PDF로 저장</button><button class="btn sm" data-ax="layout" ${page() && page().att ? '' : 'disabled'} title="지금 출석부 쪽에서 글 상자·사진을 옮기거나 글꼴·크기를 바꾼 뒤 누르면, 모든 출석부에 같은 배치로">이 쪽 배치를 모든 출석부에</button>${Object.keys(A.layout).length ? '<button class="btn sm" data-ax="layoutreset">배치 처음대로</button>' : ''}</div>
+  <p class="hint" style="margin-top:8px">출석부는 왼쪽에서 고르는 대로 오른쪽에 바로 만들어집니다. 출력 창은 <b>A4 세로 맨 위·실제 크기</b>(엡손에 맞춘 기본 자리)로 열리니, 출석부 용지를 A4처럼 위쪽부터 넣으세요. 어긋나면 출력 창의 <b>위치 보정</b>(가로·세로 mm) — 이 PC가 출석부용으로 따로 기억합니다. 이름이 길면 글자가 저절로 줄어듭니다.</p></div>`;
   const pv = $('#aprev'); if (pv) { const r = rows[attPrev] || {}, tmp = attPage(r, attPrev), bw = pv.clientWidth || 260, kk = bw / (doc.w * MM); pv.style.height = doc.h * MM * kk + 'px'; tmp.els.forEach(e => { if (e.attFrame) { e.hidden = false; if (!A.printFrame) e.opacity = 0.45; } });
     const draw = () => { pv.innerHTML = `<div style="transform:scale(${kk});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(ATT_W, ATT_H, tmp.els, '#ffffff')}</div>`; prevFitWatch(pv, ATT_W, ATT_H); }; draw(); fitTextOffscreen(tmp.els).then(() => { if (document.body.contains(pv)) draw(); }); }
 }
@@ -5986,6 +5986,7 @@ function renderAttSide(body) {
     if (k === 'clear' && window.confirm(`출석부 명단 ${A.rows.length}명을 비울까요? (만든 쪽은 그대로)`)) { A.rows = []; attPrev = 0; markDirty(); renderSide(); }
     if (k === 'merge') { await attMerge(); renderSide(); }
     if (k === 'mergeprint') { if (await attMerge()) { renderSide(); openPrint('att'); } }
+    if (k === 'printnow') { await attLive(); if (doc.pages.some(p => p.att && !p.att.empty)) openPrint('att'); else toast('출력할 출석부가 없습니다 — ② 명단에서 체크하세요', true); }  /* 11/19 팀장님: 실시간이니 만들기 없이 출력 창으로 바로 */
     if (k === 'print') openPrint('att'); if (k === 'pdf') openDownload('pdfhq');
     if (k === 'layout') { await attSaveLayout(); renderSide(); }
     if (k === 'layoutreset' && window.confirm('옮기거나 고친 칸 배치를 처음(용지에 맞춘 자리)으로 되돌릴까요?')) { A.layout = {}; if (doc.pages.some(p => p.att)) await attMerge(); else commit(); renderSide(); }
