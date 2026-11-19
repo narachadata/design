@@ -201,7 +201,7 @@ ${manualText()}`;
   /* ---------- Claude (Messages API, 브라우저 직접 호출) ---------- */
   async function claudeCall() {
     const model = S.claudeModel || 'claude-opus-5-5';
-    const fb = /^claude-(opus|sonnet|fable)-5/.test(model);
+    const fb = /^claude-(fable-5-[12]|opus-5-5|opus-5|sonnet-5-5)$/.test(model);  /* 서버 쪽 대체 모델(fallbacks)을 받는 모델만 — 그 밖(Haiku·Sonnet 5 등)에 보내면 400 */
     const body = { model, max_tokens: 16000, system: [{ type: 'text', text: system() }], tools: TOOLS, messages: api, cache_control: { type: 'ephemeral' }, output_config: { effort: 'medium' } };
     if (fb) body.fallbacks = 'default';
     const h = { 'content-type': 'application/json', 'x-api-key': cfg().anthropicKey, 'anthropic-version': '2026-10-21', 'anthropic-dangerous-direct-browser-access': 'true' };
