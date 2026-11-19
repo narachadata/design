@@ -2680,7 +2680,7 @@ function renderManual() {
 function manZoom(im) { let z = $('#manZoom'); if (z) z.remove(); z = document.createElement('div'); z.id = 'manZoom'; z.innerHTML = `<div class="mzwrap">${im.innerHTML.replace('<span class="mzoom">🔍 크게</span>', '')}</div><button class="btn" data-mzc>닫기 (Esc)</button>`; $('#dlgManual').appendChild(z); const close = () => { z.remove(); document.removeEventListener('keydown', key, true); }; const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }; document.addEventListener('keydown', key, true); z.onclick = close; }
 /* 매뉴얼의 '바로 해 보기' */
 function manualGo(g) { const rail = k => { const b = $(`#rail [data-tab="${k}"]`); if (b) b.click(); };
-  ({ tpl: () => rail('tpl'), virtueTpl: () => { tplCat = 'all'; tplQ = ''; tplF = { format: '', season: '', age: '', occasion: '인성', biz: '' }; rail('tpl'); }, photo: () => rail('photo'), nara: () => rail('naracha'), elems: () => rail('elems'), video: () => rail('video'), settings: () => openSettings(), cert: () => naraGo('cert'), att: () => naraGo('att'), attPick: () => { naraGo('att'); openAttPick(); }, news: () => naraGo('news'), calendar: () => naraGo('calendar'), pages: () => rail('pages'), book: () => { rail('pages'); openBook(); }, resize: () => openResize(), print: () => openPrint(), qr: () => openQr(), dday: () => openDday(), dojang: () => openDojang(), wizard: () => openWizard(doc.calendar.year || 2027), rules: () => openRules(), download: () => openDownload(), vkeys: () => tlKeysHelp(), filemenu: () => $('#btnFileMenu').click() }[g] || (() => {}))(); }
+  ({ tpl: () => rail('tpl'), virtueTpl: () => { tplCat = 'all'; tplQ = ''; tplF = { format: '', season: '', age: '', occasion: '인성', biz: '' }; rail('tpl'); }, photo: () => rail('photo'), nara: () => rail('naracha'), elems: () => rail('elems'), video: () => rail('video'), settings: () => openSettings(), cert: () => naraGo('cert'), att: () => naraGo('att'), attPick: () => { naraGo('att'); openAttPick(); }, news: () => naraGo('news'), calendar: () => naraGo('calendar'), pages: () => rail('pages'), book: () => { rail('pages'); openBook(); }, resize: () => openResize(), print: () => openPrint(), qr: () => openQr(), dday: () => openDday(), dojang: () => openDojang(), wizard: () => openWizard(doc.calendar.year || 2027), rules: () => openRules(), download: () => openDownload(), vkeys: () => tlKeysHelp(), aichat: () => { if (NC.aichat) NC.aichat.show(true); }, filemenu: () => $('#btnFileMenu').click() }[g] || (() => {}))(); }
 /* ---- 설정 (세로 메뉴 맨 아래 ⚙): 여러 곳에 흩어져 있던 설정을 한곳에. 바꾸면 바로 적용되고 이 PC에 기억(일부는 동기화 폴더로 두 PC 같이) ---- */
 let setTab = 'view';
 function openSettings(tab) {
@@ -2862,9 +2862,10 @@ function renderSide0() {
     body.oninput = e => { const t = e.target, k = t.dataset.k; if (!k) return; const v = t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) : t.value; doc[k.slice(4)] = v; if (k === 'doc.name') $('#pname').value = v; markDirty(); };
   } else if (sideTab === 'ai') {
     body.innerHTML = `<p class="hint">${chatMode() ? '지금 쓰는 채팅 요금제(Claude·Gemini·ChatGPT)로 씁니다 — 지시문을 복사해 채팅에 붙여 넣고, 받은 답·그림을 공방에 붙여 넣습니다. 방식은 "AI 설정"에서 바꿉니다.' : 'Claude가 문구와 이미지 프롬프트를 만들고, Gemini가 삽화를 그립니다. API 키는 "AI 설정"에 넣습니다.'}</p>
+    <button class="btn primary" data-aichat style="width:100%;margin:0 0 10px">💬 AI 도우미와 대화하기 (오른쪽 채팅창)</button>
     <div class="tile"><button data-ai="content"><svg class="ic" style="width:22px;height:22px"><use href="#i-ai"/></svg>인성 문구 제안</button><button data-ai="image"><svg class="ic" style="width:22px;height:22px"><use href="#i-img"/></svg>AI 이미지 생성</button><button data-ai="keys"><svg class="ic" style="width:22px;height:22px"><use href="#i-help"/></svg>AI 설정</button><button data-racha><span style="font-size:20px">🐧</span>라차 동작 만들기</button><button data-ai="edit"><svg class="ic" style="width:22px;height:22px"><use href="#i-elems"/></svg>이미지 편집기</button></div>
     <h3>이미지 편집기</h3><p class="hint">선택한 이미지의 배경을 색으로 지정해 지우고(스포이트·허용 범위·부드러운 가장자리), 지우개·복원 브러시로 세밀하게 다듬고, 자를 수 있습니다.</p>`;
-    body.onclick = e => { if (e.target.closest('[data-racha]')) { openRachaMaker(); return; } const b = e.target.closest('[data-ai]'); if (!b) return; if (b.dataset.ai === 'edit') { const el = selEls()[0]; if (el && el.type === 'image' && src(el.src)) openImgEditor(el); else toast('먼저 이미지 요소를 선택하세요', true); } else openAI(b.dataset.ai); };
+    body.onclick = e => { if (e.target.closest('[data-aichat]')) { if (NC.aichat) NC.aichat.show(true); return; } if (e.target.closest('[data-racha]')) { openRachaMaker(); return; } const b = e.target.closest('[data-ai]'); if (!b) return; if (b.dataset.ai === 'edit') { const el = selEls()[0]; if (el && el.type === 'image' && src(el.src)) openImgEditor(el); else toast('먼저 이미지 요소를 선택하세요', true); } else openAI(b.dataset.ai); };
   } else if (sideTab === 'bg') {
     const pg = page();
     const grads = [['linear-gradient(135deg,#FFE89A,#FFD34D)', '옐로'], ['linear-gradient(135deg,#1E2B5A,#2F5BEA)', '네이비'], ['linear-gradient(135deg,#E0564B,#FFB199)', '선셋'], ['linear-gradient(180deg,#DDF3EA,#FFFFFF)', '민트 페이드'], ['linear-gradient(135deg,#6B3FD1,#E0564B)', '퍼플 레드'], ['linear-gradient(180deg,#E6EDF2,#FFFFFF)', '스카이 페이드'], ['radial-gradient(circle at 30% 20%,#FFF7CC,#FFE89A)', '빛 번짐'], ['linear-gradient(135deg,#1B1B1B,#3A3A3A)', '블랙']];
@@ -4135,7 +4136,7 @@ function openRules() {
 
 /* ---- AI 도우미 ---- */
 let aiCtx = { tab: 'content', monthIdx: 0 };
-$('#btnAI').onclick = () => openAI(selEls()[0] && selEls()[0].type === 'image' ? 'image' : 'content');
+$('#btnAI').onclick = () => { if (NC.aichat) NC.aichat.toggle(); else openAI(selEls()[0] && selEls()[0].type === 'image' ? 'image' : 'content'); }; /* 11/19 팀장님: AI 도우미 = 오른쪽 채팅창(aichat.js) */
 function openAI(tab) { aiCtx.tab = tab; const el = selEls()[0]; if (el && el.month) aiCtx.monthIdx = el.month - 1; if (!chatMode() && !AI.cfg.anthropicKey && !AI.cfg.geminiKey && tab !== 'keys') aiCtx.tab = 'keys'; renderAI(); $('#dlgAI').showModal(); }
 $$('#dlgAI [role=tab]').forEach(b => b.onclick = () => { aiCtx.tab = b.dataset.tab; renderAI(); });
 /* 인성 데이터 (2026-11-18 관장님 결정): 표는 각 프로그램 안에 두고, 기준은 메인 프로그램 데이터(기본표 VIRTUE24 + 설정에서 고친 virtueEdits).
@@ -7045,6 +7046,21 @@ async function runRacha() {
 }
 
 // 점검용 (주소에 ?qa 가 있을 때만): 자동 시험에서 문서 상태를 읽음
+/* ---- AI 도우미 채팅창(aichat.js)에 넘기는 문서·편집 함수 (11/19) ---- */
+if (NC.aichat) NC.aichat.init({
+  get doc() { return doc; }, get cur() { return cur; }, get sel() { return sel.slice(); }, get hptr() { return hptr; },
+  pgOff, commit, undo, renderAll, goto, select, uid, TEXT_DEF, docK, isPx: isPxDoc, sizeLabel: () => { updDocSize(); const t = ($('#docSize') || {}).textContent; return t && /px/.test(t) ? `${t} (${docSizeLabel(' × ')})` : t || docSizeLabel(' × '); }, toast, openAI, tplItems, openTplPreview,
+  fonts: () => allFonts().map(f => f.family), dojang: getDojang,
+  addPage(dup) { endEdit(); const p = dup ? dupPage(page()) : newPage(); doc.pages.splice(cur + 1, 0, p); commit(); goto(cur + 1); return cur; },
+  async addImageURL(u, a) { const ref = addAsset(u); const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('그림을 읽지 못했습니다')); i.src = u; }); const ar = img.naturalWidth / img.naturalHeight || 1; let w = Number(a && a.w) || Math.min(80 * docK(), doc.w * 0.6), h = w / ar; if (h > doc.h * 0.8) { h = doc.h * 0.8; w = h * ar; } const el = { type: 'image', src: ref, id: uid(), x: r1(a && a.x != null ? Number(a.x) : (doc.w - w) / 2), y: r1(a && a.y != null ? Number(a.y) : (doc.h - h) / 2), w: r1(w), h: r1(h), rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: 'AI 그림' }; page().els.push(el); commit(); renderAll(); select([el.id]); return el.id; },
+  async pageJPEG(i) { const p = doc.pages[i]; const dpi = Math.max(30, Math.min(110, 1100 / (Math.max(doc.w, doc.h) / 25.4))); const c = await renderPageCanvas(p, dpi, 'thumb', '#ffffff'); return c.toDataURL('image/jpeg', 0.82); },
+  tool(k) {
+    const M = { templates: 'tpl', virtue_templates: 'virtueTpl', pages: 'pages', elements: 'elems', photos: 'photo', naracha: 'nara', news: 'news', cert: 'cert', att: 'att', calendar: 'calendar', calendar_wizard: 'wizard', book: 'book', resize: 'resize', print: 'print', download: 'download', qr: 'qr', dday: 'dday', dojang_info: 'dojang', rules: 'rules', settings: 'settings', file_menu: 'filemenu' };
+    if (M[k]) { manualGo(M[k]); return true; }
+    const F = { new_design: () => openNewDesign(), holiday: () => openHoliday(), fonts: () => openFonts(), ai_image_studio: () => openAI('image'), racha_maker: () => openRachaMaker(), virtue_copy: () => openAI('content'), manual: () => openManual(), image_editor: () => { const el = selEls()[0]; if (el && el.type === 'image' && src(el.src)) { openImgEditor(el); return true; } toast('먼저 이미지 요소를 고르세요', true); return false; } };
+    if (!F[k]) return false; const r = F[k](); return r !== false;
+  },
+});
 if (/[?&]qa\b/.test(location.search)) window.NCQA = { tlShow, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML };
 
 /* ---- 패널 너비 조절 ---- */

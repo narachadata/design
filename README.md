@@ -235,6 +235,7 @@ Ctrl+Z 실행 취소(그 쪽으로 돌아가 되돌림) · Ctrl+Shift+Z 다시 �
 - `live.js` 실시간 같이 편집: 같은 문서를 연 PC끼리 요소 단위 변경을 주고받음(BroadcastChannel + Firebase Realtime Database, 설정은 저장·동기화 창)
 - `lib.js` 나라차 자료실(동기화 폴더의 디자인자료) 읽기, 내 그림(AI 그림) 보관함
 - `ai.js` Claude·Gemini 연동(API 방식)과 채팅창 방식 지시문·답 읽기, 흰 배경 제거
+- `aichat.js` 오른쪽 AI 도우미 채팅창 — Claude·Gemini API로 대화하며 도구(문서 읽기·고치기·템플릿·기능 창 열기·그림 만들기)로 공방을 함께 씀. app.js가 `NC.aichat.init(bridge)`로 연결
 - `defaults.js` 2026년 인성 캘린더 내용(덕목·명언·실천·사자성어)
 - `assets.js`, `assets/` 2026 캘린더에서 추출한 삽화·마스코트·로고(투명 PNG)
 - `fonts/` 무료 글꼴
