@@ -5955,9 +5955,9 @@ function prUse(cert) {
   const keep = { pages: prState.pages, range: prState.range, pick: prState.pick }; let o = prLoad(k);
   /* 출석부 (11/19 팀장님: 프린터 창 용지는 A4 그대로, 출석부 용지(폭 209 ≈ A4 폭)를 A4처럼 넣음 — 209×150 가로 쪽을 보내면 맥이 A4 세로에 맞춰 90° 돌려 찍었음):
      A4 세로 쪽 맨 위에 실제 크기 100%로(워드 메일머지와 같게) · 여백 0 · 돌리지 않음. 예전 설정(판 없음)은 한 번 이 값으로 */
-  const ATT_PR = { paper: 'A4', orient: 'p', fit: 'actual', margin: 0, mt: 0, mb: 0, ml: 0, mr: 0, ax: 0.5, ay: 0, dx: 0, dy: 5, feed: 'none', nup: 1, attV: 3 };  /* dy 5: 팀장님 엡손 실제 출력이 5mm 위로 찍힘(11/19) */
+  const ATT_PR = { paper: 'A4', orient: 'p', fit: 'actual', margin: 0, mt: 0, mb: 0, ml: 0, mr: 0, ax: 0.5, ay: 0, dx: 0, dy: 0, feed: 'none', nup: 1, attV: 4 };  /* dy: 11/19 +5mm 해 보니 너무 아래 → 팀장님 "5mm 다시 올려" → 0 */
   if (cert === 'att' && (!o || (o.attV || 0) < 2)) o = Object.assign({}, o || {}, ATT_PR);
-  else if (cert === 'att' && (o.attV || 0) < 3) o = Object.assign({}, o, { dy: (Number(o.dy) || 0) + 5, attV: 3 });  /* 이미 A4 기본을 쓰던 설정: 지금 위치에서 5mm 아래로 */
+  else if (cert === 'att' && (o.attV || 0) < 4) o = Object.assign({}, o, { dy: (Number(o.dy) || 0) + ((o.attV || 0) < 3 ? 0 : -5), attV: 4 });  /* 판 3에서 더했던 5mm를 다시 뺌 (판 2에서 바로 오면 그대로) */
   else if (!o && cert) { const g = prLoad('naracal-print') || {}; o = (Number(g.dx) || Number(g.dy)) ? g : { fit: 'actual', margin: 0, mt: 0, mb: 0, ml: 0, mr: 0 }; }  /* 처음: 예전에 맞춰 둔 위치 보정이 있으면 그대로 이어받음, 없으면 실제 크기 */
   prKey = k; prState = Object.assign({}, PR_DEF, o || {}, keep);
 }
