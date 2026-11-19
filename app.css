@@ -1474,3 +1474,5 @@ body.prmg-drag{cursor:grabbing;-webkit-user-select:none;user-select:none}
 .prpaper .prcut{position:absolute;border-left:1px dashed #9aa0aa;border-top:1px dashed #9aa0aa;pointer-events:none;z-index:3}
 
 .cfseg button small{white-space:nowrap}
+
+.cfseg.four{flex-wrap:wrap}.cfseg.four button{flex:1 1 45%;min-width:0}
