@@ -5851,7 +5851,7 @@ async function openAttPick(again) {
       ${P.mode === 'recent' ? `<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><div class="seg">${rp.map(([k, t]) => `<button type="button" data-aprp="${k}" aria-pressed="${P.rp === k}">${t}</button>`).join('')}</div>${P.rp === 'range' ? `<input type="date" id="apFrom" value="${esc(P.from)}"> ~ <input type="date" id="apTo" value="${esc(P.to)}">` : `<small class="hint" style="margin:0">등록일 ${P.rp === 'today' ? today : P.rp === 'week' ? mon + ' ~ ' + today : m1 + ' ~ ' + today}</small>`}</div>` : ''}
       <h3>${list.length}명 <small>체크를 풀면 빠짐 · 📷 = 관리프로그램 사진 있음</small> <button class="btn sm" data-apall="1">모두 체크</button> <button class="btn sm" data-apall="0">모두 해제</button></h3>
       <div class="mpeople attpeople">${list.map(s => `<label class="mper ${P.off[s.n] ? 'off' : ''}"><input type="checkbox" data-apoff="${esc(s.n)}" ${P.off[s.n] ? '' : 'checked'}><b>${esc(s.n)}</b> <small>${esc(s.b || '')} · ${esc(attGrade(s) || '')}</small><span>${s.joinDate ? '등록 ' + esc(String(s.joinDate).slice(0, 10)) : ''}${daysOf(s.n) ? ' · ' + esc(daysOf(s.n)) : ''}${photoMap[s.n] && photoMap[s.n].d ? ' · 📷' : ''}</span></label>`).join('') || `<p class="hint">${P.mode === 'name' && !q ? '이름을 써 넣으세요' : P.mode === 'ban' && !P.ban.length ? '반을 고르세요' : '해당하는 재원생이 없습니다'}</p>`}</div>
-      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px;flex-wrap:wrap"><label class="chk" style="margin-right:auto"><input type="checkbox" id="apReplace" ${P.replace ? 'checked' : ''}> 지금 명단을 바꾸기 <small class="hint" style="margin:0">(끄면 뒤에 더함 · ${A.rows.length}명 있음)</small></label><button class="btn" id="apGo" ${nOn ? '' : 'disabled'}>명단에 넣기</button><button class="btn primary" id="apGoMake" ${nOn ? '' : 'disabled'}>넣고 출석부 ${nOn}장 만들기</button></div></div>`;
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px;flex-wrap:wrap"><label class="chk" style="margin-right:auto"><input type="checkbox" id="apReplace" ${P.replace ? 'checked' : ''}> 지금 명단을 바꾸기 <small class="hint" style="margin:0">(끄면 뒤에 더함 · ${A.rows.length}명 있음)</small></label><button class="btn primary" id="apGo" ${nOn ? '' : 'disabled'}>명단에 넣기 (${nOn}명)</button></div></div>`;  /* 11/19 팀장님: 바로 출력으로 가지 않음 — 넣으면 왼쪽 명단·오른쪽 쪽(실시간)에서 확인한 뒤 출력 */
     d.querySelector('[data-close]').onclick = () => d.close();
     d.onclick = e => { const m = e.target.closest('[data-apm]'); if (m) { P.mode = m.dataset.apm; draw(); if (P.mode === 'name') setTimeout(() => { const i = d.querySelector('#apQ'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 0); return; }
       const r = e.target.closest('[data-aprp]'); if (r) { P.rp = r.dataset.aprp; draw(); return; }
@@ -5859,15 +5859,15 @@ async function openAttPick(again) {
     d.onchange = e => { const t = e.target; if (t.dataset.apban != null) { const b = t.dataset.apban; P.ban = t.checked ? [...new Set(P.ban.concat(b))] : P.ban.filter(x => x !== b); draw(); return; } if (t.dataset.apoff != null) { if (t.checked) delete P.off[t.dataset.apoff]; else P.off[t.dataset.apoff] = 1; draw(); return; } if (t.id === 'apFrom' || t.id === 'apTo') { P[t.id === 'apFrom' ? 'from' : 'to'] = t.value; draw(); return; } if (t.id === 'apReplace') P.replace = t.checked; };
     d.oninput = e => { if (e.target.id !== 'apQ' || e.isComposing) return; P.q = e.target.value; clearTimeout(draw.t); draw.t = setTimeout(() => { draw(); const i = d.querySelector('#apQ'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
     const go = async make => {
-      const picked = list.filter(s => !P.off[s.n]); if (!picked.length) return; d.querySelector('#apGo').disabled = d.querySelector('#apGoMake').disabled = true;
+      const picked = list.filter(s => !P.off[s.n]); if (!picked.length) return; d.querySelector('#apGo').disabled = true;
       if (!attIsDoc()) { d.close(); if (!(await attNeedDoc())) return; }  /* 사진을 지금 문서가 아니라 출석부 문서에 넣도록 먼저 옮김 */
       const A = attState(), pm = await attPhotos(picked.map(s => s.n), true), rows = [], busSet = attBusSet();
       for (const s of picked) { const r = attRowFrom(s, A, daysOf, busSet), ph = pm[s.n] && pm[s.n].d; if (ph) { try { r.photo = addAsset(await shrinkDataURL(ph, 900)); } catch (e) { r.photo = addAsset(ph); } } rows.push(r); }
       const before = A.rows.length, keep = P.replace ? [] : A.rows.filter(r => !rows.some(x => x.name === r.name)); A.rows = keep.concat(rows); attPrev = keep.length; commit(); d.close(); sideTab = 'att'; renderRail(); renderSide();
-      const noPh = rows.filter(r => !r.photo).length; toast(`${rows.length}명을 출석부 명단에 넣었습니다${P.replace && before ? ` (예전 ${before}명은 바꿈)` : ''}${noPh ? ` · 사진 없는 사람 ${noPh}명은 사진 칸을 비웁니다` : ''}`);
-      if (make) { if (await attMerge()) openPrint('att'); }
+      const noPh = rows.filter(r => !r.photo).length; toast(`${rows.length}명을 출석부 명단에 넣었습니다 — 왼쪽 명단과 오른쪽 쪽에서 확인한 뒤 출력하세요${P.replace && before ? ` (예전 ${before}명은 바꿈)` : ''}${noPh ? ` · 사진 없는 사람 ${noPh}명은 사진 칸을 비웁니다` : ''}`);
+      attLiveSoon(true);  /* 오른쪽 출석부 쪽을 바로 만듦 (출력은 확인한 뒤 패널·위 막대에서) */
     };
-    d.querySelector('#apGo').onclick = () => go(false); d.querySelector('#apGoMake').onclick = () => go(true);
+    d.querySelector('#apGo').onclick = () => go(false);
   };
   if (!d._ce) { d._ce = true; d.addEventListener('compositionend', e => { if (e.target.id !== 'apQ' || !d._draw) return; attPick.q = e.target.value; d._draw(); const i = d.querySelector('#apQ'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }); }  /* 한글 조합이 끝나면 찾기 */
   d._draw = draw; draw(); if (!d.open) d.showModal();
