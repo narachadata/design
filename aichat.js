@@ -12,6 +12,7 @@
   if (!Array.isArray(S.log)) S.log = [];
   let api = []; /* 지금 대화의 AI 회사 형식 기록 — 덧붙이기만 함(Claude 생각 블록을 그대로 돌려보내야 해서 고치지 않음). 새로 고침하면 새 대화 */
   let apiProv = null;
+  if (S.gemV !== 2) { S.gemV = 2; S.geminiModel = ''; S.gemAuto = null; }  /* 예전 판은 자동으로 고른 모델을 '직접 적은 모델' 칸에 넣어 둠 → 한 번 비워 자동 고르기·바쁠 때 바꾸기가 되게 (11/20) */
   function save() { try { localStorage.setItem(LS, JSON.stringify(Object.assign({}, S, { log: S.log.slice(-60) }))); } catch (e) {} }
   const $ = s => document.querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -236,27 +237,46 @@ ${manualText()}`;
 
   /* ---------- Gemini (generateContent + 함수 호출) ---------- */
   const gemSchema = s => { if (!s || typeof s !== 'object') return s; if (Array.isArray(s)) return s.map(gemSchema); const o = {}; for (const k in s) { if (k === 'additionalProperties') continue; o[k] = gemSchema(s[k]); } if (o.type === 'object' && o.properties && !Object.keys(o.properties).length) delete o.properties; if (Array.isArray(o.required) && !o.required.length) delete o.required; return o; };
-  async function geminiModel() {
-    if (S.geminiModel) return S.geminiModel;
+  /* 모델: ⚙에 직접 적은 이름이 있으면 그것만. 비어 있으면 목록에서 고른 후보(안정판 Flash 먼저, 미리보기판은 뒤 — 미리보기는 바빠서 503이 잦음)를 하루 기억 */
+  async function geminiCands() {
+    if (S.geminiModel) return [S.geminiModel];
+    const A = S.gemAuto; if (A && Array.isArray(A.list) && A.list.length && Date.now() - (A.at || 0) < 864e5) return A.list;
     const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': cfg().geminiKey }, signal: aborter.signal });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(errKo('gemini', r.status, j.error && j.error.message));
     const L = (j.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent')).map(m => m.name.replace(/^models\//, '')).filter(n => /^gemini-\d/.test(n) && !/image|tts|audio|live|embed|vision|lite|learnlm|thinking-exp/.test(n));
     const ver = n => { const m = n.match(/^gemini-(\d+(?:\.\d+)?)/); return m ? parseFloat(m[1]) : 0; };
-    const score = n => ver(n) * 10 + (/flash/.test(n) ? 3 : /pro/.test(n) ? 2 : 0) + (/preview|exp/.test(n) ? -1 : 0) + (/-\d{3,}$|-\d{2}-\d{2}/.test(n) ? -0.5 : 0);
+    const score = n => ver(n) * 10 + (/flash/.test(n) ? 50 : /pro/.test(n) ? 2 : 0) + (/preview|exp/.test(n) ? -25 : 0)  /* Flash(값 싸고 빠름) 먼저, 미리보기판은 뒤, Pro는 맨 뒤 */ + (/-\d{3,}$|-\d{2}-\d{2}/.test(n) ? -0.5 : 0);
     L.sort((a, b) => score(b) - score(a));
     if (!L[0]) throw new Error('쓸 수 있는 Gemini 대화 모델을 찾지 못했습니다. ⚙에서 모델 이름을 직접 넣어 주세요.');
-    S.geminiModel = L[0]; save(); renderSet();
-    return S.geminiModel;
+    S.gemAuto = { list: L.slice(0, 4), at: Date.now() }; save();
+    return S.gemAuto.list;
+  }
+  async function geminiModel() { return (await geminiCands())[0]; }
+  const sleep = ms => new Promise((res, rej) => { const t = setTimeout(res, ms); aborter.signal.addEventListener('abort', () => { clearTimeout(t); rej(new DOMException('중지', 'AbortError')); }, { once: true }); });
+  /* 바쁨(5xx·529)이면 1.5초·4초 쉬고 다시, 그래도 바쁘면 (자동 고르기일 때·이 대화에 그 모델 답이 아직 없을 때) 다음 후보 모델로 */
+  async function gemPost(ctx, body) {
+    const cands = await geminiCands(); let i = Math.max(0, cands.indexOf(ctx.gemModel || cands[0]));
+    for (;;) {
+      const model = cands[i];
+      for (const wait of [0, 1500, 4000]) {
+        if (wait) await sleep(wait);
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': cfg().geminiKey }, body: JSON.stringify(body), signal: aborter.signal });
+        const j = await r.json().catch(() => ({}));
+        if (r.ok) { if (ctx.gemModel && ctx.gemModel !== model) ctx.say(`(${ctx.gemModel} 모델이 바빠서 ${model} 모델로 보냈습니다)`); ctx.gemModel = model; return j; }
+        if (!(r.status >= 500 || r.status === 529)) throw new Error(errKo('gemini', r.status, j.error && j.error.message));
+        ctx.lastErr = errKo('gemini', r.status, j.error && j.error.message);
+      }
+      const canSwitch = !S.geminiModel && i + 1 < cands.length && !api.some(c => c.role === 'model');  /* 앞서 이 모델이 답한 대화는 생각 서명이 그 모델 것이라 바꾸지 않음 */
+      if (!canSwitch) throw new Error(ctx.lastErr + (S.geminiModel ? ' — ⚙의 모델 칸을 비우면 바쁠 때 다른 모델로 바꿔 보냅니다.' : ''));
+      ctx.gemModel = ctx.gemModel || model; i++;
+    }
   }
   async function geminiTurn(ctx) {
-    const model = await geminiModel();
     const decl = TOOLS.map(t => ({ name: t.name, description: t.description, parameters: gemSchema(t.input_schema) }));
     for (let n = 0; n < MAX_LOOP; n++) {
       const body = { systemInstruction: { parts: [{ text: system() }] }, contents: api, tools: [{ functionDeclarations: decl }] };
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': cfg().geminiKey }, body: JSON.stringify(body), signal: aborter.signal });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(errKo('gemini', r.status, j.error && j.error.message));
+      const j = await gemPost(ctx, body);
       const c = (j.candidates || [])[0];
       if (!c || !c.content) { const why = (j.promptFeedback && j.promptFeedback.blockReason) || (c && c.finishReason) || ''; ctx.say(why ? `Gemini가 답하지 않았습니다(${why}). 다르게 말해 보세요.` : 'Gemini가 빈 답을 보냈습니다. 다시 보내 주세요.'); return; }
       const content = { role: 'model', parts: c.content.parts || [] };
@@ -285,7 +305,7 @@ ${manualText()}`;
     if (st === 429) return `${who} 사용량 한도에 걸렸습니다. 잠시 뒤 다시 보내거나, 결제(크레딧)를 확인해 주세요. (${st})`;
     if (st === 400 && /credit|billing|balance/i.test(m)) return `${who} 계정에 크레딧(충전 금액)이 없습니다. 결제 화면에서 충전해 주세요.`;
     if (st === 404) return `${who} 모델 이름을 찾지 못했습니다. ⚙에서 모델을 다시 골라 주세요. (${m.slice(0, 120)})`;
-    if (st >= 500 || st === 529) return `${who} 서버가 바쁩니다. 잠시 뒤 다시 보내 주세요. (${st})`;
+    if (st >= 500 || st === 529) return `${who} 서버가 바쁩니다(여러 번 다시 보내 봤지만 계속 바쁨). 1~2분 뒤 다시 보내 주세요. (${st})`;
     return `${who} 오류 ${st}: ${m.slice(0, 200)}`;
   }
 
