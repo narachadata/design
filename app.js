@@ -6014,9 +6014,9 @@ function prUse(cert) {
   const keep = { pages: prState.pages, range: prState.range, pick: prState.pick }; let o = prLoad(k);
   /* 출석부 (11/19 팀장님: 프린터 창 용지는 A4 그대로, 출석부 용지(폭 209 ≈ A4 폭)를 A4처럼 넣음 — 209×150 가로 쪽을 보내면 맥이 A4 세로에 맞춰 90° 돌려 찍었음):
      A4 세로 쪽 맨 위에 실제 크기 100%로(워드 메일머지와 같게) · 여백 0 · 돌리지 않음. 예전 설정(판 없음)은 한 번 이 값으로 */
-  const ATT_PR = { paper: 'A4', orient: 'p', fit: 'actual', margin: 0, mt: 0, mb: 0, ml: 0, mr: 0, ax: 0.5, ay: 0, dx: 0, dy: 0, feed: 'none', nup: 1, attV: 6 };  /* 팀장님 엡손으로 맞춘 '위 5mm'는 ATT_BASE_Y로 자리에 넣어 두고, 칸 숫자는 모두 0에서 시작 (11/19 "그 위치 그냥 두고 0으로") */  /* 위 여백 5mm: 팀장님 엡손 실제 출력으로 맞춘 자리(11/19 "5mm 위 여백을 주니 맞았어") */  /* dy: 11/19 +5mm 해 보니 너무 아래 → 팀장님 "5mm 다시 올려" → 0 */
+  const ATT_PR = { paper: 'A4', orient: 'p', fit: 'actual', margin: 0, mt: 0, mb: 0, ml: 0, mr: 0, ax: 0.5, ay: 0, dx: 0, dy: 0, feed: 'none', nup: 1, attV: 7 };  /* 팀장님 엡손으로 맞춘 '위 5mm'는 ATT_BASE_Y로 자리에 넣어 두고, 칸 숫자는 모두 0에서 시작 (11/19 "그 위치 그냥 두고 0으로") */  /* 위 여백 5mm: 팀장님 엡손 실제 출력으로 맞춘 자리(11/19 "5mm 위 여백을 주니 맞았어") */  /* dy: 11/19 +5mm 해 보니 너무 아래 → 팀장님 "5mm 다시 올려" → 0 */
   if (cert === 'att' && (!o || (o.attV || 0) < 2)) o = Object.assign({}, o || {}, ATT_PR);
-  else if (cert === 'att' && (o.attV || 0) < 6) o = Object.assign({}, o, { mt: Math.max(0, (Number(o.mt) || 0) - ((o.attV || 0) === 5 ? 5 : 0)), dy: 0, attV: 6 });  /* 판 5의 위 여백 5mm는 기본 자리로 들어갔으니 칸에서는 뺌 */  /* 기본 자리 = 위 여백 5mm·세로 보정 0 (예전 판에서 오면 이 값으로) */
+  else if (cert === 'att' && (o.attV || 0) < 7) o = Object.assign({}, o, { margin: 0, mt: 0, mb: 0, ml: 0, mr: 0, dx: 0, dy: 0, attV: 7 });  /* 11/19 팀장님: 손으로 넣었던 위 여백 5mm가 기본 자리 5mm와 겹쳐 10mm로 찍힘 → 칸은 모두 0, 자리는 기본(ATT_BASE_Y 5mm)만 */  /* 기본 자리 = 위 여백 5mm·세로 보정 0 (예전 판에서 오면 이 값으로) */
   else if (!o && cert) { const g = prLoad('naracal-print') || {}; o = (Number(g.dx) || Number(g.dy)) ? g : { fit: 'actual', margin: 0, mt: 0, mb: 0, ml: 0, mr: 0 }; }  /* 처음: 예전에 맞춰 둔 위치 보정이 있으면 그대로 이어받음, 없으면 실제 크기 */
   prKey = k; prState = Object.assign({}, PR_DEF, o || {}, keep);
 }
