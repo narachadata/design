@@ -5653,7 +5653,17 @@ function attStatus(join, A) {
 }
 const attTel = p => { const d = String(p || '').replace(/\D/g, ''); if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`; if (d.length === 10) return d.startsWith('02') ? `02-${d.slice(2, 6)}-${d.slice(6)}` : `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`; return String(p || '').trim(); };
 const attReg = t => { t = String(t || '').trim(); if (/프리/.test(t)) return '프리패스'; const m = t.match(/주\s*(\d)/); return m ? (Number(m[1]) >= 4 ? '프리패스' : `주${m[1]}회`) : t; };
-const attAddr = note => { const L = String(note || '').split('\n').map(l => (l.match(/주소\s*[:：]\s*(.+)$/) || [])[1]).filter(Boolean); return L.length ? L[L.length - 1].trim() : ''; };  /* 관리 앱엔 주소 칸이 따로 없고 등록 설문의 「주소: …」 메모 줄뿐 */
+/* 주소 = 관리 앱 학적부의 주소 (11/19 팀장님 "학적부에 있는 주소를 활용") — 관리 앱엔 주소 칸이 따로 없고, 학적부 🗒 상담·특이사항 로그(s.note의 "[날짜 …] 내용" 줄)에 있음.
+   ① 「주소: …」「주소 - …」「주소변경: …」「거주지·주소지·집주소·사는 곳 …」 줄 ② 없으면 주소처럼 생긴 줄(시·구 + 로·길·동 / 아파트 이름) — 여러 줄이면 날짜가 가장 최근인 줄(이사 반영) */
+function attAddr(note) {
+  const rows = String(note || '').split('\n').map((L, i) => { L = L.trim(); const m = L.match(/^\[(\d{4}-\d{2}-\d{2})[^\]]*\]\s*(.*)$/); return { d: m ? m[1] : '', t: (m ? m[2] : L).trim(), i }; }).filter(r => r.t);
+  const KEY = /^(?:집\s*)?(?:주소|거주지|주소지|사는\s*곳)(?:\s*(?:변경|바뀜|이전))?\s*[:：\-=]?\s*(.+)$/, OLD = /주소\s*[:：]\s*(.+)$/;
+  const looks = t => !/^[가-힣A-Za-z ]{1,10}\s*[:：]/.test(t) && t.length <= 90 && ((/(특별시|광역시|자치시|[가-힣]+도|[가-힣]+시|[가-힣]+군|[가-힣]+구)\s/.test(t) && /([가-힣0-9]+(로|길)\s*\d|[가-힣0-9]+(동|읍|면|리)(\s|$|\d|,))/.test(t)) || (typeof ATT_APT !== 'undefined' && ATT_APT.test && ATT_APT.test(t) && /\d|동|구/.test(t)));
+  const pick = list => list.length ? list.sort((x, y) => (x.d || '').localeCompare(y.d || '') || x.i - y.i)[list.length - 1].v : '';
+  let c = rows.map(r => { const m = r.t.match(KEY) || r.t.match(OLD); return m ? Object.assign({}, r, { v: m[1].trim() }) : null; }).filter(r => r && r.v && !/^(없음|모름|-)$/.test(r.v));
+  if (!c.length) c = rows.filter(r => looks(r.t)).map(r => Object.assign({}, r, { v: r.t }));
+  return pick(c).replace(/^[:：\-\s]+/, '').trim();
+}
 const attSchool = sc => String(sc || '').trim().replace(/초등학교$/, '초').replace(/중학교$/, '중').replace(/고등학교$/, '고');
 /* 학교/학년: '늘푸른초/초3'처럼 학교 끝 글자와 학년 첫 글자(초·중·고)가 겹치면 학교 쪽을 뺌 → '늘푸른/초3' */
 const attSchoolFix = v => { const t = String(v || '').trim(), m = t.match(/^(.+?)\s*(초|중|고)\s*\/\s*((초|중|고)\s*\d.*)$/); return m && m[2] === m[4] && m[1].trim() ? `${m[1].trim()}/${m[3].replace(/\s+/g, '')}` : t; };
