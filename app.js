@@ -89,6 +89,7 @@ function markDirty() {
   if (NC.live.deferSave() && store.state.handle && !store.state.needPerm && Object.keys(doc.assets || {}).some(k => !liveAssetKeys.has(k))) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 2500); } /* 실시간 중 이 PC가 넣은 사진은 실시간 통로로 가지 않으므로 이 PC가 직접 파일에 한 번 저장 */
   if (store.state.handle && !store.state.needPerm && !NC.live.deferSave()) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 1500); } // 파일 권한을 다시 받기 전에는 브라우저에만 저장. 실시간 연결 중엔 먼저 들어온 PC가 저장
   updateSaveBadge(); NC.live.changed();
+  if (sideTab === 'att' && doc.att) attLiveSoon();  /* 출석부: 왼쪽 패널에서 바꾼 것을 오른쪽 쪽에 바로 (11/19 팀장님) */
 }
 async function saveFileNow() {
   if (store.state.conflict) return false;
@@ -310,7 +311,7 @@ function elHTML(el, mode, ext) {
   if (el.type === 'video') { const ps = el.poster ? src(el.poster) : ''; const len = Math.max(0, Number(el.tout || el.dur || 0) - Number(el.tin || 0)); return `<div class="el el-video${lock}" data-id="${el.id}" style="${base}${blend}"><div class="imgclip" style="border-radius:${el.radius || 0}mm;background:#1b1f2a">${ps && el.fit === 'blur' ? `<img src="${ps}" alt="" draggable="false" style="object-fit:cover;filter:blur(2mm) brightness(.72)">` : ''}${ps ? `<img src="${ps}" alt="" draggable="false" style="object-fit:${el.fit === 'contain' || el.fit === 'blur' ? 'contain' : 'cover'};${el.fit === 'blur' ? 'position:absolute;inset:0;' : ''}${FX.imageFilter(el).replace(/^filter:/, 'filter:')}">` : ''}${mode === 'edit' ? `<span class="vbadge">▶ ${(len / Math.max(0.1, Number(el.speed || 1))).toFixed(1)}초${Number(el.speed || 1) !== 1 ? ` · ${el.speed}배` : ''}</span>` : ''}</div></div>`; }
   if (el.type === 'shape') return `<div class="el el-shape${lock}" data-id="${el.id}" style="${base}${blend}">${FX.shapeSVG(el)}</div>`;
   if (el.type === 'path' && el.attIcon === 'bus') return `<div class="el el-path${lock}" data-id="${el.id}" style="${base}">${ATT_BUS_SVG}</div>`;
-  if (el.type === 'path' && el.attSvg) return `<div class="el el-path${lock}" data-id="${el.id}" style="${base}">${attFrameSVG()}</div>`;  /* 출석부 틀 */
+  if (el.type === 'path' && el.attSvg) return `<div class="el el-path${lock}" data-id="${el.id}" style="${base}${mode === 'edit' && doc.att && !doc.att.printFrame ? 'opacity:.28;' : ''}">${attFrameSVG()}</div>`;  /* 편집 화면: ✍ 글자만이면 흐리게(맞춰 보기용), 🖼 틀까지면 진하게 */  /* 출석부 틀 */
   if (el.type === 'path') return `<div class="el el-path${lock}" data-id="${el.id}" style="${base}${blend}">${FX.pathSVG(el)}</div>`;
   if (el.type === 'chart') return `<div class="el el-chart${lock}" data-id="${el.id}" style="${base}">${chartSVG(el)}</div>`;
   if (el.type === 'cal') return `<div class="el el-cal${lock}" data-id="${el.id}" style="${base}">${CAL.calHTML(el, doc)}</div>`;
@@ -5629,7 +5630,7 @@ const ATT_PHOTO = { x: 168.5, y: 23, w: 33, h: 35.5 };  /* 이름 아래 오른�
 const attDefYear = () => { const t = new Date(); return t.getFullYear() + (t.getMonth() >= 10 ? 1 : 0); };  /* 11·12월엔 다음 해 출석부 (연말 일괄) */
 const attIsDoc = () => Math.abs(doc.w - ATT_W) < 1 && Math.abs(doc.h - ATT_H) < 1;
 function attState() {
-  if (!doc.att) doc.att = { rows: [], year: attDefYear(), stMode: 'join', printFrame: false, showFrame: false, layout: {}, fv: 5 };
+  if (!doc.att) doc.att = { rows: [], year: attDefYear(), stMode: 'join', printFrame: false, showFrame: false, layout: {}, fv: 6 };
   const A = doc.att; A.rows = A.rows || []; A.layout = A.layout || {}; if (!A.year) A.year = attDefYear(); if (!A.stMode) A.stMode = 'join';
   if (A.fv !== 2) { /* 11/19 팀장님: 주소는 지역까지만·보호자 이름 가운데 O·학교 글자 겹침 빼기·연도 칸은 등록일 — 이미 넣은 명단도 한 번 맞춤 */
     A.fv = 2; if (A.stMode === 'auto') A.stMode = 'join';
@@ -5638,6 +5639,7 @@ function attState() {
   if (A.fv === 2) { A.fv = 3; (doc.pages || []).forEach(p => { p.els = p.els.map(e => e.attFrame && e.type === 'image' ? Object.assign(attFrameEl(A), { id: e.id }) : e); }); }  /* 사진 틀 → 새로 그린 벡터 틀 (11/19) */
   if (A.fv === 3) { A.fv = 4; const bs = attBusSet(); A.rows.forEach(r => { r.addr = attAddrShort(r.addr); if (r.bus == null) r.bus = bs.has(String(r.name || '').trim()); }); }  /* 주소에 붙은 메모(· 차량: …)·'중앙로55' 정리, 차량 이용 표시 (11/19) */
   if (A.fv === 4) { A.fv = 5; A.rows.forEach(r => { r.addr = attAddrShort(r.addr); }); }  /* 끝 숫자 빼기 (11/19) */
+  if (A.fv === 5) { A.fv = 6; }  /* 도로명 건물 번호를 남기는 규칙 — 주소는 관리프로그램에서 다시 가져와야 번호가 돌아옴 */
   return A;
 }
 const attRowsOn = () => attState().rows.filter(r => String(r.name || '').trim() && !r.off);
@@ -5659,8 +5661,8 @@ const attSchoolFix = v => { const t = String(v || '').trim(), m = t.match(/^(.+?
 const attMask = v => { const t = String(v || '').trim(); if (!t || /\s/.test(t) || !/^[가-힣]+$/.test(t)) return t; const a = [...t]; if (a.length === 1) return t; if (a.length === 2) return a[0] + 'O'; return a[0] + 'O'.repeat(a.length - 2) + a[a.length - 1]; };
 /* 주소: 세부 주소(동·호·층 등)는 빼고 어디 사는지만 — 아파트면 아파트 이름까지, 도로명이면 도로명과 건물 번호까지, 지번이면 동·리 이름까지 */
 const ATT_APT = /(아파트|APT|apt|빌라|맨션|타운|주공|단지|래미안|자이|힐스테이트|푸르지오|e편한세상|이편한세상|아이파크|롯데캐슬|더샵|센트레빌|위브|꿈에그린|호반|SK뷰|sk뷰|데시앙|베르디움|스위첸|해링턴|어울림|하늘채|수자인|오피스텔)/;
-/* 따로 떨어진 숫자 낱말(109동·1100호·109-1100·190번지·190, 건물 번호 등)은 빼고 지역만 (11/19 팀장님) — '중앙로55'처럼 도로명에 붙은 번호·'12번길'은 그대로 */
-function attAddrShort(v) { const tk = attAddrShort0(v).split(' ').filter(Boolean), num = w => /^(지하|B)?\d+([-~]\d+)*(동|호|호실|층|번지|번)?$/.test(w), out = tk.filter(w => !num(w)); return (out.length ? out : tk).join(' '); }
+/* 상세주소 숫자(109동·1100호·109-1100·층)와 지번(190번지·190)은 빼고, 도로명 + 건물 번호(기본주소)까지 (11/19 팀장님 "중앙로55까지, 마지막 숫자만 지워") — '중앙로55'처럼 도로명에 붙은 번호·'12번길'은 그대로 */
+function attAddrShort(v) { const tk = attAddrShort0(v).split(' ').filter(Boolean), num = w => /^(지하|B)?\d+([-~]\d+)*(동|호|호실|층|번지|번)?$/.test(w), road = w => /[가-힣](로|길)$/.test(w || ''), out = tk.filter((w, i) => !num(w) || (road(tk[i - 1]) && /^(지하)?\d+(-\d+)?$/.test(w))); return (out.length ? out : tk).join(' '); }  /* 도로명 바로 뒤 건물 번호(중앙로 55)는 남김 — 도로명주소의 기본주소 */
 function attAddrShort0(v) {
   let t = String(v || '').replace(/\s+/g, ' ').trim(); if (!t) return '';
   t = t.split(/\s*[·•|/]\s*|\s+(?=차량\s*[:：])|\s*[;；]\s*/)[0].trim();  /* 등록 설문 메모가 한 줄에 붙은 것(· 차량: 편도 …) 빼기 */
@@ -5764,8 +5766,27 @@ async function attNeedDoc() { if (attIsDoc()) return true; const from = `${Math.
 async function attMerge() {
   if (!(await attNeedDoc())) return false; const A = attState(), rows = attRowsOn(); if (!rows.length) { toast('출력할 사람이 없습니다 — ② 명단에서 체크하세요', true); return false; }
   const pages = rows.map((r, i) => attPage(r, i)); setStatus('이름 길이에 맞춰 글자 크기를 맞추는 중…'); await fitTextOffscreen(pages.flatMap(p => p.els)); setStatus('');
-  const keep = doc.pages.filter(p => !p.att && p.els.length); doc.pages = keep.concat(pages); cur = keep.length; sel = []; fitCache.clear(); commit(); renderAll();
+  const keep = doc.pages.filter(p => !p.att && p.els.length); doc.pages = keep.concat(pages); cur = keep.length; sel = []; fitCache.clear(); attBuilt = { id: doc.docId || '', sig: attSig(A) }; commit(); renderAll();
   toastUndo(`출석부 ${rows.length}장을 만들었습니다 — 🖨 바로 출력에서 용지에 맞게 찍습니다`); return true;
+}
+/* 실시간 출석부 (11/19 팀장님 "왼쪽에서 요청하는 내용이 오른쪽 편집 화면에 실시간으로"):
+   명단·연도 칸·배치·만드는 규칙이 바뀌면 출석부 쪽을 다시 만듦 — 명단을 비우면 빈 출석부 한 장. 쪽에서 직접 옮긴 자리는 「이 쪽 배치를 모든 출석부에」로 기억해 두면 유지.
+   기준(sig)은 문서에 저장하지 않음 → 예전에 만들어 둔 출석부도 열고 출석부 패널에 오면 지금 규칙으로 다시 만듦 */
+const ATT_GEN = 2; let attBuilt = { id: '', sig: '' }, attLiveT = 0, attLiveBusy = false;
+const attSig = A => JSON.stringify([ATT_GEN, A.rows, A.layout, A.year, A.stMode]);
+function attLiveSoon(now) { clearTimeout(attLiveT); attLiveT = setTimeout(attLive, now ? 0 : 350); }
+async function attLive() {
+  if (!doc.att || !attIsDoc() || attLiveBusy) return; const A = attState(), sig = attSig(A), id = doc.docId || '';
+  if (attBuilt.id === id && attBuilt.sig === sig) return; attLiveBusy = true;
+  try {
+    const rows = attRowsOn(), pages = rows.length ? rows.map((r, i) => attPage(r, i)) : [{ id: uid(), bg: '#ffffff', els: [attFrameEl(A)], label: '출석부 (명단 없음)', att: { i: 0, empty: true } }];
+    await fitTextOffscreen(pages.flatMap(p => p.els));
+    if (attSig(A) !== sig || (doc.docId || '') !== id) { attLiveBusy = false; attLiveSoon(); return; }  /* 그사이 또 바뀜 */
+    const keep = doc.pages.filter(p => !p.att && p.els.length), pr = A.rows[attPrev], at = pr ? rows.indexOf(pr) : -1, was = at >= 0 ? at : (page() && page().att ? page().att.i : 0);  /* 왼쪽에서 고르거나 고치는 사람의 쪽을 보여 줌 */
+    doc.pages = keep.concat(pages); cur = keep.length + Math.min(Math.max(0, was), pages.length - 1); sel = []; fitCache.clear();
+    attBuilt = { id, sig }; commit(); const ae = document.activeElement, sb0 = $('#sidebody'), inSide = ae && sb0 && sb0.contains(ae);
+    if (inSide) { renderCanvas(); fitCanvas(); renderOverlay(); renderInspector(); updateSaveBadge(); } else renderAll();  /* 왼쪽 표에 쓰는 중이면 패널은 그대로 (입력이 끊기지 않게) */
+  } finally { attLiveBusy = false; }
 }
 /* 이 쪽에서 옮기거나 고친 글 상자·사진 자리를 모든 출석부에 */
 async function attSaveLayout() {
@@ -5853,6 +5874,7 @@ async function openAttPick(again) {
 }
 /* ---- 출석부 패널 ---- */
 function renderAttSide(body) {
+  if (doc.att && attIsDoc()) attLiveSoon(true);
   const A = attState(), rows = A.rows, nOn = attRowsOn().length, made = doc.pages.filter(p => p.att).length, cols = ATT_F.filter(f => f[0] === 'name').concat(ATT_F.filter(f => f[0] !== 'name')).map(f => [f[0], f[1]]);  /* 표는 이름이 맨 앞 */
   const W = { name: 5.5, st: 4, bd: 7, reg: 4.5, addr: 10, tel: 8, days: 5, school: 7, guard: 5, no: 4 };
   body.innerHTML = `<div class="cert att">
