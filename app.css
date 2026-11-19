@@ -1429,7 +1429,7 @@ dialog.mandlg .dhead h2 small{font-size:12.5px;font-weight:500;color:var(--ui-mu
 @keyframes amTilt{0%{opacity:0;transform:rotate(-20deg) translateY(4px)}70%{transform:rotate(4deg)}100%{opacity:.75;transform:none}}
 .am-mask{overflow:hidden}
 /* 출력 창: 화면이 낮아도 '출력' 단추가 늘 보이게 (아래에 붙음) */
-.row:has(> #prGo){position:sticky;bottom:0;background:var(--ui-bg,#fff);padding:8px 0 4px;z-index:2;box-shadow:0 -8px 10px -10px rgba(0,0,0,.25)}
+.row:has(> #prGo){position:sticky;bottom:-16px;background:var(--ui-bg,#fff);padding:10px 20px 16px;margin:10px -20px -16px 0!important;z-index:3;box-shadow:0 -10px 12px -12px rgba(0,0,0,.3)} /* 아래 여백(dbody 16px)까지 덮어 뒤 내용이 비치지 않게 (11/19) */
 
 /* 빈 그림 자리: 밝은·어두운 배경 모두에서 보이게(회색 반투명) */
 .imgph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.35;color:rgba(128,128,128,.95);background:rgba(128,128,128,.16);pointer-events:none}
