@@ -3694,7 +3694,7 @@ const ND_GROUPS = [['rec', '추천', '<path d="m12 3 2.6 5.6 6 .7-4.5 4.1 1.2 6L
   ['web', '웹사이트', '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/>'], ['print', '인쇄', '<path d="M7 8V3h10v5M7 17H4v-7h16v7h-3M7 14h10v7H7z"/>'],
   ['doc', '문서', '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>'], ['sign', '현수막 · 배너', '<path d="M3 5h18v8H3zM6 13v8M18 13v8"/>'], ['cal', '캘린더', '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>']];
 const ND_COLOR = { news: '#e2731e', pres: '#2f5bea', sns: '#d6408b', video: '#e0302e', web: '#6b3fd1', print: '#1e2b5a', doc: '#2f8d9e', sign: '#c9831a', cal: '#3a8a3a' };
-const ND_REC = ['nl-45', 'ig-sq', 'cardnews', 'kakao', 'a4p', 'letter', 'cert', 'flyer', 'xbanner', 'banner3', 'pres169', 'yt-thumb', 'desk-cal'];
+const ND_REC = ['nl-45', 'ig-sq', 'cardnews', 'kakao', 'a4p', 'letter', 'cert', 'flyer', 'xbanner', 'banner3', 'pres169', 'yt-thumb', 'desk-cal', 'pos-device'];  /* pos-device: 결제 단말기 화면 800×1280 (11/19 팀장님) */
 let ndState = { nav: 'rec', q: '' };
 function recentFormats() { try { return JSON.parse(localStorage.getItem('naracal-recent-formats') || '[]'); } catch (e) { return []; } }
 function fmtMM(f) { return f[5] === 'px' ? [PX(f[3]), PX(f[4])] : [f[3], f[4]]; }
