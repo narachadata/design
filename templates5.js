@@ -112,4 +112,71 @@
       kw: [nm, '인성 인성덕목 덕목 삽화 라차 이달의', tr, TRACK[tr].theme, fmt, id === 'yearly' ? '계획 연간 12달' : '12쪽 달마다', '태권도장'].join(' '),
       build: uid => fn(uid, tr) });
   }));
+
+  /* ===== 결제 단말기 화면 (800×1280 픽셀 · 세로) — 11/19 팀장님: 카카오페이 커넥트(수련비)·토스 프론트(용품) 배경 =====
+     '결제' 같은 글은 넣지 않고 도장 CI·라차만 · 인성덕목 24개(극기 12 + 홍익 12)는 덕목·사자성어·라차 그림
+     크기: 800×1280px = 211.67×338.67mm(96dpi) → 내려받기 PNG가 정확히 800×1280 */
+  const DW = 800 * 25.4 / 96, DH = 1280 * 25.4 / 96, cx = w => (DW - w) / 2;
+  const EMO = cp => `https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u${cp}.svg`;
+  const KICK = 'assets/virtue/racha-kick.webp';
+  const NAVY = '#14213D', GOLD = '#C9A227';
+  const frame2 = (S, c) => [S('rect', 8, 8, DW - 16, DH - 16, { fill: 'rgba(0,0,0,0)', stroke: c, strokeW: 0.7, name: '테두리' }), S('rect', 11.5, 11.5, DW - 23, DH - 23, { fill: 'rgba(0,0,0,0)', stroke: c, strokeW: 0.3, opacity: 0.8, name: '안쪽 테두리' })];
+  const scatter = (I, cps, seed) => { let r = seed; const rnd = () => (r = (r * 9301 + 49297) % 233280) / 233280; const spots = [[12, 16], [58, 30], [100, 12], [146, 28], [180, 48], [16, 306], [92, 312], [168, 304]]; return spots.map(([x, y], i) => { const sz = 14 + rnd() * 8;  /* 위·아래 가장자리만 (그림·로고와 안 겹치게) */ return I(EMO(cps[i % cps.length]), x, y, sz, sz, { rot: Math.round(rnd() * 50 - 25), opacity: 0.9, name: '꾸밈' }); }); };
+  const CI = [
+    ['premium-navy', '고급 · 네이비 골드', '고급', '사계절', (T, I, S, P) => P(NAVY, [...frame2(S, GOLD),
+      I('asset:brand-since-white', cx(120), 104, 120, 101.7, { name: '로고' }),
+      S('rect', cx(40), 222, 40, 0.5, { fill: GOLD, name: '금선' })], '고급 네이비')],
+    ['premium-ivory', '고급 · 아이보리', '고급', '사계절', (T, I, S, P) => P('#F7F3EA', [...frame2(S, GOLD),
+      I('asset:brand-symbol-gray', cx(130), 228, 130, 97.6, { opacity: 0.07, name: '워터마크' }),
+      I('asset:brand-korean', cx(140), 122, 140, 70.7, { name: '로고' }),
+      S('rect', cx(40), 206, 40, 0.5, { fill: GOLD, name: '금선' })], '고급 아이보리')],
+    ['cute-yellow', '귀여운 · 라차 발차기', '귀여운', '사계절', (T, I, S, P) => P('#FFE89A', [
+      S('ellipse', -30, -20, 110, 110, { fill: '#FFFFFF', opacity: 0.45, name: '동그라미' }), S('ellipse', 140, 250, 120, 120, { fill: '#FFFFFF', opacity: 0.45, name: '동그라미' }), S('ellipse', 150, 40, 40, 40, { fill: '#FFFFFF', opacity: 0.6, name: '동그라미' }),
+      I(KICK, cx(150), 52, 150, 181, { name: '라차' }),
+      I('asset:brand-horizontal', cx(150), 268, 150, 29, { name: '로고' })], '귀여운 노랑')],
+    ['cute-sky', '귀여운 · 라차 인사', '귀여운', '사계절', (T, I, S, P) => P('#DDEFFB', [
+      S('ellipse', 120, -40, 150, 150, { fill: '#FFFFFF', opacity: 0.5, name: '동그라미' }), S('ellipse', -50, 230, 140, 140, { fill: '#FFFFFF', opacity: 0.5, name: '동그라미' }),
+      I(art('극기', 5), 15, 62, DW - 30, 170, { name: '라차' }),
+      I('asset:brand-korean-navy', cx(110), 252, 110, 55.6, { name: '로고' })], '귀여운 하늘')],
+    ['spring', '계절 · 봄', '귀여운', '봄', (T, I, S, P) => P('#FDE7EF', [...scatter(I, ['1f338', '1f337', '1f33c'], 3),
+      I(art('극기', 3), 15, 70, DW - 30, 170, { name: '라차' }), I(logo('#FDE7EF'), cx(140), 272, 140, 27, { name: '로고' })], '봄')],
+    ['summer', '계절 · 여름', '귀여운', '여름', (T, I, S, P) => P('#DDF4F7', [...scatter(I, ['2600', '1f349', '1f30a'], 7),
+      I(art('극기', 7), 15, 70, DW - 30, 170, { name: '라차' }), I(logo('#DDF4F7'), cx(140), 272, 140, 27, { name: '로고' })], '여름')],
+    ['autumn', '계절 · 가을', '귀여운', '가을', (T, I, S, P) => P('#FCEBD7', [...scatter(I, ['1f341', '1f342', '1f330'], 11),
+      I(art('극기', 10), 15, 70, DW - 30, 170, { name: '라차' }), I(logo('#FCEBD7'), cx(140), 272, 140, 27, { name: '로고' })], '가을')],
+    ['winter', '계절 · 겨울', '귀여운', '겨울', (T, I, S, P) => P('#E6EDF8', [...scatter(I, ['2744', '26c4', '1f381'], 13),
+      I(art('극기', 12), 15, 70, DW - 30, 170, { name: '라차' }), I(logo('#E6EDF8'), cx(140), 272, 140, 27, { name: '로고' })], '겨울')],
+  ];
+  CI.forEach(([id, name, style, season, fn]) => L.push({ id: `dev-ci-${id}`, cat: 'device', name: `결제 단말기 배경 · ${name}`, w: DW, h: DH, screen: true,
+    tags: { format: '단말기 화면', season, age: '전체', occasion: '안내', biz: '태권도장' }, kw: `결제 단말기 배경 화면 카카오페이 토스 커넥트 프론트 800 1280 로고 CI 라차 ${style} ${season} ${name}`,
+    build: uid => { const { T, I, S, P } = H(uid); return [fn(T, I, S, P)]; } }));
+
+  /* 인성덕목 24 — 극기 1~12월 + 홍익 1~12월 (덕목·영문·삽화·사자성어·풀이) */
+  const both = () => ['극기', '홍익'].flatMap(tr => plan(tr).P.map((v, k) => ({ tr, m: k + 1, v })));
+  function devCute(uid) { const { T, I, S, P } = H(uid); return both().map(({ tr, m, v }) => { const [bg, ac] = PAL[m - 1]; return P(bg, [
+    S('ellipse', 130, -30, 120, 120, { fill: '#FFFFFF', opacity: 0.4, name: '동그라미' }),
+    T(`${TRACK[tr].yr} ${tr} · ${m}월의 덕목`, 14, 20, DW - 28, 12, { font: 'Jua', size: 28, color: ac, name: '머리글' }),
+    T(v.virtue, 10, 35, DW - 20, 38, Object.assign({ font: 'Black Han Sans', size: v.virtue.length > 4 ? 72 : 100, color: INK, lh: 1.1, name: '덕목' }, R(m, 'virtue'))),
+    T(`(${v.en})`, 14, 75, DW - 28, 10, Object.assign({ font: 'Montserrat', size: 20, weight: 700, color: ac, ls: 0.1, name: '영문' }, R(m, 'en'))),
+    S('rect', 16, 91, DW - 32, 160, { fill: WHITE, radius: 22, name: '그림 판' }),
+    I(art(tr, m), 22, 97, DW - 44, 148, Object.assign({ pos: '50% 100%', name: '삽화' }, R(m, 'illust'))),
+    T(`${v.idiom}(${v.hanja})`, 10, 260, DW - 20, 18, Object.assign({ font: 'Gowun Batang', size: 40, weight: 700, color: INK, name: '사자성어' }, R(m, 'idiom'))),
+    T(v.meaning, 18, 282, DW - 36, 28, Object.assign({ size: 20, weight: 500, color: '#3A4563', lh: 1.4, name: '풀이' }, R(m, 'meaning'))),
+    I(logo(bg), cx(80), 318, 80, 15.4, { name: '로고' }),
+  ], `${tr} ${m}월 ${v.virtue}`); }); }
+  function devPremium(uid) { const { T, I, S, P } = H(uid); return both().map(({ tr, m, v }) => P(NAVY, [...frame2(S, GOLD),
+    T(`${TRACK[tr].yr} ${tr} · ${m}월의 덕목`, 14, 22, DW - 28, 9, { font: 'Noto Serif KR', size: 18, weight: 600, color: GOLD, ls: 0.06, name: '머리글' }),
+    S('ellipse', cx(150), 38, 150, 150, { fill: '#FFFFFF', name: '그림 원' }),
+    I(art(tr, m), cx(128), 50, 128, 126, Object.assign({ name: '삽화' }, R(m, 'illust'))),
+    T(v.virtue, 10, 196, DW - 20, 30, Object.assign({ font: 'Noto Serif KR', size: v.virtue.length > 4 ? 54 : 72, weight: 900, color: '#FFFFFF', lh: 1.1, name: '덕목' }, R(m, 'virtue'))),
+    T(`(${v.en})`, 14, 228, DW - 28, 8, Object.assign({ font: 'Montserrat', size: 15, weight: 700, color: GOLD, ls: 0.2, name: '영문' }, R(m, 'en'))),
+    S('rect', cx(40), 241, 40, 0.5, { fill: GOLD, name: '금선' }),
+    T(`${v.idiom}(${v.hanja})`, 10, 248, DW - 20, 16, Object.assign({ font: 'Gowun Batang', size: 34, weight: 700, color: '#FFFFFF', name: '사자성어' }, R(m, 'idiom'))),
+    T(v.meaning, 20, 268, DW - 40, 30, Object.assign({ size: 17, color: '#C9CFDD', lh: 1.45, name: '풀이' }, R(m, 'meaning'))),
+    I('asset:brand-horizontal-white', cx(70), 310, 70, 13.5, { name: '로고' }),
+  ], `${tr} ${m}월 ${v.virtue}`)); }
+  [['cute', '귀여운', devCute], ['premium', '고급', devPremium]].forEach(([id, nm, fn]) => L.push({ id: `dev-virtue-${id}`, cat: 'device', name: `결제 단말기 · 인성덕목 24 (${nm})`, w: DW, h: DH, screen: true,
+    tags: { format: '단말기 화면', season: '사계절', age: '전체', occasion: '인성', biz: '태권도장' }, kw: `결제 단말기 화면 인성 인성덕목 덕목 24 극기 홍익 사자성어 라차 800 1280 ${nm}`, build: uid => fn(uid) }));
+  if (NC.tpl.cats && !NC.tpl.cats.some(c => c[0] === 'device')) NC.tpl.cats.splice(Math.max(1, NC.tpl.cats.findIndex(c => c[0] === 'web')), 0, ['device', '결제 단말기']);
+  if (NC.tpl.facets && !NC.tpl.facets.format.includes('단말기 화면')) NC.tpl.facets.format.push('단말기 화면');
 })();
