@@ -1538,3 +1538,17 @@ body.tl-focus .aichat{display:none}
 .ach-box .btn{height:40px;white-space:nowrap}
 .ach-box .btn.stop{background:var(--ui-danger);border-color:var(--ui-danger)}
 #btnAI.on{background:var(--ui-ai);color:#fff}
+
+/* 떠 있는 도구 막대: 세로(왼쪽에 붙임)·접기 (11/20 팀장님 "쪽을 가림 — 세로로, 접었다 폈다") */
+.stage .toolbar .tbmode .tbf-tool,.stage .toolbar.tb-fold .tbmode .tbf-up{display:none}.stage .toolbar.tb-fold .tbmode .tbf-tool{display:inline}
+.stage .toolbar .tbmode .tbo-h{display:none}.stage .toolbar.tb-v .tbmode .tbo-h{display:inline}.stage .toolbar.tb-v .tbmode .tbo-v{display:none}
+.stage .toolbar.tb-fold>.tgroup:not(.tbmode){display:none!important}
+.stage .toolbar.tb-fold{padding:3px 4px}
+.stage .toolbar.tb-v,.stage.compact .toolbar.tb-v{left:10px;right:auto;margin:0;width:auto;top:14px;flex-direction:column;flex-wrap:nowrap;align-items:stretch;justify-content:flex-start;max-height:calc(100% - 28px);overflow-y:auto;overflow-x:hidden;padding:5px 4px;gap:0}
+.stage.rulers .toolbar.tb-v{top:28px;left:26px}
+.stage .toolbar.tb-v .tgroup{flex-direction:column;border-left:0;border-top:1px solid var(--ui-line);padding:4px 0;align-items:center}
+.stage .toolbar.tb-v .tgroup:first-child{border-top:0}
+.stage .toolbar.tb-v .tgroup:not(.qbar) .btn{font-size:0;gap:0;padding:5px;min-height:0}
+.stage .toolbar.tb-v #zoomFit{display:flex;flex-direction:column;align-items:center}.stage .toolbar.tb-v #zoomPct{font-size:10.5px;margin:0}
+.stage .toolbar.tb-v .qbar{flex-wrap:wrap;max-width:132px;justify-content:center;gap:2px}.stage .toolbar.tb-v .qbar select,.stage .toolbar.tb-v .qbar input{max-width:124px}
+.stage .toolbar.tb-v.tb-fold{padding:3px}
