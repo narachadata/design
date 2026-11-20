@@ -7090,8 +7090,8 @@ async function runRacha() {
   const tb = $('.stage .toolbar'), bo = $('#tbOrient'), bf = $('#tbFold'); if (!tb || !bo || !bf) return;
   let st = { v: false, fold: false }; try { Object.assign(st, JSON.parse(localStorage.getItem('naracal-tbmode') || '{}')); } catch (e) {}
   const apply = () => { tbMaxH = 0; tb.classList.toggle('tb-v', !!st.v); tb.classList.toggle('tb-fold', !!st.fold); bo.title = st.v ? '도구 막대를 가로로 (위쪽)' : '도구 막대를 세로로 (왼쪽)'; bf.title = st.fold ? '도구 막대 펴기' : '도구 막대 접기'; try { localStorage.setItem('naracal-tbmode', JSON.stringify(st)); } catch (e) {} if (typeof fitCanvas === 'function' && doc) requestAnimationFrame(() => { fitCanvas(); }); };
-  bo.onclick = () => { st.v = !st.v; st.fold = false; apply(); };
-  bf.onclick = () => { st.fold = !st.fold; apply(); };
+  bo.onclick = () => { st.v = !st.v; st.fold = false; apply(); bo.blur(); };
+  bf.onclick = () => { st.fold = !st.fold; apply(); bf.blur(); };  /* 누른 뒤 파란 테두리가 남지 않게 */
   apply();
 })();
 if (NC.aichat) NC.aichat.init({

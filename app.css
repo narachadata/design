@@ -1563,3 +1563,8 @@ body.tl-focus .aichat{display:none}
 .stage .toolbar.tb-v .tgroup.tbmode{margin:0 0 6px;flex-direction:column;padding:2px;border-top:0}
 .stage .toolbar.tb-v.tb-fold .tgroup.tbmode{margin:0;flex-direction:column}
 .stage .toolbar.tb-fold .tgroup.tbmode{margin:0}
+
+/* 접으면 가로·세로 모두 작업 화면 왼쪽 위 모서리에 고정 — 쪽을 되도록 안 가리게 (11/20 팀장님) */
+.stage .toolbar.tb-fold,.stage.compact .toolbar.tb-fold{left:8px;right:auto;top:8px;margin:0;width:auto}
+.stage.rulers .toolbar.tb-fold{left:24px;top:26px}
+.stage .toolbar.tb-fold:not(.tb-v){flex-direction:row}
