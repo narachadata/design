@@ -302,7 +302,9 @@ window.NARACAL_VIRTUE_ART = {
   /* 홍익 = 11/20 팀장님이 제미나이로 만든 장면 그림 12장(배경 있는 정사각, 모서리 둥글게) — 예전 그림(asset:illu-…)은 legacy에 */
   '홍익': ['pride', 'morality', 'consideration', 'responsibility', 'respect', 'humility', 'forgiveness', 'friendship', 'justice', 'honesty', 'fairness', 'cooperation'].map((k, i) => 'assets/virtue/hi-' + String(i + 1).padStart(2, '0') + '-' + k + '.webp'),
   legacy: { '홍익': ['pride', 'morality', 'consideration', 'responsibility', 'respect', 'humility', 'forgiveness', 'friendship', 'justice', 'honesty', 'fairness', 'cooperation'].map((k, i) => 'asset:illu-' + String(i + 1).padStart(2, '0') + '-' + k) },
-  extra: [['assets/virtue/racha-kick.webp', '라차 발차기'], ['assets/virtue/hi-racha-hello.webp', '라차 인사']],
+  extra: [['assets/virtue/racha-kick.webp', '라차 발차기'], ['assets/virtue/hi-racha-hello.webp', '라차 인사'], ['assets/virtue/hi-symbol.webp', '홍익 상징 (널리 이롭게)'], ['assets/virtue/hi-cover.webp', '홍익 표지 (가로)']],
+  /* 표지 그림: 홍익 해는 팀장님 새 표지(11/20), 극기 해는 예전 단체 그림 */
+  cover: { '극기': 'asset:cover-group', '홍익': 'assets/virtue/hi-cover.webp' },
 };
 // 기본 프로젝트 데이터: 2026년 캘린더 내용을 바탕으로 2027년 초안을 만듭니다.
 window.NARACAL_DEFAULTS = (function () {
