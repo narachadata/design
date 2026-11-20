@@ -386,7 +386,7 @@
     I(D.logo, 140, 200, 760, 190, { name: '로고' }),
     T('2027년 3월 정기 승급심사', 1000, 110, 1850, 280, { font: 'Do Hyeon', size: 360, color: NAVY, align: 'center', lh: 1, name: '제목' }),
     T('바른 자세 · 큰 기합 · 최선을 다하는 마음', 1000, 420, 1850, 160, { size: 170, weight: 700, color: RED, align: 'center', lh: 1 }),
-    I(D.m1, 2560, 220, 360, 360, { name: '마스코트' }),
+    I('assets/virtue/ra-ev-exam.webp', 2560, 190, 380, 380, { name: '라차 그림' }),
   ], '심사 현수막')]; } });
 
   NC.tpl.cats = [['all', '전체'], ['calendar', '달력 테마'], ['calpage', '달력 낱장'], ['poster', '포스터'], ['flyer', '전단지'], ['leaflet', '리플렛'], ['sns', 'SNS'], ['season', '명절·행사'], ['cert', '상장·증서'], ['card', '명함·카드'], ['sticker', '쿠폰·명찰·스티커'], ['sheet', '서식·활동지'], ['notice', '안내문'], ['banner', '현수막·입간판'], ['web', '웹·영상']];
