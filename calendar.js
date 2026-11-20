@@ -436,8 +436,73 @@ NC.cal = (function () {
       );
       return pg(CBG, els, `${m}월 달력`, 'cal');
     }
+    /* ---------- 배경화면 (2027~ 인쇄 대신 이미지로 나눠 줌, 팀장님 11/20) ----------
+       한 달 = 한 장: 덕목·명언·그림 + 그 달 달력. 기준 크기(인쇄 글자 크기 그대로)로 짜고, 앱이 화면 크기(1920×1080 / 1080×2340px)로 통째로 키움.
+       PC 기준 224×126(16:9) — 아래 작업 표시줄 자리는 비움 / 휴대폰 기준 126×273(9:19.5) — 위 1/4은 잠금 화면 시계 자리라 비움 */
+    const WALL = { pc: [224, 126], mob: [126, 273] };
+    const wallCal = (m, x, y, w, h, s) => calEl(m, { x, y, w, h, s: Object.assign({ wdLang: 'short', wdH: 4.6, wdSize: 6.5, daySize: 9, evSize: 5.2, lineW: 0.5, outerW: 0.8, cellPad: 2.2 }, s) });
+    function wallMonth(m, fmt) {
+      const mo = C.months[m - 1], bg = mo.bg === 'B' ? B : A, dark = isDark(bg), ts = T.titleScale || 1;
+      const ink = dark ? '#ffffff' : TX, card = CBG, cardDark = isDark(card), idiom = `${mo.idiom}(${mo.hanja})`;
+      const common = { role: 'virtue', month: m, name: '덕목', weight: T.titleWeight || 800 };
+      const ym = `${MONTHS_EN[m - 1]}  ${year}`;
+      if (fmt === 'pc') {
+        return pg(bg, [
+          T_(mo.virtue, 12, 9, 92, 15, Object.assign({ font: T.fontTitle, size: Math.round(34 * ts), color: dark ? '#ffffff' : T.titleColor, lh: 1, ls: -0.02 }, common)),
+          T_(mo.en, 12, 24.5, 92, 5, { font: T.fontNum, size: 7, weight: 700, ls: 0.18, color: T.accent, name: '영문', role: 'en', month: m }),
+          img(mo, 14, 31, 84, 62, { month: m, pos: '50% 50%' }),
+          T_(mo.quote, 10, 95, 96, 15, { size: 9.5, weight: 700, lh: 1.5, align: 'center', color: ink, name: '명언', role: 'quote', month: m }),
+          S_('rect', 108, 7, 108, 108, { fill: card, radius: 4, name: '달력 카드', shadow: true }),
+          T_(String(m).padStart(2, '0'), 113, 9.5, 28, 15, { font: T.fontNum, size: 38, weight: 800, lh: 1, ls: -0.03, color: T.accent, name: '월 숫자' }),
+          T_(ym, 140, 11, 56, 5, { font: T.fontNum, size: 6.5, weight: 700, ls: 0.18, color: cardDark ? '#dddddd' : '#555555', name: '연월', role: 'ym', month: m }),
+          T_(idiom, 140, 16.5, 70, 6, { size: 9, weight: 700, color: T.idiomColor, name: '사자성어', role: 'idiom', month: m }),
+          I_(C.dojang.swoosh, 201, 10, 11, 9, { name: '로고' }),
+          wallCal(m, 112, 27, 100, 70),
+          S_('rect', 112, 99.5, 100, 0.4, { fill: T.accent, opacity: 0.6, name: '실천 줄' }),
+          I_(C.dojang.target, 112, 102, 8, 8, { name: '실천 아이콘' }),
+          T_(practiceText(mo), 122, 101, 90, 12, { font: T.fontHand, size: 8.5, lh: 1.4, color: cardDark ? '#ffffff' : '#222222', name: '실천 과제', role: 'practice', month: m }),
+          I_(C.dojang.footer, 140, 117, 36, 5.3, { name: '하단 로고', opacity: 0.85 }),
+        ], `${m}월 PC 배경화면`, 'wall');
+      }
+      /* 휴대폰: 달력 칸을 위아래로 넉넉히(팀장님 11/20 — 줄 간격 늘리기): 그림을 조금 줄이고 달력 높이 70 (줄마다 약 13mm 기준) */
+      return pg(bg, [
+        T_(mo.virtue, 8, 60, 110, 12, Object.assign({ font: T.fontTitle, size: Math.round(28 * ts), color: dark ? '#ffffff' : T.titleColor, lh: 1, ls: -0.02, align: 'center' }, common)),
+        T_(mo.en, 8, 72.5, 110, 5, { font: T.fontNum, size: 6.5, weight: 700, ls: 0.18, color: T.accent, align: 'center', name: '영문', role: 'en', month: m }),
+        img(mo, 30, 79, 66, 58, { month: m, pos: '50% 50%' }),
+        T_(mo.quote, 8, 138.5, 110, 14, { size: 8.5, weight: 700, lh: 1.45, align: 'center', color: ink, name: '명언', role: 'quote', month: m }),
+        S_('rect', 5, 154, 116, 106, { fill: card, radius: 4, name: '달력 카드', shadow: true }),
+        T_(String(m).padStart(2, '0'), 9, 156.5, 26, 14, { font: T.fontNum, size: 34, weight: 800, lh: 1, ls: -0.03, color: T.accent, name: '월 숫자' }),
+        T_(ym, 35, 158, 60, 5, { font: T.fontNum, size: 6, weight: 700, ls: 0.18, color: cardDark ? '#dddddd' : '#555555', name: '연월', role: 'ym', month: m }),
+        T_(idiom, 35, 163, 70, 6, { size: 8.5, weight: 700, color: T.idiomColor, name: '사자성어', role: 'idiom', month: m }),
+        I_(C.dojang.swoosh, 106, 157, 11, 9, { name: '로고' }),
+        wallCal(m, 8, 172, 110, 70, { daySize: 9.5, evSize: 5.2, wdH: 5 }),
+        I_(C.dojang.target, 9, 245.5, 7.5, 7.5, { name: '실천 아이콘' }),
+        T_(practiceText(mo), 18.5, 244.5, 100, 12, { font: T.fontHand, size: 8, lh: 1.4, color: cardDark ? '#ffffff' : '#222222', name: '실천 과제', role: 'practice', month: m }),
+        I_(C.dojang.footer, 45, 263, 36, 5.3, { name: '하단 로고', opacity: 0.85 }),
+      ], `${m}월 휴대폰 배경화면`, 'wall');
+    }
+    function wallCover(fmt) {
+      const c = C.cover, bg = c.bg === 'B' ? B : A, dark = isDark(bg), ink = dark ? '#ffffff' : TX;
+      if (fmt === 'pc') return pg(bg, [
+        I_(C.dojang.logo, 12, 10, 60, 14, { name: '로고', role: 'logo' }),
+        T_(String(year), 140, 6, 72, 22, { font: T.fontNum, size: 54, weight: 800, color: dark ? T.titleColor : T.yearColor, align: 'right', lh: 1, ls: -0.02, name: '연도', role: 'year' }),
+        I_(c.image, 20, 30, 184, 64, { name: '표지 그림', role: 'coverImage' }),
+        T_(c.title, 12, 97, 200, 7, { size: 13, weight: 500, align: 'center', color: ink, name: '제목 윗줄', role: 'coverTitle' }),
+        T_(c.subtitle, 12, 104.5, 200, 9, { size: 16, weight: 700, align: 'center', color: ink, name: '제목 아랫줄', role: 'coverSubtitle' }),
+      ], 'PC 배경화면 표지', 'wallcover');
+      return pg(bg, [
+        T_(String(year), 8, 66, 110, 22, { font: T.fontNum, size: 58, weight: 800, color: dark ? T.titleColor : T.yearColor, align: 'center', lh: 1, ls: -0.02, name: '연도', role: 'year' }),
+        I_(C.dojang.logo, 33, 91, 60, 14, { name: '로고', role: 'logo' }),
+        I_(c.image, 4, 112, 118, 66, { name: '표지 그림', role: 'coverImage' }),
+        T_(c.title, 8, 184, 110, 7, { size: 12, weight: 500, align: 'center', color: ink, name: '제목 윗줄', role: 'coverTitle' }),
+        T_(c.subtitle, 8, 192, 110, 18, { size: 15, weight: 700, lh: 1.35, align: 'center', color: ink, name: '제목 아랫줄', role: 'coverSubtitle' }),
+        T_(c.note, 10, 214, 106, 16, { size: 8, lh: 1.5, align: 'center', color: dark ? '#dddddd' : TX, name: '설명', role: 'coverNote' }),
+      ], '휴대폰 배경화면 표지', 'wallcover');
+    }
     const out = [];
     const kind = opts.kind || 'full';
+    if (/^wall-(pc|mob)$/.test(kind)) { const f = kind.slice(5); if (opts.cover !== false) out.push(wallCover(f)); for (let m = 1; m <= 12; m++) out.push(wallMonth(m, f)); out.forEach(p => { p.wall = f; p.els.forEach(e => { e.gen = 1; }); }); out.base = WALL[f]; return out; }
+    if (kind === 'wallmonth') { const p = wallMonth(opts.month || 1, opts.fmt || 'pc'); p.wall = opts.fmt || 'pc'; p.els.forEach(e => { e.gen = 1; }); const r = [p]; r.base = WALL[p.wall]; return r; }
     if (kind === 'full') { out.push(cover()); for (let m = 1; m <= 12; m++) { out.push(virtue(m)); out.push(calendar(m)); } out.push(back()); }
     else if (kind === 'months') { for (let m = 1; m <= 12; m++) out.push(calendar(m)); }
     else if (kind === 'virtues') { for (let m = 1; m <= 12; m++) out.push(virtue(m)); }
