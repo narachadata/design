@@ -47,7 +47,7 @@ NC.tpl = (function () {
       T('장소', 28, 100, 30, 8, { size: 13, weight: 700, color: NAVY }), T('나라차태권도 본관 수련장', 60, 100, 126, 8, { size: 13, weight: 500 }),
       T('준비', 28, 116, 30, 8, { size: 13, weight: 700, color: NAVY }), T('도복 착용, 띠 정리, 심사비 납부 확인', 60, 116, 126, 8, { size: 13, weight: 500 }),
       T('문의', 28, 132, 30, 8, { size: 13, weight: 700, color: NAVY }), T(`${PHONE} (사범실)`, 60, 132, 126, 8, { size: 13, weight: 500 }),
-      I(D.pride, 30, 156, 150, 112, { name: '삽화' }),
+      I('assets/virtue/ra-ev-exam.webp', 49, 155, 112, 112, { name: '라차 그림' }),
       T('"땀과 노력은 나를 자랑스럽게 만들어 줍니다"', 12, 272, 186, 10, { size: 13, weight: 600, align: 'center', color: NAVY }),
     ], '심사 포스터')]; } },
     { id: 'poster-contest', cat: 'poster', name: '품새 대회 포스터', w: 210, h: 297, build(uid) { const { T, I, S, P } = H(uid); return [P(WHITE, [

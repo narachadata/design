@@ -306,6 +306,13 @@ window.NARACAL_VIRTUE_ART = {
   /* 표지 그림: 홍익 해는 팀장님 새 표지(11/20), 극기 해는 예전 단체 그림 */
   cover: { '극기': 'asset:cover-group', '홍익': 'assets/virtue/hi-cover.webp' },
 };
+/* 휴관·행사 라차 그림 (11/20 팀장님이 제미나이로 만든 장면 그림, 왼쪽 가슴에 나라차 로고 얹음) — 휴관 카드 「라차 그림」 모양·승급심사 포스터·사진 패널에서 씀 */
+window.NARACAL_RACHA_ART = [
+  ['신정', 'ra-hol-sinjeong', '신정 — 해돋이 인사'], ['설날', 'ra-hol-seollal', '설날 — 세배'], ['삼일절', 'ra-hol-samiljeol', '삼일절 — 태극기 만세'], ['어린이날', 'ra-hol-childrens', '어린이날 — 바람개비·풍선'],
+  ['부처님오신날', 'ra-hol-buddha', '부처님오신날 — 연등'], ['현충일', 'ra-hol-memorial', '현충일 — 국화·묵념'], ['제헌절', 'ra-hol-constitution', '제헌절 — 법 책'], ['광복절', 'ra-hol-liberation', '광복절 — 태극기'],
+  ['추석', 'ra-hol-chuseok', '추석 — 송편 빚기'], ['개천절', 'ra-hol-foundation', '개천절 — 하늘 열림'], ['한글날', 'ra-hol-hangeul', '한글날 — 붓글씨 「한글」'], ['크리스마스', 'ra-hol-christmas', '성탄절 — 선물'],
+  ['임시공휴일', 'ra-hol-dayoff', '쉬는 날 — 해변 휴식'], ['', 'ra-ev-exam', '승급심사 — 띠 매기'], ['', 'ra-wave', '라차 손 흔들기'],
+].map(([hol, k, t]) => ({ hol, src: 'assets/virtue/' + k + '.webp', title: t }));
 // 기본 프로젝트 데이터: 2026년 캘린더 내용을 바탕으로 2027년 초안을 만듭니다.
 window.NARACAL_DEFAULTS = (function () {
   const M = [

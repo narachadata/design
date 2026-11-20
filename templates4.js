@@ -155,6 +155,10 @@
       els.push(S('rect', cx, cy, cw, ch, { fill: '#FFFFFF', radius: r2(2.4 * u), name: '안내 상자', shadow: true }));
       els.push(I(A(0), wide ? w * 0.06 : w - 26 * u, wide ? h * 0.42 : cy - 20 * u, wide ? w * 0.26 : 22 * u, wide ? w * 0.26 : 22 * u, { name: '그림' }));
       box = { x: cx + cw * 0.08, y: cy + ch * 0.07, w: cw * 0.84, h: ch * 0.86 }; o = Object.assign({}, o, { pal: Object.assign({}, p, { ink: '#1F2430', sub: '#5B6472', chip: '#F3F4F7', chipInk: '#1F2430' }) });
+    } else if (o.style === 'racha') { // 라차 그림: 팀장님 장면 그림(정사각·모서리 둥근)을 위에 크게, 안내는 아래 (가로형은 그림 왼쪽)
+      const s = wide ? h * 0.84 : Math.min(w * 0.84, h * (tall ? 0.5 : 0.46)), ix = wide ? w * 0.05 : (w - s) / 2, iy = wide ? (h - s) / 2 : h * 0.045;
+      els.push(I(hol.racha, ix, iy, s, s, { name: '라차 그림' }));
+      box = wide ? { x: ix + s + w * 0.04, y: h * 0.08, w: w - ix - s - w * 0.08, h: h * 0.84 } : { x: w * 0.08, y: iy + s + h * 0.02, w: w * 0.84, h: h - iy - s - h * 0.045 };
     } else if (o.style === 'saekdong') {
       const sh = Math.max(5 * u, h * 0.06); els.push(I(ART.saekdong(w, sh), 0, 0, w, sh, { fit: 'fill', name: '색동' })); els.push(I(ART.saekdong(w, sh), 0, h - sh, w, sh, { fit: 'fill', name: '색동', flipV: true }));
       art = A(0); box = { x: w * 0.1, y: sh + h * 0.05, w: w * 0.8, h: h - 2 * sh - h * 0.1 };
@@ -207,12 +211,20 @@
     return P(o.pal.bg || p.bg, els, `${hol.key} 휴관`);
   }
 
-  /* ===== 템플릿 등록: 휴일마다 5가지(명절은 7가지) ===== */
+  /* ===== 템플릿 등록: 휴일마다 5가지(명절은 7가지) + 라차 그림(팀장님 그림이 있는 휴일) ===== */
   const STYLES = [['paper', '종이 카드'], ['night', '밤하늘'], ['arch', '아치 액자'], ['calendar', '달력 안내'], ['type', '큰 글자']];
   const EXTRA = [['saekdong', '색동'], ['greet', '인사 카드']];
   const W0 = 285.75, H0 = 357.19; // 기본: 인스타그램 4:5 (1080×1350px)
+  const RA = {}; (window.NARACAL_RACHA_ART || []).forEach(r => { if (r.hol) RA[r.hol] = r.src; });
   HOL.forEach(hol => {
+    hol.racha = RA[hol.key];
     const styles = STYLES.concat(hol.myeongjeol ? EXTRA : []);
+    // 라차 그림 모양은 맨 앞에 (기존 모양의 색·글꼴 순서는 그대로): 밝은 바탕 색 묶음 중 첫째
+    if (hol.racha) { const st = 'racha', pal = hol.pals.find(p => lum(p.bg) >= 0.62) || hol.pals[0];
+      const o = { hol, style: st, pal, fontT: hol.fonts[0], art: null };
+      L.push({ id: `hol-${hol.key}-${st}`, cat: 'season', name: `${hol.key === '크리스마스' ? '성탄절' : hol.key} 휴관 카드 · 라차 그림`, w: W0, h: H0, holiday: hol.key, holMonth: hol.month, responsive: true, tags: { format: 'SNS', season: hol.season, age: '전체', occasion: '휴관', biz: '태권도장' },
+        kw: [hol.key, hol.key === '크리스마스' ? '성탄절 크리스마스' : '', hol.myeongjeol ? '명절 명절인사' : '국경일 공휴일', '휴관 휴무 공지 안내 카드 SNS 인스타 라차 펭귄 마스코트', hol.season].join(' '),
+        build: (uid, sz) => { const W = sz ? sz.w : W0, Hh = sz ? sz.h : H0, screen = sz ? !!sz.screen : true; return [compose(uid, Object.assign({}, o, { art: [] }), W, Hh, screen)]; } }); }
     styles.forEach(([st, stName], i) => {
       const pal = hol.pals[st === 'night' ? (hol.pals.findIndex(p => /^#(0|1)/.test(p.bg)) >= 0 ? hol.pals.findIndex(p => /^#(0|1)/.test(p.bg)) : 0) : i % hol.pals.length];
       const o = { hol, style: st, pal, fontT: hol.fonts[i % hol.fonts.length], art: null };
