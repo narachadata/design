@@ -1552,3 +1552,14 @@ body.tl-focus .aichat{display:none}
 .stage .toolbar.tb-v #zoomFit{display:flex;flex-direction:column;align-items:center}.stage .toolbar.tb-v #zoomPct{font-size:10.5px;margin:0}
 .stage .toolbar.tb-v .qbar{flex-wrap:wrap;max-width:132px;justify-content:center;gap:2px}.stage .toolbar.tb-v .qbar select,.stage .toolbar.tb-v .qbar input{max-width:124px}
 .stage .toolbar.tb-v.tb-fold{padding:3px}
+
+/* 막대 모양 단추(접기·세로로)는 도구 단추와 구분되게 — 연한 회색 칸 안에 작고 흐린 아이콘 (11/20 팀장님 "오른쪽 단추와 비슷해 구분 안 됨, 너무 튀지 않게") */
+.stage .toolbar .tgroup.tbmode{background:var(--ui-field,#f1f3f6);border-radius:9px;padding:2px;gap:0;margin-right:6px;border-left:0}
+.stage .toolbar .tbmode .btn{color:var(--ui-muted,#5c6473);padding:4px;min-height:0;height:26px;width:26px;justify-content:center}
+.stage .toolbar .tbmode .btn .ic{width:15px;height:15px;stroke-width:1.8}
+.stage .toolbar .tbmode .btn:hover{background:#fff;color:var(--ui-fg,#222)}
+.stage .toolbar .tbmode .btn:focus-visible{outline:2px solid var(--accent,#3b5bdb);outline-offset:0}
+.stage .toolbar .tbmode .btn:focus:not(:focus-visible){outline:0;box-shadow:none}
+.stage .toolbar.tb-v .tgroup.tbmode{margin:0 0 6px;flex-direction:column;padding:2px;border-top:0}
+.stage .toolbar.tb-v.tb-fold .tgroup.tbmode{margin:0;flex-direction:column}
+.stage .toolbar.tb-fold .tgroup.tbmode{margin:0}
