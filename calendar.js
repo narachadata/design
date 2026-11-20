@@ -217,7 +217,9 @@ NC.cal = (function () {
     const pg = (bg, els, label, kind) => ({ id: uid(), bg, els, label, kind });
     const calEl = (m, extra) => Object.assign({ id: uid(), type: 'cal', year, month: m, rot: 0, opacity: 1, s: Object.assign({ fontNum: T.fontNum, fontBody: T.fontBody, line: T.line, outer: T.outer, sunBg: T.sunBg, sunColor: T.sunColor, dayColor: CTX, evColor: CTX, wdColor: CTX }, extra && extra.s), events: (C.months[m - 1].events || []).map(e => Object.assign({}, e)), notes: (C.months[m - 1].notes || []).slice(), name: `${m}월 달력`, role: 'cal', month: m }, extra, { s: Object.assign({ fontNum: T.fontNum, fontBody: T.fontBody, line: T.line, outer: T.outer, sunBg: T.sunBg, sunColor: T.sunColor, dayColor: CTX, evColor: CTX, wdColor: CTX }, extra && extra.s) });
     const mini = (m, x, y, w, h, st) => { const ny = m === 12 ? year + 1 : year, nm = m === 12 ? 1 : m + 1; return { id: uid(), type: 'mini', year: ny, month: nm, x, y, w, h, rot: 0, opacity: 1, s: Object.assign({ fontNum: T.fontNum, color: CTX, sunColor: T.sunColor }, st), name: '다음 달' }; };
-    const img = (mo, x, y, w, h, st) => I_(mo.image, x, y, w, h, Object.assign({ pos: '50% 100%', name: '삽화', role: 'illust', month: mo.m }, mo.imgScale && mo.imgScale !== 1 ? {} : {}, st));
+    /* 배경이 있는 정사각 장면 그림(홍익 hi-…, 모서리 둥근 카드)은 자리 상자 가운데에 조금 작게 — 아래 붙이면 아래 띠·위 영문 덕목과 겹쳤음 (11/20) */
+    const cardArt = src => /(^|\/)hi-\d\d-/.test(String(src || ''));
+    const img = (mo, x, y, w, h, st) => { if (cardArt(mo.image)) { const s = Math.round(Math.min(w, h) * 0.78); x += (w - s) / 2; y += (h - s) * 0.65; w = h = s; st = Object.assign({}, st, { pos: '50% 50%' }); } return I_(mo.image, x, y, w, h, Object.assign({ pos: '50% 100%', name: '삽화', role: 'illust', month: mo.m }, st)); };
     const L = T.layout;
 
     function cover() {

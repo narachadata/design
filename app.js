@@ -2819,13 +2819,14 @@ function renderSide0() {
     <p class="hint">글 상자를 두 번 누르면 바로 고칩니다. 오른쪽 속성 패널에서 그라데이션·외곽선·그림자·광선·3D·휘기 등 효과를 더합니다.</p>`;
     body.onclick = e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.add) { const a = b.dataset.add.split(':')[1]; if (a === 'v') addText('s', { vertical: true, text: '세로로 쓰는 글', w: 14, h: 60 }); else addText(a); } if (b.dataset.tstyle) { const p = FX.TEXT_PRESETS.find(x => x.id === b.dataset.tstyle); addText('h', Object.assign({ font: 'Jua', size: 32 }, p.st)); } if (b.dataset.pair) { const [a, bb] = b.dataset.pair.split('|'); lastTextStyle = Object.assign({}, lastTextStyle || {}, { font: a }); noteFont(a); noteFont(bb); const t = addText('h', { font: a }); setTimeout(() => { endEdit(); const s2 = addText('b', { font: bb, text: '본문은 ' + bb + ' 글꼴로 씁니다.' }); s2.y = t.y + t.h + 4; rerender(); }, 120); } if (b.dataset.usefont) { const els = selEls().filter(x => x.type === 'text'); if (els.length) { els.forEach(x => x.font = b.dataset.usefont); commit(); rerender(); } else { lastTextStyle = Object.assign({}, lastTextStyle || {}, { font: b.dataset.usefont }); toast('새 글자의 기본 글꼴로 정했습니다'); } } };
   } else if (sideTab === 'photo') {
-    const groups = [['홍익(2년차·짝수 해) 삽화', k => k.startsWith('illu-')], ['마스코트', k => k.startsWith('mascot-')], ['로고·아이콘', k => !k.startsWith('illu-') && !k.startsWith('mascot-')]];
+    const groups = [['예전 홍익 삽화 (2026 캘린더)', k => k.startsWith('illu-')], ['마스코트', k => k.startsWith('mascot-')], ['로고·아이콘', k => !k.startsWith('illu-') && !k.startsWith('mascot-')]];
     const mine = Object.keys(doc.assets);
     body.innerHTML = `<div class="row" style="margin-bottom:6px"><label class="btn sm">파일 올리기<input type="file" accept="image/*" id="imgFile" hidden multiple></label><button class="btn sm ai" id="imgAI">AI로 만들기</button></div>
     <p class="hint">그림을 누르면 페이지에 추가됩니다. 이미지 요소를 선택한 상태면 그 그림을 바꿉니다.</p>
     ${mine.length ? `<h3>내 이미지 (${mine.length})</h3><div class="picker">${mine.map(k => `<button data-img="a:${k}" draggable="true"><img src="${doc.assets[k]}" alt="" draggable="false"></button>`).join('')}</div>` : ''}
     ${libPhotoHTML()}
-    ${(() => { const A = window.NARACAL_VIRTUE_ART; if (!A) return ''; const ks = A['극기'].concat(A.extra.map(x => x[0])), vn = ((window.NARACAL_VPLAN || {})['극기'] || []).map(x => x.virtue); return `<h3>극기(1년차·홀수 해) 삽화</h3><div class="picker">${ks.map((k, i) => `<button data-img="${k}" title="${i < 12 ? `${i + 1}월 ${esc(vn[i] || '')}` : esc(A.extra[i - 12][1])} — 누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${k}" alt="" loading="lazy" draggable="false"></button>`).join('')}</div>`; })()}
+    ${(() => { const A = window.NARACAL_VIRTUE_ART; if (!A) return ''; const grp = (tr, t, more) => { const ks = A[tr].concat(more.map(x => x[0])), vn = ((window.NARACAL_VPLAN || {})[tr] || []).map(x => x.virtue); return `<h3>${t}</h3><div class="picker">${ks.map((k, i) => `<button data-img="${k}" title="${i < 12 ? `${i + 1}월 ${esc(vn[i] || '')}` : esc(more[i - 12][1])} — 누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${k}" alt="" loading="lazy" draggable="false"></button>`).join('')}</div>`; };
+      return grp('극기', '극기(1년차·홀수 해) 삽화', A.extra.filter(x => !/hi-/.test(x[0]))) + grp('홍익', '홍익(2년차·짝수 해) 삽화', A.extra.filter(x => /hi-/.test(x[0]))); })()}
     ${groups.map(([t, f]) => { const ks = Object.keys(ASSETS).filter(f); return `<h3>${t}</h3><div class="picker">${ks.map(k => `<button data-img="asset:${k}" title="누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${ASSETS[k]}" alt="" draggable="false"></button>`).join('')}</div>`; }).join('')}`;
     body.onclick = async e => {
       const pc = e.target.closest('[data-pcat]'); if (pc) { photoCat = pc.dataset.pcat; renderSide(); return; }
@@ -4169,11 +4170,12 @@ function virtuePlanFor(year) {
 function virtueTrackOf(year) { return window.NARACAL_VTRACK ? window.NARACAL_VTRACK(year) : (Number(year) % 2 === 0 ? '홍익' : '극기'); }
 function virtueArtFix(cal, pages, year, onlyEmpty) {
   const A = window.NARACAL_VIRTUE_ART, ms = cal && cal.months; if (!A || !Array.isArray(ms)) return 0;
-  const tr = virtueTrackOf(year), mine = A[tr] || [], other = A[tr === '극기' ? '홍익' : '극기'] || [];
+  const tr = virtueTrackOf(year), mine = A[tr] || [], ot = tr === '극기' ? '홍익' : '극기', other = (A[ot] || []).concat((A.legacy || {})[ot] || [], (A.legacy || {})[tr] || []);  /* 예전 기본 그림(legacy)도 '기본 그림'으로 보고 새 그림으로 바꿈 */
   const swap = s => !s || (!onlyEmpty && other.includes(s));
   let n = 0;
   ms.forEach((mo, k) => { const want = mine[k]; if (!want) return; if (swap(mo.image)) { mo.image = want; n++; }
-    (pages || []).forEach(p => p.els.forEach(e => { if (e.type === 'image' && e.role === 'illust' && e.month === k + 1 && swap(e.src)) { e.src = want; delete e.srcOrig; n++; } })); });
+    (pages || []).forEach(p => p.els.forEach(e => { if (e.type === 'image' && e.role === 'illust' && e.month === k + 1 && swap(e.src)) { e.src = want; delete e.srcOrig; n++;
+      if (/(^|\/)hi-\d\d-/.test(want) && !e.cardFit) { const sq = Math.round(Math.min(e.w, e.h) * 0.78 * 10) / 10; e.x = Math.round((e.x + (e.w - sq) / 2) * 10) / 10; e.y = Math.round((e.y + (e.h - sq) * 0.65) * 10) / 10; e.w = e.h = sq; e.pos = '50% 50%'; e.cardFit = 1; } } })); });  /* 정사각 장면 카드는 상자 가운데에 조금 작게 (calendar.js img와 같게) */
   return n;
 }
 /* 마법사에서 해를 바꿀 때: 12달 덕목이 '다른 덕목 해의 기본 문구' 그대로면 이 해 문구로 (직접 고친 문구가 하나라도 있으면 그대로) */
