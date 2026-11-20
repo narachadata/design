@@ -299,8 +299,10 @@ window.NARACAL_VTRACK = function (y) { return (Number(y) % 2 === 0) ? '홍익' :
    달력의 그 달 삽화가 비었거나 '다른 해 덕목의 기본 그림'이면 그 해 덕목 그림으로 바꿔 넣음(직접 넣은 그림은 그대로) */
 window.NARACAL_VIRTUE_ART = {
   '극기': ['self-respect', 'initiative', 'courage', 'passion', 'courtesy', 'gratitude', 'patience', 'self-control', 'justice', 'honesty', 'service', 'love'].map((k, i) => 'assets/virtue/kg-' + String(i + 1).padStart(2, '0') + '-' + k + '.webp'),
-  '홍익': ['pride', 'morality', 'consideration', 'responsibility', 'respect', 'humility', 'forgiveness', 'friendship', 'justice', 'honesty', 'fairness', 'cooperation'].map((k, i) => 'asset:illu-' + String(i + 1).padStart(2, '0') + '-' + k),
-  extra: [['assets/virtue/racha-kick.webp', '라차 발차기']],
+  /* 홍익 = 11/20 팀장님이 제미나이로 만든 장면 그림 12장(배경 있는 정사각, 모서리 둥글게) — 예전 그림(asset:illu-…)은 legacy에 */
+  '홍익': ['pride', 'morality', 'consideration', 'responsibility', 'respect', 'humility', 'forgiveness', 'friendship', 'justice', 'honesty', 'fairness', 'cooperation'].map((k, i) => 'assets/virtue/hi-' + String(i + 1).padStart(2, '0') + '-' + k + '.webp'),
+  legacy: { '홍익': ['pride', 'morality', 'consideration', 'responsibility', 'respect', 'humility', 'forgiveness', 'friendship', 'justice', 'honesty', 'fairness', 'cooperation'].map((k, i) => 'asset:illu-' + String(i + 1).padStart(2, '0') + '-' + k) },
+  extra: [['assets/virtue/racha-kick.webp', '라차 발차기'], ['assets/virtue/hi-racha-hello.webp', '라차 인사']],
 };
 // 기본 프로젝트 데이터: 2026년 캘린더 내용을 바탕으로 2027년 초안을 만듭니다.
 window.NARACAL_DEFAULTS = (function () {
