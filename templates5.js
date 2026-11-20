@@ -164,15 +164,20 @@
     T(v.meaning, 18, 282, DW - 36, 28, Object.assign({ size: 20, weight: 500, color: '#3A4563', lh: 1.4, name: '풀이' }, R(m, 'meaning'))),
     I(logo(bg), cx(80), 318, 80, 15.4, { name: '로고' }),
   ], `${tr} ${m}월 ${v.virtue}`); }); }
-  function devPremium(uid) { const { T, I, S, P } = H(uid); return both().map(({ tr, m, v }) => P(NAVY, [...frame2(S, GOLD),
-    T(`${TRACK[tr].yr} ${tr} · ${m}월의 덕목`, 14, 22, DW - 28, 9, { font: 'Noto Serif KR', size: 18, weight: 600, color: GOLD, ls: 0.06, name: '머리글' }),
-    S('ellipse', cx(150), 38, 150, 150, { fill: '#FFFFFF', name: '그림 원' }),
-    I(art(tr, m), cx(128), 50, 128, 126, Object.assign({ name: '삽화' }, R(m, 'illust'))),
-    T(v.virtue, 10, 196, DW - 20, 30, Object.assign({ font: 'Noto Serif KR', size: v.virtue.length > 4 ? 54 : 72, weight: 900, color: '#FFFFFF', lh: 1.1, name: '덕목' }, R(m, 'virtue'))),
-    T(`(${v.en})`, 14, 228, DW - 28, 8, Object.assign({ font: 'Montserrat', size: 15, weight: 700, color: GOLD, ls: 0.2, name: '영문' }, R(m, 'en'))),
-    S('rect', cx(40), 241, 40, 0.5, { fill: GOLD, name: '금선' }),
-    T(`${v.idiom}(${v.hanja})`, 10, 248, DW - 20, 16, Object.assign({ font: 'Gowun Batang', size: 34, weight: 700, color: '#FFFFFF', name: '사자성어' }, R(m, 'idiom'))),
-    T(v.meaning, 20, 268, DW - 40, 30, Object.assign({ size: 17, color: '#C9CFDD', lh: 1.45, name: '풀이' }, R(m, 'meaning'))),
+  /* 고급: 삽화를 원 안에 꽉 채움(원 모양으로 자름). 흰 바탕 극기 그림은 조금 줄여 머리 위 여백(아래쪽에 맞춤) — 11/20 팀장님 */
+  const PFIT = { '극기': [0.86, 1, 0.86, 0.86, 0.86, 0.86, 0.86, 0.86, 1, 0.86, 1, 1] };
+  const pfit = (tr, m) => { const z = (PFIT[tr] || [])[m - 1] || 1; return z === 1 ? { zoom: 1 } : { zoom: z, panY: Math.round(50 * (1 - z) * 10) / 10 }; };
+  function devPremium(uid) { const { T, I, S, P } = H(uid); const CW = 156, CY = 40; return both().map(({ tr, m, v }) => P(NAVY, [...frame2(S, GOLD),
+    T(`${TRACK[tr].yr} ${tr} · ${m}월의 덕목`, 14, 21, DW - 28, 9, { font: 'MaruBuri', size: 18, weight: 700, color: GOLD, ls: 0.12, name: '머리글' }),
+    S('ellipse', cx(CW + 10), CY - 5, CW + 10, CW + 10, { fill: 'rgba(0,0,0,0)', stroke: GOLD, strokeW: 0.6, name: '금테' }),
+    S('ellipse', cx(CW), CY, CW, CW, { fill: '#FFFFFF', name: '그림 원' }),
+    I(art(tr, m), cx(CW), CY, CW, CW, Object.assign({ fit: 'cover', clip: 'circle', pos: '50% 50%', cardFit: 1, name: '삽화' }, pfit(tr, m), R(m, 'illust'))),
+    T(v.virtue, 10, 205, DW - 20, 30, Object.assign({ font: 'Nanum Myeongjo ExtraBold', size: v.virtue.length > 4 ? 56 : 74, weight: 800, color: '#FFFFFF', lh: 1.1, ls: v.virtue.length > 4 ? 0.02 : 0.08, name: '덕목' }, R(m, 'virtue'))),
+    T(v.en, 14, 236, DW - 28, 8, Object.assign({ font: 'Cinzel', size: 15, weight: 700, color: GOLD, ls: 0.28, name: '영문' }, R(m, 'en'))),
+    S('rect', cx(14) - 12, 249.75, 14, 0.4, { fill: GOLD, name: '금선' }), S('rect', cx(14) + 12, 249.75, 14, 0.4, { fill: GOLD, name: '금선' }),
+    S('rect', cx(2.4), 248.75, 2.4, 2.4, { fill: GOLD, rot: 45, name: '금 마름모' }),
+    T(`${v.idiom}(${v.hanja})`, 10, 255, DW - 20, 16, Object.assign({ font: 'Noto Serif KR', size: 34, weight: 700, color: '#FFFFFF', ls: 0.02, name: '사자성어' }, R(m, 'idiom'))),
+    T(v.meaning, 16, 274, DW - 32, 30, Object.assign({ font: 'MaruBuri', size: 16, weight: 400, color: '#C9CFDD', lh: 1.55, name: '풀이' }, R(m, 'meaning'))),
     I('asset:brand-horizontal-white', cx(70), 310, 70, 13.5, { name: '로고' }),
   ], `${tr} ${m}월 ${v.virtue}`)); }
   [['cute', '귀여운', devCute], ['premium', '고급', devPremium]].forEach(([id, nm, fn]) => L.push({ id: `dev-virtue-${id}`, cat: 'device', name: `결제 단말기 · 인성덕목 24 (${nm})`, w: DW, h: DH, screen: true,

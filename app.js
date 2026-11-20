@@ -4238,7 +4238,7 @@ function virtueDiff(year) { const m = doc.calendar && doc.calendar.months; if (!
 function applyMonthContent(mi, r) {
   Object.assign(doc.calendar.months[mi], { virtue: r.virtue, en: r.en, quote: r.quote, practice: r.practice.slice(0, 2), idiom: r.idiom, hanja: r.hanja, meaning: r.meaning });
   let n = 0;
-  doc.pages.forEach(p => p.els.forEach(el => { if (el.type !== 'text' || el.month !== mi + 1) return; const map = { virtue: r.virtue, en: `(${r.en})`, quote: r.quote, practice: `1. ${r.practice[0]}\n2. ${r.practice[1]}`, idiom: `${r.idiom}(${r.hanja})`, meaning: r.meaning }; if (map[el.role] != null) { el.text = map[el.role]; n++; } }));
+  doc.pages.forEach(p => p.els.forEach(el => { if (el.type !== 'text' || el.month !== mi + 1) return; const map = { virtue: r.virtue, en: /^\s*\(/.test(el.text || "(") ? `(${r.en})` : r.en, quote: r.quote, practice: `1. ${r.practice[0]}\n2. ${r.practice[1]}`, idiom: `${r.idiom}(${r.hanja})`, meaning: r.meaning }; if (map[el.role] != null) { el.text = map[el.role]; n++; } }));
   return n;
 }
 function renderAI() {
