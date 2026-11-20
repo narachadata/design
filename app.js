@@ -4173,6 +4173,9 @@ function virtueArtFix(cal, pages, year, onlyEmpty) {
   const tr = virtueTrackOf(year), mine = A[tr] || [], ot = tr === '극기' ? '홍익' : '극기', other = (A[ot] || []).concat((A.legacy || {})[ot] || [], (A.legacy || {})[tr] || []);  /* 예전 기본 그림(legacy)도 '기본 그림'으로 보고 새 그림으로 바꿈 */
   const swap = s => !s || (!onlyEmpty && other.includes(s));
   let n = 0;
+  const CV = A.cover || {}, cw = CV[tr], cvAll = Object.values(CV);  /* 표지 그림도 그 해 덕목대로 (기본 표지끼리만 바꿈, 직접 넣은 표지는 그대로) */
+  if (cw && cal.cover && (!cal.cover.image || (!onlyEmpty && cvAll.includes(cal.cover.image) && cal.cover.image !== cw))) { cal.cover.image = cw; n++; }
+  if (cw) (pages || []).forEach(p => p.els.forEach(e => { if (e.type === 'image' && e.role === 'coverImage' && (!e.src || (!onlyEmpty && cvAll.includes(e.src) && e.src !== cw))) { e.src = cw; delete e.srcOrig; n++; } }));
   ms.forEach((mo, k) => { const want = mine[k]; if (!want) return; if (swap(mo.image)) { mo.image = want; n++; }
     (pages || []).forEach(p => p.els.forEach(e => { if (e.type === 'image' && e.role === 'illust' && e.month === k + 1 && swap(e.src)) { e.src = want; delete e.srcOrig; n++;
       if (/(^|\/)hi-\d\d-/.test(want) && !e.cardFit) { const sq = Math.round(Math.min(e.w, e.h) * 0.78 * 10) / 10; e.x = Math.round((e.x + (e.w - sq) / 2) * 10) / 10; e.y = Math.round((e.y + (e.h - sq) * 0.65) * 10) / 10; e.w = e.h = sq; e.pos = '50% 50%'; e.cardFit = 1; } } })); });  /* 정사각 장면 카드는 상자 가운데에 조금 작게 (calendar.js img와 같게) */
