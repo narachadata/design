@@ -469,14 +469,15 @@ function fitCanvas() {
   watchToolbar();
   // 위에 떠 있는 도구 막대와 아래 쪽 이동 막대에 페이지가 가리지 않게 그 높이만큼 비워 두고 맞춤
   const st = $('#stage'); { const was = st.classList.contains('compact'); st.classList.toggle('compact', st.clientHeight < 470 || st.clientWidth < 480);  /* 낮거나 좁은 작업 화면(노트북+큰 타임라인, 800px 창) */ if (was !== st.classList.contains('compact')) tbMaxH = 0; } /* 낮은 작업 화면(노트북 + 큰 타임라인): 도구 막대를 아이콘 한 줄로 */
-  const tb = st.querySelector('.toolbar'); if (tb) tbMaxH = Math.max(tbMaxH, tb.offsetHeight); const top = tb ? tb.offsetTop + tbMaxH + (st.classList.contains('compact') ? 6 : 14) : 24, bot = st.classList.contains('tlon') && $('#vtl') && !document.body.classList.contains('tl-wide') ? $('#vtl').offsetHeight + 18 : 64;
+  const tb = st.querySelector('.toolbar'), vt = !!(tb && tb.classList.contains('tb-v')), lx = vt ? tb.offsetLeft + tb.offsetWidth + 12 - 40 : 0;  /* 세로 도구 막대: 위가 아니라 왼쪽을 비움 */
+  if (tb && !vt) tbMaxH = Math.max(tbMaxH, tb.offsetHeight); const top = tb && !vt ? tb.offsetTop + tbMaxH + (st.classList.contains('compact') ? 6 : 14) : 24, bot = st.classList.contains('tlon') && $('#vtl') && !document.body.classList.contains('tl-wide') ? $('#vtl').offsetHeight + 18 : 64;
   st.style.setProperty('--pgm-top', Math.max(0, top - 6) + 'px');  /* 나란히 보기: 결과 화면도 도구 막대 아래에서 시작 */
-  const w = st.classList.contains('pgm-on') ? st.clientWidth / 2 - 64 : st.clientWidth - 80, h = st.clientHeight - top - bot - 4;
+  const w = (st.classList.contains('pgm-on') ? st.clientWidth / 2 - 64 : st.clientWidth - 80) - Math.max(0, lx), h = st.clientHeight - top - bot - 4;
   const k = zoom || Math.max(0.03, Math.min(Math.max(w, 60) / (doc.w * MM), Math.max(h, 60) / (doc.h * MM)));
   // 문서 밖으로 나간 요소가 있으면 그만큼 작업 화면을 넓혀 스크롤로 닿게 함 (좌우·위아래 같은 폭이라 페이지가 가운데에 그대로)
   const ov = pageOverflow(page()), px = Math.ceil(Math.max(ov.l, ov.r) * MM * k), py = Math.ceil(Math.max(ov.t, ov.b) * MM * k);
   const sc = $('#scroller'), prev = fitCanvas.pad || [0, 0], padCh = sc && (px !== prev[0] || py !== prev[1]) && prev.k === k, r0 = padCh ? $('#canvasWrap').getBoundingClientRect() : null;
-  $('#canvasWrap').style.margin = `${top + py}px ${40 + px}px ${bot + py}px`; // 도구 막대가 두 줄로 접혀도 페이지를 가리지 않게
+  $('#canvasWrap').style.margin = `${top + py}px ${40 + px}px ${bot + py}px ${40 + px + Math.max(0, lx)}px`; // 도구 막대가 두 줄로 접혀도 페이지를 가리지 않게
   /* 여백이 바뀌면(쪽 밖 요소) 바뀌기 전 페이지 자리를 재 두었다가 스크롤로 되돌림 — 여백 차이만큼만 옮기면 '가운데 정렬 → 넘침'으로 바뀔 때 정렬 기준이 달라져 화면이 튀었음 */
   if (padCh) queueMicrotask(() => { const r1 = $('#canvasWrap').getBoundingClientRect(); sc.scrollLeft += r1.x - r0.x; sc.scrollTop += r1.y - r0.y; });
   fitCanvas.pad = [px, py]; fitCanvas.pad.k = k;
@@ -7084,6 +7085,15 @@ async function runRacha() {
 
 // 점검용 (주소에 ?qa 가 있을 때만): 자동 시험에서 문서 상태를 읽음
 /* ---- AI 도우미 채팅창(aichat.js)에 넘기는 문서·편집 함수 (11/19) ---- */
+/* 떠 있는 도구 막대: 가로·세로 바꾸기, 접기·펴기 — 이 PC가 기억 (11/20) */
+(function tbMode() {
+  const tb = $('.stage .toolbar'), bo = $('#tbOrient'), bf = $('#tbFold'); if (!tb || !bo || !bf) return;
+  let st = { v: false, fold: false }; try { Object.assign(st, JSON.parse(localStorage.getItem('naracal-tbmode') || '{}')); } catch (e) {}
+  const apply = () => { tbMaxH = 0; tb.classList.toggle('tb-v', !!st.v); tb.classList.toggle('tb-fold', !!st.fold); bo.title = st.v ? '도구 막대를 가로로 (위쪽)' : '도구 막대를 세로로 (왼쪽)'; bf.title = st.fold ? '도구 막대 펴기' : '도구 막대 접기'; try { localStorage.setItem('naracal-tbmode', JSON.stringify(st)); } catch (e) {} if (typeof fitCanvas === 'function' && doc) requestAnimationFrame(() => { fitCanvas(); }); };
+  bo.onclick = () => { st.v = !st.v; st.fold = false; apply(); };
+  bf.onclick = () => { st.fold = !st.fold; apply(); };
+  apply();
+})();
 if (NC.aichat) NC.aichat.init({
   get doc() { return doc; }, get cur() { return cur; }, get sel() { return sel.slice(); }, get hptr() { return hptr; },
   pgOff, commit, undo, renderAll, goto, select, uid, TEXT_DEF, docK, isPx: isPxDoc, sizeLabel: () => { updDocSize(); const t = ($('#docSize') || {}).textContent; return t && /px/.test(t) ? `${t} (${docSizeLabel(' × ')})` : t || docSizeLabel(' × '); }, toast, openAI, tplItems, openTplPreview,
