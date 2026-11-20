@@ -50,7 +50,9 @@ function viewSrc(el, mode) {
   const onScreen = Math.max(el.w, el.h) * (el.zoom || 1) * MM * kScale() * (window.devicePixelRatio || 1);
   return onScreen < PREV_MAX * 0.8 ? p.url : full;
 }
-function src(ref) { if (!ref) return ''; if (ref.startsWith('asset:')) return blobURL(ref, ASSETS[ref.slice(6)]); if (ref.startsWith('a:')) return blobURL(ref, doc.assets[ref.slice(2)]); if (ref.startsWith('lib:')) return NC.lib.url(ref.slice(4)); return ref; }
+/* 공방 그림(assets/virtue …)은 같은 이름으로 고쳐 올리므로 배포 버전을 붙여 브라우저·GitHub 캐시의 예전 그림이 안 나오게 (팀장님 11/20 — 단말기 템플릿에 예전 도복이 보였음) */
+const vref = r => /^assets\/[^?#]+\.(webp|png|jpe?g)$/i.test(r || '') ? r + '?v=' + (window.NARACAL_VER || '') : r;
+function src(ref) { if (!ref) return ''; if (/^assets\//.test(ref)) return vref(ref); if (ref.startsWith('asset:')) return blobURL(ref, ASSETS[ref.slice(6)]); if (ref.startsWith('a:')) return blobURL(ref, doc.assets[ref.slice(2)]); if (ref.startsWith('lib:')) return NC.lib.url(ref.slice(4)); return ref; }
 function addAsset(dataURL) { for (const k in doc.assets) if (doc.assets[k] === dataURL) return 'a:' + k; const id = uid(); doc.assets[id] = dataURL; return 'a:' + id; }
 function gcAssets() { const used = new Set(); const walk = v => { if (typeof v === 'string' && v.startsWith('a:')) used.add(v.slice(2)); else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(doc.pages); walk(doc.calendar); walk(doc.audio); walk(doc.cert); hist.forEach(h => { for (const m of h.matchAll(/"a:([^"]+)"/g)) used.add(m[1]); }); for (const k in doc.assets) if (!used.has(k)) delete doc.assets[k]; } // 실행 취소 기록에 남은 그림도 지키기 (저장 뒤 Ctrl+Z로 지운 사진 되살리기)
 
@@ -201,6 +203,10 @@ async function loadDoc(j, from, quiet) {
   if (!doc.calendar.theme || !doc.calendar.theme.id) doc.calendar.theme = Object.assign({ id: 'classic' }, doc.calendar.theme || {});
   const m8 = doc.calendar.months && doc.calendar.months[7]; if (m8 && !m8.image && /우정/.test(m8.virtue || '')) { m8.image = 'asset:illu-08-friendship'; doc.pages.forEach(p => p.els.forEach(e => { if (e.type === 'image' && e.role === 'illust' && e.month === 8 && !e.src) e.src = m8.image; })); }
   if (doc.calendar && doc.calendar.months) virtueArtFix(doc.calendar, doc.pages, doc.calendar.year || 2027, true);
+  { const y = Number(doc.calendar && doc.calendar.year); if (y && doc.pages.some(p => p.els.some(e => e.role === 'virtue')) && virtueWrongTrack(doc.calendar, y)) { const VP = virtuePlanFor(y), tr = VP.tr;
+      if (window.confirm(`「${doc.name || '이 문서'}」는 ${y}년 캘린더인데 12달 덕목이 ${tr === '극기' ? '홍익(짝수 해)' : '극기(홀수 해)'} 내용입니다.\n${y}년은 ${tr === '극기' ? '1년차 극기(1월 자기존중 … 12월 사랑)' : '2년차 홍익'} 차례입니다. 12달의 덕목·영문·명언·실천·사자성어를 ${tr}로 다시 채우고, 다른 해 기본 삽화도 ${tr} 그림으로 바꿀까요?\n(일정·디자인·직접 넣은 그림은 그대로)`)) {
+        let n = 0; VP.P.forEach((x, k) => { if (doc.calendar.months[k]) n += applyMonthContent(k, x); }); const na = virtueArtFix(doc.calendar, doc.pages, y);
+        setTimeout(() => toast(`${y}년 ${tr} 덕목으로 다시 채웠습니다 (글 상자 ${n}곳 · 삽화 ${na}곳) — 저장(Ctrl+S)하세요`), 600); if (store.state) store.state.dirty = true; } } }
   if (doc.cert) certMigrate(doc.cert);  /* 상장 굵기·제목 자리 고침 (한 번만) */  /* 빈 삽화 자리 = 그 해 덕목 그림 */
   cur = 0; sel = []; selDay = null; hist = []; histMeta = []; hptr = -1;
   await registerDocFonts(); ensureAllHolidays();
@@ -2825,8 +2831,8 @@ function renderSide0() {
     <p class="hint">그림을 누르면 페이지에 추가됩니다. 이미지 요소를 선택한 상태면 그 그림을 바꿉니다.</p>
     ${mine.length ? `<h3>내 이미지 (${mine.length})</h3><div class="picker">${mine.map(k => `<button data-img="a:${k}" draggable="true"><img src="${doc.assets[k]}" alt="" draggable="false"></button>`).join('')}</div>` : ''}
     ${libPhotoHTML()}
-    ${(() => { const A = window.NARACAL_VIRTUE_ART; if (!A) return ''; const grp = (tr, t, more) => { const ks = A[tr].concat(more.map(x => x[0])), vn = ((window.NARACAL_VPLAN || {})[tr] || []).map(x => x.virtue); return `<h3>${t}</h3><div class="picker">${ks.map((k, i) => `<button data-img="${k}" title="${i < 12 ? `${i + 1}월 ${esc(vn[i] || '')}` : esc(more[i - 12][1])} — 누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${k}" alt="" loading="lazy" draggable="false"></button>`).join('')}</div>`; };
-      return grp('극기', '극기(1년차·홀수 해) 삽화', A.extra.filter(x => !/hi-/.test(x[0]))) + grp('홍익', '홍익(2년차·짝수 해) 삽화', A.extra.filter(x => /hi-/.test(x[0]))) + ((window.NARACAL_RACHA_ART || []).length ? `<h3>휴관·행사 라차 그림</h3><div class="picker">${window.NARACAL_RACHA_ART.map(r => `<button data-img="${r.src}" title="${esc(r.title)} — 누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${r.src}" alt="" loading="lazy" draggable="false"></button>`).join('')}</div>` : ''); })()}
+    ${(() => { const A = window.NARACAL_VIRTUE_ART; if (!A) return ''; const grp = (tr, t, more) => { const ks = A[tr].concat(more.map(x => x[0])), vn = ((window.NARACAL_VPLAN || {})[tr] || []).map(x => x.virtue); return `<h3>${t}</h3><div class="picker">${ks.map((k, i) => `<button data-img="${k}" title="${i < 12 ? `${i + 1}월 ${esc(vn[i] || '')}` : esc(more[i - 12][1])} — 누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${src(k)}" alt="""" loading="lazy" draggable="false"></button>`).join('')}</div>`; };
+      return grp('극기', '극기(1년차·홀수 해) 삽화', A.extra.filter(x => !/hi-/.test(x[0]))) + grp('홍익', '홍익(2년차·짝수 해) 삽화', A.extra.filter(x => /hi-/.test(x[0]))) + ((window.NARACAL_RACHA_ART || []).length ? `<h3>휴관·행사 라차 그림</h3><div class="picker">${window.NARACAL_RACHA_ART.map(r => `<button data-img="${r.src}" title="${esc(r.title)} — 누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${src(r.src)}" alt="" loading="lazy" draggable="false"></button>`).join('')}</div>` : ''); })()}
     ${groups.map(([t, f]) => { const ks = Object.keys(ASSETS).filter(f); return `<h3>${t}</h3><div class="picker">${ks.map(k => `<button data-img="asset:${k}" title="누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${ASSETS[k]}" alt="" draggable="false"></button>`).join('')}</div>`; }).join('')}`;
     body.onclick = async e => {
       const pc = e.target.closest('[data-pcat]'); if (pc) { photoCat = pc.dataset.pcat; renderSide(); return; }
@@ -3179,7 +3185,14 @@ function openTplPreview(t) {
 }
 
 /* ---- 캘린더 마법사 ---- */
-let wz = { year: 2027, kind: 'full', mode: 'replace', view: 'cal', month: 1, weekStart: 0, rows: 'merge', colorA: '', colorB: '', themeId: 'classic' };
+let wz = { year: 2027, kind: 'full', mode: 'replace', view: 'cal', month: 1, weekStart: 0, rows: 'merge', colorA: '', colorB: '', themeId: 'classic', fmt: 'print', wcover: true };
+/* 만들 형식: 인쇄(탁상 224×154mm) · PC 배경화면 1920×1080 · 휴대폰 배경화면 1080×2340 (2027년은 인쇄 대신 이미지로 배포 — 팀장님 11/20)
+   배경화면은 calendar.js가 기준 크기(PC 224×126 · 휴대폰 126×273, 인쇄 글자 크기)로 짜고 여기서 화면 크기로 통째로 키움 */
+const WZ_FMT = { print: { name: '탁상 달력 (인쇄)', sub: '224×154mm · 표지·인성·달력 26쪽', base: [224, 154] }, pc: { name: 'PC 배경화면', sub: '1920×1080px · 한 달 한 장', base: [224, 126], fid: 'wall-pc' }, mob: { name: '휴대폰 배경화면', sub: '1080×2340px · 잠금 화면·학부모 앱', base: [126, 273], fid: 'wall-mob' } };
+const wzWall = () => wz.fmt === 'pc' || wz.fmt === 'mob';
+function wallTarget(f) { const F = FORMATS.find(x => x[0] === WZ_FMT[f].fid); return [PX(F[3]), PX(F[4])]; }
+// 배경화면 쪽(기준 크기)을 W×H로 키움 — 글자·달력 글자도 같은 배율
+function wallScale(pages, f, W, H) { const [bw, bh] = WZ_FMT[f].base; return resizedDoc({ w: bw, h: bh, pages }, W, H, 'contain').pages.map((p, i) => Object.assign(p, { wall: pages[i].wall, kind: pages[i].kind })); }
 function openWizard(year, themeId) {
   wz.year = year || doc.calendar.year || new Date().getFullYear();
   wz.themeId = themeId || (doc.calendar.theme && doc.calendar.theme.id) || 'classic';
@@ -3191,7 +3204,7 @@ function openWizard(year, themeId) {
   renderWizard(); d.showModal(); d.querySelectorAll('.dbody, .wz-left, .wz-right').forEach(x => { x.scrollTop = 0; });
 }
 function wizardTheme() { const th = clone(CAL.THEMES.find(x => x.id === wz.themeId) || CAL.THEMES[0]); th.colorA = wz.colorA; th.colorB = wz.colorB; return th; }
-function wizardDoc() { const t = Object.assign({}, doc, { calendar: clone(doc.calendar), w: 224, h: 154, bleed: 0, cropMarks: false }); t.calendar.year = wz.year; t.calendar.theme = wizardTheme(); virtueTextFix(t.calendar, wz.year); virtueArtFix(t.calendar, null, wz.year); return t; }
+function wizardDoc() { const [bw, bh] = WZ_FMT[wz.fmt].base; const t = Object.assign({}, doc, { calendar: clone(doc.calendar), w: bw, h: bh, bleed: 0, cropMarks: false }); t.calendar.year = wz.year; t.calendar.theme = wizardTheme(); virtueTextFix(t.calendar, wz.year); virtueArtFix(t.calendar, null, wz.year); return t; }
 // 크기를 바꾼 달력 쪽: 달력 칸이 위 요소들 바로 아래부터 아래 요소(로고 등) 바로 위까지 차지 (세로로 긴 A3에서 생기던 큰 빈칸)
 function calFillGap(pg) {
   const c = pg.els.find(e => e.type === 'cal'); if (!c) return;
@@ -3199,29 +3212,31 @@ function calFillGap(pg) {
   const top = above.length ? Math.max(...above.map(e => e.y + e.h)) + Math.min(10, doc.h * 0.02) : c.y, bot = below.length ? Math.min(...below.map(e => e.y)) - Math.min(8, doc.h * 0.015) : c.y + c.h;
   if (bot - top > c.h) { c.y = Math.round(top * 10) / 10; c.h = Math.round((bot - top) * 10) / 10; }
 }
-function wizardPages(kind) { const t = wizardDoc(); const saved = doc; doc = t; try { const pages = CAL.buildPages(t, uid, { year: wz.year, kind }); pages.forEach(p => p.els.forEach(el => { if (el.type === 'cal') el.s = Object.assign({}, el.s, { weekStart: wz.weekStart, rows: wz.rows }); if (el.type === 'mini') el.s = Object.assign({}, el.s, { weekStart: wz.weekStart }); })); return pages; } finally { doc = saved; } }
+function wizardPages(kind) { const t = wizardDoc(); const saved = doc; doc = t; try { const pages = wzWall() ? CAL.buildPages(t, uid, { year: wz.year, kind: 'wall-' + wz.fmt, cover: wz.wcover }) : CAL.buildPages(t, uid, { year: wz.year, kind }); pages.forEach(p => p.els.forEach(el => { if (el.type === 'cal') el.s = Object.assign({}, el.s, { weekStart: wz.weekStart, rows: wz.rows }); if (el.type === 'mini') el.s = Object.assign({}, el.s, { weekStart: wz.weekStart }); })); return pages; } finally { doc = saved; } }
 function wizardSheet(pg) { const t = wizardDoc(); const saved = doc; doc = t; try { return sheetHTML(pg, 'thumb'); } finally { doc = saved; } }
 function themeThumbs() { const saved = doc; const out = []; try { CAL.THEMES.forEach(th => { const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: wz.year }), w: 224, h: 154, bleed: 0, cropMarks: false }); doc = t; const pv = CAL.buildPages(t, uid, { year: wz.year, kind: 'virtue', month: 1 })[0]; out.push({ th, html: sheetHTML(pv, 'thumb') }); }); } finally { doc = saved; } return out; }
 function renderWizard() {
   const body = $('#wzBody'); const hol = (doc.holidays[wz.year] || []).length;
-  const pages = wizardPages(wz.view === 'cal' ? 'months' : 'virtues'); const big = pages[wz.month - 1]; const pageCount = wz.kind === 'full' ? 26 : 12;
+  const wall = wzWall(), [BW, BH] = WZ_FMT[wz.fmt].base; const pages = wizardPages(wz.view === 'cal' ? 'months' : 'virtues'); if (wz.month > pages.length) wz.month = 1; const big = pages[wz.month - 1]; const pageCount = wall ? pages.length : wz.kind === 'full' ? 26 : 12;
+  const pgName = (pg, i) => wall ? (pg.kind === 'wallcover' ? '표지' : `${i + (wz.wcover ? 0 : 1)}월`) : `${i + 1}월`;
   body.innerHTML = `<div class="wz-side">
     <h3>연도</h3><div class="wz-yearrow"><button class="btn icon" id="wzYm" title="이전 해"><svg class="ic"><use href="#i-prev"/></svg></button><input type="number" id="wzYear" value="${wz.year}" min="2000" max="2100"><button class="btn icon" id="wzYp" title="다음 해"><svg class="ic"><use href="#i-next"/></svg></button></div>
     <div class="wz-hol ${hol ? 'ok' : ''}">${hol ? `✓ ${wz.year}년 공휴일 ${hol}개 자동 적용 (대체공휴일 포함)` : `${wz.year}년은 자동 계산 범위(${CAL.AUTO_RANGE[0]}~${CAL.AUTO_RANGE[1]})를 벗어납니다`}<button class="btn sm" id="wzHol">${hol ? '편집' : '가져오기'}</button></div>
+    <h3>만들 형식</h3><div class="wz-opts">${Object.entries(WZ_FMT).map(([k, f]) => `<label class="wz-opt ${wz.fmt === k ? 'on' : ''}"><input type="radio" name="wzFmt" value="${k}" ${wz.fmt === k ? 'checked' : ''}><b>${f.name}</b><small>${f.sub}</small></label>`).join('')}</div>
     <h3>디자인 테마</h3><div class="wz-themes">${themeThumbs().map(({ th, html }) => `<button class="wz-th ${wz.themeId === th.id ? 'on' : ''}" data-th="${th.id}" title="${esc(th.desc)}"><div class="wz-thbox" data-w="224" data-h="154">${html}</div><span>${esc(th.name)}</span></button>`).join('')}</div>
-    <h3>구성</h3><div class="wz-opts">${[['full', '전체 26쪽', '표지 + 인성 12 + 달력 12 + 뒷표지'], ['months', '달력 12쪽', '월간 달력 페이지만'], ['virtues', '인성 12쪽', '덕목·명언 페이지만']].map(([k, t, d2]) => `<label class="wz-opt ${wz.kind === k ? 'on' : ''}"><input type="radio" name="wzKind" value="${k}" ${wz.kind === k ? 'checked' : ''}><b>${t}</b><small>${d2}</small></label>`).join('')}</div>
+    ${wall ? `<h3>구성</h3><div class="wz-opts">${[[true, '표지 + 12달 (13장)', '연도 표지 한 장 + 달마다 한 장'], [false, '12달만 (12장)', '달마다 한 장 (덕목·명언·그림 + 그 달 달력)']].map(([k, t, d2]) => `<label class="wz-opt ${wz.wcover === k ? 'on' : ''}"><input type="radio" name="wzCover" value="${k ? 1 : 0}" ${wz.wcover === k ? 'checked' : ''}><b>${t}</b><small>${d2}</small></label>`).join('')}</div>` : `<h3>구성</h3><div class="wz-opts">${[['full', '전체 26쪽', '표지 + 인성 12 + 달력 12 + 뒷표지'], ['months', '달력 12쪽', '월간 달력 페이지만'], ['virtues', '인성 12쪽', '덕목·명언 페이지만']].map(([k, t, d2]) => `<label class="wz-opt ${wz.kind === k ? 'on' : ''}"><input type="radio" name="wzKind" value="${k}" ${wz.kind === k ? 'checked' : ''}><b>${t}</b><small>${d2}</small></label>`).join('')}</div>`}
     <h3>달력 모양</h3><div class="grid2"><label class="f"><span>주 시작</span><select id="wzWs"><option value="0" ${wz.weekStart === 0 ? 'selected' : ''}>일요일</option><option value="1" ${wz.weekStart === 1 ? 'selected' : ''}>월요일</option></select></label><label class="f"><span>줄 수</span><select id="wzRows"><option value="merge" ${wz.rows === 'merge' ? 'selected' : ''}>5줄 (24/31 합침)</option><option value="6" ${wz.rows === '6' ? 'selected' : ''}>6줄</option><option value="auto" ${wz.rows === 'auto' ? 'selected' : ''}>자동</option></select></label></div>
     <h3>인성 페이지 색</h3><div class="grid2"><label class="f"><span>홀수 달</span><input type="color" id="wzA" value="${wz.colorA}"></label><label class="f"><span>짝수 달</span><input type="color" id="wzB" value="${wz.colorB}"></label></div>
     <h3>넣는 방식</h3><div class="seg"><button data-wzmode="replace" aria-pressed="${wz.mode === 'replace'}">문서 새로 만들기</button><button data-wzmode="append" aria-pressed="${wz.mode === 'append'}">현재 문서 뒤에 추가</button></div>
-    <p class="hint" style="margin-top:10px">${wz.mode === 'replace' ? '224×154mm 새 문서로 만듭니다. 지금 문서는 그대로 남습니다(저장하지 않았다면 \'직전 문서\'로 보관).' : `현재 문서(${Math.round(doc.w)}×${Math.round(doc.h)}mm) 끝에 ${pageCount}쪽을 덧붙입니다${Math.abs(doc.w - 224) > 0.5 || Math.abs(doc.h - 154) > 0.5 ? ' — 탁상 달력(224×154) 배치를 이 크기에 맞춰 늘려 넣습니다' : ''}.`}</p>
-    <div class="wz-go"><button class="btn primary full" id="wzGo">${wz.year}년 ${pageCount}쪽 만들기</button></div>
+    <p class="hint" style="margin-top:10px">${wz.mode === 'replace' ? wall ? `${FORMATS.find(x => x[0] === WZ_FMT[wz.fmt].fid)[3]}×${FORMATS.find(x => x[0] === WZ_FMT[wz.fmt].fid)[4]}px 새 문서로 만듭니다. 다 만든 뒤 <b>다운로드 → PNG/JPG</b>로 받으면 ${pageCount}장이 ZIP 하나로 묶여 나옵니다(학부모 앱·단톡방에 그대로 올리기). 지금 문서는 그대로 남습니다.` : '224×154mm 새 문서로 만듭니다. 지금 문서는 그대로 남습니다(저장하지 않았다면 \'직전 문서\'로 보관).' : `현재 문서(${Math.round(doc.w)}×${Math.round(doc.h)}mm) 끝에 ${pageCount}쪽을 덧붙입니다${Math.abs(doc.w - 224) > 0.5 || Math.abs(doc.h - 154) > 0.5 ? ' — 탁상 달력(224×154) 배치를 이 크기에 맞춰 늘려 넣습니다' : ''}.`}</p>
+    <div class="wz-go"><button class="btn primary full" id="wzGo">${wz.year}년 ${wall ? `${WZ_FMT[wz.fmt].name} ${pageCount}장` : `${pageCount}쪽`} 만들기</button></div>
     ${doc.pages.some(p => p.kind) ? `<button class="btn full" id="wzRetheme" style="margin-top:6px">현재 캘린더에 디자인만 적용</button>` : ''}
     <p class="hint">문구(덕목·명언·실천·사자성어)는 기본 문구로 먼저 채워지며, 만든 뒤 AI 도구나 직접 입력으로 바꿉니다.</p>
   </div>
   <div class="wz-main">
-    <div class="wz-top"><div class="seg" style="width:220px"><button data-wzview="cal" aria-pressed="${wz.view === 'cal'}">달력 페이지</button><button data-wzview="virtue" aria-pressed="${wz.view === 'virtue'}">인성 페이지</button></div><span class="hint" style="margin:0">${wz.year}년 ${wz.month}월 · 아래 작은 달력을 누르면 크게 봅니다</span></div>
-    <div class="wz-big"><div class="wz-bigbox" id="wzBig" data-w="224" data-h="154">${wizardSheet(big)}</div></div>
-    <div class="wz-grid" id="wzGrid">${pages.map((pg, i) => `<button class="wz-m ${i + 1 === wz.month ? 'on' : ''}" data-m="${i + 1}"><div class="wz-mbox" data-w="224" data-h="154">${wizardSheet(pg)}</div><span>${i + 1}월</span></button>`).join('')}</div>
+    <div class="wz-top">${wall ? `<b>${WZ_FMT[wz.fmt].name}</b>` : `<div class="seg" style="width:220px"><button data-wzview="cal" aria-pressed="${wz.view === 'cal'}">달력 페이지</button><button data-wzview="virtue" aria-pressed="${wz.view === 'virtue'}">인성 페이지</button></div>`}<span class="hint" style="margin:0">${wz.year}년 ${pgName(big, wz.month - 1)} · 아래 작은 그림을 누르면 크게 봅니다</span></div>
+    <div class="wz-big"><div class="wz-bigbox" id="wzBig" data-w="${BW}" data-h="${BH}">${wizardSheet(big)}</div></div>
+    <div class="wz-grid${wz.fmt === 'mob' ? ' tall' : ''}" id="wzGrid">${pages.map((pg, i) => `<button class="wz-m ${i + 1 === wz.month ? 'on' : ''}" data-m="${i + 1}"><div class="wz-mbox" data-w="${BW}" data-h="${BH}">${wizardSheet(pg)}</div><span>${pgName(pg, i)}</span></button>`).join('')}</div>
   </div>`;
   requestAnimationFrame(() => { fitBoxes(body, '.wz-thbox', 60); fitBoxes(body, '.wz-mbox', 80); fitBoxes(body, '.wz-bigbox', 460); });
   const setYear = y => { wz.year = clamp(Math.round(y) || wz.year, 2000, 2100); ensureHolidays(wz.year, true); renderWizard(); };
@@ -3229,6 +3244,8 @@ function renderWizard() {
   $('#wzYm').onclick = () => setYear(wz.year - 1); $('#wzYp').onclick = () => setYear(wz.year + 1); $('#wzYear').onchange = e => setYear(Number(e.target.value));
   $('#wzHol').onclick = () => { $('#dlgWizard').close(); openHoliday(wz.year); const dh = $('#dlgHoliday'), back = () => { dh.removeEventListener('close', back); renderWizard(); $('#dlgWizard').showModal(); }; dh.addEventListener('close', back); };
   body.querySelectorAll('[name=wzKind]').forEach(r => r.onchange = () => { wz.kind = r.value; renderWizard(); });
+  body.querySelectorAll('[name=wzFmt]').forEach(r => r.onchange = () => { wz.fmt = r.value; wz.month = 1; renderWizard(); });
+  body.querySelectorAll('[name=wzCover]').forEach(r => r.onchange = () => { wz.wcover = r.value === '1'; wz.month = 1; renderWizard(); });
   $('#wzWs').onchange = e => { wz.weekStart = Number(e.target.value); renderWizard(); }; $('#wzRows').onchange = e => { wz.rows = e.target.value; renderWizard(); };
   $('#wzA').oninput = e => { wz.colorA = e.target.value; }; $('#wzA').onchange = () => renderWizard(); $('#wzB').oninput = e => { wz.colorB = e.target.value; }; $('#wzB').onchange = () => renderWizard();
   body.querySelectorAll('[data-wzmode]').forEach(b => b.onclick = () => { wz.mode = b.dataset.wzmode; renderWizard(); });
@@ -3239,17 +3256,31 @@ function renderWizard() {
     if (wz.mode === 'replace') { /* 새 문서로: 지금 문서는 파일에 저장하거나 '직전 문서'로 보관 (예전엔 지금 문서를 비워 덮어써 상장·파일 연결이 그대로 남았음) */
       keepCurrentDoc.kept = ''; if (doc.pages.some(p => p.els.length) && !(await keepCurrentDoc())) return; const kept = keepCurrentDoc.kept, wasFile = store.state.fileName;
       const hol0 = clone(doc.holidays || {}), cal0 = clone(doc.calendar || null), showHol0 = doc.showHolidays;  /* 앞 문서에서 손본 공휴일·달력 설정(인성 문구·반복 일정 규칙)은 새 문서로 가져감 */
-      await store.disconnect(); const nm = `${wz.year} 인성 캘린더`; doc = newDoc(['custom', nm, 224, 154]); doc.name = nm; doc.bleed = 3; doc.pages = []; doc.holidays = Object.assign({}, doc.holidays, hol0); if (cal0) doc.calendar = cal0; if (showHol0 != null) doc.showHolidays = showHol0; doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = nm; clearTimeout(fileTimer);
-      doc.calendar.year = wz.year; doc.calendar.theme = theme; virtueTextFix(doc.calendar, wz.year); virtueArtFix(doc.calendar, null, wz.year); const pages = wizardPages(wz.kind); doc.pages.push(...pages); ensureAllHolidays(); commit(); zoom = 0; renderAll(); updateSaveBadge(); fitCanvas(); goto(0);
-      $('#dlgWizard').close(); toast(`새 문서 "${nm}" ${pages.length}쪽을 만들었습니다 — 저장(Ctrl+S)으로 내 드라이브에 저장하세요${kept ? ` · 저장하지 않은 "${kept}"는 직전 문서로 보관` : wasFile ? ` · 앞 문서는 "${wasFile}"에 그대로` : ''}`);
+      await store.disconnect(); const wall = wzWall(), nm = wall ? `${wz.year} ${WZ_FMT[wz.fmt].name} 캘린더` : `${wz.year} 인성 캘린더`, WH = wall ? wallTarget(wz.fmt) : [224, 154]; doc = newDoc(['custom', nm, WH[0], WH[1]]); if (wall) doc.fmt = WZ_FMT[wz.fmt].fid; doc.name = nm; doc.bleed = wall ? 0 : 3; doc.pages = []; doc.holidays = Object.assign({}, doc.holidays, hol0); if (cal0) doc.calendar = cal0; if (showHol0 != null) doc.showHolidays = showHol0; doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = nm; clearTimeout(fileTimer);
+      doc.calendar.year = wz.year; doc.calendar.theme = theme; virtueTextFix(doc.calendar, wz.year); virtueArtFix(doc.calendar, null, wz.year); let pages = wizardPages(wz.kind); if (wall) pages = wallScale(pages, wz.fmt, doc.w, doc.h); doc.pages.push(...pages); ensureAllHolidays(); commit(); zoom = 0; renderAll(); updateSaveBadge(); fitCanvas(); goto(0);
+      $('#dlgWizard').close(); toast(`새 문서 "${nm}" ${pages.length}${wall ? '장' : '쪽'}을 만들었습니다 — ${wall ? '다운로드 → PNG/JPG로 한꺼번에(ZIP) 받으세요 · ' : ''}저장(Ctrl+S)으로 내 드라이브에 저장하세요${kept ? ` · 저장하지 않은 "${kept}"는 직전 문서로 보관` : wasFile ? ` · 앞 문서는 "${wasFile}"에 그대로` : ''}`);
       if (!doc.holidays[wz.year]) setTimeout(() => openHoliday(wz.year), 400); return; }
     doc.calendar.year = wz.year; doc.calendar.theme = theme; virtueTextFix(doc.calendar, wz.year); virtueArtFix(doc.calendar, null, wz.year);
-    let pages = wizardPages(wz.kind); const odd = Math.abs(doc.w - 224) > 0.5 || Math.abs(doc.h - 154) > 0.5; if (odd) { pages = resizedDoc({ w: 224, h: 154, pages }, doc.w, doc.h, 'fit', [0.5, 0.5]).pages; pages.forEach(calFillGap); }  /* 다른 크기 문서에 덧붙일 때 그 크기로 + 달력이 머리 아래 빈칸까지 채움 */
+    let pages = wizardPages(wz.kind); const [bw0, bh0] = WZ_FMT[wz.fmt].base; const odd = Math.abs(doc.w - bw0) > 0.5 || Math.abs(doc.h - bh0) > 0.5; if (odd && wzWall()) pages = wallScale(pages, wz.fmt, doc.w, doc.h); else if (odd) { pages = resizedDoc({ w: 224, h: 154, pages }, doc.w, doc.h, 'fit', [0.5, 0.5]).pages; pages.forEach(calFillGap); }  /* 다른 크기 문서에 덧붙일 때 그 크기로 + 달력이 머리 아래 빈칸까지 채움 */
     doc.pages.push(...pages); ensureAllHolidays(); commit(); goto(doc.pages.length - pages.length);
     $('#dlgWizard').close(); { const nm0 = oldName, w0 = oldW, h0 = oldH; toastUndo(`${wz.year}년 ${pages.length}쪽을 만들었습니다${odd ? ` — 이 문서 크기(${Math.round(doc.w)}×${Math.round(doc.h)}mm)에 맞췄습니다` : ''}`, () => { doc.name = nm0; doc.w = w0; doc.h = h0; $('#pname').value = nm0; zoom = 0; renderAll(); fitCanvas(); }); }
     if (!doc.holidays[wz.year]) setTimeout(() => openHoliday(wz.year), 400);
   };
-  const rt = $('#wzRetheme'); if (rt) rt.onclick = () => { doc.calendar.year = wz.year; doc.calendar.theme = wizardTheme(); const nrep = CAL.retheme(doc, uid, wz.year); ensureAllHolidays(); commit(); renderAll(); $('#dlgWizard').close(); toast(`디자인을 ${nrep}쪽에 적용했습니다 (문구·일정·그림 유지)`); };
+  const rt = $('#wzRetheme'); if (rt) rt.onclick = () => { doc.calendar.year = wz.year; doc.calendar.theme = wizardTheme(); const nrep = CAL.retheme(doc, uid, wz.year) + wallRetheme(); ensureAllHolidays(); commit(); renderAll(); $('#dlgWizard').close(); toast(`디자인을 ${nrep}쪽에 적용했습니다 (문구·일정·그림 유지)`); };
+}
+
+// 배경화면 쪽(kind wall·wallcover)에 새 테마 적용: 같은 달·같은 형식으로 다시 짜고 달력 칸 편집·직접 넣은 요소는 옮김 (CAL.retheme이 글은 먼저 모아 둠)
+function wallRetheme() {
+  let n = 0; const y = doc.calendar.year;
+  doc.pages = doc.pages.map(p => {
+    if (p.kind !== 'wall' && p.kind !== 'wallcover') return p;
+    const f = p.wall || (doc.w > doc.h ? 'pc' : 'mob'), c0 = p.els.find(e => e.type === 'cal');
+    const fresh = p.kind === 'wallcover' ? CAL.buildPages(doc, uid, { year: y, kind: 'wall-' + f, cover: true })[0] : CAL.buildPages(doc, uid, { year: y, kind: 'wallmonth', fmt: f, month: c0 ? c0.month : 1 })[0];
+    const np = wallScale([Object.assign(fresh, { wall: f })], f, doc.w, doc.h)[0];
+    const nc = np.els.find(e => e.type === 'cal'); if (c0 && nc) ['cells', 'merges', 'colW', 'rowH'].forEach(k => { if (c0[k] != null) nc[k] = clone(c0[k]); });
+    if (p.els.some(e => e.gen)) np.els.push(...p.els.filter(e => !e.gen)); n++; return np;
+  });
+  return n;
 }
 
 /* ======================= 속성 패널 ======================= */
@@ -3702,7 +3733,7 @@ const FORMATS = [
   ['sticker', '원형 스티커', 'print', 50, 50, 'mm', '스티커 라벨 원형'], ['nametag', '명찰', 'print', 90, 60, 'mm', '명찰 이름표'],
   ['banner', '가로 현수막 5×0.9m', 'sign', 5000, 900, 'mm', '현수막 가로 대형'], ['banner3', '가로 현수막 3×0.7m', 'sign', 3000, 700, 'mm', '현수막 가로'], ['banner-v', '세로 현수막 0.8×2m', 'sign', 800, 2000, 'mm', '현수막 세로 심사'],
   ['xbanner', 'X배너 60×180cm', 'sign', 600, 1800, 'mm', 'X배너 입간판 배너'], ['sign-a1', '입간판 A1', 'sign', 594, 841, 'mm', '입간판 포스터'],
-  ['desk-cal', '탁상 캘린더', 'cal', 224, 154, 'mm', '캘린더 달력 탁상'], ['wall-cal', '벽걸이 캘린더 A3', 'cal', 297, 420, 'mm', '캘린더 달력 벽걸이'], ['a4-cal', 'A4 달력 한 장', 'cal', 297, 210, 'mm', '달력 월간 가로'],
+  ['desk-cal', '탁상 캘린더', 'cal', 224, 154, 'mm', '캘린더 달력 탁상'], ['wall-pc', 'PC 배경화면 캘린더', 'cal', 1920, 1080, 'px', '배경화면 바탕화면 PC 컴퓨터 모니터 캘린더 달력 이미지'], ['wall-mob', '휴대폰 배경화면 캘린더', 'cal', 1080, 2340, 'px', '배경화면 휴대폰 핸드폰 잠금화면 모바일 학부모 앱 캘린더 달력 이미지'], ['wall-cal', '벽걸이 캘린더 A3', 'cal', 297, 420, 'mm', '캘린더 달력 벽걸이'], ['a4-cal', 'A4 달력 한 장', 'cal', 297, 210, 'mm', '달력 월간 가로'],
 ];
 const ND_GROUPS = [['rec', '추천', '<path d="m12 3 2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>'], ['news', '도장 소식지', '<path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 12.5h7M7 16h4"/>'], ['pres', '프레젠테이션', '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="m10 9 5 2.5-5 2.5z"/>'],
   ['sns', '소셜 미디어', '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="m8.2 10.8 7.6-3.6M8.2 13.2l7.6 3.6"/>'], ['video', '유튜브 · 영상', '<rect x="3" y="6" width="18" height="12" rx="3"/><path d="m10 9.5 5 2.5-5 2.5z"/>'],
@@ -4182,10 +4213,20 @@ function virtueArtFix(cal, pages, year, onlyEmpty) {
   return n;
 }
 /* 마법사에서 해를 바꿀 때: 12달 덕목이 '다른 덕목 해의 기본 문구' 그대로면 이 해 문구로 (직접 고친 문구가 하나라도 있으면 그대로) */
+/* 문서의 12달 덕목이 그 해 차례가 아닌 쪽(홀수 해 = 극기인데 홍익 등)인가 — 덕목 이름으로 셈. 예전엔 12달 글자가 계획표와 모두 같아야만 바꿔서,
+   2026 홍익 기본 초안(NARACAL_DEFAULTS)에서 시작한 「2027 인성 캘린더」가 홍익 문구로 남았음 (팀장님 11/20) */
+function virtueWrongTrack(cal, year) {
+  const ms = cal && cal.months; if (!Array.isArray(ms) || ms.length < 12) return false;
+  const P = virtuePlanFor(year).P, O = virtuePlanFor(Number(year) + 1).P, D = ((window.NARACAL_DEFAULTS || {}).calendar || window.NARACAL_DEFAULTS || {}).months || [];
+  if (P.length < 12 || O.length < 12) return false;
+  const nm = v => String(v || '').replace(/\s/g, ''), cnt = L => ms.filter((mo, k) => L[k] && nm(mo.virtue) === nm(L[k].virtue)).length;
+  const own = cnt(P), other = Math.max(cnt(O), D.length >= 12 ? cnt(D) : 0);
+  return own <= 3 && other >= 8;
+}
 function virtueTextFix(cal, year) {
   const ms = cal && cal.months; if (!Array.isArray(ms) || ms.length < 12) return 0;
   const P = virtuePlanFor(year).P, O = virtuePlanFor(Number(year) + 1).P; if (P.length < 12 || O.length < 12) return 0;
-  if (ms.every((mo, k) => mo.virtue === P[k].virtue) || !ms.every((mo, k) => mo.virtue === O[k].virtue)) return 0;
+  if (!virtueWrongTrack(cal, year)) return 0;
   ms.forEach((mo, k) => Object.assign(mo, { virtue: P[k].virtue, en: P[k].en, quote: P[k].quote, practice: P[k].practice.slice(0, 2), idiom: P[k].idiom, hanja: P[k].hanja, meaning: P[k].meaning }));
   return 12;
 }
@@ -7202,7 +7243,7 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
       }; }
   } catch (e) { console.warn(e); }
   if (!loaded) { try { const saved0 = await store.idbGet('doc'), saved = await tabPick(saved0); if (saved) { await loadDoc(saved); loaded = true; setStatus(saved !== saved0 ? '이 탭에서 쓰던 문서를 불러왔습니다' : '브라우저 저장본을 불러왔습니다'); } } catch (e) {} }
-  if (!loaded) { doc = newDoc(); doc.calendar.year = 2027; doc.name = '2027 인성 캘린더'; doc.pages = CAL.buildPages(doc, uid, { year: 2027, kind: 'full' }); ensureAllHolidays(); $('#pname').value = doc.name; hist = [snapshot()]; histMeta = [{ cur: 0, sel: [] }]; hptr = 0; renderAll(); setStatus('2027년 캘린더 초안을 만들었습니다. 공휴일은 자동으로 들어갔습니다.'); freshDraft = true; }
+  if (!loaded) { doc = newDoc(); doc.calendar.year = 2027; doc.name = '2027 인성 캘린더'; virtueTextFix(doc.calendar, 2027); virtueArtFix(doc.calendar, null, 2027); doc.pages = CAL.buildPages(doc, uid, { year: 2027, kind: 'full' }); ensureAllHolidays(); $('#pname').value = doc.name; hist = [snapshot()]; histMeta = [{ cur: 0, sel: [] }]; hptr = 0; renderAll(); setStatus('2027년 캘린더 초안을 만들었습니다. 공휴일은 자동으로 들어갔습니다.'); freshDraft = true; }
   // 동기화 폴더(구글 드라이브): 허락돼 있으면 바로 맞추고, 아니면 한 번 눌러 허락받기
   try {
     const pf = await store.reconnectFolder();
