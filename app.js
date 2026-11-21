@@ -62,7 +62,7 @@ function gcAssets() { const used = new Set(); const walk = v => { if (typeof v =
 const HIST_LIVE = ['assets', 'fonts', 'name', 'docId', 'updatedAt'];
 function snapshot() { const keep = {}; HIST_LIVE.forEach(k => { keep[k] = doc[k]; delete doc[k]; }); const s = JSON.stringify(doc); Object.assign(doc, keep); return s; }
 let histMeta = [];  // 기록마다 그때 보던 쪽·선택
-function commit() { tlTimingSnap = null; if (BKm && doc && doc.book && doc.book.bookMode) setTimeout(() => BKm.afterCommit(), 0); /* 도서 편집: 쪽에서 사진 크기를 바꾸거나 지우면 다시 흘림 */ if (!certTplBusy && doc && doc.cert && doc.pages.some(p => p.certTpl)) { certTplBusy = true; try { certTplCommit(); } catch (e) { console.warn('상장 양식 반영 실패', e); } finally { certTplBusy = false; } } const s_ = snapshot(); if (hist[hptr] === s_) return; hist = hist.slice(0, hptr + 1); histMeta = histMeta.slice(0, hptr + 1); hist.push(s_); histMeta.push({ cur, sel: sel.slice(), rn: NC.live.rn }); if (hist.length > 120) { hist.shift(); histMeta.shift(); } hptr = hist.length - 1; markDirty(); if (tl.open && !tl.playing) pgmSoon(); }
+function commit() { tlTimingSnap = null; if (BKm && doc && doc.book && doc.book.bookMode) { try { BKm.afterCommit(); } catch (e) { console.warn(e); } } /* 도서 편집: 쪽에서 사진 크기를 바꾸거나 지우면 다시 흘림 */ if (!certTplBusy && doc && doc.cert && doc.pages.some(p => p.certTpl)) { certTplBusy = true; try { certTplCommit(); } catch (e) { console.warn('상장 양식 반영 실패', e); } finally { certTplBusy = false; } } const s_ = snapshot(); if (hist[hptr] === s_) return; hist = hist.slice(0, hptr + 1); histMeta = histMeta.slice(0, hptr + 1); hist.push(s_); histMeta.push({ cur, sel: sel.slice(), rn: NC.live.rn }); if (hist.length > 120) { hist.shift(); histMeta.shift(); } hptr = hist.length - 1; markDirty(); if (tl.open && !tl.playing) pgmSoon(); }
 // 바로 앞 기록을 고쳐 씀 (그림 비율 맞춤처럼 한 동작의 뒷처리)
 function amendCommit() { if (hptr < 0) return commit(); hist[hptr] = snapshot(); histMeta[hptr].rn = NC.live.rn; markDirty(); }
 let nudgeTimer = null; function commitSoon() { clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { nudgeTimer = null; commit(); }, 450); }
@@ -520,12 +520,18 @@ document.addEventListener('change', e => { if (e.target.id === 'guideToggle') { 
 const lockedBg = el => el.locked && el.w * el.h >= doc.w * doc.h * 0.6;
 // 회전한 요소: 손잡이 커서도 그만큼 돌림
 function rotCursor(d, rot) { const base = { n: 0, ne: 45, e: 90, se: 135, s: 180, sw: 225, w: 270, nw: 315 }[d] || 0; return ['ns-resize', 'nesw-resize', 'ew-resize', 'nwse-resize'][Math.round((((base + rot) % 180) + 180) % 180 / 45) % 4]; }
+function bookNoteHTML(els) { /* 도서 편집: 화면에만 보이는 안내 (인쇄·PDF에는 안 나옴) */
+  if (!(doc.book && doc.book.bookMode)) return ''; const pg = page(), k9 = 1 / (kScale() || 1); let h = '';
+  if (pg.blank) h += `<div class="bk-note" style="left:0;top:${doc.h / 2 - 8}mm;width:${doc.w}mm;font-size:${15 * k9}px">비워 둔 쪽<small>다음 장을 오른쪽(홀수) 쪽에서 시작하려고 저절로 생긴 쪽 · 인쇄하면 하얀 쪽</small></div>`;
+  const f = els.length === 1 && els[0].flowFrame ? els[0] : null;
+  if (f) h += `<button class="bk-chip" data-bkstory="1" style="left:${f.x}mm;top:${f.y}mm;font-size:${11.5 * k9}px" title="본문 글은 원고에서 고치면 쪽이 저절로 다시 짜입니다">✎ ${f.flowFrame === 'toc' ? '차례는 장·절 제목에서 저절로 만들어집니다' : '본문은 원고에서 고칩니다'} · <b>원고 열기</b></button>`;
+  return h; }
 function renderOverlay(guides) {
   const o = $('#ovl'); const els = selEls(); let h = '';
   els.forEach(el => { const single = els.length === 1, kpx = kScale() * MM, sw = el.w * kpx, sh = el.h * kpx, tiny = single && Math.min(sw, sh) < 26; h += `<div class="sel${single ? '' : ' multi'}${tiny ? ' tiny' : ''}${imgPan === el.id ? ' panning' : ''}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].filter(d => !((d === 'n' || d === 's') && (sh < 34 || sw < 16)) && !((d === 'e' || d === 'w') && (sw < 34 || sh < 16))).map(d =>  /* 위·아래 손잡이는 높이가 낮으면, 좌·우 손잡이는 너비가 좁으면 가운데를 가리므로 뺌 (한 줄 글 상자는 좌·우 손잡이 유지) */ `<div class="h ${d}" data-h="${d}"${el.rot ? ` style="cursor:${rotCursor(d, el.rot)}"` : ''}></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; if (el.locked) h += `<button class="lockbadge" data-unlock="${el.id}" title="잠금 풀기 (Ctrl+L)">🔒 잠금 풀기</button>`; h += '</div>'; });
   if (els.length > 1) { const U = unionBox(els), bx = U.x, by = U.y, bw = U.w, bh = U.h; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm">${els.some(e => e.locked) ? '' : ['nw', 'ne', 'se', 'sw'].map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="함께 크기 조절 (비율 유지)"></div>`).join('') + (() => { const kp = kScale() * MM, sw = bw * kp, sh = bh * kp; return ['n', 's', 'e', 'w'].filter(d => /[ns]/.test(d) ? sw >= 34 && sh >= 16 : sh >= 34 && sw >= 16).map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="한쪽으로 늘이기·줄이기 (Shift: 비율 유지)"></div>`).join(''); })() + '<div class="rotline"></div><div class="h rot" data-h="rot" data-g="1" title="함께 돌리기 (Shift: 15°씩)"></div>'}</div>`; }
   (guides || []).forEach(g => { h += g.v != null ? `<div class="guide v" style="left:${g.v}mm"></div>` : `<div class="guide h" style="top:${g.h}mm"></div>`; });
-  h += calOverlay(); h += userGuidesHTML(); h += bookGuidesHTML();
+  h += calOverlay(); h += userGuidesHTML(); h += bookGuidesHTML(); h += bookNoteHTML(els);
   page().els.forEach(el => { if (textOver.has(el.id) && !el.hidden) h += `<button class="ovf" data-ovf="${el.id}" style="left:${el.x + el.w}mm;top:${el.y + el.h}mm" title="글이 상자를 넘칩니다 — 누르면 상자를 글에 맞춤 (인디자인의 넘침 표시)">+</button>`; }); try { if (showRulers()) requestAnimationFrame(drawRulers); } catch (e) {} // 고른 요소 범위를 눈금자에 표시
   // 인쇄 안내선: 도련(잘려 나가는 영역)·안전 여백(글자를 두지 않을 영역)
   if (showGuides() && Number(doc.bleed) > 0) { const b = Number(doc.bleed); h += `<div class="pg-bleed" style="left:${-b}mm;top:${-b}mm;width:${doc.w + 2 * b}mm;height:${doc.h + 2 * b}mm" title="도련 ${b}mm: 이 선까지 배경을 채우세요"></div><div class="pg-safe" style="left:${safeMM()}mm;top:${safeMM()}mm;width:${doc.w - 2 * safeMM()}mm;height:${doc.h - 2 * safeMM()}mm" title="안전 여백 ${safeMM()}mm: 글자·로고는 이 안쪽에"></div>`; }
@@ -3439,6 +3445,7 @@ function renderInspector() {
     <p class="hint">그라데이션·패턴 배경은 왼쪽 "배경" 메뉴에서 고릅니다. 요소를 누르면 그 요소의 속성이 여기에 나옵니다. 빈 곳을 끌면 여러 요소를 함께 고릅니다.</p>
     <details class="fx pgvid" ${tlOn() || (doc.video && doc.video.isCopy) ? 'open' : ''}><summary><span class="anim-h"><svg class="ic"><use href="#i-video"/></svg>영상 장면 설정</span> <small class="hint" style="margin:0">영상으로 만들 때만</small></summary><div class="grid2">${F('보여 주는 시간', 'pg.vdur', pg.vdur || vset().dur, { type: 'slider', min: 1, max: Math.max(20, Math.ceil(Number(pg.vdur || 0))), step: 0.5, unit: '초', def: vset().dur })}${F('다음으로 넘김', 'pg.vtrans', pg.vtrans || '', { type: 'select', options: [['', '기본 (' + VIDEO.TRANS.find(t => t[0] === vset().trans)[1] + ')']].concat(VIDEO.TRANS) })}</div><div class="grid2">${F('넘김 길이', 'pg.vturn', pg.vturn || vset().turn, { type: 'slider', min: 0.2, max: 2, step: 0.1, unit: '초', def: vset().turn })}${F('카메라', 'pg.vcam', pg.vcam || '', { type: 'select', options: [['', '없음']].concat(VIDEO.CAMS.slice(1)) })}</div><div class="row" style="gap:6px"><button class="btn sm" id="pgVplay"><svg class="ic"><use href="#i-play"/></svg>이 쪽부터 미리보기</button><button class="btn sm" id="pgVtab">영상 메뉴</button></div></details>
     <h3>단축키</h3><p class="hint">T 글자 추가 · P 펜 · Ctrl+D 복제 · Ctrl+G 그룹 · Ctrl+Z 취소 · 화살표 이동 · Delete 삭제 · Ctrl+휠 확대</p>`;
+    if (doc.book && doc.book.bookMode) { const v9 = ins.querySelector('.pgvid'); if (v9) v9.remove(); const kind9 = pg.toc ? ['차례 쪽', '장·절 제목에서 저절로 만들어집니다'] : pg.blank ? ['비워 둔 쪽', '다음 장을 오른쪽(홀수) 쪽에서 시작하려고 저절로 생긴 쪽입니다'] : pg.flow ? (pg.chapOpen ? ['장 시작 쪽', '원고의 장 제목(#)에서 시작합니다'] : ['본문 쪽', '원고에서 저절로 짜인 쪽입니다']) : pg.back ? ['뒷붙이 쪽', '판권 등 책 끝에 붙는 쪽'] : ['직접 꾸미는 쪽', '표지·속표지처럼 자유롭게 꾸미는 쪽']; const h9 = ins.querySelector('h2'); if (h9) h9.insertAdjacentHTML('afterend', `<div class="bk-pginfo"><b>${kind9[0]}</b><span>${kind9[1]}</span>${(pg.flow || pg.toc) && !pg.blank ? '<button class="btn sm" id="pgBkStory">✎ 원고 열기</button>' : ''}</div>`); const sb9 = ins.querySelector('#pgBkStory'); if (sb9) sb9.addEventListener('click', ev => { ev.stopPropagation(); if (BK()) BK().openStory(); }); } /* 도서 편집: 쪽 종류 안내, 영상 설정은 숨김 */
     ins.onclick = e => { if (e.target.closest('#pgVplay')) { openVideoPlayer(true); return; } if (e.target.closest('#pgVtab')) { sideTab = 'video'; renderRail(); renderSide(); return; } const b = e.target.closest('[data-pgbg]'); if (b) { pg.bg = b.dataset.pgbg; commit(); rerender(); } };
     return;
   }
@@ -5151,9 +5158,9 @@ function findClick(e) {
 /* ---- 도서 편집 (book.js) — 팀장님 11/21 「영상 위에 도서 편집, 인디자인·쿽 방식 책 만들기」 ---- */
 function BK() { if (BKm) return BKm; if (!NC.bookMod) return null; BKm = NC.bookMod({
   get doc() { return doc; }, get cur() { return cur; }, setCur(i) { cur = clamp(i, 0, doc.pages.length - 1); }, page, uid, clone, esc, MM, FONTS, TEXT_DEF, BOOK_DEF, addAsset,
-  toast: (m, bad) => toast(m, bad), commit, renderAll, renderCanvas, renderSide, goto, book, bookNum, isRightPage, newDoc, newPage, setStatus, endEdit, ensureLibFonts, loadScript, printIssues, openSpreads, bookletPdf, openDownload,
+  toast: (m, bad) => toast(m, bad), commit, renderAll, renderCanvas, renderSide, goto, book, bookNum, sheetHTML, fitBoxes, isRightPage, newDoc, newPage, setStatus, endEdit, ensureLibFonts, loadScript, printIssues, openSpreads, bookletPdf, openDownload,
   imgUrl: el => { try { return viewSrc(el, 'print'); } catch (e) { return ''; } },
-  markDirty: () => { if (store.state) store.state.dirty = true; updateSaveBadge(); },
+  markDirty: () => markDirty(), amendCommit,
   async newDocKeep() { keepCurrentDoc.kept = ''; if (doc.pages.some(p => p.els.length) && !(await keepCurrentDoc())) return false; const k = keepCurrentDoc.kept; await store.disconnect(); return k || ''; },
   setDoc(d) { doc = d; doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; },
   afterNewDoc() { hist = []; histMeta = []; hptr = -1; { const pn = $('#pname'); if (pn) pn.value = doc.name; } commit(); zoom = 0; renderAll(); updateSaveBadge(); fitCanvas(); goto(0); },
@@ -5245,7 +5252,8 @@ document.addEventListener('click', e => { if (e.target.closest && e.target.close
 function fitBoxToText(el) { const d = $(`#canvas [data-id="${el.id}"]`); if (!d) return; const { ch } = textContentH(d); el.sizing = ''; el.h = r1(Math.max(2, ch)); fitCache.delete(el.id); commit(); rerender(); toast('상자를 글에 맞췄습니다 (자동 높이)'); }
 document.addEventListener('dblclick', e => { const hd = e.target.closest && e.target.closest('.ovl .h'); if (!hd || hd.dataset.h === 'rot') return; const el = selEls()[0]; if (el && el.type === 'text' && selEls().length === 1) { e.preventDefault(); e.stopPropagation(); fitBoxToText(el); } }, true);
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-ovf]'); if (!b) return; e.stopPropagation(); const el = find(b.dataset.ovf); if (el) { select([el.id]); fitBoxToText(el); } }, true);
-document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('[data-ovf]')) e.stopPropagation(); }, true);
+document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('[data-ovf],[data-bkstory]')) e.stopPropagation(); }, true);
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-bkstory]'); if (!b) return; e.stopPropagation(); const el = selEls()[0]; if (el && el.flowFrame && BK()) BK().onFrameDbl(el); }, true);
 /* 속성 패널 '글 상자' 칸 */
 function tboxHTML(el) {
   const sz = el.sizing || '', over = textOver.has(el.id);
@@ -6623,8 +6631,13 @@ function pgClick(i, e) {
 function pgAssetsOf(pages) { const assets = {}; const walk = v => { if (typeof v === 'string' && v.startsWith('a:') && doc.assets[v.slice(2)]) assets[v] = doc.assets[v.slice(2)]; else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(pages); return assets; }
 function pgAfter(at, n, msg, undoable) { pgSel = new Set(); for (let j = 0; j < n; j++) pgSel.add(at + j); cur = clamp(at, 0, doc.pages.length - 1); pgSelCur = cur; pgAnchor = cur; sel = []; cellSel = null; selDay = null; commit(); renderAll(); if (msg) (undoable ? toastUndo(msg) : toast(msg)); requestAnimationFrame(() => { const t = document.querySelector(`#thumbs .thumb[data-i="${cur}"]`); if (t) t.scrollIntoView({ block: 'nearest' }); }); }
 function pgRemove(idx) { const curPg = page(); doc.pages = doc.pages.filter((p, i) => !idx.includes(i)); const k = doc.pages.indexOf(curPg); return Math.min(k >= 0 ? k : idx[0], doc.pages.length - 1); }
+function bookAutoBlock(idx, k) { /* 도서 편집: 원고에서 저절로 만들어지는 본문·차례 쪽은 복제·잘라내기·지우기 대신 원고를 고치게 안내 */
+  if (!(doc.book && doc.book.bookMode) || !['dup', 'cut', 'del'].includes(k)) return false;
+  const auto = idx.filter(i => doc.pages[i] && (doc.pages[i].flow || doc.pages[i].toc)); if (!auto.length) return false;
+  toast(`${auto.map(i => i + 1).join(', ')}쪽은 원고에서 저절로 만들어지는 ${doc.pages[auto[0]].toc ? '차례' : '본문'} 쪽입니다 — 쪽을 늘리거나 줄이려면 원고를 고치세요 (원고 편집기: 본문을 두 번 누르기)`, true); return true; }
 function pageCmd(k) {
   const idx = pgPicked(), n = idx.length;
+  if (bookAutoBlock(idx, k)) return;
   if (k === 'all') { pgSel = new Set(doc.pages.map((_, i) => i)); pgSelCur = cur; pgFocus = true; renderThumbs(); toast(`${doc.pages.length}쪽을 모두 골랐습니다`); return; }
   if (k === 'add') { doc.pages.splice(idx[n - 1] + 1, 0, newPage(page().bg)); pgAfter(idx[n - 1] + 1, 1); return; }
   if (k === 'grid') { openPageGrid(); return; }
@@ -7099,6 +7112,7 @@ function renderPageGrid() {
 function gridCmd(k) {
   const idx = [...gridSel].sort((a, b) => a - b); if (!idx.length) return;
   if (k === 'go') { $('#dlgGrid').close(); goto(idx[0]); return; }
+  if (bookAutoBlock(idx, k)) return;
   if (k === 'dup') { const copies = idx.map(i => dupPage(doc.pages[i])); const at = idx[idx.length - 1] + 1; doc.pages.splice(at, 0, ...copies); gridSel = new Set(copies.map((_, j) => at + j)); commit(); renderAll(); renderPageGrid(); toast(`${copies.length}쪽을 복제했습니다`); return; }
   if (k === 'del') { if (idx.length >= doc.pages.length) { toast('모든 쪽을 지울 수는 없습니다', true); return; } if (!window.confirm(`${idx.length}쪽을 지울까요? (Ctrl+Z로 되돌릴 수 있습니다)`)) return; const curPg = page(); doc.pages = doc.pages.filter((p, i) => !gridSel.has(i)); cur = Math.max(0, Math.min(doc.pages.indexOf(curPg) >= 0 ? doc.pages.indexOf(curPg) : idx[0], doc.pages.length - 1)); sel = []; cellSel = null; gridSel = new Set([Math.min(idx[0], doc.pages.length - 1)]); commit(); renderAll(); renderPageGrid(); toastUndo(`${idx.length}쪽을 지웠습니다`, () => { if ($('#dlgGrid') && $('#dlgGrid').open) renderPageGrid(); }); }
 }
