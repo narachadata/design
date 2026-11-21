@@ -204,7 +204,7 @@ async function loadDoc(j, from, quiet) {
   const m8 = doc.calendar.months && doc.calendar.months[7]; if (m8 && !m8.image && /우정/.test(m8.virtue || '')) { m8.image = 'asset:illu-08-friendship'; doc.pages.forEach(p => p.els.forEach(e => { if (e.type === 'image' && e.role === 'illust' && e.month === 8 && !e.src) e.src = m8.image; })); }
   if (doc.calendar && doc.calendar.months) virtueArtFix(doc.calendar, doc.pages, doc.calendar.year || 2027, true);
   { const y = Number(doc.calendar && doc.calendar.year); if (y && doc.pages.some(p => p.els.some(e => e.role === 'virtue')) && virtueWrongTrack(doc.calendar, y)) { const VP = virtuePlanFor(y), tr = VP.tr;
-      if (window.confirm(`「${doc.name || '이 문서'}」는 ${y}년 캘린더인데 12달 덕목이 ${tr === '극기' ? '홍익(짝수 해)' : '극기(홀수 해)'} 내용입니다.\n${y}년은 ${tr === '극기' ? '1년차 극기(1월 자기존중 … 12월 사랑)' : '2년차 홍익'} 차례입니다. 12달의 덕목·영문·명언·실천·사자성어를 ${tr}로 다시 채우고, 다른 해 기본 삽화도 ${tr} 그림으로 바꿀까요?\n(일정·디자인·직접 넣은 그림은 그대로)`)) {
+      if (window.confirm(`「${doc.name || '이 문서'}」는 ${y}년 캘린더인데 12달 덕목이 ${tr === '극기' ? '홍익(짝수 해)' : '극기(홀수 해)'} 내용입니다.\n${y}년은 ${tr === '극기' ? '1년차(홀수 해) 극기(1월 자기존중 … 12월 사랑)' : '2년차(짝수 해) 홍익'} 차례입니다. 12달의 덕목·영문·명언·실천·사자성어를 ${tr}로 다시 채우고, 다른 해 기본 삽화도 ${tr} 그림으로 바꿀까요?\n(일정·디자인·직접 넣은 그림은 그대로)`)) {
         let n = 0; VP.P.forEach((x, k) => { if (doc.calendar.months[k]) n += applyMonthContent(k, x); }); const na = virtueArtFix(doc.calendar, doc.pages, y);
         setTimeout(() => toast(`${y}년 ${tr} 덕목으로 다시 채웠습니다 (글 상자 ${n}곳 · 삽화 ${na}곳) — 저장(Ctrl+S)하세요`), 600); if (store.state) store.state.dirty = true; } } }
   if (doc.cert) certMigrate(doc.cert);  /* 상장 굵기·제목 자리 고침 (한 번만) */  /* 빈 삽화 자리 = 그 해 덕목 그림 */
@@ -2650,13 +2650,13 @@ function renderNaraSide(body) {
 /* 나라차 → 캘린더: 연도·캘린더 마법사·인성 문구 넣기 + 반복 일정·공휴일·달력 테마 (템플릿 패널에서 옮겨 옴 — 템플릿 패널은 템플릿만) */
 function renderCalSide(body) {
   const yearNow = doc.calendar.year || 2027, hasCal = doc.pages.some(p => p.els.some(e => e.type === 'cal'));
-  body.innerHTML = `<div class="wz-card"><div class="wz-year">${yearNow}<small>년</small></div><p class="hint" style="margin:0 0 8px">연도별 달력 모양과 테마를 미리 보며 표지·인성·달력 26쪽을 한 번에 만듭니다.</p><button class="btn primary full" id="wzOpen"><svg class="ic"><use href="#i-cal"/></svg>캘린더 마법사 열기</button>${window.NARACAL_VPLAN ? `<button class="btn full" id="wzVirtue" style="margin-top:6px" title="나라차 인성덕목 2년 계획(메인 프로그램과 같은 내용)의 덕목·명언·실천·사자성어를 12달에 넣습니다. 삽화는 기본 그림이면 그 해 덕목 그림으로 바꿉니다.">📖 ${yearNow}년 인성 문구 넣기 · ${window.NARACAL_VTRACK(yearNow) === '극기' ? '1년차 극기' : '2년차 홍익'}</button>` : ''}</div>
+  body.innerHTML = `<div class="wz-card"><div class="wz-year">${yearNow}<small>년</small></div><p class="hint" style="margin:0 0 8px">연도별 달력 모양과 테마를 미리 보며 표지·인성·달력 26쪽을 한 번에 만듭니다.</p><button class="btn primary full" id="wzOpen"><svg class="ic"><use href="#i-cal"/></svg>캘린더 마법사 열기</button>${window.NARACAL_VPLAN ? `<button class="btn full" id="wzVirtue" style="margin-top:6px" title="나라차 인성덕목 2년 계획(메인 프로그램과 같은 내용)의 덕목·명언·실천·사자성어를 12달에 넣습니다. 삽화는 기본 그림이면 그 해 덕목 그림으로 바꿉니다.">📖 ${yearNow}년 인성 문구 넣기 · ${window.NARACAL_VTRACK(yearNow) === '극기' ? '1년차(홀수 해) 극기' : '2년차(짝수 해) 홍익'}</button>` : ''}</div>
   ${(() => { const df = virtueDiff(yearNow); if (!df || !doc.pages.some(p => p.els.some(e => e.role === 'virtue'))) return ''; return df.length ? `<div class="vcheck warn">⚠ 이 문서의 인성 문구가 ${yearNow}년 계획표${virtuePlanFor(yearNow).edits ? '(관리 앱에서 고친 덕목 포함)' : ''}와 <b>${df.length}달</b> 다릅니다: ${df.slice(0, 6).map(x => `${x.m}월(${x.f.map(k => VFIELD[k]).join('·')})`).join(', ')}${df.length > 6 ? ' …' : ''}<br><small>메인 프로그램·소식지·학부모앱과 같은 문구로 맞추려면 위 '인성 문구 넣기'를 누르세요. 일부러 바꾼 문구라면 그대로 두세요.</small></div>` : `<div class="vcheck ok">✓ 이 문서의 인성 문구가 ${yearNow}년 계획표${virtuePlanFor(yearNow).edits ? '(관리 앱에서 고친 덕목 포함)' : ''}와 같습니다</div>`; })()}
   <div class="nara-list" style="margin-top:10px"><button class="nara-card" data-calx="rules"><svg class="ic"><use href="#i-cal"/></svg><span><b>반복 일정 · 연간 행사</b><small>매주 수련·승급심사·생일·원비 날 — 달력에 넣는 목록 (휴일 빼기)</small></span><i>›</i></button><button class="nara-card" data-calx="hol"><svg class="ic"><use href="#i-cal"/></svg><span><b>공휴일</b><small>${yearNow}년 공휴일 확인·고치기 (대체 휴일 포함)</small></span><i>›</i></button><button class="nara-card" data-calx="theme" ${hasCal ? '' : 'disabled title="이 문서에 달력이 없습니다"'}><svg class="ic"><use href="#i-theme"/></svg><span><b>달력 테마 바꾸기</b><small>${hasCal ? '지금 달력의 색·글꼴·배치를 한 번에' : '마법사로 만든 달력 문서에서 쓸 수 있습니다'}</small></span><i>›</i></button></div>`;
   $('#wzOpen').onclick = () => openWizard(yearNow);
   if ($('#wzVirtue')) $('#wzVirtue').onclick = () => {   /* [나라차 R4.505] 인성덕목 2년 계획 문구를 연도에 맞게 */
       const VP = virtuePlanFor(yearNow), tr = VP.tr, P = VP.P; if (!P.length || !doc.calendar.months) return;
-      if (!confirm(`${yearNow}년은 ${tr === '극기' ? '1년차 극기(나의 가치)' : '2년차 홍익(우리·모두의 가치)'}입니다.\n12달의 덕목·영문·명언·실천 2가지·사자성어를 메인 프로그램의 인성덕목 2년 계획${VP.src === 'main' ? '(관리 앱이 이 브라우저에 남긴 최신 표 — 설정에서 고친 내용 포함)' : '(공방 안의 기본표 — 관리 앱을 이 브라우저에서 한 번 열면 고친 내용까지 든 최신 표를 씁니다)'}으로 바꿉니다.\n(일정·디자인은 그대로 · 삽화는 기본 그림이면 그 해 덕목 그림으로 바꾸고, 직접 넣은 그림은 그대로 둡니다)${VP.edits ? (VP.changed.length ? `\n\n메인 프로그램에서 고친 내용도 반영합니다: ${VP.changed.join(', ')}` : '\n\n메인 프로그램에서 고친 내용: 없음 — 계획표 그대로') : '\n\n※ 메인 프로그램에서 고친 내용까지 반영하려면 이 브라우저에서 메인 프로그램을 한 번 열거나, 나라차 → 소식지에서 데이터를 불러온 뒤 다시 누르세요.'}`)) return;
+      if (!confirm(`${yearNow}년은 ${tr === '극기' ? '1년차(홀수 해) 극기(나의 가치)' : '2년차(짝수 해) 홍익(우리·모두의 가치)'}입니다.\n12달의 덕목·영문·명언·실천 2가지·사자성어를 메인 프로그램의 인성덕목 2년 계획${VP.src === 'main' ? '(관리 앱이 이 브라우저에 남긴 최신 표 — 설정에서 고친 내용 포함)' : '(공방 안의 기본표 — 관리 앱을 이 브라우저에서 한 번 열면 고친 내용까지 든 최신 표를 씁니다)'}으로 바꿉니다.\n(일정·디자인은 그대로 · 삽화는 기본 그림이면 그 해 덕목 그림으로 바꾸고, 직접 넣은 그림은 그대로 둡니다)${VP.edits ? (VP.changed.length ? `\n\n메인 프로그램에서 고친 내용도 반영합니다: ${VP.changed.join(', ')}` : '\n\n메인 프로그램에서 고친 내용: 없음 — 계획표 그대로') : '\n\n※ 메인 프로그램에서 고친 내용까지 반영하려면 이 브라우저에서 메인 프로그램을 한 번 열거나, 나라차 → 소식지에서 데이터를 불러온 뒤 다시 누르세요.'}`)) return;
       let n = 0; P.forEach((x, k) => { if (doc.calendar.months[k]) n += applyMonthContent(k, x); }); const na = virtueArtFix(doc.calendar, doc.pages, yearNow);
       commit(); rerender(); toast(n ? `인성 문구를 넣었습니다 (글 상자 ${n}곳${na ? ` · ${tr} 삽화 ${na}곳` : ''})` : '이 문서에는 인성 문구 자리가 없습니다 — 캘린더 마법사로 만든 달력 문서에서 쓰세요', !n);
     };
@@ -2832,7 +2832,7 @@ function renderSide0() {
     ${mine.length ? `<h3>내 이미지 (${mine.length})</h3><div class="picker">${mine.map(k => `<button data-img="a:${k}" draggable="true"><img src="${doc.assets[k]}" alt="" draggable="false"></button>`).join('')}</div>` : ''}
     ${libPhotoHTML()}
     ${(() => { const A = window.NARACAL_VIRTUE_ART; if (!A) return ''; const grp = (tr, t, more) => { const ks = A[tr].concat(more.map(x => x[0])), vn = ((window.NARACAL_VPLAN || {})[tr] || []).map(x => x.virtue); return `<h3>${t}</h3><div class="picker">${ks.map((k, i) => `<button data-img="${k}" title="${i < 12 ? `${i + 1}월 ${esc(vn[i] || '')}` : esc(more[i - 12][1])} — 누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${src(k)}" alt="""" loading="lazy" draggable="false"></button>`).join('')}</div>`; };
-      return grp('극기', '극기(1년차·홀수 해) 삽화', A.extra.filter(x => !/hi-/.test(x[0]))) + grp('홍익', '홍익(2년차·짝수 해) 삽화', A.extra.filter(x => /hi-/.test(x[0]))) + ((window.NARACAL_RACHA_ART || []).length ? `<h3>휴관·행사 라차 그림</h3><div class="picker">${window.NARACAL_RACHA_ART.map(r => `<button data-img="${r.src}" title="${esc(r.title)} — 누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${src(r.src)}" alt="" loading="lazy" draggable="false"></button>`).join('')}</div>` : ''); })()}
+      return grp('극기', '극기(1년차·홀수 해) 삽화', A.extra.filter(x => !/hi-/.test(x[0]))) + grp('홍익', '홍익(2년차·짝수 해) 삽화', A.extra.filter(x => /hi-/.test(x[0]))) + ((window.NARACAL_RACHA_ART || []).length ? `<h3>휴관·행사 라차 그림</h3><div class="picker">${window.NARACAL_RACHA_ART.map(r => `<button data-img="${r.src}" title="${esc(r.title)} — 누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${src(r.src)}" alt="" loading="lazy" draggable="false"></button>`).join('')}</div>` : '') + (() => { const sp = (window.NARACAL_SPORTS_ART || []).map((x, i) => ({ src: x, title: `${i + 1}월 ${((window.NARACAL_SPORTS || [])[i] || [])[1] || ''}` })).concat(window.NARACAL_SPORTS_MORE || []); return sp.length ? `<h3>라차 스포츠 그림</h3><div class="picker">${sp.map(r => `<button data-img="${r.src}" title="${esc(r.title)} — 누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${src(r.src)}" alt="" loading="lazy" draggable="false"></button>`).join('')}</div>` : ''; })(); })()}
     ${groups.map(([t, f]) => { const ks = Object.keys(ASSETS).filter(f); return `<h3>${t}</h3><div class="picker">${ks.map(k => `<button data-img="asset:${k}" title="누르면 쪽에 넣기 · 끌어다 놓기" draggable="true"><img src="${ASSETS[k]}" alt="" draggable="false"></button>`).join('')}</div>`; }).join('')}`;
     body.onclick = async e => {
       const pc = e.target.closest('[data-pcat]'); if (pc) { photoCat = pc.dataset.pcat; renderSide(); return; }
@@ -3198,6 +3198,30 @@ const wzWall = () => wz.fmt === 'pc' || wz.fmt === 'mob';
 function wallTarget(f) { const F = FORMATS.find(x => x[0] === WZ_FMT[f].fid); return [PX(F[3]), PX(F[4])]; }
 // 배경화면 쪽(기준 크기)을 W×H로 키움 — 글자·달력 글자도 같은 배율
 function wallScale(pages, f, W, H) { const [bw, bh] = WZ_FMT[f].base; return resizedDoc({ w: bw, h: bh, pages }, W, H, 'contain').pages.map((p, i) => Object.assign(p, { wall: pages[i].wall, kind: pages[i].kind })); }
+/* 마법사 오른쪽 표지·1월…12월: 화살표 키로 옮기기 (팀장님 11/21) — ←→ 한 칸, ↑↓ 한 줄. 글 칸·고르기 상자 안에서는 원래대로 */
+const WZ_PHONE_H = 480;  /* 휴대폰 미리보기 높이(px) */
+/* 큰 미리보기는 아래 작은 그림(표지·1월…12월)이 스크롤 없이 다 보이도록 남는 높이에 맞춤 (팀장님 11/21) */
+function wzFitBig() {
+  const body = $('#wzBody'), main = body && body.querySelector('.wz-main'), g = $('#wzGrid'), top = body && body.querySelector('.wz-top'), bb = $('#wzBig'); if (!main || !g || !bb) return;
+  const phone = !!bb.closest('.phone'), cap = phone ? WZ_PHONE_H : 460, wide = getComputedStyle(body).gridTemplateColumns.split(' ').length > 1;
+  const avail = main.clientHeight - g.offsetHeight - top.offsetHeight - 20 - (phone ? 52 : 32);
+  const H = wide ? clamp(avail, 110, cap) : cap, BW = Number(bb.dataset.w), BH = Number(bb.dataset.h);
+  if (phone) { bb.style.width = Math.round(H * BW / BH) + 'px'; bb.style.setProperty('--ph', H + 'px'); } else bb.style.maxWidth = Math.min(640, Math.round(H * BW / BH)) + 'px';
+  fitBoxes(body, '.wz-bigbox', H);
+}
+addEventListener('resize', () => { const d = $('#dlgWizard'); if (d && d.open) wzFitBig(); });
+function wzFocusMonth() { const b = $('#wzGrid .wz-m.on'); if (b) { b.focus({ preventScroll: true }); b.scrollIntoView({ block: 'nearest' }); } }
+function wzArrow(e) {
+  if (!/^Arrow(Left|Right|Up|Down)$/.test(e.key) || e.altKey || e.ctrlKey || e.metaKey || e.isComposing) return;
+  if (e.target.matches && e.target.matches('input,select,textarea,[contenteditable="true"]')) return;
+  const all = [...document.querySelectorAll('#wzGrid .wz-m')]; if (!all.length) return;
+  const top0 = all[0].offsetTop, cols = Math.max(1, all.filter(b => b.offsetTop === top0).length);
+  const k = clamp(wz.month - 1 + ({ ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols })[e.key], 0, all.length - 1);
+  e.preventDefault(); e.stopPropagation(); if (k === wz.month - 1) return;
+  wz.month = k + 1; renderWizard(); wzFocusMonth();
+}
+/* 테마를 누르면 화면을 새로 그려 초점이 창 밖(body)으로 가므로 문서 전체에서 받음 — 마법사가 열렸을 때만 */
+document.addEventListener('keydown', e => { const d = $('#dlgWizard'); if (d && d.open && !$('#dlgHoliday[open]')) wzArrow(e); }, true);
 function openWizard(year, themeId) {
   wz.year = year || doc.calendar.year || new Date().getFullYear();
   wz.themeId = themeId || (doc.calendar.theme && doc.calendar.theme.id) || 'classic';
@@ -3239,11 +3263,11 @@ function renderWizard() {
     <p class="hint">문구(덕목·명언·실천·사자성어)는 기본 문구로 먼저 채워지며, 만든 뒤 AI 도구나 직접 입력으로 바꿉니다.</p>
   </div>
   <div class="wz-main">
-    <div class="wz-top">${wall ? `<b>${WZ_FMT[wz.fmt].name}</b>` : `<div class="seg" style="width:200px"><button data-wzview="virtue" aria-pressed="${wz.view !== 'cal'}">이미지면</button><button data-wzview="cal" aria-pressed="${wz.view === 'cal'}">달력면</button></div>`}<span class="hint" style="margin:0">${wz.year}년 ${pgName(big, wz.month - 1)} · 아래 작은 그림을 누르면 크게 봅니다</span></div>
-    <div class="wz-big"><div class="wz-bigbox" id="wzBig" data-w="${BW}" data-h="${BH}">${wizardSheet(big)}</div></div>
-    <div class="wz-grid${wz.fmt === 'mob' ? ' tall' : ''}" id="wzGrid">${pages.map((pg, i) => `<button class="wz-m ${i + 1 === wz.month ? 'on' : ''}" data-m="${i + 1}"><div class="wz-mbox" data-w="${BW}" data-h="${BH}">${wizardSheet(pg)}</div><span>${pgName(pg, i)}</span></button>`).join('')}</div>
+    <div class="wz-top">${wall ? `<b>${WZ_FMT[wz.fmt].name}</b>` : `<div class="seg" style="width:200px"><button data-wzview="virtue" aria-pressed="${wz.view !== 'cal'}">이미지면</button><button data-wzview="cal" aria-pressed="${wz.view === 'cal'}">달력면</button></div>`}<span class="hint" style="margin:0">${wz.year}년 ${pgName(big, wz.month - 1)}${wz.fmt === 'mob' ? ' · 휴대폰 잠금 화면처럼 보기(시계는 미리보기용, 그림에는 안 들어감)' : ''} · 아래 작은 그림을 누르거나 ← → ↑ ↓ 키로 옮기면 크게 봅니다</span></div>
+    ${wz.fmt === 'mob' ? /* 휴대폰 배경화면은 휴대폰 잠금 화면 모양으로 미리보기 (팀장님 11/21) */ `<div class="wz-big phone"><div class="wz-bigbox" id="wzBig" data-w="${BW}" data-h="${BH}" style="width:${Math.round(WZ_PHONE_H * BW / BH)}px">${wizardSheet(big)}<div class="wz-island"></div><div class="wz-clock"><b>9:41</b><span>${pgName(big, wz.month - 1) === '표지' ? `${wz.year}년` : `${pgName(big, wz.month - 1)} 1일`}</span></div></div></div>` : `<div class="wz-big"><div class="wz-bigbox" id="wzBig" data-w="${BW}" data-h="${BH}">${wizardSheet(big)}</div></div>`}
+    <div class="wz-grid${wz.fmt === 'mob' ? ' tall' : ''}" id="wzGrid" style="--wzc:${Math.max(6, Math.ceil(pages.length / 2))}">${pages.map((pg, i) => `<button class="wz-m ${i + 1 === wz.month ? 'on' : ''}" data-m="${i + 1}"><div class="wz-mbox" data-w="${BW}" data-h="${BH}">${wizardSheet(pg)}</div><span>${pgName(pg, i)}</span></button>`).join('')}</div>
   </div>`;
-  requestAnimationFrame(() => { fitBoxes(body, '.wz-thbox', 60); fitBoxes(body, '.wz-mbox', 80); fitBoxes(body, '.wz-bigbox', 460); });
+  requestAnimationFrame(() => { fitBoxes(body, '.wz-thbox', 60); fitBoxes(body, '.wz-mbox', 80); wzFitBig(); });
   const setYear = y => { wz.year = clamp(Math.round(y) || wz.year, 2000, 2100); ensureHolidays(wz.year, true); renderWizard(); };
   body.querySelectorAll('[data-th]').forEach(b => b.onclick = () => { const th = CAL.THEMES.find(x => x.id === b.dataset.th); wz.themeId = th.id; wz.colorA = th.colorA; wz.colorB = th.colorB; wz.view = 'virtue'; if (!wzWall()) wz.month = 1; renderWizard(); });  /* 테마를 고르면 이미지면부터 (팀장님 11/21) */
   $('#wzYm').onclick = () => setYear(wz.year - 1); $('#wzYp').onclick = () => setYear(wz.year + 1); $('#wzYear').onchange = e => setYear(Number(e.target.value));
@@ -3256,7 +3280,7 @@ function renderWizard() {
   body.querySelectorAll('[data-wzmode]').forEach(b => b.onclick = () => { wz.mode = b.dataset.wzmode; renderWizard(); });
   body.querySelectorAll('[data-wzview]').forEach(b => b.onclick = () => { wz.view = b.dataset.wzview; renderWizard(); });
   body.querySelectorAll('[data-thcat]').forEach(b => b.onclick = () => { wz.thCat = b.dataset.thcat; const sc = body.querySelector('.wz-side'), top = sc ? sc.scrollTop : 0; renderWizard(); const sc2 = $('#wzBody .wz-side'); if (sc2) sc2.scrollTop = top; });
-  $('#wzGrid').onclick = e => { const b = e.target.closest('[data-m]'); if (b) { wz.month = Number(b.dataset.m); renderWizard(); } };
+  $('#wzGrid').onclick = e => { const b = e.target.closest('[data-m]'); if (b) { wz.month = Number(b.dataset.m); renderWizard(); wzFocusMonth(); } };
   $('#wzGo').onclick = async () => {
     const oldName = doc.name, oldW = doc.w, oldH = doc.h, theme = wizardTheme();
     if (wz.mode === 'replace') { /* 새 문서로: 지금 문서는 파일에 저장하거나 '직전 문서'로 보관 (예전엔 지금 문서를 비워 덮어써 상장·파일 연결이 그대로 남았음) */
@@ -4397,7 +4421,7 @@ const ST_BELT = [['white', '흰띠', '#ffffff', 'a white belt'], ['yellow', '노
 const ST_MOOD = [['happy', '😄', '밝게 웃음', 'a big, bright smile'], ['kiai', '😤', '기합!', 'shouting a powerful kihap with the mouth open'], ['focus', '🧐', '진지한 집중', 'a serious, focused expression'], ['proud', '😊', '뿌듯함', 'a proud, confident smile'], ['wink', '😉', '윙크', 'a playful wink'], ['wow', '😲', '깜짝', 'a surprised, excited face'], ['moved', '🥹', '감동', 'touched, happy tears in the eyes']];
 // 옷: [키, 이름, 영어, 띠를 맴, 도복 상의(V넥 깃·가슴 엠블럼)] — 나라차 운영규정 '수련 복장 규정'(흰 도복 원칙, 흰 상의+검정 바지·검정 도복·나라차 티셔츠+검정 바지 허용)
 const ST_OUTFIT = [['dobok', '흰 도복', 'a clean white taekwondo dobok (white V-neck pullover top and white pants)', true, true], ['blackpants', '흰 상의+검정 바지', 'a white taekwondo dobok top (V-neck pullover) with black dobok pants', true, true], ['black', '검정 도복', 'a black taekwondo dobok (black V-neck pullover top and black pants)', true, true], ['tee', '나라차 티셔츠', 'a navy long-sleeve T-shirt with black dobok pants', true, false], ['gear', '겨루기 보호구', 'a white taekwondo dobok with full sparring gear: a blue or red chest protector, headgear, forearm and shin guards and gloves', true, false], ['hanbok', '한복', 'a colorful traditional Korean hanbok', false, false], ['casual', '평상복', 'casual everyday clothes', false, false]];
-const ST_DOBOK = 'The dobok top is a taekwondo-style pullover with a V-neck opening, not a wrap-over judo or karate jacket, so there are no overlapping lapels. The V-neck collar is a contrasting trim band that goes only around the neck and ends in a small black square at the bottom point of the V on the chest; the front never opens or runs down to the belt. A red-and-black collar is red on the outer half and black on the inner half next to the neck.'; // 팀장님 11/20: 깃은 목 둘레만(유도복 금지), 유급자 깃 = 바깥 빨강·안쪽 검정
+const ST_DOBOK = 'The dobok top is a taekwondo-style pullover with a V-neck opening, not a wrap-over judo or karate jacket, so there are no overlapping lapels. The V-neck collar is a contrasting trim band that goes only around the neck and ends in a small black square at the bottom point of the V on the chest; the front never opens or runs down to the belt. A red-and-black collar is red on the outer half and black on the inner half next to the neck. This applies to every person in every pose, including side views, running, jumping and throwing: the two collar sides meet only once in a small V on the upper chest, well above the belt, and never cross into an X or run diagonally down to the belt. Apart from the dojang logo described here, the dobok chest has no other patches, flags, letters or badges.'; // 팀장님 11/20: 깃은 목 둘레만(유도복 금지), 유급자 깃 = 바깥 빨강·안쪽 검정 · 11/21: 옆모습·움직이는 자세에서도 X자 깃 금지, 가짜 패치 금지
 const ST_EMBLEM = 'a red dot and a short red stroke above a large curved navy-blue swoosh, together shaped like a flying-kick figure, symbol only with no text';
 const ST_AGE = [['kid-m', '어린이 남자', '👦', 'boy', 'about 8 years old', 'm'], ['kid-f', '어린이 여자', '👧', 'girl', 'about 8 years old', 'f'], ['tod-m', '유아 남자', '🧒', 'little boy', 'about 5 years old', 'm'], ['tod-f', '유아 여자', '👶', 'little girl', 'about 5 years old', 'f'], ['teen-m', '청소년 남자', '🧑', 'teenage boy', 'about 15 years old', 'm'], ['teen-f', '청소년 여자', '👱‍♀️', 'teenage girl', 'about 15 years old', 'f'], ['man', '성인 남자', '👨', 'man', 'in his 30s', 'm'], ['woman', '성인 여자', '👩', 'woman', 'in her 30s', 'f'], ['master-m', '사범님 (남)', '🥋', 'taekwondo master instructor, a kind and confident man', 'in his 40s', 'm'], ['master-f', '사범님 (여)', '🥋', 'taekwondo master instructor, a kind and confident woman', 'in her 40s', 'f']];
 const ST_HAIR = { m: ['a short neat haircut', 'a bowl cut', 'short curly hair', 'a buzz cut', 'short spiky hair', 'side-parted hair'], f: ['a high ponytail', 'two braids', 'a bob cut', 'pigtails', 'long straight hair with a headband', 'a low bun'] };

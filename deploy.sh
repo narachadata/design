@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 VER=$(date +%Y%m%d.%H%M)
 echo "window.NARACAL_VER = \"$VER\";" > version.js
 echo "{\"ver\":\"$VER\"}" > version.json
-sed -i '' -E "s/(app\.(js|css)\?v=)[0-9a-z.]+/\1$VER/g; s/(version|effects|imgedit|elements|templates|templates2|templates3|templates4|templates5|calendar|storage|lib|ai|defaults|assets|assets-brand|webfonts|fonts|news|video|media|vtemplates|astream|live|manual|attend|aichat)\.js\?v=[0-9a-z.]+/\1.js?v=$VER/g" index.html
+sed -i '' -E "s/(app\.(js|css)\?v=)[0-9a-z.]+/\1$VER/g; s/(version|effects|imgedit|elements|templates|templates2|templates3|templates4|templates5|templates6|calendar|storage|lib|ai|defaults|assets|assets-brand|webfonts|fonts|news|video|media|vtemplates|astream|live|manual|attend|aichat)\.js\?v=[0-9a-z.]+/\1.js?v=$VER/g" index.html
 git add -A
 # 커밋 메일 주소는 스크립트에 적지 않고, 이 폴더의 git 설정(git config user.email)에서 씀 — 처음 한 번 팀장님이 직접 등록
 if ! git config user.email >/dev/null; then echo "배포 멈춤: 이 폴더에 커밋 메일 주소가 없습니다. 한 번만 실행하세요 → git config user.email \"메일 주소\""; git reset -q; exit 1; fi

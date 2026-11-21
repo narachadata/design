@@ -307,15 +307,19 @@ window.NARACAL_VIRTUE_ART = {
   cover: { '극기': 'asset:cover-group', '홍익': 'assets/virtue/hi-cover.webp' },
 };
 /* 휴관·행사 라차 그림 (11/20 팀장님이 제미나이로 만든 장면 그림, 왼쪽 가슴에 나라차 로고 얹음) — 휴관 카드 「라차 그림」 모양·승급심사 포스터·사진 패널에서 씀 */
-/* 라차 스포츠 그림 12달 (팀장님 11/21 「라차가 다양한 스포츠를 하는 캘린더 템플릿」) — 제미나이 그림을 받으면 assets/sports/sp-01.webp … 경로를 달 순서대로 넣음.
+/* 라차 스포츠 그림 12달 (팀장님 11/21 「라차가 다양한 스포츠를 하는 캘린더 템플릿」) — 11/21 받은 제미나이 그림(모서리 r64·가슴 로고·V깃 손질), 달 순서.
    비어 있는 달은 그 달 덕목 삽화를 씀. 달마다 운동: NARACAL_SPORTS(1월 스키 … 12월 눈썰매) */
-window.NARACAL_SPORTS_ART = [];
+window.NARACAL_SPORTS_ART = ['sp-01-ski', 'sp-02-skate', 'sp-03-soccer', 'sp-04-bike', 'sp-05-baseball', 'sp-06-badminton', 'sp-07-swim', 'sp-08-surf', 'sp-09-run', 'sp-10-basketball', 'sp-11-tabletennis', 'sp-12-sled'].map(k => 'assets/sports/' + k + '.webp');  /* 11/21 받은 그림 */
+/* 달 그림 말고 더 받은 스포츠 그림 (사진 패널 「라차 스포츠 그림」·템플릿에서 씀) */
+window.NARACAL_SPORTS_MORE = [['sp-dodgeball', '피구'], ['sp-curling', '컬링'], ['sp-skate2', '아이스링크 스케이트']].map(([k, t]) => ({ src: 'assets/sports/' + k + '.webp', title: t }));
 window.NARACAL_SPORTS = [['⛷️', '스키', 'SKI'], ['⛸️', '스케이트', 'SKATING'], ['⚽', '축구', 'SOCCER'], ['🚴', '자전거', 'CYCLING'], ['⚾', '야구', 'BASEBALL'], ['🏸', '배드민턴', 'BADMINTON'], ['🏊', '수영', 'SWIMMING'], ['🏄', '서핑', 'SURFING'], ['🏃', '달리기', 'RUNNING'], ['🏀', '농구', 'BASKETBALL'], ['🏓', '탁구', 'TABLE TENNIS'], ['🛷', '눈썰매', 'SLEDDING']];
 window.NARACAL_RACHA_ART = [
   ['신정', 'ra-hol-sinjeong', '신정 — 해돋이 인사'], ['설날', 'ra-hol-seollal', '설날 — 세배'], ['삼일절', 'ra-hol-samiljeol', '삼일절 — 태극기 만세'], ['어린이날', 'ra-hol-childrens', '어린이날 — 바람개비·풍선'],
   ['부처님오신날', 'ra-hol-buddha', '부처님오신날 — 연등'], ['현충일', 'ra-hol-memorial', '현충일 — 국화·묵념'], ['제헌절', 'ra-hol-constitution', '제헌절 — 법 책'], ['광복절', 'ra-hol-liberation', '광복절 — 태극기'],
   ['추석', 'ra-hol-chuseok', '추석 — 송편 빚기'], ['개천절', 'ra-hol-foundation', '개천절 — 하늘 열림'], ['한글날', 'ra-hol-hangeul', '한글날 — 붓글씨 「한글」'], ['크리스마스', 'ra-hol-christmas', '성탄절 — 선물'],
   ['임시공휴일', 'ra-hol-dayoff', '쉬는 날 — 해변 휴식'], ['', 'ra-ev-exam', '승급심사 — 띠 매기'], ['', 'ra-wave', '라차 손 흔들기'],
+  ['', 'ra-ev-congrats', '승급 축하 — 새 띠'], ['', 'ra-ev-recruit', '수련생 모집 — 어서 와요'], ['', 'ra-ev-birthday', '생일 축하 — 케이크'],
+  ['', 'ra-ev-camp', '방학 캠프 — 숲 소풍'], ['', 'ra-ev-contest', '대회 — 시상대'], ['', 'ra-ev-attend', '출석 칭찬 — 별 스티커'],
 ].map(([hol, k, t]) => ({ hol, src: 'assets/virtue/' + k + '.webp', title: t }));
 // 기본 프로젝트 데이터: 2026년 캘린더 내용을 바탕으로 2027년 초안을 만듭니다.
 window.NARACAL_DEFAULTS = (function () {

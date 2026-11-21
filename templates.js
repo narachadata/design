@@ -83,7 +83,7 @@ NC.tpl = (function () {
       I(D.logo, 10, 8, 50, 12, { name: '로고' }),
       T('여름방학 특별 캠프', 8, 26, 132, 20, { font: 'Black Han Sans', size: 32, color: NAVY, align: 'center', lh: 1.1 }),
       T('2027. 7. 26(월) ~ 7. 30(금)  ·  5일간', 8, 48, 132, 8, { size: 12, weight: 600, align: 'center', color: RED }),
-      I(D.coop, 14, 60, 120, 72, { name: '삽화' }),
+      I('assets/virtue/ra-ev-camp.webp', 14, 60, 120, 72, { fit: 'cover', pos: '50% 62%', radius: 6, name: '라차 그림' }),
       S('rect', 10, 136, 128, 54, { fill: WHITE, radius: 4 }),
       T(`프로그램  품새·겨루기·격파·물놀이·캠프파이어\n대    상  초등 1~6학년 (선착순 30명)\n참 가 비  000,000원 (식비·보험 포함)\n신    청  도장 사무실 또는 ${PHONE}`, 16, 142, 116, 44, { size: 10.5, lh: 1.65, weight: 500, name: '안내' }),
       T('나라차태권도', 8, 196, 132, 8, { font: 'Montserrat', size: 9, weight: 700, align: 'center', color: NAVY, ls: 0.2 }),
@@ -94,7 +94,7 @@ NC.tpl = (function () {
       T('FREE TRIAL', 10, 12, 100, 6, { font: 'Montserrat', size: 9, weight: 700, color: YEL, ls: 0.3 }),
       T('무료 체험수업\n신청하세요', 10, 22, 128, 44, { font: 'Jua', size: 34, color: WHITE, lh: 1.1, name: '제목' }),
       T('도복 무료 대여 · 1회 90분 · 학부모 참관 가능', 10, 72, 128, 8, { size: 10, weight: 500, color: '#C8CFE4' }),
-      I(D.m4, 8, 96, 50, 50, { name: '마스코트' }),
+      I('assets/virtue/ra-ev-recruit.webp', 8, 96, 50, 50, { name: '라차 그림' }),
       T('이렇게 진행돼요', 64, 100, 76, 7, { size: 12, weight: 700, color: NAVY }),
       T('1. 전화 또는 방문 신청\n2. 체험 시간 예약 (평일 오후)\n3. 기본 동작·간단한 발차기 체험\n4. 상담 후 반 배정', 64, 110, 78, 36, { size: 10, lh: 1.65, weight: 500, name: '안내' }),
       S('rect', 10, 154, 128, 24, { fill: YEL, radius: 12 }),
@@ -136,7 +136,7 @@ NC.tpl = (function () {
       T('CONGRATULATIONS', 24, 40, 238, 10, { font: 'Montserrat', size: 13, weight: 700, color: RED, ls: 0.3 }),
       T('승급을\n축하합니다!', 24, 56, 238, 80, { font: 'Jua', size: 58, color: NAVY, lh: 1.1, name: '제목' }),
       T('2027년 3월 정기 승급심사 합격자\n홍길동 · 김나라 · 이차차 · 박태권 외 12명', 24, 150, 200, 40, { size: 17, weight: 500, lh: 1.5, color: '#333', name: '내용' }),
-      I(D.m1, 190, 160, 80, 80, { name: '마스코트' }),
+      I('assets/virtue/ra-ev-congrats.webp', 180, 150, 92, 92, { name: '라차 그림' }),
       T('나라차태권도', 24, 250, 180, 10, { font: 'Montserrat', size: 11, weight: 700, color: NAVY, ls: 0.2 }),
     ], 'SNS 축하')]; } },
     { id: 'sns-cardnews', cat: 'sns', name: '카드뉴스 표지', w: 285.75, h: 285.75, build(uid) { const { T, I, S, P } = H(uid); return [P(MINT, [
@@ -152,7 +152,7 @@ NC.tpl = (function () {
       S('rect', 24, 156, 120, 14, { fill: YEL, radius: 7 }),
       T('무료 체험 1회', 24, 158.5, 120, 10, { size: 13, weight: 700, color: NAVY, align: 'center' }),
       T(`6세~성인 · 평일 14:00~21:00\n${PHONE}`, 24, 182, 200, 40, { size: 19, weight: 600, lh: 1.5, color: WHITE, name: '내용' }),
-      I(D.m8, 186, 170, 90, 90, { name: '마스코트' }),
+      I('assets/virtue/ra-ev-recruit.webp', 184, 160, 90, 90, { name: '라차 그림' }),
       T('나라차태권도', 24, 250, 180, 10, { font: 'Montserrat', size: 11, weight: 700, color: YEL, ls: 0.2 }),
     ], 'SNS 모집')]; } },
     { id: 'sns-story', cat: 'sns', name: '인스타 스토리 공지', w: 285.75, h: 508, build(uid) { const { T, I, S, P } = H(uid); return [P(NAVY, [
@@ -245,7 +245,7 @@ NC.tpl = (function () {
       T('홍길동 수련생,\n생일 축하해요!', 10, 24, 96, 34, { font: 'Gaegu', size: 26, weight: 700, color: NAVY, lh: 1.15, name: '제목' }),
       T('오늘처럼 힘찬 기합으로\n멋지게 자라길 응원합니다.', 10, 62, 96, 20, { size: 10, lh: 1.5, color: '#444', name: '내용' }),
       T('나라차태권도 사범 일동', 10, 90, 96, 6, { size: 8.5, weight: 600, color: NAVY }),
-      I(D.m5, 100, 40, 44, 56, { pos: '50% 100%', name: '마스코트' }),
+      I('assets/virtue/ra-ev-birthday.webp', 100, 46, 42, 42, { name: '라차 그림' }),
     ], '생일 카드')]; } },
 
     /* ===== 안내문 (A4 세로) ===== */
