@@ -209,6 +209,12 @@ NC.cal = (function () {
     { id: 'sports-team', cat: '스포츠', name: '라차 스포츠', desc: '달마다 다른 운동(스키·축구·수영…), 전광판 숫자와 스포츠 띠', layout: 'sports', calLayout: 'band', art: 'sports', titleWeight: 800, colorA: '#EEF3FB', colorB: '#FDF1EC', band: '#14286B', panel: '#14286B', titleColor: '#14286B', idiomColor: '#FFD34D', tabColor: '#E63946', accent: '#E63946', yearColor: '#14286B', text: '#14213D', fontTitle: 'Isamanru', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Oswald', line: '#7C7F85', outer: '#14286B', sunBg: '#F3F5FA', sunColor: '#E63946' },
     { id: 'sports-pop', cat: '스포츠', name: '스포츠 팝', desc: '라임·오렌지 경기장 색, 운동하는 라차', layout: 'sports', calLayout: 'card', art: 'sports', titleWeight: 900, colorA: '#F3FBE4', colorB: '#FFF3E6', band: '#FF7A1A', panel: '#1F3B2C', stripe2: '#B8E34A', titleColor: '#1F3B2C', idiomColor: '#1F3B2C', tabColor: '#FF7A1A', accent: '#FF7A1A', yearColor: '#1F3B2C', text: '#1E2A22', fontTitle: 'CookieRun', fontHand: 'Pretendard', fontBody: 'NanumSquareNeo', fontNum: 'Oswald', line: '#808C87', outer: '#1F3B2C', sunBg: '#F4FAEC', sunColor: '#E5484D' },
     { id: 'sports-court', cat: '스포츠', name: '코트 그린', desc: '경기장 선이 그려진 초록 코트, 운동하는 라차', layout: 'sports', calLayout: 'split', art: 'sports', court: true, titleWeight: 800, colorA: '#2E7D4F', colorB: '#2A7349', band: '#1E5C39', panel: '#FFFFFF', titleColor: '#FFFFFF', idiomColor: '#FFE066', tabColor: '#FFE066', accent: '#FFE066', yearColor: '#1E5C39', text: '#FFFFFF', calBg: '#FFFFFF', calText: '#1a1a1a', fontTitle: 'Isamanru', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Oswald', line: '#82858C', outer: '#1E5C39', sunBg: '', sunColor: '#D9434F' },
+    { id: 'glass-aurora', cat: '사진·그림', name: '오로라 글래스', desc: '오로라 그라데이션에 그림을 크게, 반투명 유리 카드', layout: 'glass', calLayout: 'card', titleWeight: 800, colorA: '#E4E9FF', colorB: '#F7E3F5', g1: '#C9D6FF', g2: '#F6D5F7', blob1: '#A0E7E5', blob2: '#FFD6A5', titleColor: '#2A2550', idiomColor: '#6C4BD8', tabColor: '#6C4BD8', accent: '#6C4BD8', yearColor: '#2A2550', text: '#1F1F2E', fontTitle: 'Pretendard', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#868A99', outer: '#2A2550', sunBg: '#F5F6FF', sunColor: '#E0435E' },
+    { id: 'glass-sunset', cat: '모던', name: '선셋 글래스', desc: '노을빛 그라데이션과 유리 카드, 배경화면용', layout: 'glass', calLayout: 'card', titleWeight: 800, colorA: '#FFE7D6', colorB: '#FFE0E6', g1: '#FFD6A5', g2: '#FF9AA2', blob1: '#FFF3B0', blob2: '#FFC2D1', titleColor: '#4A2030', idiomColor: '#C8435E', tabColor: '#E2557A', accent: '#E2557A', yearColor: '#4A2030', text: '#2E1A22', fontTitle: 'GMarketSans', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#8C8486', outer: '#4A2030', sunBg: '#FFF4F1', sunColor: '#E2557A' },
+    { id: 'stamp-star', cat: '인성', name: '칭찬 도장판', desc: '그 달 날짜만큼 도장 칸 — 실천한 날 도장 쾅!', layout: 'stamp', calLayout: 'card', titleWeight: 800, colorA: '#FFF6E0', colorB: '#FFF0D6', panel: '#FFFFFF', stampC: '#F08C2E', dotC: 'rgba(240,140,46,0.14)', titleColor: '#3B2A6B', idiomColor: '#3B2A6B', tabColor: '#F08C2E', accent: '#F08C2E', yearColor: '#3B2A6B', text: '#2A2340', fontTitle: 'Jua', fontHand: 'Gaegu', fontBody: 'NanumSquareNeo', fontNum: 'Montserrat', line: '#8C8480', outer: '#3B2A6B', sunBg: '#FFF8EC', sunColor: '#E5484D' },
+    { id: 'stamp-mint', cat: '귀여운', name: '칭찬 도장판 민트', desc: '민트 점무늬에 도장 칸, 실천 체크', layout: 'stamp', calLayout: 'card', titleWeight: 800, colorA: '#E3F6EF', colorB: '#EAF8F3', panel: '#FFFFFF', stampC: '#1F9E7D', dotC: 'rgba(31,158,125,0.14)', titleColor: '#1F4E5F', idiomColor: '#1F4E5F', tabColor: '#1F9E7D', accent: '#1F9E7D', yearColor: '#1F4E5F', text: '#1E3438', fontTitle: 'CookieRun', fontHand: 'Gaegu', fontBody: 'NanumSquareNeo', fontNum: 'Montserrat', line: '#808C87', outer: '#1F4E5F', sunBg: '#EEF8F4', sunColor: '#D9534F' },
+    { id: 'badge-groovy', cat: '귀여운', name: '그루비 배지', desc: '둥근 창 둘레 곡선 글자, 무지개 아치, 70년대 레트로', layout: 'badge', calLayout: 'band', groovy: true, titleWeight: 800, colorA: '#F8E9CF', colorB: '#F6E3C4', band: '#9E4318', panel: '#F2B84B', arc1: '#D9622B', arc2: '#F2B84B', arc3: '#6B8F4E', titleColor: '#7A3B17', idiomColor: '#F6C453', tabColor: '#D9622B', accent: '#D9622B', yearColor: '#7A3B17', text: '#3A2414', fontTitle: 'Binggre', fontHand: 'Pretendard', fontBody: 'Paperozi', fontNum: 'Oswald', line: '#8C7D66', outer: '#9E4318', sunBg: '#FBF1E3', sunColor: '#C0392B' },
+    { id: 'badge-emblem', cat: '인성', name: '나라차 엠블럼', desc: '도장 이름이 둘레를 감싼 엠블럼 창, 남색·빨강', layout: 'badge', calLayout: 'minimal', titleWeight: 800, colorA: '#EEF1F7', colorB: '#F4F5F9', panel: '#FFFFFF', titleColor: '#1E2B5A', idiomColor: '#E0564B', tabColor: '#E0564B', accent: '#E0564B', yearColor: '#1E2B5A', text: '#1a1a1a', fontTitle: 'Black Han Sans', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Oswald', line: '#7C7F85', outer: '#1E2B5A', sunBg: '', sunColor: '#D84343' },
     { id: 'season-garden', cat: '계절', name: '사계절 정원', desc: '달마다 바뀌는 계절색과 꽃·눈·단풍 장식', layout: 'season', calLayout: 'card', season: 'pastel', titleWeight: 400, colorA: '#FDEFF3', colorB: '#EEF3EE', titleColor: '#3A3A3A', idiomColor: '#3A3A3A', tabColor: '#3A3A3A', accent: '#3A3A3A', yearColor: '#3A3A3A', text: '#2A2A2A', fontTitle: 'Jua', fontHand: 'Gaegu', fontBody: 'Gowun Dodum', fontNum: 'Montserrat', line: '#8A8A8A', outer: '#555555', sunBg: '', sunColor: '#E0564B' },
     { id: 'season-arch', cat: '계절', name: '계절 아치', desc: '아치 창 위에 계절 꽃다발, 달마다 색이 바뀜', layout: 'arch', calLayout: 'card', season: 'pastel', deco: true, titleWeight: 700, colorA: '#FDEFF3', colorB: '#EEF3EE', panel: '#FFFFFF', titleColor: '#3A3A3A', idiomColor: '#3A3A3A', tabColor: '#3A3A3A', accent: '#3A3A3A', yearColor: '#3A3A3A', text: '#2A2A2A', fontTitle: 'Gowun Batang', fontHand: 'Gaegu', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#8A8A8A', outer: '#555555', sunBg: '', sunColor: '#C8392B' },
     { id: 'season-diary', cat: '계절', name: '계절 다이어리', desc: '모눈종이에 폴라로이드·마스킹테이프, 계절 장식', layout: 'polaroid', calLayout: 'card', season: 'pastel', deco: true, titleScale: 1.1, colorA: '#FDEFF3', colorB: '#EEF3EE', titleColor: '#3A3A3A', idiomColor: '#3A3A3A', tabColor: '#3A3A3A', accent: '#3A3A3A', yearColor: '#3A3A3A', text: '#2A2A2A', fontTitle: 'Jua', fontHand: 'Gaegu', fontBody: 'Gowun Dodum', fontNum: 'Montserrat', line: '#8A8A8A', outer: '#555555', sunBg: '', sunColor: '#E0564B' },
@@ -519,6 +525,75 @@ NC.cal = (function () {
           I_(C.dojang.target, 20, 125, 9.5, 9.5, { name: '실천 아이콘' }),
           prac(32, 122.5, 80, 24, { size: 10 }),
           ...logoAt(104, 13, 11, 9.5, dk),
+        ].filter(Boolean), `${m}월 이미지면`, 'virtue');
+      }
+      if (L === 'glass') {
+        /* 풀 이미지 + 유리 카드: 오로라 그라데이션 바탕에 그림을 크게, 왼쪽 반투명 유리 카드에 글 (배경화면에 잘 어울림) */
+        return pg(bg, [
+          S_('rect', 0, 0, 224, 154, { fillType: 'gradient', g1: T.g1 || A, g2: T.g2 || B, gAngle: 135, name: '그라데이션 바탕' }),
+          S_('ellipse', 120, -30, 130, 110, { fill: T.blob1 || '#ffffff', opacity: 0.45, name: '빛 번짐' }),
+          S_('ellipse', -40, 90, 120, 100, { fill: T.blob2 || '#ffffff', opacity: 0.4, name: '빛 번짐' }),
+          img(mo, 66, 4, 158, 150, { pos: '75% 100%' }),
+          S_('rect', 10, 12, 98, 130, { fill: '#ffffff', opacity: 0.56, radius: 6, shadow: true, shA: 0.12, shB: 1.6, shY: 1, name: '유리 카드' }),
+          S_('rect', 10, 12, 98, 130, { fill: '', stroke: '#ffffff', strokeW: 0.5, radius: 6, name: '유리 테두리' }),
+          ...logoAt(91, 18, 11, 9.5, false),
+          T_(mm2, 17, 17, 60, 24, { font: T.fontNum, size: 60, weight: 800, lh: 1, ls: -0.04, color: t.accent, name: '월 숫자' }),
+          T_(ymCaps, 18, 42, 84, 6, { font: T.fontNum, size: 7.5, weight: 700, ls: 0.26, color: t.titleColor, opacity: 0.7, name: '연월', role: 'ym', month: m }),
+          T_(mo.virtue, 17, 52, 88, 18, Object.assign({ font: T.fontTitle, size: Math.round(38 * (T.titleScale || 1)), color: t.titleColor, lh: 1.05, ls: -0.02 }, common)),
+          T_(mo.en, 18, 70, 88, 6, { font: T.fontNum, size: 8.5, weight: 700, ls: 0.2, color: t.accent, name: '영문', role: 'en', month: m }),
+          T_(mo.quote, 18, 80, 86, 34, { size: 12, weight: 600, lh: 1.6, color: '#1f1f2e', name: '명언', role: 'quote', month: m }),
+          S_('rect', 18, 116, 20, 0.5, { fill: t.accent, name: '가는 줄' }),
+          prac(18, 119, 86, 22, { size: 9.8, color: '#1f1f2e' }),
+        ].filter(Boolean), `${m}월 이미지면`, 'virtue');
+      }
+      if (L === 'stamp') {
+        /* 칭찬 도장판: 그 달 날짜 수만큼 도장 칸(7칸 × 5줄) — 아이가 실천한 날 도장·스티커를 붙임 */
+        const nd2 = daysIn(year, m), card = T.panel || '#ffffff', sc = T.stampC || t.accent, cells = [];
+        for (let d = 1; d <= 35; d++) { const k = d - 1, cx = 140 + (k % 7) * 10.6, cy = 101 + Math.floor(k / 7) * 9; if (d <= nd2) { cells.push(S_('ellipse', cx, cy, 7.6, 7.6, { fill: '#ffffff', stroke: sc, strokeW: 0.35, dash: '1 0.7', name: `도장 칸 ${d}` })); cells.push(T_(String(d), cx, cy, 7.6, 7.6, { font: T.fontNum, size: 6, weight: 600, align: 'center', valign: 'middle', lh: 1, color: sc, opacity: 0.75, name: `날짜 ${d}` })); } }
+        return pg(bg, [
+          S_('dots', 0, 0, 224, 154, { fill: T.dotC || 'rgba(0,0,0,0.06)', cell: 5, name: '점무늬' }),
+          img(mo, 120, 4, 98, 90, { pos: '50% 100%' }),
+          ...logoAt(16, 12, 11, 9.5, false),
+          T_(ymCaps, 30, 14.5, 84, 6, { font: T.fontNum, size: 7.5, weight: 700, ls: 0.26, color: t.accent, name: '연월', role: 'ym', month: m }),
+          T_(String(m), 14, 24, 40, 26, { font: T.fontNum, size: 66, weight: 800, lh: 1, ls: -0.04, color: t.accent, name: '월 숫자' }),
+          T_(mo.virtue, nd === 1 ? 38 : 56, 30, 70, 18, Object.assign({ font: T.fontTitle, size: Math.round(36 * (T.titleScale || 1)), color: t.titleColor, lh: 1.05, ls: -0.02 }, common)),
+          T_(mo.en, nd === 1 ? 39 : 57, 48, 70, 5, { font: T.fontNum, size: 8, weight: 700, ls: 0.2, color: t.accent, name: '영문', role: 'en', month: m }),
+          T_(mo.quote, 16, 58, 100, 30, { size: 12, weight: 700, lh: 1.6, color: ink, name: '명언', role: 'quote', month: m }),
+          S_('rect', 8, 94, 208, 54, { fill: card, radius: 5, shadow: true, shA: 0.1, shB: 1, name: '도장판 카드' }),
+          S_('star', 14, 99, 8, 8, { fill: sc, name: '별' }),
+          T_('칭찬 도장판', 24, 99, 70, 8, { font: T.fontTitle, size: 14, weight: 800, valign: 'middle', lh: 1, color: t.titleColor, name: '도장판 제목' }),
+          T_('실천한 날마다 도장 쾅! · 다 모으면 사범님께 보여 주세요', 14, 109, 120, 5, { size: 7, weight: 600, color: '#666666', name: '도장판 설명' }),
+          S_('rect', 14, 118, 118, 25, { fill: T.season ? t.bg : (B || '#f6f6f6'), radius: 3, name: '실천 바탕' }),
+          I_(C.dojang.target, 18, 121.5, 9.5, 9.5, { name: '실천 아이콘' }),
+          prac(30, 120, 100, 22, { size: 9.8, color: '#222222' }),
+          ...cells,
+        ].filter(Boolean), `${m}월 이미지면`, 'virtue');
+      }
+      if (L === 'badge') {
+        /* 곡선 글자 배지: 둥근 그림 창 둘레를 영문 덕목·도장 이름 글자가 감싸고, 월 숫자 배지도 원 둘레 글자 (레트로·그루비) */
+        /* 둘레 글자는 원 둘레 길이에 맞춰 되풀이해 고르게 꽉 차게 (글자 폭 ≈ 0.58em) */
+        const ringFill = (str, size, diam) => { const fs = size * 25.4 / 72, C2 = 2 * Math.PI * (diam / 2 - fs * 0.6); return str.repeat(Math.max(1, Math.round(C2 / (str.length * fs * 0.58)))); };
+        const ring = ringFill(`${mo.en.toUpperCase()} ✦ ${C.dojang.nameEn || 'NARACHA TAEKWONDO'} ✦ ${year} ✦ `, 12, 114);
+        return pg(bg, [
+          T.groovy ? S_('arch', -26, 92, 92, 92, { fill: T.arc1 || t.accent, name: '무지개 1' }) : null,
+          T.groovy ? S_('arch', -16, 102, 72, 82, { fill: T.arc2 || '#ffffff', name: '무지개 2' }) : null,
+          T.groovy ? S_('arch', -6, 112, 52, 72, { fill: T.arc3 || t.titleColor, name: '무지개 3' }) : null,
+          T.groovy ? S_('arch', 4, 122, 32, 62, { fill: bg, name: '무지개 4' }) : null,
+          T_(ring, 108, 2, 114, 114, { font: T.fontNum, size: 12, weight: 700, warp: 'circle', warpFit: true, color: t.titleColor, name: '둘레 글자', role: 'ring', month: m }),
+          S_('ellipse', 121, 15, 88, 88, { fill: T.panel || '#ffffff', name: '둥근 창' }),
+          img(mo, 124, 18, 82, 82, { clip: 'circle', pos: '50% 100%' }),
+          S_('ellipse', 176, 104, 40, 40, { fill: t.accent, shadow: true, shA: 0.18, shB: 0.8, name: '월 배지' }),
+          S_('ellipse', 184.5, 112.5, 23, 23, { fill: '', stroke: 'rgba(255,255,255,0.7)', strokeW: 0.35, name: '배지 안쪽 선' }),
+          T_(ringFill(`${MONTHS_EN[m - 1].toUpperCase()} • ${year} • `, 6.5, 40), 176, 104, 40, 40, { font: T.fontNum, size: 6.5, weight: 700, warp: 'circle', warpFit: true, color: '#ffffff', name: '배지 둘레 글자' }),
+          T_(String(m), 176, 104, 40, 40, { font: T.fontNum, size: 34, weight: 800, align: 'center', valign: 'middle', lh: 1, color: '#ffffff', name: '월 숫자' }),
+          ...logoAt(16, 12, 11, 9.5, dk),
+          T_(ymCaps, 30, 14.5, 80, 6, { font: T.fontNum, size: 7.5, weight: 700, ls: 0.26, color: t.accent, name: '연월', role: 'ym', month: m }),
+          T_(mo.virtue, 15, 26, 96, 20, Object.assign({ font: T.fontTitle, size: Math.round(44 * (T.titleScale || 1)), color: t.titleColor, lh: 1.05, ls: -0.02 }, common)),
+          T_(mo.en, 16, 47, 96, 6, { font: T.fontNum, size: 9, weight: 700, ls: 0.22, color: t.accent, name: '영문', role: 'en', month: m }),
+          T_(mo.quote, 16, 58, 94, 36, { size: 12.5, weight: 700, lh: 1.6, color: ink, name: '명언', role: 'quote', month: m }),
+          S_('rect', T.groovy ? 52 : 14, 112, T.groovy ? 116 : 154, 32, { fill: dk ? 'rgba(255,255,255,0.12)' : '#ffffff', opacity: 0.92, radius: 4, name: '실천 카드' }),
+          I_(C.dojang.target, T.groovy ? 56 : 18, 116, 9.5, 9.5, { name: '실천 아이콘' }),
+          prac(T.groovy ? 68 : 30, 114.5, T.groovy ? 98 : 136, 28, { size: 9.8 }),
         ].filter(Boolean), `${m}월 이미지면`, 'virtue');
       }
       if (L === 'season') {
