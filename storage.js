@@ -320,9 +320,14 @@ NC.store = (function () {
     if (taken) name = entry.kind === 'file' ? await uniqueName(name.replace(/\.design\.json$/i, ''), t) : `${name} (${Date.now() % 100000})`;
     return moveEntry(entry, fromPath, [TRASH], name);
   }
+  /* 종류별 폴더 (팀장님 11/21): 폴더 만들기(없으면) · 아무 파일(PNG·PDF·영상) 쓰기 · 파일 목록 */
+  async function ensureDir(path) { let d = state.dir; for (const p of path || []) d = await d.getDirectoryHandle(p, { create: true }); return d; }
+  async function uniqueFile(name, dir) { const names = new Set(); for await (const [n] of dir.entries()) names.add(n); if (!names.has(name)) return name; const m = name.match(/^(.*?)(\.[^.]+)?$/); for (let i = 2; i < 999; i++) { const c = `${m[1]} (${i})${m[2] || ''}`; if (!names.has(c)) return c; } return Date.now() + '_' + name; }
+  async function writeBlobAt(path, name, blob) { if (!(await folderReady())) return null; const d = await ensureDir(path); const nm = await uniqueFile(String(name || 'file').replace(/[\\/:*?"<>|]/g, '_'), d); const h = await d.getFileHandle(nm, { create: true }); const w = await h.createWritable(); await w.write(blob); await w.close(); return nm; }
+  async function listFiles(path) { let d; try { d = await dirAt(path); } catch (e) { return []; } const out = []; for await (const [n, h] of d.entries()) { if (h.kind !== 'file' || n.startsWith('.')) continue; try { const f = await h.getFile(); out.push({ name: n, handle: h, size: f.size, lastModified: f.lastModified }); } catch (e) {} } return out.sort((a, b) => b.lastModified - a.lastModified); }
   async function emptyEntry(name) { const t = await state.dir.getDirectoryHandle(TRASH); await t.removeEntry(name, { recursive: true }); }
 
-  return { snapshot, listSnapshots, readSnapshot, state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
+  return { ensureDir, writeBlobAt, listFiles, snapshot, listSnapshots, readSnapshot, state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
     writeCopy, pcName, setPcName, adopt, descends, pcId: () => pc().id,
     connectFolder, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, findDocById, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
 })();
