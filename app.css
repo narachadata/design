@@ -1610,3 +1610,6 @@ body.tl-focus .aichat{display:none}
 .imp-sel{border:1.5px solid var(--ui-accent);border-radius:10px;padding:10px 12px;background:var(--ui-accent-soft);font-size:13px}.imp-warn{margin-top:8px;padding:8px 10px;border-radius:8px;background:#fff6e0;line-height:1.6}
 .imp-list{margin:4px 0 8px 18px;line-height:1.7;font-size:13px}
 @media (max-width:900px){.imp-cards{grid-template-columns:1fr}}
+
+/* 도서 편집 — 원고 편집기 사진 목록 */
+.st-photos{margin-top:8px}.st-ph{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:4px}.st-ph button{border:1px solid var(--ui-line);border-radius:6px;padding:0;aspect-ratio:1;overflow:hidden;background:var(--ui-field);cursor:pointer}.st-ph img{width:100%;height:100%;object-fit:cover;display:block}

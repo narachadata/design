@@ -73,8 +73,7 @@ NC.imgedit = (function () {
       const orig = document.createElement('canvas'); orig.width = W; orig.height = H; orig.getContext('2d').drawImage(img, 0, 0);
       const work = document.createElement('canvas'); work.width = W; work.height = H; work.getContext('2d').drawImage(img, 0, 0);
       st = { W, H, orig, work, hist: [], tool: 'bg', color: '#ffffff', tol: 22, soft: 16, connected: true, despill: true, feather: 1, minPx: Math.round(W * H / 4000), brush: 30, hard: 70, zoom: 1, crop: null, onApply };
-      render(); fit();
-      d.showModal();
+      render(); d.showModal(); requestAnimationFrame(fit); /* 창을 띄운 뒤에 크기를 재야 사진이 창에 맞게 보임 (예전엔 띄우기 전에 재서 작게 보였음) */
     }).catch(e => alert(e.message));
   }
   function pushHist() { const c = document.createElement('canvas'); c.width = st.W; c.height = st.H; c.getContext('2d').drawImage(st.work, 0, 0); st.hist.push(c); if (st.hist.length > 12) st.hist.shift(); }
