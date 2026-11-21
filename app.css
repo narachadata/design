@@ -1603,3 +1603,10 @@ body.tl-focus .aichat{display:none}
 .dvgather{display:flex;align-items:center;gap:10px;justify-content:space-between;margin-top:14px;padding:10px 12px;border-radius:10px;background:#fff6e0;font-size:13px}
 .dvexp{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px}.dvexpi{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:8px;align-items:center;text-align:left;border:1px solid var(--ui-line);border-radius:9px;background:var(--ui-bg);padding:8px 10px;cursor:pointer}.dvexpi:hover{border-color:var(--ui-accent)}
 .dvexpi .dvx-ext{grid-row:1/3;font-size:10px;font-weight:800;color:#fff;background:#5b6b8c;border-radius:5px;padding:4px 5px;min-width:34px;text-align:center}.dvexpi b{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dvexpi small{font-size:11px;color:var(--ui-fg2)}
+
+/* 다른 프로그램 파일 가져오기 (import.js) */
+.imp .imp-drop{border:2px dashed var(--ui-line);border-radius:12px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:8px;background:var(--ui-field)}.imp .imp-drop.over{border-color:var(--ui-accent);background:var(--ui-accent-soft)}.imp .imp-drop small{color:var(--ui-fg2)}
+.imp-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.imp-card{border:1px solid var(--ui-line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:4px;font-size:12px;line-height:1.5}.imp-card span{font-size:22px}.imp-card b{font-size:13px}.imp-card small{color:var(--ui-fg2)}
+.imp-sel{border:1.5px solid var(--ui-accent);border-radius:10px;padding:10px 12px;background:var(--ui-accent-soft);font-size:13px}.imp-warn{margin-top:8px;padding:8px 10px;border-radius:8px;background:#fff6e0;line-height:1.6}
+.imp-list{margin:4px 0 8px 18px;line-height:1.7;font-size:13px}
+@media (max-width:900px){.imp-cards{grid-template-columns:1fr}}
