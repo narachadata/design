@@ -19,6 +19,7 @@ function newPage(bg) { return { id: uid(), bg: bg || '#ffffff', els: [], label: 
 function newDoc(sz) { sz = sz || SIZES[0]; return { v: 2, name: '새 디자인', w: sz[2], h: sz[3], bleed: 0, cropMarks: false, pages: [newPage()], assets: {}, fonts: [], holidays: {}, showHolidays: true, calendar: Object.assign(clone(window.NARACAL_DEFAULTS), { theme: Object.assign({ id: 'classic' }, window.NARACAL_DEFAULTS.theme) }), rules: clone(savedRules() || window.NARACAL_DEFAULTS.rules), updatedAt: Date.now() }; }
 /* 도장 기본 행사 목록(반복 일정 규칙): 한 번 저장하면 새 문서·다음 해 달력에 그대로 (두 PC 설정 동기화) */
 function savedRules() { try { const v = JSON.parse(localStorage.getItem('naracal-rules-saved') || 'null'); return Array.isArray(v) && v.length ? v : null; } catch (e) { return null; } }
+let BKm = null; /* 도서 편집 모듈 (BK()) — commit에서도 보므로 맨 위에 */
 const page = () => doc.pages[cur];
 const find = id => page().els.find(e => e.id === id);
 const selEls = () => sel.map(find).filter(Boolean);
@@ -61,7 +62,7 @@ function gcAssets() { const used = new Set(); const walk = v => { if (typeof v =
 const HIST_LIVE = ['assets', 'fonts', 'name', 'docId', 'updatedAt'];
 function snapshot() { const keep = {}; HIST_LIVE.forEach(k => { keep[k] = doc[k]; delete doc[k]; }); const s = JSON.stringify(doc); Object.assign(doc, keep); return s; }
 let histMeta = [];  // 기록마다 그때 보던 쪽·선택
-function commit() { tlTimingSnap = null; if (!certTplBusy && doc && doc.cert && doc.pages.some(p => p.certTpl)) { certTplBusy = true; try { certTplCommit(); } catch (e) { console.warn('상장 양식 반영 실패', e); } finally { certTplBusy = false; } } const s_ = snapshot(); if (hist[hptr] === s_) return; hist = hist.slice(0, hptr + 1); histMeta = histMeta.slice(0, hptr + 1); hist.push(s_); histMeta.push({ cur, sel: sel.slice(), rn: NC.live.rn }); if (hist.length > 120) { hist.shift(); histMeta.shift(); } hptr = hist.length - 1; markDirty(); if (tl.open && !tl.playing) pgmSoon(); }
+function commit() { tlTimingSnap = null; if (BKm && doc && doc.book && doc.book.bookMode) setTimeout(() => BKm.afterCommit(), 0); /* 도서 편집: 쪽에서 사진 크기를 바꾸거나 지우면 다시 흘림 */ if (!certTplBusy && doc && doc.cert && doc.pages.some(p => p.certTpl)) { certTplBusy = true; try { certTplCommit(); } catch (e) { console.warn('상장 양식 반영 실패', e); } finally { certTplBusy = false; } } const s_ = snapshot(); if (hist[hptr] === s_) return; hist = hist.slice(0, hptr + 1); histMeta = histMeta.slice(0, hptr + 1); hist.push(s_); histMeta.push({ cur, sel: sel.slice(), rn: NC.live.rn }); if (hist.length > 120) { hist.shift(); histMeta.shift(); } hptr = hist.length - 1; markDirty(); if (tl.open && !tl.playing) pgmSoon(); }
 // 바로 앞 기록을 고쳐 씀 (그림 비율 맞춤처럼 한 동작의 뒷처리)
 function amendCommit() { if (hptr < 0) return commit(); hist[hptr] = snapshot(); histMeta[hptr].rn = NC.live.rn; markDirty(); }
 let nudgeTimer = null; function commitSoon() { clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { nudgeTimer = null; commit(); }, 450); }
@@ -697,6 +698,7 @@ wrap.addEventListener('pointerdown', e => {
     const id = dom.dataset.id, el = find(id); const was = sel.includes(id);
     if (imgPan && imgPan === id && !el.locked) { drag = { kind: 'imgpan', el, start: p, o: { panX: el.panX || 0, panY: el.panY || 0 }, moved: false }; e.preventDefault(); return; }
     if (imgPan) endImgPan(true);
+    if (el.type === 'image' && el.flowImg && was && sel.length === 1 && lastClick && lastClick.id === id && Date.now() - lastClick.t < 450) { lastClick = null; e.preventDefault(); openImgEditor(el); return; } /* 도서 편집 사진: 두 번 누르면 사진 편집기 (자리 조정 대신) */
     if (el.type === 'image' && was && !el.locked && !e.altKey && !e.shiftKey && sel.length === 1 && lastClick && lastClick.id === id && Date.now() - lastClick.t < 450) { lastClick = null; imgPan = id; renderOverlay(); toast('그림 자리 조정 — 끌어서 틀 안의 그림을 옮기고 휠로 확대합니다 · Esc나 다른 곳을 누르면 끝'); e.preventDefault(); return; }
     // 고른 달력의 칸 위를 누르면 칸 선택 (요일 줄을 누르면 달력 이동)
     if (el.type === 'cal' && was && !el.locked && hitNode.closest('.cell')) { const cellNode = hitNode.closest('.cell'); const c = Number(cellNode.dataset.c); if (e.shiftKey && cellSel && cellSel.id === id) cellSel.b = c; else cellSel = { id, a: c, b: c }; const dd = cellNode.dataset.day; selDay = dd ? Number(dd) : null; drag = { kind: 'cells', start: p, moved: false }; renderOverlay(); renderInspector(); e.preventDefault(); return; }
@@ -5147,9 +5149,8 @@ function findClick(e) {
 }
 
 /* ---- 도서 편집 (book.js) — 팀장님 11/21 「영상 위에 도서 편집, 인디자인·쿽 방식 책 만들기」 ---- */
-let BKm = null;
 function BK() { if (BKm) return BKm; if (!NC.bookMod) return null; BKm = NC.bookMod({
-  get doc() { return doc; }, get cur() { return cur; }, setCur(i) { cur = clamp(i, 0, doc.pages.length - 1); }, page, uid, clone, esc, MM, FONTS, TEXT_DEF, BOOK_DEF,
+  get doc() { return doc; }, get cur() { return cur; }, setCur(i) { cur = clamp(i, 0, doc.pages.length - 1); }, page, uid, clone, esc, MM, FONTS, TEXT_DEF, BOOK_DEF, addAsset,
   toast: (m, bad) => toast(m, bad), commit, renderAll, renderCanvas, renderSide, goto, book, bookNum, isRightPage, newDoc, newPage, setStatus, endEdit, ensureLibFonts, loadScript, printIssues, openSpreads, bookletPdf, openDownload,
   imgUrl: el => { try { return viewSrc(el, 'print'); } catch (e) { return ''; } },
   markDirty: () => { if (store.state) store.state.dirty = true; updateSaveBadge(); },
