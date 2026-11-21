@@ -261,13 +261,16 @@
       const all = (A.FONTS || []).map(f => [f.family, f.label || f.family]).filter(f => !pref.some(p => p[0] === f[0]));
       return pref.concat(all);
     }
-    async function createBook() {
+    async function createBook() { return makeBook(Object.assign({}, NB)); }
+    /* 책 만들기 (마법사·인디자인 가져오기 공용) — o: kind·title·author·w·h·mg·cols·font·size·lh·bind·cover·sample·md */
+    async function makeBook(NB) {
+      NB.kind = NB.kind || 'general'; if (!NB.mg) NB.mg = marginsFor(NB.w, NB.h, NB.kind);
       const K = KINDS[NB.kind], title = (NB.title || '').trim() || (NB.kind === 'edu' ? '나라차 수련 교본' : NB.kind === 'booklet' ? '나라차 소식' : '나라차 이야기');
       const kept = await A.newDocKeep(); if (kept === false) return;
       const d = A.newDoc(['custom', title, NB.w, NB.h]); d.name = title; d.bleed = 3; d.cropMarks = false; d.pages = [];
       d.book = Object.assign(A.clone(A.BOOK_DEF), { on: true, bookMode: true, kind: NB.kind, bind: NB.bind, title, author: NB.author || '', start: 1, skip: 0, facing: true, pos: 'outer', style: 'n', size: Math.max(7.5, Math.round((NB.size || K.size) * 0.85 * 2) / 2), color: '#555555', font: K.head, margin: 8, header: '', footer: '', headL: '{책제목}', headR: '{장제목}', rule: true, guides: true, mg: Object.assign({}, NB.mg), cols: Number(NB.cols || K.cols) || 1, gutter: 6, tocLevel: 2, tocTitle: '차례' });
       d.bstyles = psDefaults(NB.kind); if (NB.font) ['body', 'list', 'center', 'small'].forEach(k => { d.bstyles[k].font = NB.font; }); if (NB.size) { const z = NB.size; d.bstyles.body.size = z; d.bstyles.list.size = z; d.bstyles.center.size = z; d.bstyles.small.size = Math.round(z * 0.85 * 2) / 2; d.bstyles.quote.size = Math.round(z * 0.95 * 2) / 2; } if (NB.lh) ['body', 'list', 'center', 'quote'].forEach(k => { d.bstyles[k].lh = NB.lh; });
-      d.bstory = { md: NB.sample ? SAMPLE(title) : `# 첫째 장\n여기에 원고를 붙여 넣으세요. 왼쪽 「도서 편집 → 원고」에서 원고 편집기를 열거나 워드·한글에서 복사해 붙여 넣으면 쪽이 저절로 늘어납니다.` };
+      d.bstory = { md: NB.md ? NB.md : NB.sample ? SAMPLE(title) : `# 첫째 장\n여기에 원고를 붙여 넣으세요. 왼쪽 「도서 편집 → 원고」에서 원고 편집기를 열거나 워드·한글에서 복사해 붙여 넣으면 쪽이 저절로 늘어납니다.` };
       const T_ = (text, x, y, w, h, st) => Object.assign({}, A.TEXT_DEF, { id: A.uid(), text, x, y, w, h, sizing: 'fixed' }, st);
       const W = d.w, H = d.h, ac = K.accent || '#1a1a1a';
       if (NB.cover) { const c = A.newPage(K.accent || '#1E2B5A'); c.label = '표지'; c.noMaster = true; c.cover = true;
@@ -281,7 +284,7 @@
       bk.els.push(T_(`${title}\n\n펴낸 날  ${dstr} 1판 1쇄\n지은이  ${NB.author || ''}\n펴낸 곳  나라차태권도\n\n이 책의 내용을 허락 없이 옮겨 쓰지 마세요.`, NB.mg.outer, H - NB.mg.bottom - 45, W - NB.mg.inner - NB.mg.outer, 45, { font: 'Pretendard', size: 8.5, lh: 1.7, color: '#333333', name: '판권' })); d.pages.push(bk);
       A.setDoc(d); await flow({ quiet: true }); A.afterNewDoc();
       const st = d.book.lastFlow || {}; A.toast(`새 책 "${title}"을 만들었습니다 — ${d.pages.length}쪽(본문 ${st.pages || 0}쪽). 왼쪽 「도서 편집 → 원고」에서 원고를 바꾸면 쪽이 저절로 다시 짜입니다${kept ? ` · 저장하지 않은 "${kept}"는 직전 문서로 보관` : ''}`);
-      $('#dlgNewBook').close(); A.openTab('book');
+      const nbd = $('#dlgNewBook'); if (nbd && nbd.open) nbd.close(); A.openTab('book');
     }
     /* 이 문서를 책으로 (지금 크기 그대로 — 끝에 본문 흐름을 붙임) */
     function convertDoc() {
@@ -484,6 +487,6 @@
 [가운데] **오늘도 한 걸음, 내일도 한 걸음.**
 [작은글] 이 책의 예시 글은 「도서 편집 → 원고 편집기」에서 지우고 직접 쓴 원고로 바꾸어 쓰세요.`;
 
-    return { renderSide, openNewBook, openStory, flow, masterHTML, onFrameDbl, isBook, stale, parse, preflight, htmlToMd, sanitize };
+    return { renderSide, openNewBook, openStory, flow, masterHTML, onFrameDbl, isBook, stale, parse, preflight, htmlToMd, sanitize, makeBook };
   };
 })();

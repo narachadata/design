@@ -2690,7 +2690,7 @@ function renderManual() {
 function manZoom(im) { let z = $('#manZoom'); if (z) z.remove(); z = document.createElement('div'); z.id = 'manZoom'; z.innerHTML = `<div class="mzwrap">${im.innerHTML.replace('<span class="mzoom">🔍 크게</span>', '')}</div><button class="btn" data-mzc>닫기 (Esc)</button>`; $('#dlgManual').appendChild(z); const close = () => { z.remove(); document.removeEventListener('keydown', key, true); }; const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }; document.addEventListener('keydown', key, true); z.onclick = close; }
 /* 매뉴얼의 '바로 해 보기' */
 function manualGo(g) { const rail = k => { const b = $(`#rail [data-tab="${k}"]`); if (b) b.click(); };
-  ({ tpl: () => rail('tpl'), virtueTpl: () => { tplCat = 'all'; tplQ = ''; tplF = { format: '', season: '', age: '', occasion: '인성', biz: '' }; rail('tpl'); }, photo: () => rail('photo'), nara: () => rail('naracha'), elems: () => rail('elems'), video: () => rail('video'), settings: () => openSettings(), cert: () => naraGo('cert'), att: () => naraGo('att'), attPick: () => { naraGo('att'); openAttPick(); }, news: () => naraGo('news'), calendar: () => naraGo('calendar'), pages: () => rail('pages'), book: () => { rail('pages'); openBook(); }, bookedit: () => rail('book'), drive: () => openDrive(), resize: () => openResize(), print: () => openPrint(), qr: () => openQr(), dday: () => openDday(), dojang: () => openDojang(), wizard: () => openWizard(doc.calendar.year || 2027), rules: () => openRules(), download: () => openDownload(), vkeys: () => tlKeysHelp(), aichat: () => { if (NC.aichat) NC.aichat.show(true); }, filemenu: () => $('#btnFileMenu').click() }[g] || (() => {}))(); }
+  ({ tpl: () => rail('tpl'), virtueTpl: () => { tplCat = 'all'; tplQ = ''; tplF = { format: '', season: '', age: '', occasion: '인성', biz: '' }; rail('tpl'); }, photo: () => rail('photo'), nara: () => rail('naracha'), elems: () => rail('elems'), video: () => rail('video'), settings: () => openSettings(), cert: () => naraGo('cert'), att: () => naraGo('att'), attPick: () => { naraGo('att'); openAttPick(); }, news: () => naraGo('news'), calendar: () => naraGo('calendar'), pages: () => rail('pages'), book: () => { rail('pages'); openBook(); }, bookedit: () => rail('book'), drive: () => openDrive(), import: () => openImport(), resize: () => openResize(), print: () => openPrint(), qr: () => openQr(), dday: () => openDday(), dojang: () => openDojang(), wizard: () => openWizard(doc.calendar.year || 2027), rules: () => openRules(), download: () => openDownload(), vkeys: () => tlKeysHelp(), aichat: () => { if (NC.aichat) NC.aichat.show(true); }, filemenu: () => $('#btnFileMenu').click() }[g] || (() => {}))(); }
 /* ---- 설정 (세로 메뉴 맨 아래 ⚙): 여러 곳에 흩어져 있던 설정을 한곳에. 바꾸면 바로 적용되고 이 PC에 기억(일부는 동기화 폴더로 두 PC 같이) ---- */
 let setTab = 'view';
 function openSettings(tab) {
@@ -3865,10 +3865,10 @@ function openDrive(path) {
   let d = $('#dlgDrive');
   if (!d) {
     d = document.createElement('dialog'); d.id = 'dlgDrive'; d.className = 'nd drive';
-    d.innerHTML = `<div class="ndhead"><h2>내 드라이브</h2><button class="btn primary" id="dvNew"><svg class="ic"><use href="#i-new"/></svg>새 디자인 만들기</button><button class="btn sm" data-close>닫기</button></div>
+    d.innerHTML = `<div class="ndhead"><h2>내 드라이브</h2><button class="btn" id="dvImport" title="포토샵 PSD · 인디자인 IDML · 일러스트 AI · PDF"><svg class="ic"><use href="#i-upload"/></svg>다른 프로그램 파일 가져오기</button><button class="btn primary" id="dvNew"><svg class="ic"><use href="#i-new"/></svg>새 디자인 만들기</button><button class="btn sm" data-close>닫기</button></div>
     <div class="ndbody"><nav id="dvNav"></nav><div class="ndmain" id="dvMain"></div></div>`;
     document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close();
-    $('#dvNew').onclick = () => { d.close(); openNewDesign(); };
+    $('#dvNew').onclick = () => { d.close(); openNewDesign(); }; $('#dvImport').onclick = () => { d.close(); openImport(); };
     d.addEventListener('click', driveClick); d.addEventListener('dragstart', driveDrag); d.addEventListener('dragover', e => { if (e.target.closest('[data-dropdir]')) { e.preventDefault(); e.target.closest('[data-dropdir]').classList.add('over'); } });
     d.addEventListener('dragleave', e => { const t = e.target.closest('[data-dropdir]'); if (t) t.classList.remove('over'); }); d.addEventListener('drop', driveDrop);
   }
@@ -4124,11 +4124,12 @@ function openFileMenu() {
   <button data-fm="rename"><svg class="ic"><use href="#i-text"/></svg>이름 바꾸기</button><hr>
   <button data-fm="new"><svg class="ic"><use href="#i-new"/></svg>새 디자인…</button>
   <button data-fm="open"><svg class="ic"><use href="#i-folder"/></svg>내 드라이브 (열기)…<kbd>Ctrl+O</kbd></button>
+  <button data-fm="import"><svg class="ic"><use href="#i-upload"/></svg>다른 프로그램 파일 가져오기… (포토샵·인디자인·일러스트·PDF)</button>
   <button data-fm="prev"><svg class="ic"><use href="#i-open"/></svg>직전 문서 되살리기 (파일로 저장 안 한 문서)</button>
   <button data-fm="down"><svg class="ic"><use href="#i-upload"/></svg>파일로 내려받기 (JSON)</button><hr>
   <button data-fm="sync"><svg class="ic"><use href="#i-folder"/></svg>저장 · 동기화 설정…</button>`;
   document.body.appendChild(m); m.style.left = Math.max(8, Math.min(b.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px'; m.style.top = (b.bottom + 6) + 'px';
-  m.onclick = e => { const x = e.target.closest('[data-fm]'); if (!x) return; m.remove(); ({ prev: restorePrevDoc, save: saveNow, saveas: saveAs, dup: duplicateDoc, resize: openResize, versions: openVersions, bulk: openBulk, rename: () => { const p = $('#pname'); p.focus(); p.select(); toast('위쪽 문서 이름 칸에서 바로 고쳐 쓰세요 (Enter)'); }, new: openNewDesign, open: () => $('#btnOpen').click(), down: () => { gcAssets(); store.download(doc); }, sync: openSaveDialog })[x.dataset.fm](); };
+  m.onclick = e => { const x = e.target.closest('[data-fm]'); if (!x) return; m.remove(); ({ import: () => openImport(), prev: restorePrevDoc, save: saveNow, saveas: saveAs, dup: duplicateDoc, resize: openResize, versions: openVersions, bulk: openBulk, rename: () => { const p = $('#pname'); p.focus(); p.select(); toast('위쪽 문서 이름 칸에서 바로 고쳐 쓰세요 (Enter)'); }, new: openNewDesign, open: () => $('#btnOpen').click(), down: () => { gcAssets(); store.download(doc); }, sync: openSaveDialog })[x.dataset.fm](); };
   setTimeout(() => document.addEventListener('pointerdown', function off(ev) { if (!m.contains(ev.target) && ev.target.closest('#btnFileMenu') == null) { m.remove(); } document.removeEventListener('pointerdown', off); }), 0);
   document.addEventListener('keydown', function escFm(ev) { if (!document.body.contains(m)) { document.removeEventListener('keydown', escFm, true); return; } if (ev.key === 'Escape') { ev.preventDefault(); m.remove(); document.removeEventListener('keydown', escFm, true); $('#btnFileMenu').focus(); } }, true);
 }
@@ -5157,6 +5158,17 @@ function BK() { if (BKm) return BKm; if (!NC.bookMod) return null; BKm = NC.book
   afterNewDoc() { hist = []; histMeta = []; hptr = -1; { const pn = $('#pname'); if (pn) pn.value = doc.name; } commit(); zoom = 0; renderAll(); updateSaveBadge(); fitCanvas(); goto(0); },
   openTab(k) { sideTab = k; renderRail(); renderSide(); },
 }); return BKm; }
+/* ---- 다른 프로그램 파일 가져오기 (import.js) — 팀장님 11/21 「인디자인·쿽·일러스트·포토샵 파일을 읽어 와 편집」 ---- */
+let IMPm = null;
+function IMP() { if (IMPm) return IMPm; if (!NC.importMod) return null; IMPm = NC.importMod({
+  get doc() { return doc; }, uid, clone, esc, FONTS, TEXT_DEF, BOOK_DEF, newDoc, newPage, addAsset, loadScript, loadPdfJs, setStatus, toast: (m, bad) => toast(m, bad),
+  newDocKeep: () => BK_API_KEEP(), setDoc: d => { doc = d; doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; },
+  afterNewDoc() { hist = []; histMeta = []; hptr = -1; { const pn = $('#pname'); if (pn) pn.value = doc.name; } commit(); zoom = 0; renderAll(); updateSaveBadge(); fitCanvas(); goto(0); },
+  bookFrom: o => BK() && BK().makeBook(o),
+  restoreDoc(d) { doc = d; cur = 0; sel = []; renderAll(); fitCanvas(); },
+}); return IMPm; }
+async function BK_API_KEEP() { keepCurrentDoc.kept = ''; if (doc.pages.some(p => p.els.length) && !(await keepCurrentDoc())) return false; const k = keepCurrentDoc.kept; await store.disconnect(); return k || ''; }
+function openImport(files) { if (IMP()) IMP().openDialog(files); else toast('가져오기 기능을 불러오지 못했습니다 — 새로 고침(F5)', true); }
 function openBook() {
   let d = $('#dlgBook'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgBook'; d.className = 'wide'; document.body.appendChild(d); }
   const B = book(), n = doc.pages.length, pad = (4 - n % 4) % 4;
@@ -6790,7 +6802,7 @@ function mediaDrop(e) {
 document.addEventListener('drop', e => { if (e.target.closest && e.target.closest('#vtl') && e.dataTransfer && mediaDrop(e)) return; }, true);
 document.addEventListener('dragover', e => { if (e.target.closest && e.target.closest('#vtl') && e.dataTransfer && [...(e.dataTransfer.items || [])].some(it => it.kind === 'file')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }, true);
 $('#scroller').addEventListener('drop', async e => {
-  const kind = dropKind(e); if (!kind) return; if (kind === 'file' && mediaDrop(e)) return; e.preventDefault(); $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon'));
+  const kind = dropKind(e); if (!kind) return; if (kind === 'file' && IMP() && [...e.dataTransfer.files].some(f => IMP().isImportable(f))) { e.preventDefault(); openImport([...e.dataTransfer.files]); return; } /* PSD·IDML·AI·PDF를 끌어 놓으면 가져오기 */ if (kind === 'file' && mediaDrop(e)) return; e.preventDefault(); $$('#canvas .el.dropon').forEach(x => x.classList.remove('dropon'));
   if (kind === 'el') { const tg = dropTarget(e); await insertElem(e.dataTransfer.getData('text/x-nc-el'), toMM(e), { target: tg }); return; } /* 요소 패널에서 끌어다 놓기 → 놓은 자리에 (그림 위에 놓으면 그 그림을 바꿈) */
   const tgt = dropTarget(e), p = toMM(e), pg0 = page(); let refs = [];
   if (kind === 'img') { const v = e.dataTransfer.getData('text/x-nc-img'); const r = v.startsWith('lib|') ? await libInsert(v.slice(4)) : v; if (r) refs = [r]; }
@@ -7237,7 +7249,7 @@ if (NC.aichat) NC.aichat.init({
     if (!F[k]) return false; const r = F[k](); return r !== false;
   },
 });
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { bk: () => BK(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
 
 /* ---- 패널 너비 조절 ---- */
 (function () {
