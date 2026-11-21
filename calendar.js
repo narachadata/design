@@ -179,32 +179,60 @@ NC.cal = (function () {
 
   /* ---------- 달력 테마 (레이아웃 × 색 × 글꼴) ---------- */
   const THEMES = [
-    { id: 'classic', name: '클래식 옐로', desc: '2026년 원형. 노랑·하늘 번갈아', layout: 'classic', colorA: '#FFE89A', colorB: '#E6EDF2', titleColor: '#6A3416', idiomColor: '#4C8A2B', tabColor: '#F0716B', accent: '#1E2B5A', yearColor: '#1E2B5A', text: '#1a1a1a', fontTitle: 'Jua', fontHand: 'Nanum Pen Script', fontBody: 'Noto Sans KR', fontNum: 'Montserrat', line: '#737373', outer: '#444444', sunBg: '#F1F1F1', sunColor: '#E0564B' },
-    { id: 'navy-band', name: '네이비 밴드', desc: '상단 짙은 띠에 흰 제목', layout: 'band', colorA: '#FFF4CC', colorB: '#EAF1FB', band: '#1E2B5A', titleColor: '#FFFFFF', idiomColor: '#FFD34D', tabColor: '#FFD34D', accent: '#FFD34D', yearColor: '#1E2B5A', text: '#1a1a1a', fontTitle: 'Black Han Sans', fontHand: 'Gaegu', fontBody: 'Noto Sans KR', fontNum: 'Montserrat', line: '#7C7F85', outer: '#1E2B5A', sunBg: '#F3F5FA', sunColor: '#D84343' },
-    { id: 'mint', name: '파스텔 민트', desc: '민트·살구, 둥근 손글씨', layout: 'classic', titleWeight: 700, titleScale: 1.3, colorA: '#DDF3EA', colorB: '#FFE9D6', titleColor: '#1F6B4A', idiomColor: '#C2564B', tabColor: '#7FC8A9', accent: '#1F6B4A', yearColor: '#1F6B4A', text: '#223', fontTitle: 'Dongle', fontHand: 'Gaegu', fontBody: 'Gowun Dodum', fontNum: 'Montserrat', line: '#808C87', outer: '#4F9C7C', sunBg: '#EEF8F3', sunColor: '#D9534F' },
-    { id: 'minimal', name: '모던 화이트', desc: '흰 바탕, 가는 선, 큰 타이포', layout: 'minimal', colorA: '#FFFFFF', colorB: '#F6F6F3', titleColor: '#111111', idiomColor: '#E0564B', tabColor: '#111111', accent: '#E0564B', yearColor: '#111111', text: '#1a1a1a', fontTitle: 'Pretendard', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#8C8C8C', outer: '#111111', sunBg: '', sunColor: '#E0564B' },
-    { id: 'photo', name: '포토 스플릿', desc: '왼쪽 큰 그림, 오른쪽 글', layout: 'photo', colorA: '#FFFFFF', colorB: '#FFFFFF', panel: '#1E2B5A', titleColor: '#FFFFFF', idiomColor: '#1E2B5A', tabColor: '#1E2B5A', accent: '#FFD34D', yearColor: '#1E2B5A', text: '#1a1a1a', fontTitle: 'Do Hyeon', fontHand: 'Nanum Pen Script', fontBody: 'Noto Sans KR', fontNum: 'Montserrat', line: '#84858A', outer: '#1E2B5A', sunBg: '#F4F5F8', sunColor: '#D84343' },
-    { id: 'red', name: '레드 다이내믹', desc: '빨간 띠, 힘찬 제목', layout: 'band', colorA: '#FFF1EE', colorB: '#FFF8E8', band: '#E0564B', titleColor: '#FFFFFF', idiomColor: '#FFE89A', tabColor: '#FFE89A', accent: '#FFE89A', yearColor: '#B8432B', text: '#1a1a1a', fontTitle: 'Do Hyeon', fontHand: 'Nanum Pen Script', fontBody: 'Noto Sans KR', fontNum: 'Montserrat', line: '#8F807D', outer: '#B8432B', sunBg: '#FFF3F1', sunColor: '#C8392B' },
-    { id: 'forest', name: '숲 그린', desc: '초록·크림, 명조 제목', layout: 'classic', titleWeight: 700, titleScale: 0.95, colorA: '#E6F0DF', colorB: '#F7F3E8', titleColor: '#2F5D3A', idiomColor: '#8A5A2B', tabColor: '#5B9A6B', accent: '#2F5D3A', yearColor: '#2F5D3A', text: '#1f2a22', fontTitle: 'Gowun Batang', fontHand: 'Gaegu', fontBody: 'Gowun Dodum', fontNum: 'Montserrat', line: '#7D857A', outer: '#2F5D3A', sunBg: '#EEF4EA', sunColor: '#C8392B' },
-    { id: 'dark', name: '블랙 골드', desc: '검정 인성면, 금색 제목', layout: 'minimal', colorA: '#1B1B1B', colorB: '#262626', titleColor: '#E6C068', idiomColor: '#B8432B', tabColor: '#E6C068', accent: '#E6C068', yearColor: '#1B1B1B', text: '#F2F2F2', calBg: '#FFFFFF', calText: '#1a1a1a', fontTitle: 'Black Han Sans', fontHand: 'Gaegu', fontBody: 'Noto Sans KR', fontNum: 'Montserrat', line: '#898989', outer: '#1B1B1B', sunBg: '', sunColor: '#C8392B' },
+    { id: 'classic', cat: '인성', name: '클래식 옐로', desc: '2026년 원형. 노랑·하늘 번갈아', layout: 'classic', colorA: '#FFE89A', colorB: '#E6EDF2', titleColor: '#6A3416', idiomColor: '#4C8A2B', tabColor: '#F0716B', accent: '#1E2B5A', yearColor: '#1E2B5A', text: '#1a1a1a', fontTitle: 'Jua', fontHand: 'Nanum Pen Script', fontBody: 'Noto Sans KR', fontNum: 'Montserrat', line: '#737373', outer: '#444444', sunBg: '#F1F1F1', sunColor: '#E0564B' },
+    { id: 'navy-band', cat: '인성', name: '네이비 밴드', desc: '상단 짙은 띠에 흰 제목', layout: 'band', colorA: '#FFF4CC', colorB: '#EAF1FB', band: '#1E2B5A', titleColor: '#FFFFFF', idiomColor: '#FFD34D', tabColor: '#FFD34D', accent: '#FFD34D', yearColor: '#1E2B5A', text: '#1a1a1a', fontTitle: 'Black Han Sans', fontHand: 'Gaegu', fontBody: 'Noto Sans KR', fontNum: 'Montserrat', line: '#7C7F85', outer: '#1E2B5A', sunBg: '#F3F5FA', sunColor: '#D84343' },
+    { id: 'mint', cat: '인성', name: '파스텔 민트', desc: '민트·살구, 둥근 손글씨', layout: 'classic', titleWeight: 700, titleScale: 1.3, colorA: '#DDF3EA', colorB: '#FFE9D6', titleColor: '#1F6B4A', idiomColor: '#C2564B', tabColor: '#7FC8A9', accent: '#1F6B4A', yearColor: '#1F6B4A', text: '#223', fontTitle: 'Dongle', fontHand: 'Gaegu', fontBody: 'Gowun Dodum', fontNum: 'Montserrat', line: '#808C87', outer: '#4F9C7C', sunBg: '#EEF8F3', sunColor: '#D9534F' },
+    { id: 'minimal', cat: '모던', name: '모던 화이트', desc: '흰 바탕, 가는 선, 큰 타이포', layout: 'minimal', colorA: '#FFFFFF', colorB: '#F6F6F3', titleColor: '#111111', idiomColor: '#E0564B', tabColor: '#111111', accent: '#E0564B', yearColor: '#111111', text: '#1a1a1a', fontTitle: 'Pretendard', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#8C8C8C', outer: '#111111', sunBg: '', sunColor: '#E0564B' },
+    { id: 'photo', cat: '사진·그림', name: '포토 스플릿', desc: '왼쪽 큰 그림, 오른쪽 글', layout: 'photo', colorA: '#FFFFFF', colorB: '#FFFFFF', panel: '#1E2B5A', titleColor: '#FFFFFF', idiomColor: '#1E2B5A', tabColor: '#1E2B5A', accent: '#FFD34D', yearColor: '#1E2B5A', text: '#1a1a1a', fontTitle: 'Do Hyeon', fontHand: 'Nanum Pen Script', fontBody: 'Noto Sans KR', fontNum: 'Montserrat', line: '#84858A', outer: '#1E2B5A', sunBg: '#F4F5F8', sunColor: '#D84343' },
+    { id: 'red', cat: '인성', name: '레드 다이내믹', desc: '빨간 띠, 힘찬 제목', layout: 'band', colorA: '#FFF1EE', colorB: '#FFF8E8', band: '#E0564B', titleColor: '#FFFFFF', idiomColor: '#FFE89A', tabColor: '#FFE89A', accent: '#FFE89A', yearColor: '#B8432B', text: '#1a1a1a', fontTitle: 'Do Hyeon', fontHand: 'Nanum Pen Script', fontBody: 'Noto Sans KR', fontNum: 'Montserrat', line: '#8F807D', outer: '#B8432B', sunBg: '#FFF3F1', sunColor: '#C8392B' },
+    { id: 'forest', cat: '인성', name: '숲 그린', desc: '초록·크림, 명조 제목', layout: 'classic', titleWeight: 700, titleScale: 0.95, colorA: '#E6F0DF', colorB: '#F7F3E8', titleColor: '#2F5D3A', idiomColor: '#8A5A2B', tabColor: '#5B9A6B', accent: '#2F5D3A', yearColor: '#2F5D3A', text: '#1f2a22', fontTitle: 'Gowun Batang', fontHand: 'Gaegu', fontBody: 'Gowun Dodum', fontNum: 'Montserrat', line: '#7D857A', outer: '#2F5D3A', sunBg: '#EEF4EA', sunColor: '#C8392B' },
+    { id: 'dark', cat: '모던', name: '블랙 골드', desc: '검정 인성면, 금색 제목', layout: 'minimal', colorA: '#1B1B1B', colorB: '#262626', titleColor: '#E6C068', idiomColor: '#B8432B', tabColor: '#E6C068', accent: '#E6C068', yearColor: '#1B1B1B', text: '#F2F2F2', calBg: '#FFFFFF', calText: '#1a1a1a', fontTitle: 'Black Han Sans', fontHand: 'Gaegu', fontBody: 'Noto Sans KR', fontNum: 'Montserrat', line: '#898989', outer: '#1B1B1B', sunBg: '', sunColor: '#C8392B' },
     /* 2026~2027 디자인 흐름을 바탕으로 더한 테마 (색면 분할·라운드 카드 레이아웃 포함) */
-    { id: 'swiss-red', name: '스위스 그리드', desc: '빨강 색면·검정 큰 숫자, 국제 타이포 양식', layout: 'split', titleWeight: 800, colorA: '#F2F0EB', colorB: '#E9E6DF', band: '#D9261C', titleColor: '#FFFFFF', idiomColor: '#FFFFFF', tabColor: '#141414', accent: '#141414', yearColor: '#D9261C', text: '#141414', fontTitle: 'Pretendard', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#868480', outer: '#141414', sunBg: '', sunColor: '#D9261C' },
-    { id: 'cobalt-block', name: '코발트 컬러블록', desc: '코발트 블루 색면에 핑크 숫자, 대담한 색 나눔', layout: 'split', titleWeight: 700, colorA: '#FFE8F0', colorB: '#E6EBFF', band: '#1E3FD8', titleColor: '#FFFFFF', idiomColor: '#FFB8D4', tabColor: '#FFB8D4', accent: '#FFB8D4', yearColor: '#1E3FD8', text: '#141B3D', fontTitle: 'Aggravo', fontHand: 'MangoBoardTtobaks', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#828693', outer: '#1E3FD8', sunBg: '#F4F6FF', sunColor: '#E0435E' },
-    { id: 'dancheong', name: '모던 단청', desc: '쪽빛 색면·황색 숫자·한지 바탕, 세련된 전통색', layout: 'split', titleWeight: 700, colorA: '#F6EFE2', colorB: '#E7EEE8', band: '#22476B', titleColor: '#FFFFFF', idiomColor: '#F5B59D', tabColor: '#E8B33A', accent: '#E8B33A', yearColor: '#22476B', text: '#1E2328', fontTitle: 'Hahmlet', fontHand: 'MaruBuri', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#868278', outer: '#22476B', sunBg: '#FBF4EF', sunColor: '#B7322C' },
-    { id: 'riso-duotone', name: '리소 듀오톤', desc: '형광 분홍·파랑 두 색 인쇄 감성, 종이 카드', layout: 'card', colorA: '#FFDCEA', colorB: '#D7E9F7', panel: '#FBF7EE', titleColor: '#0067A8', idiomColor: '#0067A8', tabColor: '#E8338F', accent: '#D92C84', yearColor: '#0067A8', text: '#1E2240', fontTitle: 'YeogiOttaeJalnan', fontHand: 'MangoBoardTtobaks', fontBody: 'Paperozi', fontNum: 'Oswald', line: '#8C857C', outer: '#1E2240', sunBg: '#FFF2F7', sunColor: '#D92C84' },
-    { id: 'sage-cream', name: '세이지 크림', desc: '차분한 세이지 그린·크림, 둥근 카드', layout: 'card', titleWeight: 800, colorA: '#E1E9D9', colorB: '#F3ECDF', panel: '#FFFDF8', titleColor: '#3D5A43', idiomColor: '#3D5A43', tabColor: '#5A7A5F', accent: '#5A7A5F', yearColor: '#3D5A43', text: '#2A3229', fontTitle: 'NanumSquareNeo', fontHand: 'MangoBoardTtobaks', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#84897F', outer: '#3D5A43', sunBg: '#F2F6EF', sunColor: '#C0533D' },
-    { id: 'mono-blue', name: '모노 블루', desc: '파랑 한 가지 색의 농담, 깔끔한 카드', layout: 'card', titleWeight: 800, colorA: '#E2EAFA', colorB: '#EEF3FB', panel: '#FFFFFF', titleColor: '#1C3C88', idiomColor: '#1C3C88', tabColor: '#2C58CF', accent: '#2C58CF', yearColor: '#1C3C88', text: '#14213D', fontTitle: 'Escoredream', fontHand: 'Escoredream', fontBody: 'Escoredream', fontNum: 'Montserrat', line: '#848992', outer: '#1C3C88', sunBg: '#F5F8FD', sunColor: '#D9434F' },
-    { id: 'cloud-dancer', name: '클라우드 댄서', desc: '팬톤 2026 오프화이트·먹색 명조, 잡지 같은 여백', layout: 'minimal', titleWeight: 700, colorA: '#F0EEE9', colorB: '#E8E4DC', titleColor: '#2B2B2B', idiomColor: '#A9502C', tabColor: '#2B2B2B', accent: '#A9502C', yearColor: '#2B2B2B', text: '#2B2B2B', fontTitle: 'MaruBuri', fontHand: 'MaruBuri', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#8C8984', outer: '#2B2B2B', sunBg: '', sunColor: '#A9502C' },
-    { id: 'kraft-paper', name: '크라프트 페이퍼', desc: '갈색 종이색·먹색 글자·빨간 도장 포인트', layout: 'minimal', titleWeight: 700, colorA: '#E3CDA9', colorB: '#ECDDC4', titleColor: '#2B2118', idiomColor: '#A83A2C', tabColor: '#2B2118', accent: '#A83A2C', yearColor: '#2B2118', text: '#2B2118', calBg: '#FAF5EC', calText: '#2B2118', fontTitle: 'NexonLv2Gothic', fontHand: 'MangoBoardTtobaks', fontBody: 'Pretendard', fontNum: 'Oswald', line: '#898173', outer: '#2B2118', sunBg: '', sunColor: '#A83A2C' },
-    { id: 'deep-green-gold', name: '딥그린 골드', desc: '짙은 초록 인성면, 금색 명조 제목', layout: 'minimal', titleWeight: 700, colorA: '#14342B', colorB: '#1A3D33', titleColor: '#D6B26E', idiomColor: '#14342B', tabColor: '#D6B26E', accent: '#D6B26E', yearColor: '#14342B', text: '#F3EFE4', calBg: '#FFFDF7', calText: '#1C2420', fontTitle: 'Noto Serif KR', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#88857E', outer: '#14342B', sunBg: '', sunColor: '#B5432F' },
-    { id: 'teal-amber', name: '틸 & 앰버', desc: '2026 올해의 색 청록 띠에 앰버 포인트', layout: 'band', titleWeight: 700, colorA: '#E3F0EE', colorB: '#F6F1E6', band: '#0F5257', titleColor: '#FFFFFF', idiomColor: '#F2C46D', tabColor: '#F2C46D', accent: '#F2C46D', yearColor: '#0F5257', text: '#18302F', fontTitle: 'GMarketSans', fontHand: 'MangoBoardTtobaks', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#7B8785', outer: '#0F5257', sunBg: '#EEF5F4', sunColor: '#C94C38' },
-    { id: 'retro-70s', name: '레트로 70', desc: '번트 오렌지 띠·머스터드, 70년대 감성', layout: 'band', titleWeight: 700, colorA: '#F7E7C6', colorB: '#F2DECA', band: '#9E4318', titleColor: '#FFF3DC', idiomColor: '#F6C453', tabColor: '#F6C453', accent: '#F6C453', yearColor: '#9E4318', text: '#3A2414', fontTitle: 'Binggre', fontHand: 'MangoBoardTtobaks', fontBody: 'Paperozi', fontNum: 'Oswald', line: '#8C7D66', outer: '#9E4318', sunBg: '#FBF1E3', sunColor: '#C0392B' },
-    { id: 'taekwon-dynamic', name: '태권 다이내믹', desc: '경기복 네이비·레드, 스포츠 숫자', layout: 'photo', titleWeight: 700, colorA: '#E7ECF5', colorB: '#FBE8E8', panel: '#0E1A3C', titleColor: '#FFFFFF', idiomColor: '#C8102E', tabColor: '#C8102E', accent: '#FF5252', yearColor: '#0E1A3C', text: '#111827', fontTitle: 'Isamanru', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Oswald', line: '#82858C', outer: '#0E1A3C', sunBg: '#F5F6FA', sunColor: '#C8102E' },
-    { id: 'lavender-haze', name: '라벤더 헤이즈', desc: '연보라·버터 옐로, 보랏빛 패널', layout: 'photo', colorA: '#E9E3F7', colorB: '#FFF2D4', panel: '#4A3A7A', titleColor: '#FFFFFF', idiomColor: '#4A3A7A', tabColor: '#4A3A7A', accent: '#FFD88A', yearColor: '#4A3A7A', text: '#2A2440', fontTitle: 'HannaPro', fontHand: 'JoyfulStory', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#888492', outer: '#4A3A7A', sunBg: '#F6F3FC', sunColor: '#D3466A' },
-    { id: 'mocha-latte', name: '모카 라테', desc: '팬톤 2025 모카 무스 브라운·라테 톤, 카페 감성', layout: 'photo', colorA: '#EADBCD', colorB: '#F4ECE2', panel: '#6A4C3B', titleColor: '#FFFFFF', idiomColor: '#6A4C3B', tabColor: '#6A4C3B', accent: '#F1D3B8', yearColor: '#6A4C3B', text: '#2E211A', fontTitle: 'Ridibatang', fontHand: 'MaruBuri', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#8A827A', outer: '#6A4C3B', sunBg: '#FAF5EF', sunColor: '#B9473A' },
-    { id: 'terracotta', name: '테라코타 어스', desc: '흙빛 주황·모래·세이지, 따뜻한 자연색', layout: 'classic', titleWeight: 800, colorA: '#F3E2D0', colorB: '#E4E8DA', titleColor: '#A4472B', idiomColor: '#8A4426', tabColor: '#C8734F', accent: '#5A3A28', yearColor: '#A4472B', text: '#2E2420', fontTitle: 'Paperozi', fontHand: 'MangoBoardTtobaks', fontBody: 'Paperozi', fontNum: 'Montserrat', line: '#887D72', outer: '#7A4A2A', sunBg: '#F8EFE6', sunColor: '#C0392B' },
-    { id: 'kids-pop', name: '키즈 팝', desc: '복숭아·하늘색, 통통한 굵은 제목', layout: 'classic', titleWeight: 900, titleScale: 0.9, colorA: '#FFDCC8', colorB: '#CDEBF5', titleColor: '#3B2E8C', idiomColor: '#2E5BBA', tabColor: '#FF8A4C', accent: '#3B2E8C', yearColor: '#3B2E8C', text: '#222222', fontTitle: 'CookieRun', fontHand: 'MangoBoardTtobaks', fontBody: 'NanumSquareNeo', fontNum: 'Montserrat', line: '#8C8480', outer: '#3A3A3A', sunBg: '#FFF4EE', sunColor: '#E5484D' },
+    { id: 'swiss-red', cat: '모던', name: '스위스 그리드', desc: '빨강 색면·검정 큰 숫자, 국제 타이포 양식', layout: 'split', titleWeight: 800, colorA: '#F2F0EB', colorB: '#E9E6DF', band: '#D9261C', titleColor: '#FFFFFF', idiomColor: '#FFFFFF', tabColor: '#141414', accent: '#141414', yearColor: '#D9261C', text: '#141414', fontTitle: 'Pretendard', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#868480', outer: '#141414', sunBg: '', sunColor: '#D9261C' },
+    { id: 'cobalt-block', cat: '모던', name: '코발트 컬러블록', desc: '코발트 블루 색면에 핑크 숫자, 대담한 색 나눔', layout: 'split', titleWeight: 700, colorA: '#FFE8F0', colorB: '#E6EBFF', band: '#1E3FD8', titleColor: '#FFFFFF', idiomColor: '#FFB8D4', tabColor: '#FFB8D4', accent: '#FFB8D4', yearColor: '#1E3FD8', text: '#141B3D', fontTitle: 'Aggravo', fontHand: 'MangoBoardTtobaks', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#828693', outer: '#1E3FD8', sunBg: '#F4F6FF', sunColor: '#E0435E' },
+    { id: 'dancheong', cat: '모던', name: '모던 단청', desc: '쪽빛 색면·황색 숫자·한지 바탕, 세련된 전통색', layout: 'split', titleWeight: 700, colorA: '#F6EFE2', colorB: '#E7EEE8', band: '#22476B', titleColor: '#FFFFFF', idiomColor: '#F5B59D', tabColor: '#E8B33A', accent: '#E8B33A', yearColor: '#22476B', text: '#1E2328', fontTitle: 'Hahmlet', fontHand: 'MaruBuri', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#868278', outer: '#22476B', sunBg: '#FBF4EF', sunColor: '#B7322C' },
+    { id: 'riso-duotone', cat: '귀여운', name: '리소 듀오톤', desc: '형광 분홍·파랑 두 색 인쇄 감성, 종이 카드', layout: 'card', colorA: '#FFDCEA', colorB: '#D7E9F7', panel: '#FBF7EE', titleColor: '#0067A8', idiomColor: '#0067A8', tabColor: '#E8338F', accent: '#D92C84', yearColor: '#0067A8', text: '#1E2240', fontTitle: 'YeogiOttaeJalnan', fontHand: 'MangoBoardTtobaks', fontBody: 'Paperozi', fontNum: 'Oswald', line: '#8C857C', outer: '#1E2240', sunBg: '#FFF2F7', sunColor: '#D92C84' },
+    { id: 'sage-cream', cat: '귀여운', name: '세이지 크림', desc: '차분한 세이지 그린·크림, 둥근 카드', layout: 'card', titleWeight: 800, colorA: '#E1E9D9', colorB: '#F3ECDF', panel: '#FFFDF8', titleColor: '#3D5A43', idiomColor: '#3D5A43', tabColor: '#5A7A5F', accent: '#5A7A5F', yearColor: '#3D5A43', text: '#2A3229', fontTitle: 'NanumSquareNeo', fontHand: 'MangoBoardTtobaks', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#84897F', outer: '#3D5A43', sunBg: '#F2F6EF', sunColor: '#C0533D' },
+    { id: 'mono-blue', cat: '모던', name: '모노 블루', desc: '파랑 한 가지 색의 농담, 깔끔한 카드', layout: 'card', titleWeight: 800, colorA: '#E2EAFA', colorB: '#EEF3FB', panel: '#FFFFFF', titleColor: '#1C3C88', idiomColor: '#1C3C88', tabColor: '#2C58CF', accent: '#2C58CF', yearColor: '#1C3C88', text: '#14213D', fontTitle: 'Escoredream', fontHand: 'Escoredream', fontBody: 'Escoredream', fontNum: 'Montserrat', line: '#848992', outer: '#1C3C88', sunBg: '#F5F8FD', sunColor: '#D9434F' },
+    { id: 'cloud-dancer', cat: '모던', name: '클라우드 댄서', desc: '팬톤 2026 오프화이트·먹색 명조, 잡지 같은 여백', layout: 'minimal', titleWeight: 700, colorA: '#F0EEE9', colorB: '#E8E4DC', titleColor: '#2B2B2B', idiomColor: '#A9502C', tabColor: '#2B2B2B', accent: '#A9502C', yearColor: '#2B2B2B', text: '#2B2B2B', fontTitle: 'MaruBuri', fontHand: 'MaruBuri', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#8C8984', outer: '#2B2B2B', sunBg: '', sunColor: '#A9502C' },
+    { id: 'kraft-paper', cat: '모던', name: '크라프트 페이퍼', desc: '갈색 종이색·먹색 글자·빨간 도장 포인트', layout: 'minimal', titleWeight: 700, colorA: '#E3CDA9', colorB: '#ECDDC4', titleColor: '#2B2118', idiomColor: '#A83A2C', tabColor: '#2B2118', accent: '#A83A2C', yearColor: '#2B2118', text: '#2B2118', calBg: '#FAF5EC', calText: '#2B2118', fontTitle: 'NexonLv2Gothic', fontHand: 'MangoBoardTtobaks', fontBody: 'Pretendard', fontNum: 'Oswald', line: '#898173', outer: '#2B2118', sunBg: '', sunColor: '#A83A2C' },
+    { id: 'deep-green-gold', cat: '모던', name: '딥그린 골드', desc: '짙은 초록 인성면, 금색 명조 제목', layout: 'minimal', titleWeight: 700, colorA: '#14342B', colorB: '#1A3D33', titleColor: '#D6B26E', idiomColor: '#14342B', tabColor: '#D6B26E', accent: '#D6B26E', yearColor: '#14342B', text: '#F3EFE4', calBg: '#FFFDF7', calText: '#1C2420', fontTitle: 'Noto Serif KR', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#88857E', outer: '#14342B', sunBg: '', sunColor: '#B5432F' },
+    { id: 'teal-amber', cat: '인성', name: '틸 & 앰버', desc: '2026 올해의 색 청록 띠에 앰버 포인트', layout: 'band', titleWeight: 700, colorA: '#E3F0EE', colorB: '#F6F1E6', band: '#0F5257', titleColor: '#FFFFFF', idiomColor: '#F2C46D', tabColor: '#F2C46D', accent: '#F2C46D', yearColor: '#0F5257', text: '#18302F', fontTitle: 'GMarketSans', fontHand: 'MangoBoardTtobaks', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#7B8785', outer: '#0F5257', sunBg: '#EEF5F4', sunColor: '#C94C38' },
+    { id: 'retro-70s', cat: '인성', name: '레트로 70', desc: '번트 오렌지 띠·머스터드, 70년대 감성', layout: 'band', titleWeight: 700, colorA: '#F7E7C6', colorB: '#F2DECA', band: '#9E4318', titleColor: '#FFF3DC', idiomColor: '#F6C453', tabColor: '#F6C453', accent: '#F6C453', yearColor: '#9E4318', text: '#3A2414', fontTitle: 'Binggre', fontHand: 'MangoBoardTtobaks', fontBody: 'Paperozi', fontNum: 'Oswald', line: '#8C7D66', outer: '#9E4318', sunBg: '#FBF1E3', sunColor: '#C0392B' },
+    { id: 'taekwon-dynamic', cat: '사진·그림', name: '태권 다이내믹', desc: '경기복 네이비·레드, 스포츠 숫자', layout: 'photo', titleWeight: 700, colorA: '#E7ECF5', colorB: '#FBE8E8', panel: '#0E1A3C', titleColor: '#FFFFFF', idiomColor: '#C8102E', tabColor: '#C8102E', accent: '#FF5252', yearColor: '#0E1A3C', text: '#111827', fontTitle: 'Isamanru', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Oswald', line: '#82858C', outer: '#0E1A3C', sunBg: '#F5F6FA', sunColor: '#C8102E' },
+    { id: 'lavender-haze', cat: '사진·그림', name: '라벤더 헤이즈', desc: '연보라·버터 옐로, 보랏빛 패널', layout: 'photo', colorA: '#E9E3F7', colorB: '#FFF2D4', panel: '#4A3A7A', titleColor: '#FFFFFF', idiomColor: '#4A3A7A', tabColor: '#4A3A7A', accent: '#FFD88A', yearColor: '#4A3A7A', text: '#2A2440', fontTitle: 'HannaPro', fontHand: 'JoyfulStory', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#888492', outer: '#4A3A7A', sunBg: '#F6F3FC', sunColor: '#D3466A' },
+    { id: 'mocha-latte', cat: '사진·그림', name: '모카 라테', desc: '팬톤 2025 모카 무스 브라운·라테 톤, 카페 감성', layout: 'photo', colorA: '#EADBCD', colorB: '#F4ECE2', panel: '#6A4C3B', titleColor: '#FFFFFF', idiomColor: '#6A4C3B', tabColor: '#6A4C3B', accent: '#F1D3B8', yearColor: '#6A4C3B', text: '#2E211A', fontTitle: 'Ridibatang', fontHand: 'MaruBuri', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#8A827A', outer: '#6A4C3B', sunBg: '#FAF5EF', sunColor: '#B9473A' },
+    { id: 'terracotta', cat: '인성', name: '테라코타 어스', desc: '흙빛 주황·모래·세이지, 따뜻한 자연색', layout: 'classic', titleWeight: 800, colorA: '#F3E2D0', colorB: '#E4E8DA', titleColor: '#A4472B', idiomColor: '#8A4426', tabColor: '#C8734F', accent: '#5A3A28', yearColor: '#A4472B', text: '#2E2420', fontTitle: 'Paperozi', fontHand: 'MangoBoardTtobaks', fontBody: 'Paperozi', fontNum: 'Montserrat', line: '#887D72', outer: '#7A4A2A', sunBg: '#F8EFE6', sunColor: '#C0392B' },
+    { id: 'kids-pop', cat: '귀여운', name: '키즈 팝', desc: '복숭아·하늘색, 통통한 굵은 제목', layout: 'classic', titleWeight: 900, titleScale: 0.9, colorA: '#FFDCC8', colorB: '#CDEBF5', titleColor: '#3B2E8C', idiomColor: '#2E5BBA', tabColor: '#FF8A4C', accent: '#3B2E8C', yearColor: '#3B2E8C', text: '#222222', fontTitle: 'CookieRun', fontHand: 'MangoBoardTtobaks', fontBody: 'NanumSquareNeo', fontNum: 'Montserrat', line: '#8C8480', outer: '#3A3A3A', sunBg: '#FFF4EE', sunColor: '#E5484D' },
+    /* ---- 2026 이미지면 새 테마 (팀장님 11/21 「인성 뿐 아니라 이미지면에 맞는 템플릿 · 카테고리」) — 캔바·어도비 익스프레스·에치 인기 캘린더 흐름:
+       아치 창·폴라로이드 다꾸·벤토 격자·동그라미 창·매거진 표지·체커 스티커·사계절 장식. 달력면은 calLayout(기존 달력면 모양)을 씀 */
+    { id: 'sports-team', cat: '스포츠', name: '라차 스포츠', desc: '달마다 다른 운동(스키·축구·수영…), 전광판 숫자와 스포츠 띠', layout: 'sports', calLayout: 'band', art: 'sports', titleWeight: 800, colorA: '#EEF3FB', colorB: '#FDF1EC', band: '#14286B', panel: '#14286B', titleColor: '#14286B', idiomColor: '#FFD34D', tabColor: '#E63946', accent: '#E63946', yearColor: '#14286B', text: '#14213D', fontTitle: 'Isamanru', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Oswald', line: '#7C7F85', outer: '#14286B', sunBg: '#F3F5FA', sunColor: '#E63946' },
+    { id: 'sports-pop', cat: '스포츠', name: '스포츠 팝', desc: '라임·오렌지 경기장 색, 운동하는 라차', layout: 'sports', calLayout: 'card', art: 'sports', titleWeight: 900, colorA: '#F3FBE4', colorB: '#FFF3E6', band: '#FF7A1A', panel: '#1F3B2C', stripe2: '#B8E34A', titleColor: '#1F3B2C', idiomColor: '#1F3B2C', tabColor: '#FF7A1A', accent: '#FF7A1A', yearColor: '#1F3B2C', text: '#1E2A22', fontTitle: 'CookieRun', fontHand: 'Pretendard', fontBody: 'NanumSquareNeo', fontNum: 'Oswald', line: '#808C87', outer: '#1F3B2C', sunBg: '#F4FAEC', sunColor: '#E5484D' },
+    { id: 'sports-court', cat: '스포츠', name: '코트 그린', desc: '경기장 선이 그려진 초록 코트, 운동하는 라차', layout: 'sports', calLayout: 'split', art: 'sports', court: true, titleWeight: 800, colorA: '#2E7D4F', colorB: '#2A7349', band: '#1E5C39', panel: '#FFFFFF', titleColor: '#FFFFFF', idiomColor: '#FFE066', tabColor: '#FFE066', accent: '#FFE066', yearColor: '#1E5C39', text: '#FFFFFF', calBg: '#FFFFFF', calText: '#1a1a1a', fontTitle: 'Isamanru', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Oswald', line: '#82858C', outer: '#1E5C39', sunBg: '', sunColor: '#D9434F' },
+    { id: 'season-garden', cat: '계절', name: '사계절 정원', desc: '달마다 바뀌는 계절색과 꽃·눈·단풍 장식', layout: 'season', calLayout: 'card', season: 'pastel', titleWeight: 400, colorA: '#FDEFF3', colorB: '#EEF3EE', titleColor: '#3A3A3A', idiomColor: '#3A3A3A', tabColor: '#3A3A3A', accent: '#3A3A3A', yearColor: '#3A3A3A', text: '#2A2A2A', fontTitle: 'Jua', fontHand: 'Gaegu', fontBody: 'Gowun Dodum', fontNum: 'Montserrat', line: '#8A8A8A', outer: '#555555', sunBg: '', sunColor: '#E0564B' },
+    { id: 'season-arch', cat: '계절', name: '계절 아치', desc: '아치 창 위에 계절 꽃다발, 달마다 색이 바뀜', layout: 'arch', calLayout: 'card', season: 'pastel', deco: true, titleWeight: 700, colorA: '#FDEFF3', colorB: '#EEF3EE', panel: '#FFFFFF', titleColor: '#3A3A3A', idiomColor: '#3A3A3A', tabColor: '#3A3A3A', accent: '#3A3A3A', yearColor: '#3A3A3A', text: '#2A2A2A', fontTitle: 'Gowun Batang', fontHand: 'Gaegu', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#8A8A8A', outer: '#555555', sunBg: '', sunColor: '#C8392B' },
+    { id: 'season-diary', cat: '계절', name: '계절 다이어리', desc: '모눈종이에 폴라로이드·마스킹테이프, 계절 장식', layout: 'polaroid', calLayout: 'card', season: 'pastel', deco: true, titleScale: 1.1, colorA: '#FDEFF3', colorB: '#EEF3EE', titleColor: '#3A3A3A', idiomColor: '#3A3A3A', tabColor: '#3A3A3A', accent: '#3A3A3A', yearColor: '#3A3A3A', text: '#2A2A2A', fontTitle: 'Jua', fontHand: 'Gaegu', fontBody: 'Gowun Dodum', fontNum: 'Montserrat', line: '#8A8A8A', outer: '#555555', sunBg: '', sunColor: '#E0564B' },
+    { id: 'season-bento', cat: '계절', name: '계절 벤토', desc: '크기가 다른 네모 칸에 계절색, 2026 벤토 격자', layout: 'bento', calLayout: 'card', season: 'pastel', deco: true, titleWeight: 800, colorA: '#FDEFF3', colorB: '#EEF3EE', panel: '#2A2A2A', titleColor: '#3A3A3A', idiomColor: '#3A3A3A', tabColor: '#3A3A3A', accent: '#3A3A3A', yearColor: '#3A3A3A', text: '#2A2A2A', fontTitle: 'NanumSquareNeo', fontHand: 'Gaegu', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#8A8A8A', outer: '#555555', sunBg: '', sunColor: '#E0564B' },
+    { id: 'season-night', cat: '계절', name: '사계절 밤하늘', desc: '달마다 짙은 계절색 바탕에 흰 글자와 장식', layout: 'season', calLayout: 'card', season: 'deep', colorA: '#1F3A5F', colorB: '#3B2A4F', titleColor: '#FFFFFF', idiomColor: '#3A3A3A', tabColor: '#FFFFFF', accent: '#FFFFFF', yearColor: '#1F3A5F', text: '#F5F5F5', calBg: '#FFFFFF', calText: '#1a1a1a', fontTitle: 'Jua', fontHand: 'Gaegu', fontBody: 'Gowun Dodum', fontNum: 'Montserrat', line: '#8A8A8A', outer: '#333333', sunBg: '', sunColor: '#E0564B' },
+    { id: 'arch-sand', cat: '사진·그림', name: '아치 샌드', desc: '모래색 바탕에 테라코타 아치 창, 보헤미안 감성', layout: 'arch', calLayout: 'card', titleWeight: 700, colorA: '#F3E6D6', colorB: '#EFE2D2', panel: '#E8BFA2', titleColor: '#6E3B24', idiomColor: '#A4472B', tabColor: '#C8643C', accent: '#C8643C', yearColor: '#6E3B24', text: '#3A2A20', fontTitle: 'Gowun Batang', fontHand: 'MaruBuri', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#8A8076', outer: '#6E3B24', sunBg: '#FBF4EC', sunColor: '#B9473A' },
+    { id: 'arch-sage', cat: '사진·그림', name: '아치 세이지', desc: '세이지 그린 아치 창, 차분한 자연색', layout: 'arch', calLayout: 'card', titleWeight: 700, colorA: '#E7ECE1', colorB: '#EEF0E6', panel: '#C3D3B8', titleColor: '#2F4B37', idiomColor: '#5A7A5F', tabColor: '#6F8F62', accent: '#6F8F62', yearColor: '#2F4B37', text: '#25302A', fontTitle: 'MaruBuri', fontHand: 'MaruBuri', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#84897F', outer: '#2F4B37', sunBg: '#F2F6EF', sunColor: '#C0533D' },
+    { id: 'circle-sun', cat: '사진·그림', name: '선샤인 서클', desc: '해처럼 둥근 창에 그림, 큰 월 숫자', layout: 'circle', calLayout: 'minimal', titleWeight: 800, colorA: '#FFF3E0', colorB: '#FFF0E6', panel: '#FFCB5C', titleColor: '#3A2A1A', idiomColor: '#E0662C', tabColor: '#FF7A2F', accent: '#FF7A2F', yearColor: '#3A2A1A', text: '#2E2218', fontTitle: 'GMarketSans', fontHand: 'MangoBoardTtobaks', fontBody: 'Pretendard', fontNum: 'Montserrat', line: '#8C8278', outer: '#3A2A1A', sunBg: '', sunColor: '#E0564B' },
+    { id: 'magazine-cobalt', cat: '사진·그림', name: '매거진 블루', desc: '잡지 표지처럼 큰 월 숫자 앞에 그림, 코발트', layout: 'magazine', calLayout: 'split', titleWeight: 800, colorA: '#E8EDFF', colorB: '#EEF1FF', band: '#2546F0', titleColor: '#0E1446', idiomColor: '#FFFFFF', tabColor: '#2546F0', accent: '#2546F0', yearColor: '#2546F0', text: '#141B3D', fontTitle: 'Pretendard', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#828693', outer: '#0E1446', sunBg: '', sunColor: '#E0435E' },
+    { id: 'magazine-cream', cat: '모던', name: '매거진 크림', desc: '크림 종이에 토마토색 큰 숫자, 에디토리얼', layout: 'magazine', calLayout: 'split', titleWeight: 800, colorA: '#F3EDE2', colorB: '#F0E9DC', band: '#D9472B', titleColor: '#1E1E1E', idiomColor: '#FFFFFF', tabColor: '#D9472B', accent: '#D9472B', yearColor: '#D9472B', text: '#1E1E1E', fontTitle: 'Noto Serif KR', fontHand: 'MaruBuri', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#8C8984', outer: '#1E1E1E', sunBg: '', sunColor: '#D9472B' },
+    { id: 'circle-night', cat: '모던', name: '미드나잇 서클', desc: '남색 밤하늘에 금빛 달 같은 동그라미 창', layout: 'circle', calLayout: 'minimal', titleWeight: 700, colorA: '#1C2340', colorB: '#222A4A', panel: '#2F3B6A', titleColor: '#FFFFFF', idiomColor: '#B8862B', tabColor: '#F6C445', accent: '#F6C445', yearColor: '#1C2340', text: '#F2F2F2', calBg: '#FFFFFF', calText: '#1a1a1a', fontTitle: 'Gowun Batang', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Playfair Display', line: '#898989', outer: '#1C2340', sunBg: '', sunColor: '#C8392B' },
+    { id: 'bento-neon', cat: '모던', name: '벤토 네온', desc: '라임·오렌지 칸에 검정 굵은 글자, 네오 브루탈', layout: 'bento', calLayout: 'card', titleWeight: 800, colorA: '#F2F0E9', colorB: '#ECEAE2', panel: '#141414', tint1: '#D9F26A', tint2: '#FFFFFF', tint3: '#FF5A1F', titleColor: '#141414', idiomColor: '#141414', tabColor: '#FF5A1F', accent: '#FF5A1F', yearColor: '#141414', text: '#141414', fontTitle: 'Isamanru', fontHand: 'Pretendard', fontBody: 'Pretendard', fontNum: 'Oswald', line: '#868480', outer: '#141414', sunBg: '', sunColor: '#FF5A1F' },
+    { id: 'bento-pastel', cat: '귀여운', name: '벤토 파스텔', desc: '복숭아·하늘·라벤더 둥근 칸, 귀여운 격자', layout: 'bento', calLayout: 'card', titleWeight: 800, colorA: '#F6F2EC', colorB: '#F3EFE8', panel: '#3B3355', tint1: '#FFDCCB', tint2: '#FFFFFF', tint3: '#D8E6FF', titleColor: '#3B3355', idiomColor: '#3B3355', tabColor: '#FF8A65', accent: '#FF8A65', yearColor: '#3B3355', text: '#2E2A40', fontTitle: 'CookieRun', fontHand: 'Gaegu', fontBody: 'NanumSquareNeo', fontNum: 'Montserrat', line: '#8C8480', outer: '#3B3355', sunBg: '#FFF4EE', sunColor: '#E5484D' },
+    { id: 'polaroid-pink', cat: '귀여운', name: '다꾸 핑크', desc: '분홍 모눈종이에 폴라로이드·마스킹테이프·낙서', layout: 'polaroid', titleScale: 1.12, calLayout: 'card', colorA: '#FFE6EE', colorB: '#FFEFF4', grid: '#F6B9CC', titleColor: '#4B2E83', idiomColor: '#C2185B', tabColor: '#F06292', accent: '#F06292', tape: '#B9A6F2', yearColor: '#4B2E83', text: '#2E2440', fontTitle: 'Jua', fontHand: 'Gaegu', fontBody: 'Gowun Dodum', fontNum: 'Montserrat', line: '#8C8486', outer: '#4B2E83', sunBg: '#FFF4F7', sunColor: '#E0435E' },
+    { id: 'polaroid-mint', cat: '귀여운', name: '다꾸 민트', desc: '민트 모눈종이에 폴라로이드, 노란 테이프', layout: 'polaroid', titleScale: 1.12, calLayout: 'card', colorA: '#E0F5EE', colorB: '#E8F7F2', grid: '#A8DCCB', titleColor: '#1F4E5F', idiomColor: '#1F8A70', tabColor: '#2BB39A', accent: '#2BB39A', tape: '#FFD45C', yearColor: '#1F4E5F', text: '#1E3438', fontTitle: 'Jua', fontHand: 'Gaegu', fontBody: 'Gowun Dodum', fontNum: 'Montserrat', line: '#808C87', outer: '#1F4E5F', sunBg: '#EEF8F4', sunColor: '#D9534F' },
+    { id: 'sticker-lemon', cat: '귀여운', name: '체커 스티커', desc: '레몬 체커보드 테두리, 라벤더 스티커', layout: 'sticker', calLayout: 'card', titleWeight: 900, colorA: '#FFF7C2', colorB: '#FFF4B0', check: '#FFE45C', panel: '#FFFFFF', tint1: '#E4DAFF', titleColor: '#2B2B6B', idiomColor: '#5B3FE0', tabColor: '#7B5CFF', accent: '#7B5CFF', yearColor: '#2B2B6B', text: '#22224A', fontTitle: 'CookieRun', fontHand: 'Gaegu', fontBody: 'NanumSquareNeo', fontNum: 'Montserrat', line: '#8C8888', outer: '#2B2B6B', sunBg: '#FFFBE6', sunColor: '#E5484D' },
+    { id: 'sticker-cherry', cat: '귀여운', name: '체리 체커', desc: '분홍 체커보드 테두리, 체리빛 스티커', layout: 'sticker', calLayout: 'card', titleWeight: 900, colorA: '#FFF0F3', colorB: '#FFEAF0', check: '#FFC2CF', panel: '#FFFFFF', tint1: '#FFD9E2', titleColor: '#5A1A2B', idiomColor: '#C8243F', tabColor: '#E8364F', accent: '#E8364F', yearColor: '#5A1A2B', text: '#3A1520', fontTitle: 'YeogiOttaeJalnan', fontHand: 'Gaegu', fontBody: 'Paperozi', fontNum: 'Montserrat', line: '#8C8486', outer: '#5A1A2B', sunBg: '#FFF5F7', sunColor: '#E8364F' },
   ];
+  /* 계절 색표: season 테마는 달마다 바탕·제목·포인트 색이 바뀜 (pastel = 밝은 계절색, deep = 짙은 계절색·흰 글자) */
+  const SEASON = {
+    pastel: [['#E7F0FA', '#1F4E79', '#4A8BCB'], ['#F7EEE6', '#7A2E3B', '#D9577A'], ['#FDEDF2', '#A8365E', '#EE7FA4'], ['#EEF6E2', '#3F6B2A', '#E9A62C'], ['#E5F3E8', '#1E6B45', '#E8618C'], ['#E8EBFA', '#3D4A9E', '#8471D2'], ['#DFF3F6', '#0E6A80', '#F08A4B'], ['#FFF3D2', '#8A5200', '#F2A100'], ['#EEF1F8', '#4A5D8A', '#E06C9F'], ['#FBEADB', '#A4401E', '#E0662C'], ['#F6EDD6', '#735410', '#D49A12'], ['#ECF2EC', '#A3242F', '#2F6B4A']],
+    deep: [['#1F3A5F', '#FFFFFF', '#A9CBEB'], ['#5A2333', '#FFFFFF', '#F7B6C8'], ['#7A2C4E', '#FFFFFF', '#FBD3DE'], ['#2F5226', '#FFFFFF', '#F7D46B'], ['#1D5640', '#FFFFFF', '#F59AB7'], ['#2E3672', '#FFFFFF', '#C3B6F2'], ['#0B5468', '#FFFFFF', '#FFC48C'], ['#7A4A00', '#FFFFFF', '#FFD66B'], ['#3B4A72', '#FFFFFF', '#F7B7CF'], ['#7A2E16', '#FFFFFF', '#F5B03B'], ['#5A4210', '#FFFFFF', '#F6D45A'], ['#123D2A', '#FFFFFF', '#F6C445']],
+  };
+
   function themeOf(doc) { const t = doc.calendar.theme || {}; const base = THEMES.find(x => x.id === t.id) || THEMES[0]; return Object.assign({}, base, t); }
 
   /* ---------- 캘린더 마법사: 테마별 페이지 생성 ---------- */
@@ -220,7 +248,11 @@ NC.cal = (function () {
     /* 배경이 있는 정사각 장면 그림(홍익 hi-…, 모서리 둥근 카드)은 자리 상자 가운데에 조금 작게 — 아래 붙이면 아래 띠·위 영문 덕목과 겹쳤음 (11/20) */
     const cardArt = src => /(^|\/)hi-\d\d-/.test(String(src || ''));
     const img = (mo, x, y, w, h, st) => { if (cardArt(mo.image)) { const s = Math.round(Math.min(w, h) * 0.78); x += (w - s) / 2; y += (h - s) * 0.65; w = h = s; st = Object.assign({}, st, { pos: '50% 50%' }); } return I_(mo.image, x, y, w, h, Object.assign({ pos: '50% 100%', name: '삽화', role: 'illust', month: mo.m }, st)); };
-    const L = T.layout;
+    const L = T.layout, L2 = T.calLayout || T.layout;
+    /* 계절 테마: 그 달의 바탕·제목·포인트 색 (pastel·deep) */
+    const TM = m => { if (!T.season) return Object.assign({ bg: (C.months[m - 1] || {}).bg === 'B' ? B : A }, T); const q = (SEASON[T.season] || SEASON.pastel)[m - 1]; return Object.assign({}, T, { bg: q[0], titleColor: q[1], accent: q[2], tabColor: q[2], idiomColor: q[1], yearColor: q[1], panel: T.season === 'deep' ? 'rgba(255,255,255,0.14)' : (T.panel || '#ffffff') }); };
+    const deco = (m, x, y, w, h, st) => I_(`assets/deco/season-${String(m).padStart(2, '0')}.svg`, x, y, w, h, Object.assign({ name: '계절 장식', fit: 'contain' }, st));
+    const rotP = (cx, cy, dx, dy, deg) => { const r = deg * Math.PI / 180; return [cx + dx * Math.cos(r) - dy * Math.sin(r), cy + dx * Math.sin(r) + dy * Math.cos(r)]; };
 
     function cover() {
       const c = C.cover, bg = c.bg === 'B' ? B : A;
@@ -248,7 +280,7 @@ NC.cal = (function () {
     const practiceText = mo => `1. ${mo.practice[0]}\n2. ${mo.practice[1]}`;
 
     function virtue(m) {
-      const mo = C.months[m - 1], bg = mo.bg === 'B' ? B : A, chars = [...mo.virtue].length, nd = String(m).length;
+      const mo = C.months[m - 1], bg = T.season ? TM(m).bg : mo.bg === 'B' ? B : A, chars = [...mo.virtue].length, nd = String(m).length;
       const common = { role: 'virtue', month: m, name: '덕목', weight: T.titleWeight || 400 };
       const ts = T.titleScale || 1;
       if (L === 'band') {
@@ -264,7 +296,7 @@ NC.cal = (function () {
           S_('rect', 0, 134, 224, 20, { fill: '#ffffff', opacity: 0.85, name: '하단 띠' }), S_('rect', 0, 134, 224, 0.6, { fill: T.band }),
           I_(C.dojang.target, 14, 137.5, 13, 13, { name: '실천 아이콘' }),
           T_(practiceText(mo), 32, 136.5, 186, 17, { font: T.fontHand, size: 13, lh: 1.5, name: '실천 과제', role: 'practice', month: m }),
-        ], `${m}월 인성`, 'virtue');
+        ], `${m}월 이미지면`, 'virtue');
       }
       if (L === 'minimal') {
         const dark = isDark(bg);
@@ -278,7 +310,7 @@ NC.cal = (function () {
           img(mo, 120, 24, 92, 100),
           S_('rect', 14, 128, 196, 0.5, { fill: T.titleColor, name: '아랫줄' }),
           T_(practiceText(mo), 14, 132, 196, 18, { font: T.fontHand, size: 11.5, lh: 1.55, weight: 500, name: '실천 과제', role: 'practice', month: m }),
-        ], `${m}월 인성`, 'virtue');
+        ], `${m}월 이미지면`, 'virtue');
       }
       if (L === 'photo') {
         return pg('#ffffff', [
@@ -293,7 +325,7 @@ NC.cal = (function () {
           T_(mo.quote, 122, 72, 94, 44, { size: 13.5, weight: 600, lh: 1.6, color: '#ffffff', name: '명언', role: 'quote', month: m }),
           S_('rect', 122, 118, 94, 0.5, { fill: T.accent }),
           T_(practiceText(mo), 122, 122, 94, 26, { font: T.fontHand, size: 10.5, lh: 1.5, color: '#ffffff', name: '실천 과제', role: 'practice', month: m }),
-        ], `${m}월 인성`, 'virtue');
+        ], `${m}월 이미지면`, 'virtue');
       }
       if (L === 'card') {
         /* 라운드 카드형: 바탕색 위에 둥근 카드, 알약 모양 연월 표시, 그림·실천 과제는 연한 상자 */
@@ -311,7 +343,7 @@ NC.cal = (function () {
           S_('rect', 14, 127, 196, 15, { fill: bg, radius: 3.5, name: '실천 바탕' }),
           I_(C.dojang.target, 18, 129.5, 10, 10, { name: '실천 아이콘' }),
           T_(practiceText(mo), 32, 128.5, 174, 13, { font: T.fontHand, size: 10.5, lh: 1.4, name: '실천 과제', role: 'practice', month: m }),
-        ], `${m}월 인성`, 'virtue');
+        ], `${m}월 이미지면`, 'virtue');
       }
       if (L === 'split') {
         /* 컬러 블록 스플릿: 왼쪽 세로 색면에 큰 월 숫자·덕목, 오른쪽 바탕에 명언·그림·실천 과제 */
@@ -329,7 +361,182 @@ NC.cal = (function () {
           S_('rect', 94, 129, 122, 0.5, { fill: T.band, name: '실천 줄' }),
           I_(C.dojang.target, 94, 133, 10, 10, { name: '실천 아이콘' }),
           T_(practiceText(mo), 107, 132, 111, 20, { font: T.fontHand, size: 10, lh: 1.4, name: '실천 과제', role: 'practice', month: m }),
-        ], `${m}월 인성`, 'virtue');
+        ], `${m}월 이미지면`, 'virtue');
+      }
+      /* ===== 2026 이미지면 새 모양 (11/21) ===== */
+      const t = TM(m), dk = isDark(bg), ink = dk ? '#ffffff' : TX, sub = dk ? 'rgba(255,255,255,0.75)' : '#666666', mm2 = String(m).padStart(2, '0'), ymCaps = `${MONTHS_EN[m - 1].toUpperCase()}  ${year}`;
+      const logoAt = (x, y, w, h, on) => (on ? [S_('rect', x - 1.6, y - 1.4, w + 3.2, h + 2.8, { fill: '#ffffff', radius: 2, opacity: 0.92, name: '로고 바탕' })] : []).concat([I_(C.dojang.swoosh, x, y, w, h, { name: '로고' })]);  /* 남색 로고가 짙은 바탕에서 안 보여 흰 바탕을 깔아 줌 */
+      const prac = (x, y, w, h, st) => T_(practiceText(mo), x, y, w, h, Object.assign({ font: T.fontBody, size: 10.5, weight: 500, lh: 1.5, color: ink, name: '실천 과제', role: 'practice', month: m }, st, { size: Math.max(9.5, (st && st.size) || 10.5) }));
+      if (L === 'arch') {
+        /* 아치 창: 오른쪽 아치 창 안에 그림, 왼쪽 큰 월 숫자·덕목·명언 (계절 테마는 아치 위에 꽃다발) */
+        return pg(bg, [
+          S_('arch', 117, 9, 98, 139, { fill: '', stroke: t.accent, strokeW: 0.45, name: '아치 선' }),
+          S_('arch', 122, 14, 88, 129, { fill: t.panel || '#ffffff', name: '아치 창' }),
+          img(mo, 125, 30, 82, 112, { clip: 'arch', pos: '50% 100%' }),
+          T.deco ? deco(m, 146, -3, 80, 64) : null,
+          ...logoAt(16, 13, 11, 9.5, dk),
+          T_(ymCaps, 30, 15.5, 84, 6, { font: T.fontNum, size: 7.5, weight: 700, ls: 0.28, color: t.accent, name: '연월', role: 'ym', month: m }),
+          T_(mm2, 14, 24, 70, 26, { font: T.fontNum, size: 64, weight: 700, lh: 0.95, ls: -0.03, color: t.titleColor, name: '월 숫자' }),
+          T_(mo.virtue, 16, 50, 100, 20, Object.assign({ font: T.fontTitle, size: Math.round(42 * (T.titleScale || 1)), color: t.titleColor, lh: 1.05, ls: -0.01 }, common)),
+          T_(mo.en, 16, 71, 100, 6, { font: T.fontNum, size: 8.5, weight: 600, italic: true, ls: 0.08, color: t.accent, name: '영문', role: 'en', month: m }),
+          T_(mo.quote, 16, 82, 96, 38, { size: 12.5, weight: 500, lh: 1.6, color: ink, name: '명언', role: 'quote', month: m }),
+          S_('rect', 16, 123, 22, 0.5, { fill: t.accent, name: '가는 줄' }),
+          prac(16, 126, 100, 22, { size: 10 }),
+        ].filter(Boolean), `${m}월 이미지면`, 'virtue');
+      }
+      if (L === 'polaroid') {
+        /* 폴라로이드 다꾸: 모눈종이 바탕, 비스듬한 폴라로이드에 그림, 마스킹테이프·별 낙서 */
+        const fx = 164, fy = 74, ang = -4, [ix, iy] = rotP(fx, fy, 0, -10, ang), [cx2, cy2] = rotP(fx, fy, 0, 43.5, ang);
+        const tape = T.tape || t.accent;
+        return pg(bg, [
+          S_('grid', 0, 0, 224, 154, { fill: T.grid || (dk ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'), cell: 6, lineW: 0.2, name: '모눈종이' }),
+          T.deco ? deco(m, 0, 104, 64, 51, { flip: true, flipV: true, opacity: 0.95 }) : null,
+          S_('rect', fx - 46, fy - 56, 92, 112, { fill: '#ffffff', rot: ang, shadow: true, shA: 0.18, shB: 1.2, shY: 1.2, radius: 0.8, name: '폴라로이드' }),
+          S_('rect', ix - 41, iy - 41, 82, 82, { fill: T.season ? t.bg : (B || '#f4f1ea'), rot: ang, name: '사진 바탕' }),
+          img(mo, ix - 40, iy - 40, 80, 80, { rot: ang, pos: '50% 100%' }),
+          T_(`${MONTHS_EN[m - 1]} ${year} ♡`, cx2 - 40, cy2 - 6, 80, 12, { font: T.fontHand, size: 17, align: 'center', valign: 'middle', rot: ang, color: '#444444', name: '사진 글씨' }),
+          S_('rect', fx - 17, fy - 61, 34, 10, { fill: tape, opacity: 0.72, rot: ang + 7, name: '마스킹테이프' }),
+          T.deco ? deco(m, 150, -4, 76, 61) : S_('star', 200, 12, 9, 9, { fill: t.accent, points: 4, inner: 0.32, name: '반짝 낙서' }),
+          S_('star', 108, 20, 6, 6, { fill: tape, points: 4, inner: 0.32, name: '반짝 낙서' }),
+          S_('ellipse', 14, 12, 24, 24, { fill: t.accent, name: '월 스티커' }),
+          T_(String(m), 14, 12, 24, 24, { font: T.fontNum, size: 30, weight: 800, align: 'center', valign: 'middle', lh: 1, color: '#ffffff', name: '월 숫자' }),
+          T_(ymCaps, 42, 20, 70, 6, { font: T.fontNum, size: 7.5, weight: 700, ls: 0.24, color: sub, name: '연월', role: 'ym', month: m }),
+          T_(mo.virtue, 15, 42, 100, 17, Object.assign({ font: T.fontTitle, size: Math.round(36 * (T.titleScale || 1)), color: t.titleColor, lh: 1.05 }, common)),
+          S_('wave', 16, 60, 34, 3.6, { fill: t.accent, name: '물결 낙서' }),
+          T_(mo.en, 54, 59.5, 60, 5, { font: T.fontNum, size: 8, weight: 700, ls: 0.16, color: t.accent, name: '영문', role: 'en', month: m }),
+          T_(mo.quote, 16, 70, 92, 42, { size: 13, weight: 600, lh: 1.6, color: ink, name: '명언', role: 'quote', month: m }),
+          S_('rect', 14, 119, 100, 28, { fill: dk ? 'rgba(255,255,255,0.12)' : '#ffffff', radius: 3, opacity: 0.92, name: '실천 메모' }),
+          I_(C.dojang.target, 18, 123, 9, 9, { name: '실천 아이콘' }),
+          prac(29.5, 120.5, 83, 26, { size: 10 }),
+        ].filter(Boolean), `${m}월 이미지면`, 'virtue');
+      }
+      if (L === 'bento') {
+        /* 벤토 격자: 크기가 다른 둥근 칸 — 큰 그림 칸 · 월 칸 · 연도 칸 · 덕목 · 명언 · 실천 */
+        const c1 = T.season ? t.bg : (T.tint1 || A), c2 = T.tint2 || '#ffffff', c3 = T.season ? t.accent : (T.tint3 || B), pan = T.season ? t.titleColor : (T.panel || '#222222');
+        const pageBg = T.season ? '#F7F5F1' : bg, r = 5;
+        return pg(pageBg, [
+          S_('rect', 8, 8, 100, 138, { fill: c1, radius: r, name: '그림 칸' }),
+          T.deco ? deco(m, 46, 6, 64, 51) : null,
+          img(mo, 12, 30, 92, 112, { pos: '50% 100%' }),
+          S_('rect', 112, 8, 50, 46, { fill: c3, radius: r, name: '월 칸' }),
+          T_(mm2, 116, 11, 42, 28, { font: T.fontNum, size: 64, weight: 800, lh: 1, ls: -0.04, color: isDark(c3) ? '#ffffff' : '#141414', name: '월 숫자' }),
+          T_(MONTHS_EN[m - 1].toUpperCase(), 117, 44, 42, 6, { font: T.fontNum, size: 7.5, weight: 800, ls: 0.22, color: isDark(c3) ? '#ffffff' : '#141414', name: '월 이름', role: 'ym', month: m }),
+          S_('rect', 166, 8, 50, 46, { fill: pan, radius: r, name: '연도 칸' }),
+          T_(String(year), 170, 36, 44, 14, { font: T.fontNum, size: 26, weight: 800, lh: 1, ls: -0.02, color: '#ffffff', name: '연도' }),
+          T_(C.dojang.nameEn || 'NARACHA', 171, 14, 30, 8, { font: T.fontNum, size: 5.5, weight: 700, ls: 0.2, lh: 1.3, color: 'rgba(255,255,255,0.7)', name: '도장 이름' }),
+          S_('rect', 112, 58, 104, 26, { fill: c2, radius: r, name: '덕목 칸' }),
+          ...logoAt(201, 62, 11, 9.5, isDark(c2)),
+          T_(mo.virtue, 118, 61.5, 80, 13, Object.assign({ font: T.fontTitle, size: Math.round(28 * (T.titleScale || 1)), color: T.season ? t.titleColor : T.titleColor, lh: 1.05, ls: -0.02 }, common)),
+          T_(mo.en, 118, 75.5, 92, 5, { font: T.fontNum, size: 8, weight: 700, ls: 0.18, color: T.season ? t.accent : T.accent, name: '영문', role: 'en', month: m }),
+          S_('rect', 112, 88, 104, 36, { fill: T.season ? '#ffffff' : c1, radius: r, name: '명언 칸' }),
+          T_(mo.quote, 118, 91.5, 92, 30, { size: 11.5, weight: 600, lh: 1.55, color: '#1f1f1f', name: '명언', role: 'quote', month: m }),
+          S_('rect', 112, 128, 104, 18, { fill: c2, radius: r, name: '실천 칸' }),
+          I_(C.dojang.target, 116, 132, 9.5, 9.5, { name: '실천 아이콘' }),
+          prac(128, 129, 86, 16, { size: 9.5, lh: 1.4, color: '#222222' }),
+        ].filter(Boolean), `${m}월 이미지면`, 'virtue');
+      }
+      if (L === 'circle') {
+        /* 동그라미 창: 해·달처럼 둥근 창에 그림, 바깥 고리와 작은 점, 왼쪽 큰 월 숫자 */
+        return pg(bg, [
+          S_('ellipse', 100, 11, 120, 120, { fill: '', stroke: t.accent, strokeW: 0.45, name: '바깥 고리' }),
+          S_('ellipse', 106, 17, 108, 108, { fill: t.panel || '#ffffff', name: '동그라미 창' }),
+          img(mo, 110, 21, 100, 100, { clip: 'circle', pos: '50% 100%' }),
+          S_('ellipse', 104.5, 32, 5, 5, { fill: t.accent, name: '고리 점' }), S_('ellipse', 208, 104, 3.4, 3.4, { fill: t.accent, name: '고리 점' }),
+          T_(mm2, 12, 8, 90, 40, { font: T.fontNum, size: 104, weight: 800, lh: 0.95, ls: -0.05, color: t.accent, name: '월 숫자' }),
+          T_(ymCaps, 15, 47, 84, 6, { font: T.fontNum, size: 7.5, weight: 700, ls: 0.28, color: sub, name: '연월', role: 'ym', month: m }),
+          T_(mo.virtue, 15, 57, 86, 16, Object.assign({ font: T.fontTitle, size: Math.round(32 * (T.titleScale || 1)), color: t.titleColor, lh: 1.05, ls: -0.02 }, common)),
+          T_(mo.en, 15, 73.5, 86, 5, { font: T.fontNum, size: 8.5, weight: 700, ls: 0.16, color: t.accent, name: '영문', role: 'en', month: m }),
+          T_(mo.quote, 15, 82, 84, 40, { size: 12, weight: 500, lh: 1.6, color: ink, name: '명언', role: 'quote', month: m }),
+          S_('rect', 15, 134, 194, 0.4, { fill: dk ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.25)', name: '실천 줄' }),
+          I_(C.dojang.target, 15, 138, 9, 9, { name: '실천 아이콘' }),
+          prac(27, 136.5, 160, 15, { size: 9.5, lh: 1.4 }),
+          ...logoAt(197, 137.5, 12, 10.5, dk),
+        ].filter(Boolean), `${m}월 이미지면`, 'virtue');
+      }
+      if (L === 'magazine') {
+        /* 매거진 표지: 위 큰 달 이름(마스트헤드), 아주 큰 월 숫자 앞에 그림이 서고, 양옆 표지 글 */
+        return pg(bg, [
+          T_(MONTHS_EN[m - 1].toUpperCase(), 8, 6, 208, 20, { font: T.fontNum, size: 52, weight: 800, align: 'center', lh: 1, ls: 0.06, color: t.titleColor, name: '달 이름', role: 'ym', month: m }),
+          S_('rect', 10, 28, 204, 0.5, { fill: t.titleColor, name: '윗줄' }),
+          T_(`VOL.${mm2}  ·  ${year}  ·  ${C.dojang.nameEn || 'NARACHA TAEKWONDO'}`, 10, 30, 204, 5, { font: T.fontNum, size: 6, weight: 700, ls: 0.3, align: 'center', color: t.titleColor, name: '호수' }),
+          T_(mm2, 40, 38, 144, 100, { font: T.fontNum, size: 255, weight: 800, align: 'center', lh: 0.95, ls: -0.06, color: t.accent, name: '큰 월 숫자' }),
+          img(mo, 56, 42, 112, 106, { pos: '50% 100%' }),
+          T_(mo.virtue, 10, 43, 56, 28, Object.assign({ font: T.fontTitle, size: Math.round(34 * (T.titleScale || 1)), color: t.titleColor, lh: 1.1, ls: -0.02 }, common)),
+          T_(mo.en, 10, 72, 54, 5, { font: T.fontNum, size: 7.5, weight: 700, italic: true, ls: 0.08, color: t.accent, name: '영문', role: 'en', month: m }),
+          T_(mo.quote, 10, 81, 50, 56, { size: 10, weight: 600, lh: 1.6, color: ink, name: '명언', role: 'quote', month: m }),
+          T_('이달의 실천', 166, 44, 48, 5, { size: 7.5, weight: 800, ls: 0.1, color: t.accent, name: '실천 머리' }),
+          S_('rect', 166, 51, 14, 0.5, { fill: t.accent }),
+          prac(166, 54, 50, 60, { size: 9.5, lh: 1.55 }),
+          ...logoAt(200, 134, 14, 12, dk),
+        ].filter(Boolean), `${m}월 이미지면`, 'virtue');
+      }
+      if (L === 'sticker') {
+        /* 체커 스티커: 체커보드 테두리 + 흰 카드, 별꽃 스티커 위 그림, 월 배지 */
+        const tint = T.tint1 || B;
+        return pg(bg, [
+          S_('checker', 0, 0, 224, 154, { fill: T.check || t.accent, cell: 5, name: '체커보드' }),
+          S_('rect', 8, 8, 208, 138, { fill: T.panel || '#ffffff', radius: 6, shadow: true, shA: 0.12, shB: 0.8, name: '카드' }),
+          S_('burst', 110, 13, 102, 102, { fill: tint, points: 16, inner: 0.86, name: '별꽃 스티커' }),
+          S_('rect', 124, 22, 76, 82, { fill: '#ffffff', radius: 4, rot: 4, shadow: true, shA: 0.16, shB: 1, name: '스티커 카드' }),
+          img(mo, 127.5, 25.5, 69, 75, { rot: 4, radius: 2.5, pos: '50% 100%' }),
+          S_('burst', 11, 9, 35, 35, { fill: t.accent, points: 12, inner: 0.8, rot: -8, name: '월 배지' }),
+          T_(String(m), 11, 9, 35, 35, { font: T.fontNum, size: 34, weight: 800, align: 'center', valign: 'middle', lh: 1, color: '#ffffff', rot: -8, name: '월 숫자' }),
+          T_(ymCaps, 50, 22.5, 64, 6, { font: T.fontNum, size: 7.5, weight: 800, ls: 0.24, color: t.accent, name: '연월', role: 'ym', month: m }),
+          I_(C.dojang.swoosh, 196, 118, 13, 11, { name: '로고' }),
+          T_(mo.virtue, 15, 48, 96, 17, Object.assign({ font: T.fontTitle, size: Math.round(36 * (T.titleScale || 1)), color: t.titleColor, lh: 1.05, ls: -0.02 }, common)),
+          T_(mo.en, 16, 66, 96, 5, { font: T.fontNum, size: 8, weight: 800, ls: 0.18, color: t.accent, name: '영문', role: 'en', month: m }),
+          T_(mo.quote, 16, 75, 92, 40, { size: 12.5, weight: 700, lh: 1.6, color: ink, name: '명언', role: 'quote', month: m }),
+          S_('heart', 98, 112, 8, 7, { fill: t.accent, rot: 12, name: '하트 스티커' }),
+          S_('pill', 15, 121, 178, 19, { fill: tint, name: '실천 바탕' }),
+          I_(C.dojang.target, 20, 125.5, 10, 10, { name: '실천 아이콘' }),
+          prac(33, 122, 158, 17, { size: 9.8, lh: 1.4, color: '#222222' }),
+        ].filter(Boolean), `${m}월 이미지면`, 'virtue');
+      }
+      if (L === 'sports') {
+        /* 라차 스포츠: 달마다 다른 운동 — 사선 스포츠 띠, 운동 아이콘 배지, 전광판 월 숫자 (그림은 NARACAL_SPORTS_ART가 있으면 그 달 운동 그림) */
+        const SP = (window.NARACAL_SPORTS || [])[m - 1] || ['🏅', '운동', 'SPORTS'], art = (window.NARACAL_SPORTS_ART || [])[m - 1];
+        const emo = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u' + [...SP[0]].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f').join('_') + '.svg';
+        const mo2 = art ? Object.assign({}, mo, { image: art }) : mo, s2 = T.stripe2 || t.accent;
+        return pg(bg, [
+          T.court ? S_('rect', 112, 10, 104, 134, { fill: '', stroke: 'rgba(255,255,255,0.55)', strokeW: 0.7, name: '코트 선' }) : null,
+          T.court ? S_('ellipse', 136, 50, 56, 56, { fill: '', stroke: 'rgba(255,255,255,0.55)', strokeW: 0.7, name: '코트 원' }) : null,
+          T.court ? S_('rect', 112, 77.6, 104, 0.7, { fill: 'rgba(255,255,255,0.55)', name: '코트 가운데 선' }) : null,
+          T.court ? null : S_('rect', 150, -40, 30, 240, { fill: T.band, rot: 24, name: '스포츠 띠' }),
+          T.court ? null : S_('rect', 186, -40, 9, 240, { fill: s2, rot: 24, name: '스포츠 띠' }),
+          img(mo2, 116, 24, 102, 124, { pos: '50% 100%', role: art ? 'sportsArt' : 'illust' }),
+          S_('ellipse', 182, 8, 34, 34, { fill: '#ffffff', shadow: true, shA: 0.18, shB: 0.8, name: '운동 배지' }),
+          I_(emo, 188, 14, 22, 22, { name: '운동 아이콘' }),
+          S_('rect', 14, 12, 52, 30, { fill: T.court ? 'rgba(0,0,0,0.28)' : T.panel, radius: 3, name: '전광판' }),
+          T_(mm2, 14, 12, 52, 30, { font: T.fontNum, size: 62, weight: 700, align: 'center', valign: 'middle', lh: 1, ls: 0.02, color: T.court ? t.accent : '#FFD34D', name: '월 숫자' }),
+          T_(`${MONTHS_EN[m - 1].toUpperCase()}\n${year}`, 70, 15, 46, 12, { font: T.fontNum, size: 8.5, weight: 700, ls: 0.2, lh: 1.35, color: dk ? '#ffffff' : t.titleColor, name: '연월', role: 'ym', month: m }),
+          S_('pill', 70, 31, 44, 9, { fill: t.accent, name: '운동 이름 바탕' }),
+          T_(`${SP[1]}  ${SP[2]}`, 70, 31, 44, 9, { font: T.fontBody, size: 7.5, weight: 800, ls: 0.06, align: 'center', valign: 'middle', lh: 1, color: isDark(t.accent) ? '#ffffff' : '#1a1a1a', name: '이달의 운동' }),
+          T_(mo.virtue, 14, 50, 100, 18, Object.assign({ font: T.fontTitle, size: Math.round(40 * (T.titleScale || 1)), color: t.titleColor, lh: 1.05, ls: -0.02 }, common)),
+          T_(mo.en, 15, 68.5, 100, 6, { font: T.fontNum, size: 9, weight: 600, ls: 0.22, color: t.accent, name: '영문', role: 'en', month: m }),
+          T_(mo.quote, 15, 78, 96, 40, { size: 12.5, weight: 700, lh: 1.6, color: ink, name: '명언', role: 'quote', month: m }),
+          S_('rect', 14, 121, 100, 26, { fill: dk ? 'rgba(0,0,0,0.22)' : '#ffffff', radius: 3, name: '실천 카드' }),
+          S_('rect', 14, 121, 3, 26, { fill: t.accent, name: '실천 색 막대' }),
+          I_(C.dojang.target, 20, 125, 9.5, 9.5, { name: '실천 아이콘' }),
+          prac(32, 122.5, 80, 24, { size: 10 }),
+          ...logoAt(104, 13, 11, 9.5, dk),
+        ].filter(Boolean), `${m}월 이미지면`, 'virtue');
+      }
+      if (L === 'season') {
+        /* 사계절 정원: 달마다 계절색 바탕, 오른쪽 위 꽃·눈·단풍 장식, 오른쪽 아래 그림 */
+        return pg(bg, [
+          deco(m, 112, 0, 112, 90),
+          deco(m, 0, 116, 48, 38, { flip: true, flipV: true, opacity: 0.9 }),
+          img(mo, 120, 38, 98, 110, { pos: '50% 100%' }),
+          T_(mm2, 15, 12, 46, 26, { font: T.fontNum, size: 64, weight: 800, lh: 1, ls: -0.04, color: t.accent, name: '월 숫자' }),
+          T_(`${year}\n${MONTHS_EN[m - 1].toUpperCase()}`, 49, 16.5, 60, 12, { font: T.fontNum, size: 7.5, weight: 700, ls: 0.22, lh: 1.45, color: sub, name: '연월', role: 'ym', month: m }),
+          T_(mo.virtue, 15, 42, 100, 18, Object.assign({ font: T.fontTitle, size: Math.round(40 * (T.titleScale || 1)), color: t.titleColor, lh: 1.05 }, common)),
+          T_(mo.en, 16, 61, 100, 5, { font: T.fontNum, size: 8.5, weight: 700, ls: 0.16, color: t.accent, name: '영문', role: 'en', month: m }),
+          T_(mo.quote, 16, 71, 98, 44, { size: 13.5, weight: 700, lh: 1.6, color: ink, name: '명언', role: 'quote', month: m }),
+          S_('rect', 14, 120, 118, 27, { fill: dk ? 'rgba(255,255,255,0.14)' : '#ffffff', opacity: dk ? 1 : 0.9, radius: 4, name: '실천 카드' }),
+          I_(C.dojang.target, 18, 125, 10, 10, { name: '실천 아이콘' }),
+          prac(31, 122, 100, 24, { size: 10, color: dk ? '#ffffff' : t.titleColor }),
+          ...logoAt(102, 12, 12, 10.5, dk),
+        ].filter(Boolean), `${m}월 이미지면`, 'virtue');
       }
       // classic
       const enX = Math.min(150, 18 + chars * 15.5 + 3);
@@ -344,12 +551,12 @@ NC.cal = (function () {
         S_('rect', 0, 133, 224, 21, { fill: '#ffffff', opacity: 0.72, name: '하단 띠' }),
         I_(C.dojang.target, 52, 137, 13, 13, { name: '실천 아이콘' }),
         T_(practiceText(mo), 70, 135.5, 150, 17, { font: T.fontHand, size: 13, lh: 1.5, color: '#222222', name: '실천 과제', role: 'practice', month: m }),
-      ], `${m}월 인성`, 'virtue');
+      ], `${m}월 이미지면`, 'virtue');
     }
     function calendar(m) {
       const mo = C.months[m - 1];
       const idiom = `${mo.idiom}(${mo.hanja})`;
-      if (L === 'band') {
+      if (L2 === 'band') {
         return pg(CBG, [
           S_('rect', 0, 0, 224, 32, { fill: T.band, name: '상단 띠' }),
           T_(String(m), 12, 3, 34, 22, { font: T.fontNum, size: 50, weight: 800, lh: 1, ls: -0.03, color: '#ffffff', name: '월 숫자' }),
@@ -363,7 +570,7 @@ NC.cal = (function () {
           I_(C.dojang.footer, 97, 147, 30, 4.4, { name: '하단 로고' }),
         ].filter(Boolean), `${m}월 달력`, 'cal');
       }
-      if (L === 'minimal') {
+      if (L2 === 'minimal') {
         return pg(CBG, [
           T_(String(m).padStart(2, '0'), 10, 8, 40, 20, { font: T.fontNum, size: 44, weight: 800, lh: 1, ls: -0.03, color: CTX, name: '월 숫자' }),
           T_(`${MONTHS_EN[m - 1]}  ${year}`, 10, 30, 80, 6, { font: T.fontNum, size: 8, weight: 600, ls: 0.25, color: '#666', name: '연월', role: 'ym', month: m }),
@@ -376,7 +583,7 @@ NC.cal = (function () {
           T_(C.dojang.nameEn, 10, 148, 204, 5, { font: T.fontNum, size: 6.5, weight: 700, ls: 0.3, align: 'center', color: '#888', name: '하단 글자' }),
         ].filter(Boolean), `${m}월 달력`, 'cal');
       }
-      if (L === 'photo') {
+      if (L2 === 'photo') {
         return pg(CBG, [
           S_('rect', 0, 0, 30, 154, { fill: T.panel, name: '왼쪽 띠' }),
           T_(String(m), 2, 8, 26, 16, { font: T.fontNum, size: 34, weight: 800, lh: 1, align: 'center', color: T.accent, name: '월 숫자' }),
@@ -389,22 +596,22 @@ NC.cal = (function () {
           I_(C.dojang.footer, 97, 147, 30, 4.4, { name: '하단 로고' }),
         ].filter(Boolean), `${m}월 달력`, 'cal');
       }
-      if (L === 'card') {
-        const tint = mo.bg === 'B' ? B : A;
+      if (L2 === 'card') {
+        const tc = TM(m), tint = T.season ? tc.bg : T.tint1 && T.layout === 'bento' ? T.tint1 : mo.bg === 'B' ? B : A, tDk = isDark(tint);  /* 계절 테마는 달마다 계절색 머리 카드 */
         return pg(CBG, [
           S_('rect', 10, 8, 204, 31, { fill: tint, radius: 5, name: '머리 카드' }),
-          T_(String(m).padStart(2, '0'), 15, 10.5, 34, 18, { font: T.fontNum, size: 42, weight: 800, lh: 1, ls: -0.03, color: T.titleColor, name: '월 숫자' }),
-          T_(`${MONTHS_EN[m - 1]}  ${year}`, 16, 30, 40, 5, { font: T.fontNum, size: 6.8, weight: 700, ls: 0.18, color: T.accent, name: '연월', role: 'ym', month: m }),
+          T_(String(m).padStart(2, '0'), 15, 10.5, 34, 18, { font: T.fontNum, size: 42, weight: 800, lh: 1, ls: -0.03, color: tDk ? '#ffffff' : tc.titleColor, name: '월 숫자' }),
+          T_(`${MONTHS_EN[m - 1]}  ${year}`, 16, 30, 40, 5, { font: T.fontNum, size: 6.8, weight: 700, ls: 0.18, color: tDk ? '#ffffff' : tc.accent, name: '연월', role: 'ym', month: m }),
           mo.mascot ? I_(mo.mascot, 52, 11, 20, 20, { name: '마스코트', role: 'mascot', month: m }) : null,
-          T_(idiom, 76, 13, 90, 8, { size: 12.5, weight: 700, color: T.idiomColor, name: '사자성어', role: 'idiom', month: m }),
-          T_(mo.meaning, 76, 21.5, 90, 14, { size: 8.3, lh: 1.4, color: CTX, name: '사자성어 뜻', role: 'meaning', month: m }),
+          T_(idiom, 76, 13, 90, 8, { size: 12.5, weight: 700, color: tDk ? '#ffffff' : tc.idiomColor, name: '사자성어', role: 'idiom', month: m }),
+          T_(mo.meaning, 76, 21.5, 90, 14, { size: 8.3, lh: 1.4, color: tDk ? '#eeeeee' : CTX, name: '사자성어 뜻', role: 'meaning', month: m }),
           S_('rect', 170, 10.5, 41, 26, { fill: '#ffffff', radius: 3, name: '미니 바탕' }),
           mini(m, 171.5, 12, 38, 23),
           calEl(m, { x: 10, y: 43, w: 204, h: 102, s: { lineW: 0.25 } }),
           I_(C.dojang.footer, 97, 147.5, 30, 4.4, { name: '하단 로고' }),
         ].filter(Boolean), `${m}월 달력`, 'cal');
       }
-      if (L === 'split') {
+      if (L2 === 'split') {
         return pg(CBG, [
           S_('rect', 0, 0, 56, 154, { fill: T.band, name: '왼쪽 색면' }),
           T_(String(m).padStart(2, '0'), 8, 8, 44, 20, { font: T.fontNum, size: 54, weight: 800, lh: 0.9, ls: -0.04, color: T.accent, name: '월 숫자' }),
@@ -442,7 +649,7 @@ NC.cal = (function () {
     const WALL = { pc: [224, 126], mob: [126, 273] };
     const wallCal = (m, x, y, w, h, s) => calEl(m, { x, y, w, h, s: Object.assign({ wdLang: 'short', wdH: 4.6, wdSize: 6.5, daySize: 9, evSize: 5.2, lineW: 0.5, outerW: 0.8, cellPad: 2.2 }, s) });
     function wallMonth(m, fmt) {
-      const mo = C.months[m - 1], bg = mo.bg === 'B' ? B : A, dark = isDark(bg), ts = T.titleScale || 1;
+      const T = TM(m), mo = C.months[m - 1], bg = T.bg, dark = isDark(bg), ts = T.titleScale || 1;  /* 계절 테마는 달마다 계절색 */
       const ink = dark ? '#ffffff' : TX, card = CBG, cardDark = isDark(card), idiom = `${mo.idiom}(${mo.hanja})`;
       const common = { role: 'virtue', month: m, name: '덕목', weight: T.titleWeight || 800 };
       const ym = `${MONTHS_EN[m - 1]}  ${year}`;
@@ -567,5 +774,5 @@ NC.cal = (function () {
   // 칸 번호 → 칸 서식 키 (날짜 칸은 날짜로 고정해 달·주 시작이 바뀌어도 그 날짜를 따라감)
   function cellKey(el, c) { const s = Object.assign({}, CAL_DEF, el.s || {}); const first = (new Date(el.year, el.month - 1, 1).getDay() - s.weekStart + 7) % 7; const n = c - first + 1; return n >= 1 && n <= daysIn(el.year, el.month) ? 'd' + n : String(c); }
   function calRows(el) { const s = Object.assign({}, CAL_DEF, el.s || {}); const first = (new Date(el.year, el.month - 1, 1).getDay() - s.weekStart + 7) % 7; return s.rows === '6' ? 6 : s.rows === 'auto' ? Math.ceil((first + daysIn(el.year, el.month)) / 7) : 5; }
-  return { setSrc: f => { srcOf = f; }, cellKey, calRows, builtinHolidays, autoHolidays, canAuto, AUTO_RANGE, fetchHolidays, holidayMap, calHTML, miniHTML, applyRules, buildPages, retheme, syncFromPages, themeOf, THEMES, CAL_DEF, MINI_DEF, MONTHS_EN, daysIn, WD };
+  return { setSrc: f => { srcOf = f; }, SEASON, THEME_CATS: ['인성', '계절', '스포츠', '사진·그림', '귀여운', '모던'], cellKey, calRows, builtinHolidays, autoHolidays, canAuto, AUTO_RANGE, fetchHolidays, holidayMap, calHTML, miniHTML, applyRules, buildPages, retheme, syncFromPages, themeOf, THEMES, CAL_DEF, MINI_DEF, MONTHS_EN, daysIn, WD };
 })();

@@ -70,7 +70,7 @@ NC.fx = (function () {
   ];
 
   /* ---------- 벡터 도형 (SVG) ---------- */
-  const SHAPES = [['rect', '사각형'], ['ellipse', '원'], ['tri', '삼각형'], ['line', '선'], ['arrow', '화살표'], ['star', '별'], ['polygon', '다각형'], ['heart', '하트'], ['diamond', '마름모'], ['hexagon', '육각형'], ['bubble', '말풍선'], ['cross', '십자'], ['ring', '고리'], ['tab', '탭'], ['burst', '폭발'], ['pill', '알약']];
+  const SHAPES = [['rect', '사각형'], ['ellipse', '원'], ['tri', '삼각형'], ['line', '선'], ['arrow', '화살표'], ['star', '별'], ['polygon', '다각형'], ['heart', '하트'], ['diamond', '마름모'], ['hexagon', '육각형'], ['bubble', '말풍선'], ['cross', '십자'], ['ring', '고리'], ['tab', '탭'], ['burst', '폭발'], ['pill', '알약'], ['arch', '아치'], ['wave', '물결선'], ['checker', '체커보드'], ['grid', '모눈종이'], ['dots', '점무늬'], ['corner', '사진 코너'], ['bracket', '꺾쇠']];
   function polyPts(n, w, h, rot) { const pts = []; for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (rot || 0) + i * 2 * Math.PI / n; pts.push([w / 2 + w / 2 * Math.cos(a), h / 2 + h / 2 * Math.sin(a)]); } return pts; }
   function starPts(n, inner, w, h) { const pts = []; for (let i = 0; i < n * 2; i++) { const r = i % 2 ? inner : 1; const a = -Math.PI / 2 + i * Math.PI / n; pts.push([w / 2 + w / 2 * r * Math.cos(a), h / 2 + h / 2 * r * Math.sin(a)]); } return pts; }
   const P = pts => pts.map(p => p.map(v => Math.round(v * 100) / 100).join(',')).join(' ');
@@ -92,6 +92,18 @@ NC.fx = (function () {
       case 'heart': return `<path d="M${w / 2} ${h * 0.95} C${w * 0.1} ${h * 0.62} ${-w * 0.05} ${h * 0.28} ${w * 0.25} ${h * 0.12} C${w * 0.4} ${h * 0.03} ${w * 0.5} ${h * 0.2} ${w / 2} ${h * 0.3} C${w * 0.5} ${h * 0.2} ${w * 0.6} ${h * 0.03} ${w * 0.75} ${h * 0.12} C${w * 1.05} ${h * 0.28} ${w * 0.9} ${h * 0.62} ${w / 2} ${h * 0.95}Z" ${attrs}/>`;
       case 'bubble': { const r = Math.min(w, h) * 0.12, bh = h * 0.78; return `<path d="M${r} 0 H${w - r} Q${w} 0 ${w} ${r} V${bh - r} Q${w} ${bh} ${w - r} ${bh} H${w * 0.35} L${w * 0.2} ${h} L${w * 0.24} ${bh} H${r} Q0 ${bh} 0 ${bh - r} V${r} Q0 0 ${r} 0Z" ${attrs}/>`; }
       case 'ring': { const t = (el.inner == null ? 0.3 : el.inner); return `<path fill-rule="evenodd" d="M${w / 2} 0 A${w / 2} ${h / 2} 0 1 1 ${w / 2 - 0.01} 0 Z M${w / 2} ${h * t / 2} A${w / 2 * (1 - t)} ${h / 2 * (1 - t)} 0 1 0 ${w / 2 - 0.01} ${h * t / 2} Z" ${attrs}/>`; }
+      /* 2026 캘린더 이미지면용 (팀장님 11/21): 아치 창·물결 낙서선·체커보드·모눈종이·점무늬 — 무늬는 fill(무늬 색)·fill2(바탕색, 비우면 투명)·cell(칸 크기 mm) */
+      case 'arch': { const r = Math.min(w / 2, h); return `<path d="M${sw / 2} ${h - sw / 2} V${r} A${r - sw / 2} ${r - sw / 2} 0 0 1 ${w - sw / 2} ${r} V${h - sw / 2} Z" ${attrs}/>`; }
+      case 'wave': { const n = Math.max(2, Math.round(w / Math.max(2, h * 1.6))), st = w / n; let d = `M0 ${h / 2}`; for (let i = 0; i < n; i++) d += ` q${st / 4} ${-h / 2.4} ${st / 2} 0 t${st / 2} 0`; return `<path d="${d}" fill="none" stroke="${el.fill || '#333'}" stroke-width="${el.strokeW || Math.max(0.4, h * 0.18)}" stroke-linecap="round" stroke-linejoin="round"/>`; }
+      /* 앨범 사진 코너(직각삼각형, 직각이 왼쪽 위)·꺾쇠(ㄱ자, 두께 lineW) — 다른 모서리는 90·180·270도 돌려서 (11/21) */
+      case 'corner': return `<polygon points="${P([[0, 0], [w, 0], [0, h]])}" ${attrs}/>`;
+      case 'bracket': { const t = Math.min(w, h) * (el.inner == null ? 0.14 : el.inner); return `<polygon points="${P([[0, 0], [w, 0], [w, t], [t, t], [t, h], [0, h]])}" ${attrs}/>`; }
+      case 'checker': case 'grid': case 'dots': {
+        const c = Math.max(1, Number(el.cell) || (k === 'checker' ? 8 : k === 'grid' ? 5 : 4)), id = 'pt' + el.id, col = el.fill || '#333', lw = el.lineW || 0.2;
+        const cell = k === 'checker' ? `<rect width="${c}" height="${c}" fill="${col}"/><rect x="${c}" y="${c}" width="${c}" height="${c}" fill="${col}"/>` : k === 'grid' ? `<path d="M${c * 2} 0 V${c * 2} M${c} 0 V${c * 2} M0 ${c} H${c * 2} M0 ${c * 2} H${c * 2}" stroke="${col}" stroke-width="${lw}" fill="none"/>` : `<circle cx="${c / 2}" cy="${c / 2}" r="${c * 0.14}" fill="${col}"/><circle cx="${c * 1.5}" cy="${c * 1.5}" r="${c * 0.14}" fill="${col}"/>`;
+        const rx = el.radius || 0;
+        return `<defs><pattern id="${id}" width="${c * 2}" height="${c * 2}" patternUnits="userSpaceOnUse">${cell}</pattern><clipPath id="${id}c"><rect width="${w}" height="${h}" rx="${rx}"/></clipPath></defs><g clip-path="url(#${id}c)">${el.fill2 ? `<rect width="${w}" height="${h}" fill="${el.fill2}"/>` : ''}<rect width="${w}" height="${h}" fill="url(#${id})"/></g>`;
+      }
       default: return `<rect width="${w}" height="${h}" ${attrs}/>`;
     }
   }
@@ -143,7 +155,7 @@ NC.fx = (function () {
     return `<svg viewBox="0 0 ${el.vw} ${el.vh}" width="100%" height="100%" preserveAspectRatio="none" style="display:block;overflow:visible;${sh}" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${body}</svg>`;
   }
   /* ---------- 이미지 ---------- */
-  const CLIPS = [['none', '없음'], ['circle', '원'], ['rounded', '둥근 모서리'], ['star', '별'], ['hexagon', '육각형'], ['heart', '하트'], ['diamond', '마름모'], ['blob', '물방울'], ['tri', '삼각형'], ['pill', '알약']];
+  const CLIPS = [['none', '없음'], ['circle', '원'], ['rounded', '둥근 모서리'], ['star', '별'], ['hexagon', '육각형'], ['heart', '하트'], ['diamond', '마름모'], ['blob', '물방울'], ['tri', '삼각형'], ['pill', '알약'], ['arch', '아치']];
   // w·h: 요소 크기(px). path()는 % 단위를 못 써서 하트는 실제 크기로 그림, 둥근 모서리는 가로세로가 달라도 같은 둥글기
   const HEART = [[0.5, 0.95], ['C', 0.1, 0.62, -0.05, 0.28, 0.25, 0.12], ['C', 0.4, 0.03, 0.5, 0.2, 0.5, 0.3], ['C', 0.5, 0.2, 0.6, 0.03, 0.75, 0.12], ['C', 1.05, 0.28, 0.9, 0.62, 0.5, 0.95]];
   function clipPath(k, w, h) {
@@ -152,6 +164,7 @@ NC.fx = (function () {
       case 'circle': return 'ellipse(50% 50% at 50% 50%)';
       case 'rounded': return `inset(0 round ${f(Math.min(w, h) * 0.12)}px)`;
       case 'pill': return 'inset(0 round 999px)';
+      case 'arch': return `inset(0 round ${f(w / 2)}px ${f(w / 2)}px 0 0)`;  // 위가 반원인 아치 창 (11/21)
       case 'star': return 'polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)';
       case 'hexagon': return 'polygon(25% 5%,75% 5%,100% 50%,75% 95%,25% 95%,0% 50%)';
       case 'diamond': return 'polygon(50% 0,100% 50%,50% 100%,0 50%)';
