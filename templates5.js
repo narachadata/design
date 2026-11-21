@@ -106,7 +106,7 @@
     ['praise', '인성 칭찬 카드', 148, 100, 'card', '명함·카드', praise],
   ];
   ['극기', '홍익'].forEach(tr => KINDS.forEach(([id, name, w, h, cat, fmt, fn]) => {
-    const nm = `${name} · ${tr}(${TRACK[tr].yr})`;
+    const nm = `${name} · ${tr}(${TRACK[tr].yr}·${tr === '극기' ? '홀수' : '짝수'} 해)`;
     L.push({ id: `virtue-${id}-${TRACK[tr].id}`, cat, name: nm, w, h, virtue: tr, screen: cat === 'sns',
       tags: { format: fmt, season: '사계절', age: id === 'praise' ? '초등' : '전체', occasion: '인성', biz: '태권도장' },
       kw: [nm, '인성 인성덕목 덕목 삽화 라차 이달의', tr, TRACK[tr].theme, fmt, id === 'yearly' ? '계획 연간 12달' : '12쪽 달마다', '태권도장'].join(' '),
