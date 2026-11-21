@@ -1578,3 +1578,28 @@ body.tl-focus .aichat{display:none}
 .wz-clock span{order:-1;font-size:calc(var(--ph)*.027);font-weight:600;margin-bottom:calc(var(--ph)*.008);opacity:.95}
 .wz-clock b{font-size:calc(var(--ph)*.104);font-weight:700;letter-spacing:-.02em}
 .wz-grid.tall .wz-mbox{border-radius:8px}
+
+/* ===== 도서 편집 (book.js) — 팀장님 11/21 ===== */
+.bk-hero{text-align:center}.bk-hero .bk-ic{font-size:34px;line-height:1;margin:4px 0 6px}
+.bk-top{background:var(--ui-field);border-radius:10px;padding:10px 12px;margin-bottom:8px}.bk-top b{display:block;font-size:14px}.bk-top small{color:var(--ui-fg2);font-size:11.5px}
+.bk-top .btn.warn{border-color:#e0a100;color:#9a6a00;background:#fff7e0}
+.bk-sec2{border:1px solid var(--ui-line);border-radius:10px;margin:6px 0;background:var(--ui-bg)}.bk-sec2>summary{cursor:pointer;padding:9px 12px;font-weight:700;font-size:13px;list-style:none}.bk-sec2>summary::-webkit-details-marker{display:none}.bk-sec2>summary::before{content:'▸';display:inline-block;width:14px;color:var(--ui-fg2);transition:transform .15s}.bk-sec2[open]>summary::before{transform:rotate(90deg)}
+.bk-in{padding:0 12px 12px}.bk-in .f{margin-bottom:6px}
+.bk-ps{border-top:1px solid var(--ui-line)}.bk-ps>summary{cursor:pointer;padding:7px 2px;display:flex;align-items:baseline;justify-content:space-between;gap:6px;list-style:none}.bk-ps>summary::-webkit-details-marker{display:none}.bk-psn{font-size:13.5px}.bk-ps small{color:var(--ui-fg2);font-size:11px}.bk-psf{padding:2px 0 8px}
+.bk-pgm{margin-top:8px;padding:8px;border-radius:8px;background:var(--ui-field);font-size:12px}
+.bk-pf{display:flex;flex-direction:column;gap:5px;margin-top:8px}.bk-pfi{display:flex;align-items:flex-start;gap:6px;font-size:12px;line-height:1.45;padding:6px 8px;border-radius:8px;background:var(--ui-field)}.bk-pfi span{flex:1}.bk-pfi.bad{background:#fdecec}.bk-pfi.warn{background:#fff6e0}.bk-pfi.ok{background:#e9f7ee}
+.nb{display:grid;grid-template-columns:300px 1fr;gap:18px;max-height:78vh;overflow:auto}.nb h3{font-size:13px;margin:12px 0 6px}.nb h3:first-child{margin-top:0}.nb h3 small{font-weight:400;color:var(--ui-fg2)}
+.nb-kinds,.nb-trims{display:grid;grid-template-columns:1fr 1fr;gap:6px}.nb-kind,.nb-trim{text-align:left;border:1.5px solid var(--ui-line);border-radius:9px;background:var(--ui-bg);padding:7px 9px;cursor:pointer;display:flex;flex-direction:column;gap:2px}.nb-kind b,.nb-trim b{font-size:12.5px}.nb-kind small,.nb-trim small{font-size:10.5px;color:var(--ui-fg2)}.nb-kind.on,.nb-trim.on{border-color:var(--ui-accent);background:var(--ui-accent-soft)}
+.nb-prevwrap{background:var(--ui-stage);border-radius:12px;padding:14px;display:flex;flex-direction:column;align-items:center}.nb-spread{display:flex;box-shadow:0 8px 24px rgba(16,24,40,.2)}.nb-pg{position:relative;background:#fff;box-shadow:inset 0 0 0 1px rgba(16,24,40,.15)}.nb-pg:first-child{box-shadow:inset -6px 0 8px -6px rgba(0,0,0,.25),inset 0 0 0 1px rgba(16,24,40,.15)}.nb-pg:last-child{box-shadow:inset 6px 0 8px -6px rgba(0,0,0,.25),inset 0 0 0 1px rgba(16,24,40,.15)}.nb-tb{position:absolute;background:rgba(47,111,228,.12);outline:1px dashed rgba(47,111,228,.6)}.nb-no{position:absolute;font-size:8px;color:#888}
+.st-ed{display:flex;flex-direction:column;height:78vh}.st-bar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:8px}.st-sep{width:1px;height:20px;background:var(--ui-line);margin:0 4px}
+.st-body{flex:1;display:grid;grid-template-columns:1fr 230px;gap:12px;min-height:0}.st-body textarea{width:100%;height:100%;resize:none;font:15px/1.8 'Pretendard','Noto Sans KR',sans-serif;padding:14px 16px;border:1px solid var(--ui-line);border-radius:10px;background:var(--ui-bg);color:var(--ui-fg)}
+.st-side{overflow:auto;display:flex;flex-direction:column;gap:6px;font-size:12.5px}.st-ol{display:block;width:100%;text-align:left;border:0;background:none;padding:4px 6px;border-radius:6px;cursor:pointer;color:var(--ui-fg)}.st-ol:hover{background:var(--ui-field)}.st-ol.h1{font-weight:700}.st-ol.h2{padding-left:16px;color:var(--ui-fg2)}
+.st-help{margin-top:8px;padding:8px;border-radius:8px;background:var(--ui-field);line-height:1.75;font-size:11.5px}.st-help code{background:var(--ui-bg);padding:0 4px;border-radius:4px}
+@media (max-width:900px){.nb{grid-template-columns:1fr}.st-body{grid-template-columns:1fr}}
+#rail [data-tab="book"] span{word-break:keep-all}
+
+/* 내 드라이브 — 종류별 (팀장님 11/21) */
+.dvkinds{display:flex;flex-direction:column;gap:1px;margin-top:8px}.dvkinds small{font-size:11px;color:var(--ui-fg2);padding:4px 12px 2px;font-weight:700}.dvkinds .dvk-ic{width:20px;display:inline-block;text-align:center;margin-right:6px}
+.dvgather{display:flex;align-items:center;gap:10px;justify-content:space-between;margin-top:14px;padding:10px 12px;border-radius:10px;background:#fff6e0;font-size:13px}
+.dvexp{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px}.dvexpi{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:8px;align-items:center;text-align:left;border:1px solid var(--ui-line);border-radius:9px;background:var(--ui-bg);padding:8px 10px;cursor:pointer}.dvexpi:hover{border-color:var(--ui-accent)}
+.dvexpi .dvx-ext{grid-row:1/3;font-size:10px;font-weight:800;color:#fff;background:#5b6b8c;border-radius:5px;padding:4px 5px;min-width:34px;text-align:center}.dvexpi b{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dvexpi small{font-size:11px;color:var(--ui-fg2)}
