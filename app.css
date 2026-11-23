@@ -1789,3 +1789,23 @@ dialog.st-dlg{max-width:1280px;width:96vw}
 .rsmodes{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))}
 .rsmode.pic{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 6px;text-align:center;color:#5b6475}.rsmode.pic input{position:absolute;opacity:0;pointer-events:none}.rsmode.pic b{font-size:11.5px;line-height:1.3}.rsmode.pic.on{color:var(--ui-accent,#2f6fe4)}.rsmode.pic{position:relative}
 .seg.ico button{display:inline-flex;flex-direction:column;align-items:center;gap:2px;padding-top:5px;padding-bottom:4px;font-size:11.5px}.seg.ico .seg-ic{display:flex;line-height:0}
+.pk-blend{position:relative;display:block;width:26px;height:18px;isolation:isolate}.pk-blend i{position:absolute;top:1px;width:15px;height:15px;border-radius:50%}.pk-blend i:first-child{left:1px}.pk-blend i:last-child{left:10px}
+.pk.fthumbs .pk-b{padding:3px 3px 4px;min-width:58px}.pk-ft{display:block;width:52px;height:38px;border-radius:6px;overflow:hidden;background:#eef1f5}.pk-ft img{width:100%;height:100%;object-fit:cover;display:block}
+.pk-sw2{display:block;width:34px;height:18px;border-radius:5px;border:1px solid rgba(0,0,0,.08)}
+.pk-shd{display:block;width:18px;height:14px;border-radius:3px;background:#fff;border:1px solid #d5d9e0}
+.pk-pal .pk-ic{gap:0;border-radius:4px;overflow:hidden}.pk-pal i{display:block;width:8px;height:14px}
+.pk.dots{gap:4px;flex-wrap:nowrap}.pk.dots .pk-b{min-width:0;width:24px;height:24px;padding:0;border-radius:50%}.pk-dot{display:block;width:14px;height:14px;border-radius:50%}
+.evrow{display:flex;align-items:center;gap:6px}.evrow input[type=text]{flex:1;min-width:0}
+.pk.months{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}.pk.months .pk-b{min-width:0;padding:5px 0}
+.pk-wk{font-size:11px;letter-spacing:1px;color:inherit}.pk-wk .sun{color:#d93025;font-style:normal}
+.pk-cell{display:flex;flex-direction:column;align-items:center;font-size:12px;line-height:1;color:inherit;border:1px solid #d5d9e0;border-radius:4px;padding:2px 4px;min-width:24px}.pk-cell small{font-size:8px;color:#8a93a3;margin-top:1px}
+.pk.dots{gap:4px;flex-wrap:nowrap}.pk.dots .pk-b{min-width:0;width:24px;height:24px;padding:0;border-radius:50%}.pk-dot{display:block;width:14px;height:14px;border-radius:50%}
+.evrow{display:flex;align-items:center;gap:6px}.evrow input[type=text]{flex:1;min-width:0}
+.pk.months{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}.pk.months .pk-b{min-width:0;padding:5px 0}
+.pk-wk{font-size:11px;letter-spacing:1px;color:inherit}.pk-wk .sun{color:#d93025;font-style:normal}
+.pk-cell{display:flex;flex-direction:column;align-items:center;font-size:12px;line-height:1;color:inherit;border:1px solid #d5d9e0;border-radius:4px;padding:2px 4px;min-width:24px}.pk-cell small{font-size:8px;color:#8a93a3;margin-top:1px}
+.pk-chk{display:inline-block;width:20px;text-align:center}
+.wz-opt.pic{grid-template-columns:auto auto 1fr}.wz-opt.pic .wz-ic{grid-row:1/3;grid-column:2;display:flex;color:#6b7487}.wz-opt.pic b,.wz-opt.pic small{grid-column:3}.wz-opt.pic.on .wz-ic{color:var(--ui-accent,#2f6fe4)}
+.pk-sw2.chk{background:repeating-conic-gradient(#d5d9e0 0 25%,#fff 0 50%) 0 0/8px 8px}
+.kbd-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px}.kbd-grid span{display:flex;align-items:center;gap:6px;font-size:11.5px}.kbd-grid kbd{font:600 10.5px/1 var(--font-ui,system-ui);background:#fff;border:1px solid #cfd5df;border-bottom-width:2px;border-radius:4px;padding:3px 5px;white-space:nowrap}
+.toast{bottom:76px} /* 아래 쪽 넘김 막대(아이콘)를 가리지 않게 그 위에 (팀장님 11/23) */

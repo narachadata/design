@@ -81,7 +81,7 @@ NC.imgedit = (function () {
   function render() {
     const body = $('#ieBody');
     body.innerHTML = `<div class="ie-side">
-      <div class="seg"><button data-tool="bg" aria-pressed="${st.tool === 'bg'}">배경 지우기</button><button data-tool="erase" aria-pressed="${st.tool === 'erase'}">지우개</button><button data-tool="restore" aria-pressed="${st.tool === 'restore'}">복원</button><button data-tool="crop" aria-pressed="${st.tool === 'crop'}">자르기</button></div>
+      <div class="seg ico">${[['bg', '🪄', '배경 지우기', '배경을 눌러 지우기 (비슷한 색 한꺼번에)'], ['erase', '🧽', '지우개', '문질러 지우기'], ['restore', '🖌', '복원', '지운 곳을 문질러 되살리기'], ['crop', '✂', '자르기', '필요한 부분만 남기기']].map(([k, ic, t, ti]) => `<button data-tool="${k}" aria-pressed="${st.tool === k}" title="${ti}"><span class="seg-ic" style="font-size:16px;line-height:1">${ic}</span>${t}</button>`).join('')}</div>
       <div id="ieTool"></div>
       <h3>다듬기</h3>
       <label class="f"><span>가장자리 매끈하게 <small>${st.feather}px</small></span><input type="range" id="ieFeather" min="0" max="4" step="1" value="${st.feather}"></label>
