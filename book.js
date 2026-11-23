@@ -115,7 +115,7 @@
         const hd = rows[0].head ? rows[0] : null; rows.forEach((r, k) => { r.ncol = n; r.cw = cw; r.al = al; r.first = k === 0; r.last = k === rows.length - 1; r.hd = hd; if (k) r.head = false;
           const nx = rows[k + 1]; r.down = Array.from({ length: n }, (_, j) => !!(nx && (nx.mg || [])[j] === 'U')); r.joinNext = r.down.some(Boolean); r.joinPrev = k > 0 && (r.mg || []).some(v => v === 'U'); if (!k) r.mg = (r.mg || []).map(v => v === 'U' ? '' : v); }); });
       /* 각주 번호: 장(#)·부마다 1부터 · 제목·차례에 쓰는 글(plain)에는 번호를 넣지 않음 */
-      let fnN = 0; out.forEach(p => { if (p.st === 'h1' || p.st === 'part') fnN = 0; const all = p.st === 'trow' ? p.cells.flat() : (p.runs || []); all.forEach(r => { if (r.fn) r.t = String(++fnN); }); if (p.st !== 'trow' && p.runs && p.runs.some(r => r.fn)) p.plain = plainOf(noFn(p.runs)); });
+      let fnN = 0; const fnBook = ((A.doc && A.doc.book) || {}).fnMode === 'book'; out.forEach(p => { if ((p.st === 'h1' || p.st === 'part') && !fnBook) fnN = 0; /* 각주 번호: 장마다 1부터(기본) · 책 전체 이어서 */ const all = p.st === 'trow' ? p.cells.flat() : (p.runs || []); all.forEach(r => { if (r.fn) r.t = String(++fnN); }); if (p.st !== 'trow' && p.runs && p.runs.some(r => r.fn)) p.plain = plainOf(noFn(p.runs)); });
       return out;
     }
     function rowHTML(p, s, rep) {
@@ -139,9 +139,9 @@
     }
 
     /* ---------- 판면(본문 상자 자리): 펼침면이면 홀수·짝수 쪽마다 안쪽·바깥쪽 여백을 뒤집음 ---------- */
-    function frameRects(abs) {
+    function frameRects(abs, colsOver) {
       const B = B_(), d = A.doc, right = A.isRightPage(abs), L = right ? B.mg.inner : B.mg.outer, R = right ? B.mg.outer : B.mg.inner, T = B.mg.top, H = d.h - T - B.mg.bottom;
-      const W = d.w - L - R, cols = Math.max(1, Number(B.cols) || 1), g = Number(B.gutter) || 5, cw = (W - g * (cols - 1)) / cols;
+      const W = d.w - L - R, cols = Math.max(1, Number(colsOver || B.cols) || 1), g = Number(B.gutter) || 5, cw = (W - g * (cols - 1)) / cols;
       return Array.from({ length: cols }, (_, c) => ({ x: r1(L + c * (cw + g)), y: r1(T), w: r1(cw), h: r1(H), col: c, cx: r1(L + c * (cw + g)), cw: r1(cw), cb: r1(T + H) })); /* col·cx·cw·cb: 글 감싸기로 칸을 나눠도 원래 단(각주 자리)을 기억 */
     }
 
@@ -157,6 +157,7 @@
 
     /* ---------- 흘리기 엔진: 단락을 판면 상자에 차례로 채우고, 넘치면 다음 단·다음 쪽 (쪽은 필요한 만큼 만들어짐) ---------- */
     function layoutStream(paras, abs0, S, kind, extras) {
+      const ixColsN = kind === 'idx' ? Math.max(1, Math.min(3, Number(A.doc.book.ixCols) || 2)) : 0; /* 찾아보기는 기본 2단 */
       const pages = [], heads = [], placed = [], ixHits = []; let pg = null, frames = [], fi = 0, fy = 0, content = [], plain = [], lastAfter = 0, chap = kind === 'idx' ? (A.doc.book.ixTitle || '찾아보기') : '', sec = '', chapN = 0, partN = 0, firstLine = -1, overflow = 0;
       const numOn = kind === 'body' && A.doc.book.chapNum === true;
       /* 각주 (인디자인 '각주'): 이 단(칸) 아래에 짧은 줄 + 작은 글. 각주가 들어갈 만큼 본문 자리를 줄이고, 본문이 다음 단·쪽으로 넘어가면 그 단 아래에 앉힘 */
@@ -170,7 +171,11 @@
         const txt = L.map(f => f.no + ') ' + plainOf(runsOf(f.t))).join('\n'); pg.els.push(Object.assign({}, A.TEXT_DEF, { id: A.uid(), x: c.cx, y: r1(c.cb - h), w: c.cw, h: r1(h + 0.4), sizing: 'fixed', text: txt, html: fnHTML(L), htmlFor: txt, font: (S.fnote || S.small).font, size: (S.fnote || S.small).size, lh: (S.fnote || S.small).lh, color: (S.fnote || S.small).color, align: 'left', ls: 0, flowFrame: kind, flowLine: -1, flowFn: true, locked: true, name: '각주 (원고에서 고치기)' })); };
       const startFrame = () => { content = []; plain = []; lastAfter = 0; firstLine = -1; if (fr()) mbox(fr().w); };
       const closeFrame = (part) => { if (!content.length || !fr()) return; const f = fr(), txt = plain.join('\n'), hh = part ? Math.min(avail(), r1(hOf(content.join(''), 0) + 0.4)) : avail(); pg.els.push(Object.assign({}, A.TEXT_DEF, { id: A.uid(), x: f.x, y: r1(f.y + fy), w: f.w, h: r1(hh), sizing: 'fixed', text: txt, html: content.join(''), htmlFor: txt, font: S.body.font, size: S.body.size, lh: S.body.lh, color: S.body.color, align: 'left', ls: 0, flowFrame: kind, flowLine: firstLine, locked: true, name: kind === 'toc' ? '차례 (자동)' : kind === 'idx' ? '찾아보기 (자동 — 원고의 {{낱말}})' : '본문 (원고 — 두 번 눌러 고치기)' })); if (part) fy += hh; };
-      const newPg = () => { emitFn(); pg = A.newPage(); pg.label = ''; if (kind === 'toc') pg.toc = true; else pg.flow = true; if (kind === 'idx') pg.idx = true; pg.chap = chap; pg.sec = sec; const ex = extras && extras.length ? extras.shift() : null; if (ex && ex.length) pg.els.push(...ex); pages.push(pg); frames = frameRects(absNow()); fi = 0; fy = 0; startFrame(); };
+      const newPg = () => { emitFn(); pg = A.newPage(); pg.label = ''; if (kind === 'toc') pg.toc = true; else pg.flow = true; if (kind === 'idx') pg.idx = true; pg.chap = chap; pg.sec = sec; const ex = extras && extras.length ? extras.shift() : null; if (ex && ex.length) pg.els.push(...ex); pages.push(pg); frames = frameRects(absNow(), kind === 'idx' ? ixColsN : 0); fi = 0; fy = 0;
+        if (kind === 'idx' && ixColsN > 1 && pages.length === 1 && paras[0] && paras[0].st === 'tocTitle') { /* 찾아보기 첫 쪽: 제목은 쪽 폭 전체, 그 아래 2단 (책 관행) */
+          const full = frameRects(absNow(), 1)[0], ts = S.tocTitle; mbox(full.w); const th = r1(hOf(pHTML(paras[0].runs, ts, { first: true, sink: Number(ts.sink) || 0 }), 0) + 1.2);
+          if (th < full.h * 0.6) frames = [Object.assign({}, full, { h: th })].concat(frames.map(f => Object.assign({}, f, { y: r1(f.y + th), h: r1(f.h - th) }))); }
+        startFrame(); };
       const blankPg = () => { pg.blank = true; pg.flow = kind !== 'toc'; frames = []; newPg(); };
       const pending = [], floatOn = kind === 'body' && A.doc.book.imgFloat !== false; let flushing = false;
       const nextFrame = () => { fnPend = []; closeFrame(); { const nf = frames[fi + 1]; if (!nf || nf.col !== fr().col) emitFn(); } fi++; fy = 0; if (fi >= frames.length) newPg(); else startFrame(); flushPending(); };
@@ -207,11 +212,11 @@
         if (content.length) closeFrame(true);
         /* 글 감싸기 (팀장님 11/23 · 인디자인 '텍스트 감싸기'): 작은 사진을 왼쪽·오른쪽에 두고 그 옆 좁은 칸으로 글이 흐른 뒤 사진 아래부터 다시 넓게 */
         const nxP = paras[paras.indexOf(p) + 1], wrapOk = nxP && !['img', 'break', 'part', 'h1', 'trow'].includes(nxP.st); /* 바로 뒤가 글이 아니면(사진·쪽 나눔·장·표) 감쌀 글이 없으니 보통 사진으로 */
-        if (I.wrap && wrapOk && !isQ && kind === 'body' && fr().w - z.w - 4 >= 35) { fy += z.gT; const f = fr(), g = 4, right = I.wrap !== 'left', x = r1(right ? f.x + f.w - z.w : f.x), y = r1(f.y + fy);
+        if (I.wrap && wrapOk && !isQ && kind === 'body' && fr().w - z.w - (Number(I.wrapGap) || 4) >= 35) { fy += z.gT; const f = fr(), g = Number(I.wrapGap) || 4, right = I.wrap !== 'left', x = r1(right ? f.x + f.w - z.w : f.x), y = r1(f.y + fy);
           pg.els.push(Object.assign({ type: 'image', src: I.src, fit: 'cover', pos: '50% 50%', opacity: 1, flip: false, radius: 0, rot: 0 }, I.ed || {}, { id: A.uid(), x, y, w: r1(z.w), h: r1(z.h), flowImg: p.ref, flowLine: p.line, flowW: r1(z.w), flowH: r1(z.h), name: '사진(글 감싸기)' + (p.cap ? ': ' + p.cap.slice(0, 20) : '') + ' (누르면 편집)' }));
           placed.push(p.ref); let regH = z.h;
           if (p.cap) { const t = p.cap, ch = r1(z.capH + 0.4); pg.els.push(Object.assign({}, A.TEXT_DEF, { id: A.uid(), x, y: r1(y + z.h + 2), w: r1(z.w), h: ch, sizing: 'fixed', text: t, html: pHTML(runsOf(t), capCss, {}), htmlFor: t, font: Sc.font, size: Sc.size, lh: Sc.lh, color: Sc.color, align: capCss.align, ls: 0, flowFrame: kind, flowLine: p.line, locked: true, name: '사진 설명 (원고에서 고치기)' })); regH += ch + 2; }
-          const narrow = Object.assign({}, f, { wrapNarrow: true, x: r1(right ? f.x : f.x + z.w + g), y: r1(f.y + fy), w: r1(f.w - z.w - g), h: r1(regH + 1) }), restH = f.h - fy - regH - z.gB, rest = Object.assign({}, f, { y: r1(f.y + fy + regH + z.gB), h: r1(restH) });
+          const narrow = Object.assign({}, f, { wrapNarrow: true, x: r1(right ? f.x : f.x + z.w + g), y: r1(f.y + fy), w: r1(f.w - z.w - g), h: r1(regH + 1) }), restH = f.h - fy - regH - Math.max(z.gB, g - 1), rest = Object.assign({}, f, { y: r1(f.y + fy + regH + Math.max(z.gB, g - 1)), h: r1(restH) });
           frames.splice(fi, 1, Object.assign({}, f, { h: Math.max(0, fy - z.gT) }), narrow, ...(restH > 4 ? [rest] : []));
           fi++; fy = 0; startFrame(); return true; }
         fy += z.gT; const f = fr(), x = r1(isQ ? f.x : f.x + (f.w - z.w) / 2), y = r1(f.y + fy);
@@ -371,7 +376,7 @@
       for (const f of files) { if (!/^image\//.test(f.type)) continue; const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(f); }); const id = 'p' + A.uid().slice(0, 6); bim[id] = { src: A.addAsset(url), wp: 100, name: f.name }; ids.push({ id, name: f.name.replace(/\.[^.]+$/, '') }); }
       return ids;
     }
-    const imgSig = () => JSON.stringify(Object.entries(A.doc.bimgs || {}).map(([k, v]) => [k, v.wp, v.ar, v.src && v.src.length, v.wrap || '']));
+    const imgSig = () => JSON.stringify(Object.entries(A.doc.bimgs || {}).map(([k, v]) => [k, v.wp, v.ar, v.src && v.src.length, v.wrap || '', v.wrapGap || 0]));
     const hashOf = s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; };
     let flowT = 0; const flowSoon = (ms, amend) => { clearTimeout(flowT); flowT = setTimeout(() => flow({ quiet: true, amend }), ms || 500); };
     const imgMoved = () => A.doc.pages.some(p => p.els.some(e => e.flowImg && !e.flowRow && e.flowW && (Math.abs(e.w - e.flowW) > 0.5 || Math.abs(e.h - e.flowH) > 0.5)));
@@ -535,7 +540,7 @@
         if (b.st === 'break') return `<div class="be-b be-br" data-i="${i}" tabindex="0">— 여기서 다음 쪽으로 (쪽 나눔) — <button class="btn sm" data-bact="delbr">빼기</button></div>`;
         if (b.st === 'img' && b.row) return `<div class="be-b be-img be-row" data-i="${i}"><div class="be-rowph">${b.refs.map((r, j) => { const I = (d.bimgs || {})[r] || {}, u = I.src ? A.imgUrl({ src: I.src, w: 60, h: 60 }) : ''; return `<div class="be-rc"><div class="be-ph">${u ? `<img src="${u}" alt="">` : '<span>사진 없음</span>'}</div><input class="be-cap" data-i="${i}" data-j="${j}" value="${esc(b.caps[j] || '')}" placeholder="사진 ${j + 1} 설명"></div>`; }).join('')}</div><div class="be-pa"><span class="hint" style="margin:0">사진 ${b.refs.length}장을 한 줄에 나란히</span><button class="btn sm" data-bact="unrow">하나씩 따로</button><button class="btn sm danger" data-bact="delimg">🗑 빼기</button></div></div>`;
         if (b.st === 'img') { const I = (d.bimgs || {})[b.ref] || {}, u = I.src ? A.imgUrl({ src: I.src, w: 60, h: 60 }) : '', wp = I.wp || 100;
-          return `<div class="be-b be-img" data-i="${i}"><div class="be-ph">${u ? `<img src="${u}" alt="">` : '<span>사진 없음</span>'}</div><div class="be-pc"><input class="be-cap" data-i="${i}" value="${esc(b.cap || '')}" placeholder="사진 설명 (사진 아래에 나오는 글)"><div class="be-wb"><span>크기</span>${[[50, '작게'], [75, '보통'], [100, '꽉 차게']].map(([w, t]) => `<button class="${Math.abs(wp - w) < 1 ? 'on' : ''}" data-bw="${w}">${t}</button>`).join('')}${[50, 75, 100].some(w => Math.abs(wp - w) < 1) ? '' : `<em>${Math.round(wp)}%</em>`}</div>${I.qr ? '' : `<div class="be-wb"><span>글이 옆으로</span>${[['', '없음(위아래만)'], ['left', '사진을 왼쪽에'], ['right', '사진을 오른쪽에']].map(([v, t]) => `<button class="${(I.wrap || '') === v ? 'on' : ''}" data-bwrap="${v}" title="${v ? '사진을 ' + t + '에 두고 옆으로 글이 흐름' : '사진 위아래로만 글'}">${t}</button>`).join('')}</div>`}<div class="be-pa">${blocks[i + 1] && blocks[i + 1].st === 'img' && (blocks[i + 1].refs || [1]).length + 1 <= 4 ? '<button class="btn sm" data-bact="row" title="바로 아래 사진과 한 줄에 나란히 놓기">⇆ 아래 사진과 나란히</button>' : ''}${I.qr ? '<button class="btn sm" data-bact="qredit">🔳 QR 고치기</button>' : '<button class="btn sm" data-bact="swap">사진 바꾸기</button>'}<button class="btn sm danger" data-bact="delimg">🗑 ${I.qr ? 'QR' : '사진'} 빼기</button></div></div></div>`; }
+          return `<div class="be-b be-img" data-i="${i}"><div class="be-ph">${u ? `<img src="${u}" alt="">` : '<span>사진 없음</span>'}</div><div class="be-pc"><input class="be-cap" data-i="${i}" value="${esc(b.cap || '')}" placeholder="사진 설명 (사진 아래에 나오는 글)"><div class="be-wb"><span>크기</span>${[[50, '작게'], [75, '보통'], [100, '꽉 차게']].map(([w, t]) => `<button class="${Math.abs(wp - w) < 1 ? 'on' : ''}" data-bw="${w}">${t}</button>`).join('')}${[50, 75, 100].some(w => Math.abs(wp - w) < 1) ? '' : `<em>${Math.round(wp)}%</em>`}</div>${I.qr ? '' : `<div class="be-wb"><span>글이 옆으로</span>${[['', '없음(위아래만)'], ['left', '사진을 왼쪽에'], ['right', '사진을 오른쪽에']].map(([v, t]) => `<button class="${(I.wrap || '') === v ? 'on' : ''}" data-bwrap="${v}" title="${v ? '사진을 ' + t + '에 두고 옆으로 글이 흐름' : '사진 위아래로만 글'}">${t}</button>`).join('')}</div>${I.wrap ? `<div class="be-wb"><span>글과 사이</span>${[[2, '좁게'], [4, '보통'], [7, '넓게']].map(([v, t]) => `<button class="${(Number(I.wrapGap) || 4) === v ? 'on' : ''}" data-bwgap="${v}" title="사진과 옆 글 사이 ${v}mm">${t}</button>`).join('')}</div>` : ''}`}<div class="be-pa">${blocks[i + 1] && blocks[i + 1].st === 'img' && (blocks[i + 1].refs || [1]).length + 1 <= 4 ? '<button class="btn sm" data-bact="row" title="바로 아래 사진과 한 줄에 나란히 놓기">⇆ 아래 사진과 나란히</button>' : ''}${I.qr ? '<button class="btn sm" data-bact="qredit">🔳 QR 고치기</button>' : '<button class="btn sm" data-bact="swap">사진 바꾸기</button>'}<button class="btn sm danger" data-bact="delimg">🗑 ${I.qr ? 'QR' : '사진'} 빼기</button></div></div></div>`; }
         return `<div class="be-b st-${b.st}" data-i="${i}"><select class="be-st" data-i="${i}" title="이 단락 모양">${ED_STY.map(k => `<option value="${k}" ${b.st === k ? 'selected' : ''}>${PS_NAME[k]}</option>`).join('')}</select><div class="be-t" contenteditable="true" spellcheck="false" data-i="${i}" style="${css(b.st)}">${inlineHTML(b.t) || '<br>'}</div></div>`;
       };
       const tEl = i => dl.querySelector(`.be-t[data-i="${i}"]`);
@@ -614,6 +619,7 @@
         const pvm = e.target.closest('[data-pvm]'); if (pvm) { try { localStorage.setItem('naracal-bk-pv2', pvm.dataset.pvm); } catch (er) {} preview(); return; }
         const go = e.target.closest('[data-goi]'); if (go) { const i = Number(go.dataset.goi); focusI = i; if (mode === 'view') { const t = tEl(i); if (t) { t.scrollIntoView({ block: 'center' }); setCaret(t, 0); } } preview(); return; }
         const pv = e.target.closest('#bePv .pvb'); if (pv) { const pi = Number(dl.querySelector('#bePv').dataset.pi); await done(); A.goto(pi); return; }
+        const bwg = e.target.closest('[data-bwgap]'); if (bwg) { const i = Number(bwg.closest('.be-b').dataset.i), I = (d.bimgs || {})[blocks[i].ref]; if (I) { snap(); I.wrapGap = Number(bwg.dataset.bwgap); } changed(true); render(i); return; }
         const bwr = e.target.closest('[data-bwrap]'); if (bwr) { const i = Number(bwr.closest('.be-b').dataset.i), I = (d.bimgs || {})[blocks[i].ref]; if (I) { snap(); I.wrap = bwr.dataset.bwrap || undefined; if (I.wrap && (I.wp || 100) > 55) { I.wp = 45; A.toast('글이 옆으로 흐르게 사진을 작게(45%) 맞췄어요 — 크기는 바로 위에서 바꿀 수 있어요'); } } changed(true); render(i); return; }
         const bw = e.target.closest('[data-bw]'); if (bw) { const i = Number(bw.closest('.be-b').dataset.i), I = (d.bimgs || {})[blocks[i].ref]; if (I) { I.wp = Number(bw.dataset.bw); delete I.ar_user; } snap(); changed(true); render(i); return; }
         const ac = e.target.closest('[data-bact]'); if (!ac) return; const a = ac.dataset.bact, bi = ac.closest('.be-b') ? Number(ac.closest('.be-b').dataset.i) : focusI;
@@ -738,6 +744,19 @@
     };
     const pick = (kind, key, cur, items, cls) => `<div class="pk${cls ? ' ' + cls : ''}">${items.map(([v, ic, t, tip]) => { const on = String(cur) === String(v); return `<button type="button" class="pk-b${on ? ' on' : ''}" data-pk="${kind}|${key}|${esc(String(v))}" title="${esc(tip || t)}" aria-pressed="${on}">${ic ? `<span class="pk-ic">${ic}</span>` : ''}${t ? `<span class="pk-t">${t}</span>` : ''}</button>`; }).join('')}</div>`;
     const tog = (kind, key, on, ic, t, tip) => `<button type="button" class="pk-tg${on ? ' on' : ''}" data-pk="${kind}|${key}|!" data-on="${on ? 1 : 0}" title="${esc(tip || t)}" aria-pressed="${on}"><span class="pk-sw"></span>${ic ? `<span class="pk-ic">${ic}</span>` : ''}<span class="pk-t">${t}</span></button>`;
+    /* 각주·찾아보기 칸 (팀장님 11/23 밤 — 남은 일: 각주 번호 방식, 찾아보기 2단·말 고치기) */
+    const IX_RE = /\{\{([^{}|\n]+?)(?:\|([^{}\n]+?))?\}\}/g;
+    const ixTerms = md => { const m = new Map(); String(md || '').replace(IX_RE, (all, vis, key) => { const k = String(key || vis).replace(/\s+/g, ' ').trim(); if (k) m.set(k, (m.get(k) || 0) + 1); return all; }); return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], 'ko')); };
+    function fnixHTML(B) {
+      const md = (A.doc.bstory || {}).md || '', nFn = (md.match(/\[\^[^\]]*\]/g) || []).length, terms = ixTerms(md);
+      return `<div class="bk-lb">각주 번호 <small>${nFn ? `원고에 ${nFn}개` : '원고 편집기 「¹ 각주」로 넣기'}</small></div>${pick('bb', 'fnMode', B.fnMode === 'book' ? 'book' : 'chap', [['chap', '<b style="font-size:13px">¹²·¹²</b>', '장마다 1부터', '장(과 부)이 바뀌면 각주 번호를 1부터 — 교재·문집에 흔함'], ['book', '<b style="font-size:13px">¹²³⁴</b>', '책 전체 이어서', '책 처음부터 끝까지 번호를 이어서']])}
+        <div class="bk-lb" style="margin-top:10px">찾아보기 <small>${terms.length ? `낱말 ${terms.length}개` : '원고 편집기에서 낱말을 고르고 「🔍 찾아보기」'}</small></div>
+        ${tog('bb', 'index', B.index !== false, '🔍', '책 끝에 찾아보기 쪽 넣기', '판권 앞 오른쪽 쪽부터 ㄱㄴㄷ 차례로')}
+        ${pick('bb', 'ixCols', Math.max(1, Math.min(3, Number(B.ixCols) || 2)), [[1, IC.col(1), '1단'], [2, IC.col(2), '2단', '찾아보기는 2단이 흔함 (낱말이 짧아서)'], [3, IC.col(3), '3단']])}
+        <label class="f"><span>찾아보기 제목</span><input type="text" data-bb="ixTitle" value="${esc(B.ixTitle || '찾아보기')}"></label>
+        ${terms.length ? `<div class="ix-list"><div class="hint" style="margin:2px 0 4px">낱말을 고치면 원고의 같은 낱말이 모두 바뀝니다 (본문 글은 그대로, 찾아보기에 나오는 말만). 두 낱말을 같은 말로 고치면 하나로 합쳐집니다.</div>${terms.map(([t, n]) => `<div class="ix-row"><input type="text" data-ixr="${esc(t)}" value="${esc(t)}" title="찾아보기에 나오는 말"><span>${n}곳</span><button type="button" class="btn sm" data-ixgo="${esc(t)}" title="원고에서 이 낱말 자리 보기">원고</button><button type="button" class="btn sm danger" data-ixdel="${esc(t)}" title="찾아보기에서만 빼기 (본문 글은 그대로)">빼기</button></div>`).join('')}</div>` : ''}`;
+    }
+    const ixRename = (md, old, nw) => String(md || '').replace(IX_RE, (all, vis, key) => { const k = String(key || vis).replace(/\s+/g, ' ').trim(); if (k !== old) return all; if (nw == null) return vis; return nw === vis.trim() ? `{{${vis}}}` : `{{${vis}|${nw}}}`; });
     const more = (inner, t) => `<details class="bk-more"><summary>ⓘ ${t || '자세히'}</summary><div>${inner}</div></details>`;
     /* ---------- 표지 펼침면 (팀장님 11/23 「표지 펼침면」 · 조판 전문가 자문) ----------
        인쇄소에 보내는 표지는 본문과 따로 한 장: [뒷날개 | 뒤표지 | 책등 | 앞표지 | 앞날개] + 사방 도련 3mm.
@@ -1007,14 +1026,17 @@
           <div class="bk-lb">차례에 넣을 제목</div>${pick('bb', 'tocLevel', Number(B.tocLevel || 2), [[1, IC.toc(1), '장만'], [2, IC.toc(2), '장+절'], [3, IC.toc(3), '+소제목', '장 + 절 + 소제목']])}
           <label class="f"><span>차례 제목</span><input type="text" data-bb="tocTitle" value="${esc(B.tocTitle || '차례')}"></label>
           <button class="btn sm" data-bk="toc">${d.pages.some(p => p.toc) ? '차례 새로 고침' : '차례 쪽 넣기 (본문 앞)'}</button>`)}
+        ${sec('fnix', '🔍 각주 · 찾아보기', fnixHTML(B))}
         ${sec('cover', '📕 표지 펼침면 (인쇄소용 표지)', coverSecHTML())}
         ${sec('check', '✅ 점검 · 내보내기', `<button class="btn sm" data-bk="check">🔍 점검하기</button>${pf}
           <div class="col" style="gap:6px;margin-top:10px"><button class="btn primary full" data-bk="pdf" title="낱쪽 PDF · 도련 3mm · 재단선 — 인쇄소에 보내는 파일">🖨 인쇄소용 PDF (도련 3mm·재단선)</button><button class="btn full" data-bk="spread">📖 펼침면으로 보기</button><button class="btn full" data-bk="booklet" title="집 프린터 — 양면 인쇄 후 반으로 접어 스테이플">🏠 집에서 중철 소책자 인쇄 PDF</button><button class="btn full" data-bk="copymsg" title="판형·쪽 수·제본·도련을 적은 글 — 문자·메일에 붙여 넣기">✉ 인쇄소에 보낼 말 복사</button></div>`)}`;
       const applyPS = (k, f, v) => { if (!d.bstyles) d.bstyles = {}; const o = d.bstyles[k] = Object.assign({}, d.bstyles[k] || {}); let key = f; if (f === 'lhp') { key = 'lh'; v = v / 100; } if (f === 'lsp') { key = 'ls'; v = v / 100; } if (f === 'weight') v = Number(v); o[key] = v; flowSoon(80); };
       const applyBB = (k, v) => { if (k === 'tocLevel' || k === 'cols') v = Number(v);
         if (k.startsWith('mg.')) { d.book.mg = Object.assign({}, A.BOOK_DEF.mg, d.book.mg || {}); d.book.mg[k.slice(3)] = v; } else d.book[k] = v;
-        if (['mg.top', 'mg.bottom', 'mg.inner', 'mg.outer', 'cols', 'gutter', 'facing', 'tocLevel', 'tocTitle', 'start', 'imgFloat', 'chapNum', 'typo', 'tighten'].includes(k)) flowSoon(80); else { A.commit(); A.renderCanvas(); } };
+        if (['mg.top', 'mg.bottom', 'mg.inner', 'mg.outer', 'cols', 'gutter', 'facing', 'tocLevel', 'tocTitle', 'start', 'imgFloat', 'chapNum', 'typo', 'tighten', 'fnMode', 'index', 'ixCols', 'ixTitle'].includes(k)) flowSoon(80); else { A.commit(); A.renderCanvas(); } };
       body.onclick = async e => {
+        const ixd = e.target.closest('[data-ixdel]'); if (ixd) { const t = ixd.dataset.ixdel; d.bstory.md = ixRename(d.bstory.md, t, null); await flow({ quiet: true }); open.add('fnix'); A.renderSide(); A.toast(`「${t}」을 찾아보기에서 뺐습니다 (본문 글은 그대로 · 되돌리기 Ctrl+Z)`); return; }
+        const ixg = e.target.closest('[data-ixgo]'); if (ixg) { const t = ixg.dataset.ixgo, L = String(d.bstory.md || '').split('\n'); let ln = L.findIndex(l => { let hit = false; l.replace(IX_RE, (all, vis, key) => { if (String(key || vis).replace(/\s+/g, ' ').trim() === t) hit = true; return all; }); return hit; }); openStory(Math.max(0, ln)); return; }
         const pk = e.target.closest('[data-pk]'); if (pk) { const [kind, key, v0] = pk.dataset.pk.split('|'); const v = v0 === '!' ? pk.dataset.on !== '1' : v0 === 'true' ? true : v0 === 'false' ? false : /^-?\d+(\.\d+)?$/.test(v0) ? Number(v0) : v0; /* 그림 고르기 단추 */
           if (kind === 'bb') applyBB(key, v); else if (kind === 'ps') { const [k2, f2] = key.split('.'); applyPS(k2, f2, v); } else if (kind === 'pgm') { A.page().noMaster = !!v; A.commit(); A.renderCanvas(); }
           A.renderSide(); return; }
@@ -1039,8 +1061,9 @@
         if (k === 'pdf') { if (stale()) await flow({ quiet: true }); pfCache = await preflight(); const bad = pfCache.filter(x => x.lv === 'bad'); if (bad.length && !window.confirm(`꼭 고칠 것이 ${bad.length}개 있습니다:\n\n${bad.map(x => '· ' + x.msg).join('\n')}\n\n그래도 인쇄소용 PDF를 만들까요?`)) { open.add('check'); A.renderSide(); return; } if (!(Number(d.bleed) > 0)) d.bleed = 3; d.cropMarks = true; { const cp = coverPagesOf(d).filter(p => !p.dlOff); if (d.book.coverMade && cp.length && window.confirm(`표지는 펼침면 파일로 따로 보내므로 본문 PDF에서 표지 ${cp.length}쪽(맨 앞)을 뺄까요?\n(빼도 화면·집 인쇄에는 그대로 있습니다)`)) cp.forEach(p => { p.dlOff = true; }); } A.commit(); A.openDownload('pdfprint'); open.add('check'); A.renderSide(); }
         if (k === 'booklet') { if (stale()) await flow({ quiet: true }); A.bookletPdf(); }
       };
-      body.onchange = e => {
+      body.onchange = async e => {
         const t = e.target;
+        if (t.dataset.ixr != null) { const old = t.dataset.ixr, nw = t.value.replace(/[{}|\n]/g, ' ').replace(/\s+/g, ' ').trim(); if (!nw || nw === old) { t.value = old; return; } d.bstory.md = ixRename(d.bstory.md, old, nw); await flow({ quiet: true }); open.add('fnix'); A.renderSide(); A.toast(`찾아보기 말 「${old}」 → 「${nw}」`); return; }
         if (t.dataset.pgm) { A.page().noMaster = t.checked; A.commit(); A.renderCanvas(); return; }
         if (t.dataset.bcv) { const k = t.dataset.bcv, cv = d.book.cv = Object.assign({ paper: 'mojo80', thick: 0.1, flap: 0, spineFix: 0 }, d.book.cv || {}); let v = t.type === 'number' ? Number(t.value) : t.value; cv[k] = v; if (k === 'paper') { const p = PAPERS.find(q => q[0] === v); if (p && p[2]) cv.thick = p[2]; } A.commit(); open.add('cover'); A.renderSide(); return; }
         if (t.dataset.ps) { const [k, f] = t.dataset.ps.split('.'); applyPS(k, f, t.type === 'number' ? Number(t.value) : t.value); return; }

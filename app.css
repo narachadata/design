@@ -1813,3 +1813,5 @@ dialog.st-dlg{max-width:1280px;width:96vw}
 .pk-trbtn{flex-direction:row;gap:8px;width:100%;justify-content:flex-start}.pk-trbtn img{width:44px;border-radius:4px}
 .rsfmts{max-height:210px;overflow:auto;border:1px solid var(--ui-line,#e3e6eb);border-radius:10px;padding:2px 8px 8px;margin-bottom:8px}.rsfmts .pk-lb{margin:8px 0 4px}.pk.rsf .pk-b{width:66px;min-width:66px;padding:4px 2px}.pk.rsf .pk-t{font-size:10.5px;white-space:normal;text-align:center;line-height:1.2;word-break:keep-all}
 .pk.rsf .pk-b{width:74px;min-width:74px}.pk.rsf .pk-t{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.4em}
+/* 도서 편집 — 찾아보기 낱말 목록 */
+.ix-list{margin-top:8px;display:flex;flex-direction:column;gap:4px}.ix-row{display:flex;align-items:center;gap:4px}.ix-row input{flex:1;min-width:0;padding:4px 6px;border:1px solid var(--ui-line);border-radius:6px;font-size:12.5px}.ix-row span{font-size:11px;color:var(--ui-fg2);white-space:nowrap}
