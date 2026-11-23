@@ -173,6 +173,7 @@
         fy += z.h + (z.capH ? z.capH + 2.4 : 0) + z.gB; startFrame(); return true;
       };
       const placeImg = (p) => {
+        if (fr() && fr().wrapNarrow && !flushing) { if (content.length) closeFrame(true); fi++; fy = 0; if (fi >= frames.length) newPg(); else startFrame(); } /* 감싼 사진 옆 좁은 칸에는 사진을 넣지 않고 아래 넓은 칸으로 */
         if (p.refs && p.refs.length > 1) return placeRow(p);
         const I = (A.doc.bimgs || {})[p.ref]; if (!I) return; const Sc = S.small, isQ = !!I.qr, capCss = Object.assign({}, Sc, { align: isQ || (I.wp || 100) >= 100 ? 'left' : 'center', indent: 0, before: 0, after: 0 });
         /* QR: 교재 관행대로 QR은 왼쪽, 설명은 오른쪽에 나란히 (QR 폭에 설명이 갇혀 여러 줄로 쪼개지지 않게) */
@@ -183,6 +184,15 @@
           if (floatOn && !flushing) { pending.push(p); return; } /* 사진 띄워 놓기: 남은 자리는 뒤 글로 채우고 사진은 다음 단·쪽 위로 (책 관행 · 인디자인 '다음 단 위로') */
           if (flushing) return false; nextFrame(); z = size(); }
         if (content.length) closeFrame(true);
+        /* 글 감싸기 (팀장님 11/23 · 인디자인 '텍스트 감싸기'): 작은 사진을 왼쪽·오른쪽에 두고 그 옆 좁은 칸으로 글이 흐른 뒤 사진 아래부터 다시 넓게 */
+        const nxP = paras[paras.indexOf(p) + 1], wrapOk = nxP && !['img', 'break', 'part', 'h1', 'trow'].includes(nxP.st); /* 바로 뒤가 글이 아니면(사진·쪽 나눔·장·표) 감쌀 글이 없으니 보통 사진으로 */
+        if (I.wrap && wrapOk && !isQ && kind === 'body' && fr().w - z.w - 4 >= 35) { fy += z.gT; const f = fr(), g = 4, right = I.wrap !== 'left', x = r1(right ? f.x + f.w - z.w : f.x), y = r1(f.y + fy);
+          pg.els.push(Object.assign({ type: 'image', src: I.src, fit: 'cover', pos: '50% 50%', opacity: 1, flip: false, radius: 0, rot: 0 }, I.ed || {}, { id: A.uid(), x, y, w: r1(z.w), h: r1(z.h), flowImg: p.ref, flowLine: p.line, flowW: r1(z.w), flowH: r1(z.h), name: '사진(글 감싸기)' + (p.cap ? ': ' + p.cap.slice(0, 20) : '') + ' (누르면 편집)' }));
+          placed.push(p.ref); let regH = z.h;
+          if (p.cap) { const t = p.cap, ch = r1(z.capH + 0.4); pg.els.push(Object.assign({}, A.TEXT_DEF, { id: A.uid(), x, y: r1(y + z.h + 2), w: r1(z.w), h: ch, sizing: 'fixed', text: t, html: pHTML(runsOf(t), capCss, {}), htmlFor: t, font: Sc.font, size: Sc.size, lh: Sc.lh, color: Sc.color, align: capCss.align, ls: 0, flowFrame: kind, flowLine: p.line, locked: true, name: '사진 설명 (원고에서 고치기)' })); regH += ch + 2; }
+          const narrow = Object.assign({}, f, { wrapNarrow: true, x: r1(right ? f.x : f.x + z.w + g), y: r1(f.y + fy), w: r1(f.w - z.w - g), h: r1(regH + 1) }), restH = f.h - fy - regH - z.gB, rest = Object.assign({}, f, { y: r1(f.y + fy + regH + z.gB), h: r1(restH) });
+          frames.splice(fi, 1, Object.assign({}, f, { h: Math.max(0, fy - z.gT) }), narrow, ...(restH > 4 ? [rest] : []));
+          fi++; fy = 0; startFrame(); return true; }
         fy += z.gT; const f = fr(), x = r1(isQ ? f.x : f.x + (f.w - z.w) / 2), y = r1(f.y + fy);
         pg.els.push(Object.assign({ type: 'image', src: I.src, fit: 'cover', pos: '50% 50%', opacity: 1, flip: false, radius: 0, rot: 0 }, I.ed || {}, { id: A.uid(), x, y, w: r1(z.w), h: r1(z.h), flowImg: p.ref, flowLine: p.line, flowW: r1(z.w), flowH: r1(z.h), name: (isQ ? 'QR 코드' : '사진' + (p.cap ? ': ' + p.cap.slice(0, 20) : '')) + ' (누르면 편집)' }));
         placed.push(p.ref);
@@ -320,7 +330,7 @@
       for (const f of files) { if (!/^image\//.test(f.type)) continue; const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(f); }); const id = 'p' + A.uid().slice(0, 6); bim[id] = { src: A.addAsset(url), wp: 100, name: f.name }; ids.push({ id, name: f.name.replace(/\.[^.]+$/, '') }); }
       return ids;
     }
-    const imgSig = () => JSON.stringify(Object.entries(A.doc.bimgs || {}).map(([k, v]) => [k, v.wp, v.ar, v.src && v.src.length]));
+    const imgSig = () => JSON.stringify(Object.entries(A.doc.bimgs || {}).map(([k, v]) => [k, v.wp, v.ar, v.src && v.src.length, v.wrap || '']));
     const hashOf = s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; };
     let flowT = 0; const flowSoon = (ms, amend) => { clearTimeout(flowT); flowT = setTimeout(() => flow({ quiet: true, amend }), ms || 500); };
     const imgMoved = () => A.doc.pages.some(p => p.els.some(e => e.flowImg && !e.flowRow && e.flowW && (Math.abs(e.w - e.flowW) > 0.5 || Math.abs(e.h - e.flowH) > 0.5)));
@@ -484,7 +494,7 @@
         if (b.st === 'break') return `<div class="be-b be-br" data-i="${i}" tabindex="0">— 여기서 다음 쪽으로 (쪽 나눔) — <button class="btn sm" data-bact="delbr">빼기</button></div>`;
         if (b.st === 'img' && b.row) return `<div class="be-b be-img be-row" data-i="${i}"><div class="be-rowph">${b.refs.map((r, j) => { const I = (d.bimgs || {})[r] || {}, u = I.src ? A.imgUrl({ src: I.src, w: 60, h: 60 }) : ''; return `<div class="be-rc"><div class="be-ph">${u ? `<img src="${u}" alt="">` : '<span>사진 없음</span>'}</div><input class="be-cap" data-i="${i}" data-j="${j}" value="${esc(b.caps[j] || '')}" placeholder="사진 ${j + 1} 설명"></div>`; }).join('')}</div><div class="be-pa"><span class="hint" style="margin:0">사진 ${b.refs.length}장을 한 줄에 나란히</span><button class="btn sm" data-bact="unrow">하나씩 따로</button><button class="btn sm danger" data-bact="delimg">🗑 빼기</button></div></div>`;
         if (b.st === 'img') { const I = (d.bimgs || {})[b.ref] || {}, u = I.src ? A.imgUrl({ src: I.src, w: 60, h: 60 }) : '', wp = I.wp || 100;
-          return `<div class="be-b be-img" data-i="${i}"><div class="be-ph">${u ? `<img src="${u}" alt="">` : '<span>사진 없음</span>'}</div><div class="be-pc"><input class="be-cap" data-i="${i}" value="${esc(b.cap || '')}" placeholder="사진 설명 (사진 아래에 나오는 글)"><div class="be-wb"><span>크기</span>${[[50, '작게'], [75, '보통'], [100, '꽉 차게']].map(([w, t]) => `<button class="${Math.abs(wp - w) < 1 ? 'on' : ''}" data-bw="${w}">${t}</button>`).join('')}${[50, 75, 100].some(w => Math.abs(wp - w) < 1) ? '' : `<em>${Math.round(wp)}%</em>`}</div><div class="be-pa">${blocks[i + 1] && blocks[i + 1].st === 'img' && (blocks[i + 1].refs || [1]).length + 1 <= 4 ? '<button class="btn sm" data-bact="row" title="바로 아래 사진과 한 줄에 나란히 놓기">⇆ 아래 사진과 나란히</button>' : ''}${I.qr ? '<button class="btn sm" data-bact="qredit">▦ QR 고치기</button>' : '<button class="btn sm" data-bact="swap">사진 바꾸기</button>'}<button class="btn sm danger" data-bact="delimg">🗑 ${I.qr ? 'QR' : '사진'} 빼기</button></div></div></div>`; }
+          return `<div class="be-b be-img" data-i="${i}"><div class="be-ph">${u ? `<img src="${u}" alt="">` : '<span>사진 없음</span>'}</div><div class="be-pc"><input class="be-cap" data-i="${i}" value="${esc(b.cap || '')}" placeholder="사진 설명 (사진 아래에 나오는 글)"><div class="be-wb"><span>크기</span>${[[50, '작게'], [75, '보통'], [100, '꽉 차게']].map(([w, t]) => `<button class="${Math.abs(wp - w) < 1 ? 'on' : ''}" data-bw="${w}">${t}</button>`).join('')}${[50, 75, 100].some(w => Math.abs(wp - w) < 1) ? '' : `<em>${Math.round(wp)}%</em>`}</div>${I.qr ? '' : `<div class="be-wb"><span>글 감싸기</span>${[['', '없음'], ['left', '사진 왼쪽'], ['right', '사진 오른쪽']].map(([v, t]) => `<button class="${(I.wrap || '') === v ? 'on' : ''}" data-bwrap="${v}" title="${v ? '사진을 ' + t + '에 두고 옆으로 글이 흐름' : '사진 위아래로만 글'}">${t}</button>`).join('')}</div>`}<div class="be-pa">${blocks[i + 1] && blocks[i + 1].st === 'img' && (blocks[i + 1].refs || [1]).length + 1 <= 4 ? '<button class="btn sm" data-bact="row" title="바로 아래 사진과 한 줄에 나란히 놓기">⇆ 아래 사진과 나란히</button>' : ''}${I.qr ? '<button class="btn sm" data-bact="qredit">▦ QR 고치기</button>' : '<button class="btn sm" data-bact="swap">사진 바꾸기</button>'}<button class="btn sm danger" data-bact="delimg">🗑 ${I.qr ? 'QR' : '사진'} 빼기</button></div></div></div>`; }
         return `<div class="be-b st-${b.st}" data-i="${i}"><select class="be-st" data-i="${i}" title="이 단락 모양">${ED_STY.map(k => `<option value="${k}" ${b.st === k ? 'selected' : ''}>${PS_NAME[k]}</option>`).join('')}</select><div class="be-t" contenteditable="true" spellcheck="false" data-i="${i}" style="${css(b.st)}">${inlineHTML(b.t) || '<br>'}</div></div>`;
       };
       const tEl = i => dl.querySelector(`.be-t[data-i="${i}"]`);
@@ -557,6 +567,7 @@
         const it = e.target.closest('[data-sti]'); if (it) { if (mode === 'view') { const t = tEl(focusI); if (it.dataset.sti === 'bold') { if (t) { document.execCommand('bold'); blocks[focusI].t = htmlToInline(t); changed(true); } } else insertAfter(focusI, [{ st: 'break' }]); } else { const ta = dl.querySelector('#stText'); ta.focus(); if (it.dataset.sti === 'bold') { const a = ta.selectionStart, b2 = ta.selectionEnd; if (b2 > a) document.execCommand('insertText', false, `**${ta.value.slice(a, b2)}**`); } else { const a = ta.value.lastIndexOf('\n', ta.selectionStart - 1) + 1; ta.setSelectionRange(a, a); document.execCommand('insertText', false, '[쪽 나눔]\n'); } } return; }
         const go = e.target.closest('[data-goi]'); if (go) { const i = Number(go.dataset.goi); focusI = i; if (mode === 'view') { const t = tEl(i); if (t) { t.scrollIntoView({ block: 'center' }); setCaret(t, 0); } } preview(); return; }
         const pv = e.target.closest('#bePv .pvb'); if (pv) { const pi = Number(dl.querySelector('#bePv').dataset.pi); await done(); A.goto(pi); return; }
+        const bwr = e.target.closest('[data-bwrap]'); if (bwr) { const i = Number(bwr.closest('.be-b').dataset.i), I = (d.bimgs || {})[blocks[i].ref]; if (I) { snap(); I.wrap = bwr.dataset.bwrap || undefined; if (I.wrap && (I.wp || 100) > 55) I.wp = 45; } changed(true); render(i); return; }
         const bw = e.target.closest('[data-bw]'); if (bw) { const i = Number(bw.closest('.be-b').dataset.i), I = (d.bimgs || {})[blocks[i].ref]; if (I) { I.wp = Number(bw.dataset.bw); delete I.ar_user; } snap(); changed(true); render(i); return; }
         const ac = e.target.closest('[data-bact]'); if (!ac) return; const a = ac.dataset.bact, bi = ac.closest('.be-b') ? Number(ac.closest('.be-b').dataset.i) : focusI;
         if (a === 'done') { done(); return; }
