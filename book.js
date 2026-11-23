@@ -147,7 +147,7 @@
 
     /* ---------- 재기: 화면 밖 상자에 단락을 넣어 높이를 잼 (편집 화면과 같은 글 상자 CSS) ---------- */
     let MB = null;
-    function mbox(w) { if (!MB) { MB = document.createElement('div'); MB.className = 'el el-text'; MB.setAttribute('aria-hidden', 'true'); MB.style.cssText = 'position:absolute;left:-30000px;top:0;visibility:hidden;'; document.body.appendChild(MB); } MB.style.width = w + 'mm'; return MB; }
+    function mbox(w) { if (!MB) { const box = document.createElement('div'); box.setAttribute('aria-hidden', 'true'); box.style.cssText = 'position:fixed;left:-40000px;top:0;width:3000px;height:3000px;overflow:hidden;visibility:hidden;contain:strict;pointer-events:none'; /* 잴 상자를 문서 나머지와 떼어 놓음 — 쪽이 수백 장 그려져 있어도 잴 때마다 문서 전체를 다시 계산하지 않게 */ MB = document.createElement('div'); MB.className = 'el el-text'; MB.style.cssText = 'position:absolute;left:0;top:0;'; box.appendChild(MB); document.body.appendChild(box); } MB.style.width = w + 'mm'; return MB; }
     function hOf(html, lastAfter) { MB.innerHTML = html; return MB.offsetHeight / MM - (lastAfter || 0); }
     async function loadFonts(S) {
       const fams = [...new Set(Object.values(S).map(s => s.font))];
@@ -331,6 +331,7 @@
     async function flow(opt) {
       opt = opt || {}; const d = A.doc; if (!isBook() || !d.bstory) return null;
       if (flowing) { flowAgain = true; return null; } flowing = true;
+      const hideEls = ['#sidebody', '#facing'].map(s => document.querySelector(s)).filter(x => x && x.style.display !== 'none'); hideEls.forEach(x => { x.dataset.bkHide = x.style.display; x.dataset.bkTop = x.scrollTop; x.style.display = 'none'; }); /* 쪽을 짜는 동안 왼쪽 칸(수백 장 쪽 미리보기)을 잠깐 감춤 — 글 높이를 잴 때마다 문서 전체를 다시 계산하지 않게 (300쪽 10초 → 1초) */
       try {
         A.endEdit(); const S = ps(); A.setStatus('원고를 흘려 넣는 중…'); await loadFonts(S);
         const paras = parse(d.bstory.md), keepCur = A.page(), curFlowIdx = keepCur && (keepCur.flow || keepCur.toc) ? d.pages.filter(p => p.flow).indexOf(keepCur) : -1;
@@ -357,7 +358,7 @@
         if (!opt.quiet) A.toast(`원고를 흘려 넣었습니다 — 본문 ${res.pages.length}쪽${res.heads.length ? ` · 제목 ${res.heads.length}개` : ''}${d.book.lastFlow.fn ? ` · 각주 ${d.book.lastFlow.fn}개` : ''}${ixRes ? ` · 찾아보기 낱말 ${ixRes.n}개` : ''}${toc && toc.n ? ` · 차례 ${toc.n}줄` : ''}${res.overflow ? ` · 넘친 글 ${res.overflow}곳(점검 보기)` : ''}`);
         return res;
       } catch (e) { console.error(e); A.toast('흘려 넣지 못했습니다: ' + e.message, true); A.setStatus(''); return null; }
-      finally { flowing = false; if (flowAgain) { flowAgain = false; setTimeout(() => flow({ quiet: true }), 50); } }
+      finally { hideEls.forEach(x => { x.style.display = x.dataset.bkHide || ''; const t = Number(x.dataset.bkTop) || 0; if (t && x.isConnected) x.scrollTop = t; delete x.dataset.bkHide; delete x.dataset.bkTop; }); flowing = false; if (flowAgain) { flowAgain = false; setTimeout(() => flow({ quiet: true }), 50); } }
     }
     /* 쪽 위에서 고친 사진(자르기·필터·바꾼 그림·크기)을 원고 사진(doc.bimgs)에 거둬 두고, 비율을 모르는 사진은 그림을 읽어 알아냄 */
     async function harvestImgs(paras) {
