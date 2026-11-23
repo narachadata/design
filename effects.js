@@ -25,6 +25,10 @@ NC.fx = (function () {
     const deco = [el.underline ? 'underline' : '', el.strike ? 'line-through' : ''].filter(Boolean).join(' ');
     if (deco) s += `text-decoration:${deco};text-decoration-color:${grad ? el.g1 : el.color};`;
     if (el.upper) s += 'text-transform:uppercase;';
+    if (el.smallcaps) s += 'font-variant-caps:small-caps;'; /* 작은 대문자 (영문) */
+    if (el.ws) s += `word-spacing:${el.ws}em;`; /* 낱말 간격 (인디자인 '단어 간격') */
+    if (el.ti) s += `text-indent:${el.ti}em;`; /* 첫 줄 들여쓰기 (단락마다) */
+    if (el.kern === 'none') s += 'font-kerning:none;'; else if (el.kern === 'opt') s += 'font-kerning:normal;font-feature-settings:"kern" 1,"palt" 1;'; /* 커닝: 꺼짐 · 글꼴 기본 · 비례(palt — 한글·가나 글자 폭을 글자 모양대로) */
     if (el.vertical) s += 'writing-mode:vertical-rl;text-orientation:upright;';
     if (el.blend && el.blend !== 'normal') s += `mix-blend-mode:${el.blend};`;
     if (el.bg) s += `background-color:${el.bg};${grad ? '' : ''}border-radius:${el.bgR || 0}mm;`;

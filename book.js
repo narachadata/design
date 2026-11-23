@@ -30,8 +30,8 @@
     }
 
     /* ---------- 단락 스타일 (인디자인 단락 스타일 · 쿽 스타일 시트) — 크기 pt, 간격·들여쓰기 mm, 첫 줄 들여쓰기는 글자(em) ---------- */
-    const PS_ORDER = ['part', 'h1', 'h2', 'h3', 'body', 'quote', 'list', 'center', 'small', 'tip', 'warn', 'byline', 'table', 'tocTitle', 'tocPart', 'toc1', 'toc2'];
-    const PS_NAME = { part: '부 제목', tocPart: '차례 — 부', h1: '장 제목', h2: '절 제목', h3: '소제목', body: '본문', quote: '인용', list: '목록', center: '가운데', small: '작은 글·캡션', tip: '도움말 상자', warn: '주의 상자', byline: '글쓴이', table: '표', tocTitle: '차례 제목', toc1: '차례 — 장', toc2: '차례 — 절' };
+    const PS_ORDER = ['part', 'h1', 'h2', 'h3', 'body', 'quote', 'list', 'center', 'small', 'tip', 'warn', 'byline', 'table', 'fnote', 'tocTitle', 'tocPart', 'toc1', 'toc2', 'ixHead', 'ixItem'];
+    const PS_NAME = { part: '부 제목', tocPart: '차례 — 부', h1: '장 제목', h2: '절 제목', h3: '소제목', body: '본문', quote: '인용', list: '목록', center: '가운데', small: '작은 글·캡션', tip: '도움말 상자', warn: '주의 상자', byline: '글쓴이', table: '표', fnote: '각주', ixHead: '찾아보기 — 첫소리(ㄱ·ㄴ)', ixItem: '찾아보기 — 낱말', tocTitle: '차례 제목', toc1: '차례 — 장', toc2: '차례 — 절' };
     const PS_MARK = { part: '[부] ', h1: '# ', h2: '## ', h3: '### ', body: '', quote: '> ', list: '- ', center: '[가운데] ', small: '[작은글] ', tip: '[도움말] ', warn: '[주의] ', byline: '[글쓴이] ' };
     function psDefaults(k) {
       /* L = 본문 한 줄 높이(mm). 제목 앞뒤 간격을 줄 단위로 맞추면 쪽마다 글줄 리듬이 고르게 됨 (조판 전문가 11/21 — 인디자인 기준선 격자처럼)
@@ -52,6 +52,9 @@
         warn: { font: f, size: Math.round(z * 0.95 * 2) / 2, weight: 400, lh: Math.min(K.lh, 1.65), align: 'left', indent: 0, indentL: 0, before: q(0.75 * L), after: q(0.75 * L), color: '#000000', ls: -0.02, brk: 'word', box: true, bg: '#FDF1EC', barColor: '#C8502D', label: '주의' },
         byline: { font: hf, size: Math.round(z * 0.9 * 2) / 2, weight: 500, lh: 1.5, align: 'right', indent: 0, indentL: 0, before: q(0.5 * L), after: q(0.5 * L), color: '#333333', ls: 0, brk: 'word' },
         table: { font: f, size: Math.round(z * 0.9 * 2) / 2, weight: 400, lh: 1.45, align: 'left', indent: 0, indentL: 0, before: q(0.75 * L), after: q(0.75 * L), color: '#000000', ls: -0.01, bg: '#EEF1F5', barColor: '#9AA3AE' }, /* 표: 위·아래 굵은 줄, 칸 사이 가는 줄, 머리줄 바탕 (한국 교재 관행) */
+        fnote: { font: f, size: Math.round(z * 0.78 * 2) / 2, weight: 400, lh: 1.45, align: 'left', indent: 0, indentL: 0, before: 0, after: q(0.15 * L), color: '#000000', ls: 0, brk: 'word' }, /* 각주: 쪽 아래, 짧은 줄 아래에 작은 글 (한국 단행본 관행 — 본문의 약 0.8배) */
+        ixHead: { font: hf, size: Math.round(z * 1.1 * 2) / 2, weight: 700, lh: 1.4, align: 'left', indent: 0, indentL: 0, before: q(0.75 * L), after: q(0.25 * L), color: '#000000', ls: 0, keepNext: true },
+        ixItem: { font: f, size: Math.round(z * 0.9 * 2) / 2, weight: 400, lh: 1.5, align: 'left', indent: 0, indentL: 0, before: 0, after: 0, color: '#000000', ls: 0 },
         tocTitle: { font: hf, size: Math.round(z * 2), weight: 700, lh: 1.3, align: 'left', indent: 0, indentL: 0, before: 0, after: q(2 * L), color: '#000000', ls: -0.02, sink: q(7 * L) },
         tocPart: { font: hf, size: Math.round(z * 1.25 * 2) / 2, weight: 800, lh: 1.5, align: 'left', indent: 0, indentL: 0, before: q(1.5 * L), after: q(0.25 * L), color: '#000000', ls: 0, keepNext: true },
         toc1: { font: hf, size: Math.round(z * 1.1 * 2) / 2, weight: 700, lh: 1.5, align: 'left', indent: 0, indentL: 0, before: q(0.75 * L), after: q(0.25 * L), color: '#000000', ls: 0 },
@@ -64,7 +67,11 @@
 
     /* ---------- 원고 읽기: 한 줄 = 한 단락 (워드·한글에서 Enter 한 번이 한 단락인 것과 같게) ----------
        # 장 · ## 절 · ### 소제목 · > 인용 · - 목록 · [가운데] · [작은글] · [쪽 나눔] · **굵게** */
-    function runsOf(t) { const runs = [], re = /\*\*(.+?)\*\*/g; let i = 0, m; while ((m = re.exec(t))) { if (m.index > i) runs.push({ t: t.slice(i, m.index) }); runs.push({ t: m[1], b: 1 }); i = re.lastIndex; } if (i < t.length) runs.push({ t: t.slice(i) }); return runs.length ? runs : [{ t: '' }]; }
+    /* 줄 안 기호: **굵게** · [^각주 글] (쪽 아래 각주, 번호는 장마다 1부터) · {{낱말}} 또는 {{보이는 말|찾아보기 말}} (책 끝 찾아보기에 쪽 번호와 함께) */
+    const INL_RE = /\*\*(.+?)\*\*|\[\^([^\]]*)\]|\{\{([^{}|]+?)(?:\|([^{}]+?))?\}\}/g;
+    function runsOf(t) { const runs = [], re = new RegExp(INL_RE.source, 'g'); let i = 0, m; t = String(t == null ? '' : t); while ((m = re.exec(t))) { if (m.index > i) runs.push({ t: t.slice(i, m.index) }); if (m[1] != null) runs.push({ t: m[1], b: 1 }); else if (m[2] != null) { if (m[2].trim()) runs.push({ t: '*', fn: m[2].trim() }); } else runs.push({ t: m[3], ix: (m[4] || m[3]).trim() }); i = re.lastIndex; } if (i < t.length) runs.push({ t: t.slice(i) }); return runs.length ? runs : [{ t: '' }]; }
+    const fnOf = runs => (runs || []).filter(r => r.fn && r.t).map(r => ({ no: r.t, t: r.fn }));
+    const noFn = runs => (runs || []).filter(r => !r.fn);
     const plainOf = runs => runs.map(r => r.t).join('');
     /* 원고 글 다듬기 (원고는 그대로 두고 쪽에 앉힐 때만): "곧은 따옴표" → “둥근 따옴표”, 숫자와 단위 사이는 줄이 갈리지 않게 붙임, ... → … */
     const UNIT = '(?:쪽|개|명|번|회|년|월|일|시|분|초|살|세|단|급|품|장|절|권|원|kg|g|km|m|cm|mm|%|℃)';
@@ -77,7 +84,7 @@
       return s;
     }
     function sliceRuns(runs, a, b) { const out = []; let pos = 0; for (const r of runs) { const s = pos, e = pos + r.t.length; pos = e; const x = Math.max(a, s), y = Math.min(b, e); if (y > x) out.push(Object.assign({}, r, { t: r.t.slice(x - s, y - s) })); } return out; }
-    const runsHTML = runs => runs.map(r => r.b ? `<b>${esc(r.t)}</b>` : esc(r.t)).join('');
+    const runsHTML = runs => runs.map(r => r.fn ? `<span style="font-size:0.62em;vertical-align:super;line-height:0;font-weight:600;letter-spacing:0">${esc(r.t)}</span>` : r.b ? `<b>${esc(r.t)}</b>` : esc(r.t)).join('');
     const IMG_RE = /^!\[(.*?)\]\(((?:img:[A-Za-z0-9_-]+\s*,?\s*)+)\)$/;
     const imgRefs = s => String(s || '').split(',').map(x => x.trim().replace(/^img:/, '')).filter(x => /^[A-Za-z0-9_-]+$/.test(x));
     const TROW = /^\|(.*)\|\s*$/, isSepRow = cells => cells.length && cells.every(c => /^:?-{2,}:?$/.test(c)), sepAl = cells => cells.map(c => /^:-+:$/.test(c) ? 'center' : /-+:$/.test(c) ? 'right' : /^:-+$/.test(c) ? 'left' : ''); /* |:---:| 가운데 · |---:| 오른쪽 */
@@ -86,7 +93,8 @@
         const s = raw.trim(); if (!s) { gap = true; return; }
         { const tr = s.match(TROW); if (tr) { const cells = tr[1].split('|').map(c => c.trim()), prev = out[out.length - 1], same = prev && prev.st === 'trow' && !gap; gap = false; /* 표: | 칸 | 칸 | — 둘째 줄이 |---|---|이면 첫 줄은 머리줄 */
           if (isSepRow(cells)) { if (same) { const pp = out[out.length - 2]; if (pp && pp.st === 'trow' && pp.tbl === prev.tbl) prev.tbl = ++tblN; /* 표 중간의 |---| 줄: 바로 윗줄을 머리줄로 새 표 */ prev.head = true; prev.al = sepAl(cells); } return; }
-          out.push({ st: 'trow', tbl: same ? prev.tbl : ++tblN, cells: cells.map(c => runsOf(typo(c))), runs: [{ t: cells.join('  ') }], plain: cells.join('  '), line }); return; } }
+          const mg = cells.map(c => c === '<' ? 'L' : c === '^' ? 'U' : ''); /* 칸 합치기: < 는 왼쪽 칸과, ^ 는 위 칸과 한 칸으로 */
+          out.push({ st: 'trow', tbl: same ? prev.tbl : ++tblN, mg, cells: cells.map((c, j) => runsOf(mg[j] ? '' : typo(c))), runs: [{ t: cells.filter((c, j) => !mg[j]).join('  ') }], plain: cells.filter((c, j) => !mg[j]).join('  '), line }); return; } }
         gap = false;
         if (/^\[\s*쪽\s*나눔\s*\]$/.test(s)) { out.push({ st: 'break', line }); return; }
         { const pm = s.match(/^\[\s*부\s*\]\s*(.*)$/); if (pm) { const runs = runsOf(typo(pm[1].replace(/\s*\{번호없음\}\s*/g, ' ').trim())); out.push({ st: 'part', runs, plain: plainOf(runs), line, partNo: /\{번호없음\}/.test(pm[1]) ? false : null }); return; } }
@@ -104,13 +112,18 @@
       Object.values(groups).forEach(rows => { const n = Math.max(...rows.map(r => r.cells.length)), cw = Array.from({ length: n }, (_, j) => Math.max(...rows.map(r => plainOf(r.cells[j] || []).length), 1)).map(v => Math.round(Math.min(12, Math.max(2, Math.sqrt(v) * 1.6)) * 10) / 10);
         const body = rows.filter(r => !r.head), num = j => body.length && body.every(r => /^[\d\s.,:~\-–%+×/()원개회분초쪽명번살세월년일시주급단품kgcm]*$/i.test(plainOf(r.cells[j] || [])) && plainOf(r.cells[j] || []).trim() !== '' || !plainOf(r.cells[j] || []).trim()) && body.some(r => plainOf(r.cells[j] || []).trim()); /* 숫자 칸은 저절로 가운데 */
         const al0 = (rows[0].head && rows[0].al) || [], al = Array.from({ length: n }, (_, j) => al0[j] || (num(j) ? 'center' : 'left'));
-        const hd = rows[0].head ? rows[0] : null; rows.forEach((r, k) => { r.ncol = n; r.cw = cw; r.al = al; r.first = k === 0; r.last = k === rows.length - 1; r.hd = hd; if (k) r.head = false; }); });
+        const hd = rows[0].head ? rows[0] : null; rows.forEach((r, k) => { r.ncol = n; r.cw = cw; r.al = al; r.first = k === 0; r.last = k === rows.length - 1; r.hd = hd; if (k) r.head = false;
+          const nx = rows[k + 1]; r.down = Array.from({ length: n }, (_, j) => !!(nx && (nx.mg || [])[j] === 'U')); r.joinNext = r.down.some(Boolean); r.joinPrev = k > 0 && (r.mg || []).some(v => v === 'U'); if (!k) r.mg = (r.mg || []).map(v => v === 'U' ? '' : v); }); });
+      /* 각주 번호: 장(#)·부마다 1부터 · 제목·차례에 쓰는 글(plain)에는 번호를 넣지 않음 */
+      let fnN = 0; out.forEach(p => { if (p.st === 'h1' || p.st === 'part') fnN = 0; const all = p.st === 'trow' ? p.cells.flat() : (p.runs || []); all.forEach(r => { if (r.fn) r.t = String(++fnN); }); if (p.st !== 'trow' && p.runs && p.runs.some(r => r.fn)) p.plain = plainOf(noFn(p.runs)); });
       return out;
     }
     function rowHTML(p, s, rep) {
-      const n = p.ncol || p.cells.length, cw = p.cw || [], bc = s.barColor || '#9AA3AE', first = p.first || rep, top = first ? `border-top:0.35mm solid ${s.color};` : '', bot = p.last && !rep ? `border-bottom:0.35mm solid ${s.color};` : `border-bottom:0.15mm solid ${bc};`;
-      const al = p.al || [], cells = Array.from({ length: n }, (_, j) => `<span style="flex:${cw[j] || 1} 1 0;padding:1.1mm 1.6mm;text-align:${al[j] || 'left'};${j ? `border-left:0.15mm solid ${bc};` : ''}">${runsHTML(p.cells[j] || [])}</span>`).join('');
-      return `<p style="margin:${p.first && !rep ? r1(s.before || 0) : 0}mm 0 ${p.last && !rep ? r1(s.after || 0) : 0}mm 0;padding:0;display:flex;align-items:stretch;${top}${bot}${p.head || rep ? `background:${s.bg || '#EEF1F5'};font-weight:700;` : `font-weight:${s.weight};`}font-family:'${s.font}','Noto Sans KR',sans-serif;font-size:${s.size}pt;line-height:${s.lh};color:${s.color};text-align:left;letter-spacing:${s.ls || 0}em;word-break:keep-all;overflow-wrap:anywhere;">${cells}</p>`;
+      const n = p.ncol || p.cells.length, cw = p.cw || [], bc = s.barColor || '#9AA3AE', first = p.first || rep, top = first ? `border-top:0.35mm solid ${s.color};` : '', bot = p.last && !rep ? `0.35mm solid ${s.color}` : `0.15mm solid ${bc}`;
+      /* 칸 합치기: 가로(<)는 칸 너비를 더해 한 칸, 세로(^)는 위 칸 아래 줄을 지워 한 칸처럼 (글은 위 칸에) — 줄은 칸마다 그림 */
+      const al = p.al || [], mg = p.mg || [], down = rep ? [] : (p.down || []), cells = [], tot = Array.from({ length: n }, (_, j) => cw[j] || 1).reduce((a, b) => a + b, 0); for (let j = 0; j < n; j++) { if (mg[j] === 'L' && j > 0) continue; let k = j + 1, fx = cw[j] || 1; while (k < n && mg[k] === 'L') { fx += cw[k] || 1; k++; }
+        cells.push(`<span style="flex:0 0 ${Math.round(fx / tot * 10000) / 100}%;box-sizing:border-box;padding:1.1mm 1.6mm;text-align:${al[j] || 'left'};${j ? `border-left:0.15mm solid ${bc};` : ''}border-bottom:${down[j] ? '0 solid transparent' : bot};">${mg[j] === 'U' && !rep ? '' : runsHTML(p.cells[j] || [])}</span>`); j = k - 1; }
+      return `<p style="margin:${p.first && !rep ? r1(s.before || 0) : 0}mm 0 ${p.last && !rep ? r1(s.after || 0) : 0}mm 0;padding:0;display:flex;align-items:stretch;${top}${p.head || rep ? `background:${s.bg || '#EEF1F5'};font-weight:700;` : `font-weight:${s.weight};`}font-family:'${s.font}','Noto Sans KR',sans-serif;font-size:${s.size}pt;line-height:${s.lh};color:${s.color};text-align:left;letter-spacing:${s.ls || 0}em;word-break:keep-all;overflow-wrap:anywhere;">${cells.join('')}</p>`;
     }
 
     /* ---------- 단락 → HTML (인라인 스타일만 써서 PNG·PDF 내보내기에도 그대로) ---------- */
@@ -129,7 +142,7 @@
     function frameRects(abs) {
       const B = B_(), d = A.doc, right = A.isRightPage(abs), L = right ? B.mg.inner : B.mg.outer, R = right ? B.mg.outer : B.mg.inner, T = B.mg.top, H = d.h - T - B.mg.bottom;
       const W = d.w - L - R, cols = Math.max(1, Number(B.cols) || 1), g = Number(B.gutter) || 5, cw = (W - g * (cols - 1)) / cols;
-      return Array.from({ length: cols }, (_, c) => ({ x: r1(L + c * (cw + g)), y: r1(T), w: r1(cw), h: r1(H) }));
+      return Array.from({ length: cols }, (_, c) => ({ x: r1(L + c * (cw + g)), y: r1(T), w: r1(cw), h: r1(H), col: c, cx: r1(L + c * (cw + g)), cw: r1(cw), cb: r1(T + H) })); /* col·cx·cw·cb: 글 감싸기로 칸을 나눠도 원래 단(각주 자리)을 기억 */
     }
 
     /* ---------- 재기: 화면 밖 상자에 단락을 넣어 높이를 잼 (편집 화면과 같은 글 상자 CSS) ---------- */
@@ -144,15 +157,23 @@
 
     /* ---------- 흘리기 엔진: 단락을 판면 상자에 차례로 채우고, 넘치면 다음 단·다음 쪽 (쪽은 필요한 만큼 만들어짐) ---------- */
     function layoutStream(paras, abs0, S, kind, extras) {
-      const pages = [], heads = [], placed = []; let pg = null, frames = [], fi = 0, fy = 0, content = [], plain = [], lastAfter = 0, chap = '', sec = '', chapN = 0, partN = 0, firstLine = -1, overflow = 0;
+      const pages = [], heads = [], placed = [], ixHits = []; let pg = null, frames = [], fi = 0, fy = 0, content = [], plain = [], lastAfter = 0, chap = kind === 'idx' ? (A.doc.book.ixTitle || '찾아보기') : '', sec = '', chapN = 0, partN = 0, firstLine = -1, overflow = 0;
       const numOn = kind === 'body' && A.doc.book.chapNum === true;
-      const absNow = () => abs0 + pages.length - 1, fr = () => frames[fi], avail = () => fr().h - fy;
+      /* 각주 (인디자인 '각주'): 이 단(칸) 아래에 짧은 줄 + 작은 글. 각주가 들어갈 만큼 본문 자리를 줄이고, 본문이 다음 단·쪽으로 넘어가면 그 단 아래에 앉힘 */
+      let fnList = [], fnPend = [], fnCol = null; const fnMemo = new Map();
+      const fnHTML = list => { const Sf = S.fnote || S.small; return `<p style="margin:0;padding:0 0 1.6mm 0"><span style="display:block;width:24mm;border-top:0.25mm solid ${Sf.color}"></span></p>` + list.map(f => `<p style="margin:0;padding:0 0 ${r1(Sf.after || 0)}mm 3.6mm;text-indent:-3.6mm;font-family:'${Sf.font}','Noto Sans KR',sans-serif;font-size:${Sf.size}pt;line-height:${Sf.lh};font-weight:${Sf.weight};color:${Sf.color};text-align:left;letter-spacing:${Sf.ls || 0}em;word-break:keep-all;overflow-wrap:anywhere;">${esc(f.no)})\u00a0${runsHTML(runsOf(f.t))}</p>`).join(''); };
+      const fnH = list => { if (!list.length || !fr()) return 0; const w = fr().cw || fr().w, key = w + '|' + list.map(f => f.no + f.t).join('\u0001'); if (fnMemo.has(key)) return fnMemo.get(key); mbox(w); const h = hOf(fnHTML(list), 0) + 2.2; mbox(fr().w); fnMemo.set(key, h); return h; };
+      const absNow = () => abs0 + pages.length - 1, fr = () => frames[fi], fnRoom = () => { const f = fr(), L = fnList.concat(fnPend); if (!L.length || f.cb == null) return f.h; return Math.min(f.h, f.cb - fnH(L) - f.y); }, avail = () => fnRoom() - fy;
+      const fnTake = runs => { const L = fnOf(runs); if (L.length) { fnList.push(...L); if (!fnCol) fnCol = { cx: fr().cx != null ? fr().cx : fr().x, cw: fr().cw || fr().w, cb: fr().cb != null ? fr().cb : fr().y + fr().h }; } fnPend = []; };
+      const ixTake = runs => { (runs || []).forEach(r => { if (r.ix && r.t) ixHits.push({ k: r.ix, abs: absNow() }); }); };
+      const emitFn = () => { if (!fnList.length || !fnCol || !pg) { fnList = []; fnCol = null; return; } const L = fnList, c = fnCol; fnList = []; fnCol = null; mbox(c.cw); const h = hOf(fnHTML(L), 0); if (fr()) mbox(fr().w);
+        const txt = L.map(f => f.no + ') ' + plainOf(runsOf(f.t))).join('\n'); pg.els.push(Object.assign({}, A.TEXT_DEF, { id: A.uid(), x: c.cx, y: r1(c.cb - h), w: c.cw, h: r1(h + 0.4), sizing: 'fixed', text: txt, html: fnHTML(L), htmlFor: txt, font: (S.fnote || S.small).font, size: (S.fnote || S.small).size, lh: (S.fnote || S.small).lh, color: (S.fnote || S.small).color, align: 'left', ls: 0, flowFrame: kind, flowLine: -1, flowFn: true, locked: true, name: '각주 (원고에서 고치기)' })); };
       const startFrame = () => { content = []; plain = []; lastAfter = 0; firstLine = -1; if (fr()) mbox(fr().w); };
-      const closeFrame = (part) => { if (!content.length || !fr()) return; const f = fr(), txt = plain.join('\n'), hh = part ? Math.min(avail(), r1(hOf(content.join(''), 0) + 0.4)) : avail(); pg.els.push(Object.assign({}, A.TEXT_DEF, { id: A.uid(), x: f.x, y: r1(f.y + fy), w: f.w, h: r1(hh), sizing: 'fixed', text: txt, html: content.join(''), htmlFor: txt, font: S.body.font, size: S.body.size, lh: S.body.lh, color: S.body.color, align: 'left', ls: 0, flowFrame: kind, flowLine: firstLine, locked: true, name: kind === 'toc' ? '차례 (자동)' : '본문 (원고 — 두 번 눌러 고치기)' })); if (part) fy += hh; };
-      const newPg = () => { pg = A.newPage(); pg.label = ''; if (kind === 'toc') pg.toc = true; else pg.flow = true; pg.chap = chap; pg.sec = sec; const ex = extras && extras.length ? extras.shift() : null; if (ex && ex.length) pg.els.push(...ex); pages.push(pg); frames = frameRects(absNow()); fi = 0; fy = 0; startFrame(); };
+      const closeFrame = (part) => { if (!content.length || !fr()) return; const f = fr(), txt = plain.join('\n'), hh = part ? Math.min(avail(), r1(hOf(content.join(''), 0) + 0.4)) : avail(); pg.els.push(Object.assign({}, A.TEXT_DEF, { id: A.uid(), x: f.x, y: r1(f.y + fy), w: f.w, h: r1(hh), sizing: 'fixed', text: txt, html: content.join(''), htmlFor: txt, font: S.body.font, size: S.body.size, lh: S.body.lh, color: S.body.color, align: 'left', ls: 0, flowFrame: kind, flowLine: firstLine, locked: true, name: kind === 'toc' ? '차례 (자동)' : kind === 'idx' ? '찾아보기 (자동 — 원고의 {{낱말}})' : '본문 (원고 — 두 번 눌러 고치기)' })); if (part) fy += hh; };
+      const newPg = () => { emitFn(); pg = A.newPage(); pg.label = ''; if (kind === 'toc') pg.toc = true; else pg.flow = true; if (kind === 'idx') pg.idx = true; pg.chap = chap; pg.sec = sec; const ex = extras && extras.length ? extras.shift() : null; if (ex && ex.length) pg.els.push(...ex); pages.push(pg); frames = frameRects(absNow()); fi = 0; fy = 0; startFrame(); };
       const blankPg = () => { pg.blank = true; pg.flow = kind !== 'toc'; frames = []; newPg(); };
       const pending = [], floatOn = kind === 'body' && A.doc.book.imgFloat !== false; let flushing = false;
-      const nextFrame = () => { closeFrame(); fi++; fy = 0; if (fi >= frames.length) newPg(); else startFrame(); flushPending(); };
+      const nextFrame = () => { fnPend = []; closeFrame(); { const nf = frames[fi + 1]; if (!nf || nf.col !== fr().col) emitFn(); } fi++; fy = 0; if (fi >= frames.length) newPg(); else startFrame(); flushPending(); };
       const fits = (html, after, maxH) => hOf(content.join('') + html, after) <= (maxH != null ? maxH : avail()) + 0.05;
       const lineMM = s => s.size * s.lh * PT;
       const pageEmpty = () => fi === 0 && fy === 0 && !content.length && !pg.els.some(e => e.flowFrame || e.flowImg);
@@ -164,7 +185,7 @@
           const gT = (content.length || fy > 0) ? 3 : 0, gB = 3, room = f.h - gT - gB - (capH ? capH + 2 : 0); if (h > room) { const k = Math.max(0.2, room / h); h *= k; ws = ws.map(w => w * k); }
           return { h, ws, capH, gT, gB, need: gT + h + (capH ? capH + 2 : 0) + gB }; };
         let z = size(); const used = content.length ? hOf(content.join(''), 0) : 0;
-        if (fy + used + z.need > fr().h + 0.05 && (content.length || fy > 0)) { if (floatOn && !flushing) { pending.push(p); return; } if (flushing) return false; nextFrame(); z = size(); }
+        if (fy + used + z.need > fnRoom() + 0.05 && (content.length || fy > 0)) { if (floatOn && !flushing) { pending.push(p); return; } if (flushing) return false; nextFrame(); z = size(); }
         if (content.length) closeFrame(true);
         fy += z.gT; const f = fr(), tw = z.ws.reduce((a, b) => a + b, 0) + g * (refs.length - 1); let x = f.x + (f.w - tw) / 2; const y = r1(f.y + fy);
         refs.forEach((r, j) => { const I = bim[r], w = z.ws[j]; pg.els.push(Object.assign({ type: 'image', src: I.src, fit: 'cover', pos: '50% 50%', opacity: 1, flip: false, radius: 0, rot: 0 }, I.ed || {}, { id: A.uid(), x: r1(x), y, w: r1(w), h: r1(z.h), flowImg: r, flowRow: true, flowLine: p.line, flowW: r1(w), flowH: r1(z.h), name: '사진(나란히)' + ((p.caps || [])[j] ? ': ' + p.caps[j].slice(0, 20) : '') + ' (누르면 편집)' }));
@@ -180,7 +201,7 @@
         const sizeQ = () => { const f = fr(), w = Math.min(f.w * 0.6, f.w * Math.min(60, Math.max(10, I.wp || 20)) / 100), h = w; let capH = 0; if (p.cap) { mbox(f.w - w - 4); capH = hOf(pHTML(runsOf(p.cap), capCss, {}), 0); mbox(f.w); } const gT = (content.length || fy > 0) ? 3 : 0, gB = 3; return { w, h, capH, gT, gB, need: gT + Math.max(h, capH) + gB }; };
         const size = () => { if (isQ) return sizeQ(); const f = fr(); let w = f.w * Math.min(100, Math.max(10, I.wp || 100)) / 100, h = w * (I.ar || 0.66); let capH = 0; if (p.cap) { mbox(w); capH = hOf(pHTML(runsOf(p.cap), capCss, {}), 0); mbox(f.w); } const gT = (content.length || fy > 0) ? 3 : 0, gB = 3; const room = f.h - gT - gB - (capH ? capH + 2 : 0); if (h > room) { const k = Math.max(0.2, room / h); w *= k; h *= k; } return { w, h, capH, gT, gB, need: gT + h + (capH ? capH + 2 : 0) + gB }; };
         let z = size(); const used = content.length ? hOf(content.join(''), 0) : 0;
-        if (fy + used + z.need > fr().h + 0.05 && (content.length || fy > 0)) {
+        if (fy + used + z.need > fnRoom() + 0.05 && (content.length || fy > 0)) {
           if (floatOn && !flushing) { pending.push(p); return; } /* 사진 띄워 놓기: 남은 자리는 뒤 글로 채우고 사진은 다음 단·쪽 위로 (책 관행 · 인디자인 '다음 단 위로') */
           if (flushing) return false; nextFrame(); z = size(); }
         if (content.length) closeFrame(true);
@@ -237,6 +258,9 @@
           /* 끝줄 한두 글자 막기: 마지막 줄이 아주 짧으면(줄 하나를 더 먹으면) 자간을 살짝 좁혀 한 줄 위로 (조판 전문가 — 짧은 끝줄 당기기) */
           if (p.st === 'trow' && !content.length && !p.head && p.hd && !p.first) { const hh = rowHTML(p.hd, s, true); if (hOf(hh + rowHTML(p, s), 0) < fr().h) { content.push(hh); plain.push(''); } } /* 표가 쪽을 넘으면 머리줄을 다시 (인디자인 '머리글 행 반복') */
           if (tight && !p.toc) { const h0 = hOf(pHTML(runs, s, o), 0), o2 = Object.assign({}, o, { ls: r1((s.ls || 0) * 100 - 3) / 100 }), h1 = hOf(pHTML(runs, s, o2), 0); if (h1 < h0 - 0.3) o.ls = o2.ls; }
+          fnPend = fnOf(p.st === 'trow' ? p.cells.flat() : runs);
+          if (p.st === 'trow' && p.joinNext && !p.joinPrev && !first) { const rows = [p]; for (let q = n; paras[q] && paras[q].joinNext && paras[q + 1] && paras[q + 1].st === 'trow' && paras[q + 1].tbl === p.tbl; q++) rows.push(paras[q + 1]); /* 세로로 합친 칸은 쪽이 갈라지지 않게 함께 */
+            const all = rows.map(r => rowHTML(r, s)).join(''); if (hOf(all, 0) < fr().h - 1 && !fits(all, 0)) { nextFrame(); continue; } }
           if (p.st === 'trow' && p.first && !first) { const rows = []; for (let q = n; q < paras.length && paras[q].st === 'trow' && paras[q].tbl === p.tbl; q++) rows.push(paras[q]); /* 짧은 표(8줄 이하)는 쪼개지 않고 통째로 — 다음 쪽에 한두 줄만 넘어가지 않게 */
             if (rows.length <= 8) { const all = rows.map(r => rowHTML(r, s)).join(''); if (hOf(all, 0) < fr().h - 1 && !fits(all, s.after)) { nextFrame(); continue; } } }
           const html = p.st === 'trow' ? rowHTML(p, s) : pHTML(runs, s, o);
@@ -246,12 +270,13 @@
             if ((s.keepNext || (p.st === 'trow' && (p.head || p.first) && !p.last)) && nx && nx.st !== 'break' && !first) { /* 제목 아래에 다음 단락이 적어도 2줄(짧으면 통째로) 들어갈 자리가 있어야 함 — 없으면 제목도 다음 쪽으로 */
               const s2 = S[nx.st] || S.body, nxH = hOf(pHTML(nx.runs, s2, {}), s2.after), need = Math.min(nxH, 2 * lineMM(s2) + (s2.before || 0)) - 0.3;
               const remain = avail() - hOf(content.join('') + html, 0); if (!/^h\d$/.test(nx.st) && remain < need) { nextFrame(); continue; } }
-            content.push(html); plain.push(plainOf(runs)); lastAfter = s.after || 0; if (firstLine < 0) firstLine = p.line; runs = null; break;
+            content.push(html); plain.push(plainOf(runs)); lastAfter = s.after || 0; if (firstLine < 0) firstLine = p.line; { const R = p.st === 'trow' ? p.cells.flat() : runs; fnTake(R); ixTake(R); } runs = null; break;
           }
           const splittable = !/^h\d$/.test(p.st) && !p.toc && p.st !== 'tocTitle' && p.st !== 'trow';
           if (splittable) {
-            const txt = plainOf(runs), cands = []; for (let k = 1; k < txt.length; k++) if (s.brk === 'char' ? txt[k] !== ' ' : (txt[k - 1] === ' ' || txt[k - 1] === '\n')) cands.push(k);
-            const tryK = (k, maxH) => fits(pHTML(sliceRuns(runs, 0, k), s, Object.assign({}, o, { splitEnd: true })), 0, maxH);
+            const txt = plainOf(runs), cands = [], fnBad = new Set(); { let q = 0; runs.forEach(r => { if (r.fn) for (let z = q; z < q + r.t.length; z++) fnBad.add(z); q += r.t.length; }); } /* 각주 번호 앞·안에서는 줄을 가르지 않음 */
+            for (let k = 1; k < txt.length; k++) if (!fnBad.has(k) && (s.brk === 'char' ? txt[k] !== ' ' : (txt[k - 1] === ' ' || txt[k - 1] === '\n'))) cands.push(k);
+            const tryK = (k, maxH) => (fnPend = fnOf(sliceRuns(runs, 0, k)), fits(pHTML(sliceRuns(runs, 0, k), s, Object.assign({}, o, { splitEnd: true })), 0, maxH));
             const best = (list, maxH) => { let lo = 0, hi = list.length - 1, b = -1; while (lo <= hi) { const mid = (lo + hi) >> 1; if (tryK(list[mid], maxH)) { b = mid; lo = mid + 1; } else hi = mid - 1; } return b < 0 ? 0 : list[b]; };
             let k = best(cands); if (!k && first) { const all = Array.from({ length: txt.length - 1 }, (_, i) => i + 1); k = best(all); } /* 띄어쓰기 없는 긴 글은 글자 단위로 */
             if (k) {
@@ -260,23 +285,37 @@
               if (lines < 2 && !first) { nextFrame(); continue; } /* 외톨이 줄: 쪽 끝에 한 줄만 남기지 않음 */
               const restLines = Math.round((hOf(pHTML(sliceRuns(runs, k, txt.length), s, { cont: true }), 0)) / L); MB.innerHTML = '';
               if (restLines === 1 && lines > 2) { const k2 = best(cands.filter(c => c < k), avail() - L); if (k2) k = k2; } /* 과부 줄: 다음 쪽 첫머리에 한 줄만 가지 않게 */
-              content.push(pHTML(sliceRuns(runs, 0, k), s, Object.assign({}, o, { splitEnd: true }))); plain.push(plainOf(sliceRuns(runs, 0, k)).trimEnd()); if (firstLine < 0) firstLine = p.line;
+              content.push(pHTML(sliceRuns(runs, 0, k), s, Object.assign({}, o, { splitEnd: true }))); plain.push(plainOf(sliceRuns(runs, 0, k)).trimEnd()); if (firstLine < 0) firstLine = p.line; { const R = sliceRuns(runs, 0, k); fnTake(R); ixTake(R); }
               runs = sliceRuns(runs, k, txt.length); if (runs.length && runs[0].t) runs[0] = Object.assign({}, runs[0], { t: runs[0].t.replace(/^\s+/, '') }); cont = true; sink = 0; nextFrame(); continue;
             }
           }
-          if (first && fy < 0.5) { content.push(html); plain.push(plainOf(runs)); overflow++; if (firstLine < 0) firstLine = p.line; runs = null; break; } /* 빈 상자에도 안 들어가는 큰 제목 — 넘친 채로 두고 점검에 표시 */
+          if (first && fy < 0.5) { content.push(html); plain.push(plainOf(runs)); overflow++; if (firstLine < 0) firstLine = p.line; { const R = p.st === 'trow' ? p.cells.flat() : runs; fnTake(R); ixTake(R); } runs = null; break; } /* 빈 상자에도 안 들어가는 큰 제목 — 넘친 채로 두고 점검에 표시 */
           nextFrame();
         }
         if (/^h[123]$/.test(p.st) && kind === 'body') heads.push({ st: p.st, text: p.plain, abs: absNow(), no: chapNo });
         if (p.st === 'h2' && kind === 'body' && pg.sec !== sec && !pg.sec) pg.sec = sec;
       }
       { let g = 0; while (pending.length && g++ < 50) nextFrame(); } /* 끝에 남은 사진 */
-      closeFrame();
+      fnPend = []; closeFrame(); emitFn();
       /* 끝의 빈 쪽 정리 (본문 상자도 직접 넣은 요소도 없으면) */
       while (pages.length > 1 && !pages[pages.length - 1].els.length) pages.pop();
-      return { pages, heads, overflow, placed };
+      return { pages, heads, overflow, placed, ixHits };
     }
 
+    /* 흘리기 기록(다시 흘려야 하는지)에 쓰는 스타일 — 각주·찾아보기를 쓰지 않는 책은 새로 생긴 스타일 때문에 '다시 흘리기 필요'가 뜨지 않게 */
+    const psSig = S => { const o = Object.assign({}, S); if (!/\[\^|\{\{/.test(((A.doc && A.doc.bstory) || {}).md || '')) { delete o.fnote; delete o.ixHead; delete o.ixItem; } return JSON.stringify(o); };
+    /* ---------- 찾아보기(색인): 원고의 {{낱말}}이 들어간 쪽을 모아 책 끝(판권 앞)에 ㄱㄴㄷ 차례로 ---------- */
+    const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ', CHO_G = { 'ㄲ': 'ㄱ', 'ㄸ': 'ㄷ', 'ㅃ': 'ㅂ', 'ㅆ': 'ㅅ', 'ㅉ': 'ㅈ' };
+    const ixGroup = k => { const c = String(k).trim().charCodeAt(0); if (c >= 0xAC00 && c <= 0xD7A3) { const g = CHO[Math.floor((c - 0xAC00) / 588)]; return CHO_G[g] || g; } if (c >= 0x3131 && c <= 0x314E) { const g = String.fromCharCode(c); return CHO_G[g] || g; } const ch = String(k).trim().charAt(0).toUpperCase(); return /[A-Z]/.test(ch) ? ch : '#'; };
+    const pageList = nums => { const u = [...new Set(nums)].sort((a, b) => a - b), out = []; for (let i = 0; i < u.length; i++) { let j = i; while (j + 1 < u.length && u[j + 1] === u[j] + 1) j++; out.push(j - i >= 2 ? `${u[i]}–${u[j]}` : j > i ? `${u[i]}, ${u[j]}` : String(u[i])); i = j; } return out.join(', '); };
+    function ixParas(hits, S) {
+      if (!hits || !hits.length || A.doc.book.index === false) return null; const title = A.doc.book.ixTitle || '찾아보기', by = new Map();
+      hits.forEach(h => { const k = String(h.k).replace(/\s+/g, ' ').trim(); if (!k) return; const n = A.bookNum(h.abs) == null ? h.abs + 1 : A.bookNum(h.abs); if (!by.has(k)) by.set(k, []); by.get(k).push(n); });
+      const keys = [...by.keys()].sort((a, b) => { const ga = ixGroup(a), gb = ixGroup(b), oa = ga === '#' ? 2 : /[A-Z]/.test(ga) ? 1 : 0, ob = gb === '#' ? 2 : /[A-Z]/.test(gb) ? 1 : 0; return oa - ob || a.localeCompare(b, 'ko'); }); /* 한글 ㄱㄴㄷ → 영문 A~Z → 숫자·기호 */
+      const paras = [{ st: 'tocTitle', runs: [{ t: title }], plain: title, line: -1 }]; let g0 = null;
+      keys.forEach(k => { const g = ixGroup(k); if (g !== g0) { g0 = g; paras.push({ st: 'ixHead', runs: [{ t: g === '#' ? '숫자·기호' : g }], plain: g, line: -1 }); } paras.push({ st: 'ixItem', runs: [{ t: k }], plain: k, line: -1, toc: pageList(by.get(k)) }); });
+      return { paras, n: keys.length, title };
+    }
     /* ---------- 흘리기: 본문 → 차례(쪽 번호가 바뀌면 한 번 더) ---------- */
     let flowing = false, flowAgain = false;
     async function flow(opt) {
@@ -287,23 +326,25 @@
         const paras = parse(d.bstory.md), keepCur = A.page(), curFlowIdx = keepCur && (keepCur.flow || keepCur.toc) ? d.pages.filter(p => p.flow).indexOf(keepCur) : -1;
         /* 흘려 만든 쪽에 직접 얹은 요소(사진 등)는 같은 순번 쪽에 다시 얹음 */
         await harvestImgs(paras);
-        const extras = d.pages.filter(p => p.flow && !p.blank).map(p => p.els.filter(e => !e.flowFrame && !e.flowImg));
-        let res = null, toc = null;
+        const extras = d.pages.filter(p => p.flow && !p.blank && !p.idx).map(p => p.els.filter(e => !e.flowFrame && !e.flowImg)), ixExtras = d.pages.filter(p => p.idx).map(p => p.els.filter(e => !e.flowFrame && !e.flowImg));
+        let res = null, toc = null, ixRes = null;
         for (let pass = 0; pass < 3; pass++) {
           d.pages = d.pages.filter(p => !p.flow);
           let i0 = d.pages.findIndex(p => p.back); if (i0 < 0) i0 = d.pages.length;
           res = layoutStream(paras, i0, S, 'body', extras.map(x => x.slice()));
           d.pages.splice(i0, 0, ...res.pages);
+          ixRes = null; { const ip = ixParas(res.ixHits, S); if (ip) { let at = i0 + res.pages.length; if (B_().facing && !A.isRightPage(at)) { const bp = A.newPage(); bp.flow = true; bp.blank = true; bp.label = ''; d.pages.splice(at, 0, bp); at++; } /* 찾아보기는 오른쪽 쪽에서 (장처럼) */
+            const ir = layoutStream(ip.paras, at, S, 'idx', ixExtras.map(x => x.slice())); ir.pages.forEach(q => { q.chap = ip.title; q.sec = ''; }); if (ir.pages[0]) { ir.pages[0].label = ip.title; ir.pages[0].chapOpen = true; } d.pages.splice(at, 0, ...ir.pages); ixRes = { n: ip.n, pages: ir.pages.length, abs: at, title: ip.title }; } }
           { const bi = d.pages.findIndex(p => p.back); if (bi > 0 && B_().facing && A.isRightPage(bi)) { const bp = A.newPage(); bp.flow = true; bp.blank = true; bp.label = ''; d.pages.splice(bi, 0, bp); } } /* 판권은 책 맨 끝 왼쪽(짝수) 쪽에 — 모자라면 빈 쪽 하나 */
-          toc = updateToc(res.heads, S); if (!toc || !toc.changed) break;
+          toc = updateToc(ixRes ? res.heads.concat([{ st: 'h1', text: ixRes.title, abs: ixRes.abs, no: '' }]) : res.heads, S); if (!toc || !toc.changed) break;
         }
-        d.book.flowStamp = hashOf(d.bstory.md + imgSig() + JSON.stringify(S) + JSON.stringify([B_().mg, B_().cols, B_().gutter, d.w, d.h, B_().facing, B_().imgFloat, B_().chapNum, B_().typo, B_().tighten]));
-        d.book.flowImgs = res.placed.slice(); d.book.lastFlow = { imgs: res.placed.length, pages: res.pages.length, heads: res.heads.length, overflow: res.overflow, paras: paras.length, chars: paras.reduce((a, p) => a + (p.plain || '').length, 0) };
+        d.book.flowStamp = hashOf(d.bstory.md + imgSig() + psSig(S) + JSON.stringify([B_().mg, B_().cols, B_().gutter, d.w, d.h, B_().facing, B_().imgFloat, B_().chapNum, B_().typo, B_().tighten]));
+        d.book.flowImgs = res.placed.slice(); d.book.lastFlow = { ix: ixRes ? ixRes.n : 0, fn: paras.reduce((a, p) => a + fnOf(p.st === 'trow' ? p.cells.flat() : p.runs).length, 0), imgs: res.placed.length, pages: res.pages.length, heads: res.heads.length, overflow: res.overflow, paras: paras.length, chars: paras.reduce((a, p) => a + (p.plain || '').length, 0) };
         if (opt.amend && A.amendCommit) A.amendCommit(); else A.commit(); /* 쪽에서 사진을 고친 뒤 다시 흘린 것은 같은 되돌리기 한 칸으로 */
         if (curFlowIdx >= 0) { const fl = d.pages.filter(p => p.flow); const tgt = fl[Math.min(curFlowIdx, fl.length - 1)]; if (tgt) A.setCur(d.pages.indexOf(tgt)); }
         else if (keepCur && d.pages.includes(keepCur)) A.setCur(d.pages.indexOf(keepCur)); else A.setCur(Math.min(A.cur, d.pages.length - 1));
         A.renderAll(); A.setStatus('');
-        if (!opt.quiet) A.toast(`원고를 흘려 넣었습니다 — 본문 ${res.pages.length}쪽${res.heads.length ? ` · 제목 ${res.heads.length}개` : ''}${toc && toc.n ? ` · 차례 ${toc.n}줄` : ''}${res.overflow ? ` · 넘친 글 ${res.overflow}곳(점검 보기)` : ''}`);
+        if (!opt.quiet) A.toast(`원고를 흘려 넣었습니다 — 본문 ${res.pages.length}쪽${res.heads.length ? ` · 제목 ${res.heads.length}개` : ''}${d.book.lastFlow.fn ? ` · 각주 ${d.book.lastFlow.fn}개` : ''}${ixRes ? ` · 찾아보기 낱말 ${ixRes.n}개` : ''}${toc && toc.n ? ` · 차례 ${toc.n}줄` : ''}${res.overflow ? ` · 넘친 글 ${res.overflow}곳(점검 보기)` : ''}`);
         return res;
       } catch (e) { console.error(e); A.toast('흘려 넣지 못했습니다: ' + e.message, true); A.setStatus(''); return null; }
       finally { flowing = false; if (flowAgain) { flowAgain = false; setTimeout(() => flow({ quiet: true }), 50); } }
@@ -334,7 +375,7 @@
     const hashOf = s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; };
     let flowT = 0; const flowSoon = (ms, amend) => { clearTimeout(flowT); flowT = setTimeout(() => flow({ quiet: true, amend }), ms || 500); };
     const imgMoved = () => A.doc.pages.some(p => p.els.some(e => e.flowImg && !e.flowRow && e.flowW && (Math.abs(e.w - e.flowW) > 0.5 || Math.abs(e.h - e.flowH) > 0.5)));
-    const stale = () => isBook() && A.doc.bstory && (imgMoved() || A.doc.book.flowStamp !== hashOf(A.doc.bstory.md + imgSig() + JSON.stringify(ps()) + JSON.stringify([B_().mg, B_().cols, B_().gutter, A.doc.w, A.doc.h, B_().facing, B_().imgFloat, B_().chapNum, B_().typo, B_().tighten])));
+    const stale = () => isBook() && A.doc.bstory && (imgMoved() || A.doc.book.flowStamp !== hashOf(A.doc.bstory.md + imgSig() + psSig(ps()) + JSON.stringify([B_().mg, B_().cols, B_().gutter, A.doc.w, A.doc.h, B_().facing, B_().imgFloat, B_().chapNum, B_().typo, B_().tighten])));
 
     /* ---------- 차례: 장·절 제목과 쪽 번호로 차례 쪽(pg.toc)을 다시 채움 (인디자인 '목차 업데이트'를 흘릴 때마다 저절로) ---------- */
     function updateToc(heads, S) {
@@ -468,14 +509,14 @@
     const capClean = c => String(c || '').replace(/[[\]\n|]/g, ' ').trim();
     const tblMd = b => { const n = Math.max(1, ...b.rows.map(r => r.length)), L = b.rows.map(r => '| ' + Array.from({ length: n }, (_, j) => String(r[j] || '').replace(/\|/g, '/').replace(/\n/g, ' ').trim() || ' ').join(' | ') + ' |'); if (b.head && L.length) L.splice(1, 0, '| ' + Array.from({ length: n }, (_, j) => ({ left: ':---', center: ':---:', right: '---:' })[(b.al || [])[j]] || '---').join(' | ') + ' |'); return L.join('\n'); };
     const blocksToMd = bl => bl.map((b, i) => (b.st === 'table' && bl[i - 1] && bl[i - 1].st === 'table' ? '\n' : '') + (b.st === 'table' ? tblMd(b) : b.st === 'break' ? '[쪽 나눔]' : b.st === 'img' && b.row ? `![${b.caps.map(capClean).join('|')}](${b.refs.map(r => 'img:' + r).join(',')})` : b.st === 'img' ? `![${capClean(b.cap)}](img:${b.ref})` : (PS_MARK[b.st] || '') + String(b.t || '').replace(/\n/g, ' '))).join('\n');
-    const inlineHTML = t => esc(t || '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    const inlineHTML = t => esc(t || '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\[\^([^\]]*)\]/g, '<span class="be-fn" title="각주 — 쪽 아래에 작은 글로 들어갑니다">[^$1]</span>').replace(/\{\{([^{}]+?)\}\}/g, '<span class="be-ix" title="찾아보기 — 책 끝 찾아보기에 쪽 번호와 함께 들어갑니다">{{$1}}</span>');
     function htmlToInline(el) { let s = ''; el.childNodes.forEach(n => { if (n.nodeType === 3) s += n.nodeValue.replace(/\n/g, ' '); else if (n.nodeType === 1) { if (n.tagName === 'BR') return; const inner = htmlToInline(n); if ((n.tagName === 'B' || n.tagName === 'STRONG' || Number((n.style && n.style.fontWeight) || 0) >= 600) && inner.trim()) s += '**' + inner.replace(/\*\*/g, '') + '**'; else s += inner; } }); return s.replace(/\*\*\*\*/g, '').replace(/ /g, ' '); }
     function caretOffset(el) { const sel = window.getSelection(); if (!sel.rangeCount) return 0; const r = sel.getRangeAt(0), pre = r.cloneRange(); pre.selectNodeContents(el); pre.setEnd(r.startContainer, r.startOffset); return pre.toString().length; }
     function setCaret(el, off) { el.focus(); const sel = window.getSelection(), r = document.createRange(); let n, rest = off; const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); while ((n = tw.nextNode())) { if (rest <= n.nodeValue.length) { r.setStart(n, rest); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); return; } rest -= n.nodeValue.length; } r.selectNodeContents(el); r.collapse(false); sel.removeAllRanges(); sel.addRange(r); }
     function openStory(line) {
       if (!isBook()) return; let dl = $('#dlgStory'); if (!dl) { dl = document.createElement('dialog'); dl.id = 'dlgStory'; dl.className = 'wide st-dlg'; document.body.appendChild(dl); }
       const d = A.doc; let mode = (() => { try { return localStorage.getItem('naracal-bk-edmode') || 'view'; } catch (e) { return 'view'; } })();
-      let blocks = mdToBlocks(d.bstory.md), focusI = Math.max(0, blocks.findIndex(b => b.ln >= (line == null ? 0 : line))), hist = [], hptr = -1, saveT = 0, flowT = 0, snapT = 0, status = 'ok';
+      let tdSel = null, blocks = mdToBlocks(d.bstory.md), focusI = Math.max(0, blocks.findIndex(b => b.ln >= (line == null ? 0 : line))), hist = [], hptr = -1, saveT = 0, flowT = 0, snapT = 0, status = 'ok';
       if (line == null) focusI = 0;
       { const norm = blocksToMd(blocks); if (norm !== d.bstory.md) { d.bstory.md = norm; A.markDirty(); } } /* 빈 줄 정리 → 원고 줄 번호 = 단락 번호 (미리보기 쪽 찾기에 씀) */
       const S = () => ps();
@@ -489,8 +530,8 @@
         clearTimeout(flowT); flowT = setTimeout(async () => { persist(); setStatus('busy'); const r = await flow({ quiet: true }); setStatus('ok', r ? `본문 ${r.pages.length}쪽` : ''); preview(); }, 1500);
       };
       const blockHTML = (b, i) => {
-        if (b.st === 'table') { const n = Math.max(1, ...b.rows.map(r => r.length)); return `<div class="be-b be-tbl" data-i="${i}"><div class="be-tbh"><b>▦ 표</b><span>${b.rows.length}줄 × ${n}칸</span><label class="chk"><input type="checkbox" data-tbhead="${i}" ${b.head ? 'checked' : ''}> 첫 줄은 머리줄 (굵게·바탕)</label><span class="sp"></span><button class="btn sm" data-bact="tr+">+ 줄</button><button class="btn sm" data-bact="tc+">+ 칸</button><button class="btn sm" data-bact="tr-">− 줄</button><button class="btn sm" data-bact="tc-">− 칸</button><button class="btn sm danger" data-bact="deltbl" style="margin-left:14px">🗑 표 빼기</button></div>
-          <table class="be-tt">${b.rows.map((r, ri) => `<tr class="${ri === 0 && b.head ? 'hd' : ''}">${Array.from({ length: n }, (_, c) => `<td><input class="be-td" data-i="${i}" data-r="${ri}" data-c="${c}" value="${esc(r[c] || '')}" placeholder="${ri === 0 && b.head ? '제목' : ''}" style="text-align:${(b.al || [])[c] || 'left'}"></td>`).join('')}</tr>`).join('')}${b.head ? `<tr class="al">${Array.from({ length: n }, (_, c) => `<td><select data-tbal="${i}:${c}" title="이 칸 글 정렬">${[['', '정렬: 저절로'], ['left', '⇤ 왼쪽'], ['center', '↔ 가운데'], ['right', '⇥ 오른쪽']].map(([v, t]) => `<option value="${v}" ${((b.al || [])[c] || '') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></td>`).join('')}</tr>` : ''}</table><p class="be-tbn">칸을 눌러 쓰고 Tab으로 다음 칸 · 맨 끝 칸에서 Enter를 누르면 줄이 늘어납니다. 쪽을 넘으면 머리줄이 다시 붙습니다.</p></div>`; }
+        if (b.st === 'table') { const n = Math.max(1, ...b.rows.map(r => r.length)); return `<div class="be-b be-tbl" data-i="${i}"><div class="be-tbh"><b>▦ 표</b><span>${b.rows.length}줄 × ${n}칸</span><label class="chk"><input type="checkbox" data-tbhead="${i}" ${b.head ? 'checked' : ''}> 첫 줄은 머리줄 (굵게·바탕)</label><span class="sp"></span><button class="btn sm" data-bact="tr+">+ 줄</button><button class="btn sm" data-bact="tc+">+ 칸</button><button class="btn sm" data-bact="tr-">− 줄</button><button class="btn sm" data-bact="tc-">− 칸</button><span class="be-tsep"></span><button class="btn sm" data-bact="mgR" title="누른 칸을 오른쪽 칸과 한 칸으로 (기호 &lt;)">→ 합치기</button><button class="btn sm" data-bact="mgD" title="누른 칸을 아래 칸과 한 칸으로 (기호 ^)">↓ 합치기</button><button class="btn sm" data-bact="mgX" title="누른 칸의 합치기를 풉니다">합친 칸 풀기</button><button class="btn sm danger" data-bact="deltbl" style="margin-left:14px">🗑 표 빼기</button></div>
+          <table class="be-tt">${b.rows.map((r, ri) => `<tr class="${ri === 0 && b.head ? 'hd' : ''}">${Array.from({ length: n }, (_, c) => (r[c] === '<' || r[c] === '^') && !(r[c] === '^' && ri === 0) ? `<td class="mg"><input class="be-td mg" data-i="${i}" data-r="${ri}" data-c="${c}" value="" readonly placeholder="${r[c] === '<' ? '◀ 왼쪽 칸과 합침' : '▲ 위 칸과 합침'}" title="합친 칸 — 풀려면 이 칸을 누르고 「합친 칸 풀기」"></td>` : `<td><input class="be-td" data-i="${i}" data-r="${ri}" data-c="${c}" value="${esc(r[c] || '')}" placeholder="${ri === 0 && b.head ? '제목' : ''}" style="text-align:${(b.al || [])[c] || 'left'}"></td>`).join('')}</tr>`).join('')}${b.head ? `<tr class="al">${Array.from({ length: n }, (_, c) => `<td><select data-tbal="${i}:${c}" title="이 칸 글 정렬">${[['', '정렬: 저절로'], ['left', '⇤ 왼쪽'], ['center', '↔ 가운데'], ['right', '⇥ 오른쪽']].map(([v, t]) => `<option value="${v}" ${((b.al || [])[c] || '') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></td>`).join('')}</tr>` : ''}</table><p class="be-tbn">칸을 눌러 쓰고 Tab으로 다음 칸 · 맨 끝 칸에서 Enter를 누르면 줄이 늘어납니다. 칸을 하나 누르고 「→ 합치기」「↓ 합치기」로 칸을 합칩니다(글은 합친 칸에 모임). 쪽을 넘으면 머리줄이 다시 붙습니다.</p></div>`; }
         if (b.st === 'break') return `<div class="be-b be-br" data-i="${i}" tabindex="0">— 여기서 다음 쪽으로 (쪽 나눔) — <button class="btn sm" data-bact="delbr">빼기</button></div>`;
         if (b.st === 'img' && b.row) return `<div class="be-b be-img be-row" data-i="${i}"><div class="be-rowph">${b.refs.map((r, j) => { const I = (d.bimgs || {})[r] || {}, u = I.src ? A.imgUrl({ src: I.src, w: 60, h: 60 }) : ''; return `<div class="be-rc"><div class="be-ph">${u ? `<img src="${u}" alt="">` : '<span>사진 없음</span>'}</div><input class="be-cap" data-i="${i}" data-j="${j}" value="${esc(b.caps[j] || '')}" placeholder="사진 ${j + 1} 설명"></div>`; }).join('')}</div><div class="be-pa"><span class="hint" style="margin:0">사진 ${b.refs.length}장을 한 줄에 나란히</span><button class="btn sm" data-bact="unrow">하나씩 따로</button><button class="btn sm danger" data-bact="delimg">🗑 빼기</button></div></div>`;
         if (b.st === 'img') { const I = (d.bimgs || {})[b.ref] || {}, u = I.src ? A.imgUrl({ src: I.src, w: 60, h: 60 }) : '', wp = I.wp || 100;
@@ -509,7 +550,11 @@
       const lineOf = i => { let ln = 0; for (let j = 0; j < Math.min(i, blocks.length); j++) { const b = blocks[j]; ln += b.st === 'table' ? b.rows.length + (b.head ? 1 : 0) + (blocks[j - 1] && blocks[j - 1].st === 'table' ? 1 : 0) : 1; } return ln + (blocks[i] && blocks[i].st === 'table' && blocks[i - 1] && blocks[i - 1].st === 'table' ? 1 : 0); }; /* 블록 번호 → 원고 줄 번호 (표는 여러 줄) */
       let pvT = 0; const preview = () => { clearTimeout(pvT); pvT = setTimeout(() => { const box = dl.querySelector('#bePv'); if (!box) return; const L = lineOf(focusI); let best = -1; A.doc.pages.forEach(p => p.els.forEach(e => { if (e.flowLine != null && e.flowLine <= L && e.flowLine > best && (e.flowFrame === 'body' || e.flowImg)) best = e.flowLine; }));
         const pi = A.doc.pages.findIndex(p => p.els.some(e => e.flowLine === best && (e.flowFrame === 'body' || e.flowImg))); if (pi < 0) { box.innerHTML = '<p class="hint">쪽을 다시 짜면 여기에 보여요</p>'; return; }
-        const n = A.bookNum(pi); dl.querySelector('#bePvN').textContent = `${n == null ? pi + 1 : n}쪽`; box.innerHTML = `<div class="pvb" data-w="${A.doc.w}" data-h="${A.doc.h}">${A.sheetHTML(A.doc.pages[pi], 'thumb')}</div>`; A.fitBoxes(box, '.pvb', Math.min(560, box.clientHeight || 480)); box.dataset.pi = pi; }, 120); };
+        const n = A.bookNum(pi), two = pvTwo() && A.doc.pages.length > 1; dl.querySelector('#bePvN').textContent = `${n == null ? pi + 1 : n}쪽`;
+        let idx = [pi]; if (two && pi > 0) { const l = A.isRightPage(pi) ? pi - 1 : pi, r = l + 1; idx = [l, r].filter(i => i > 0 && i < A.doc.pages.length); } /* 2쪽: 펼침면(왼쪽·오른쪽 쪽)으로 — 1쪽(표지)은 혼자 */
+        box.innerHTML = `<div class="pvb${idx.length > 1 ? ' two' : ''}" data-w="${A.doc.w}" data-h="${A.doc.h}" data-n="${idx.length}">${idx.map(i => A.sheetHTML(A.doc.pages[i], 'thumb')).join('')}</div>`; A.fitBoxes(box, '.pvb', Math.min(560, box.clientHeight || 480)); box.dataset.pi = pi;
+        dl.querySelectorAll('[data-pvm]').forEach(b => b.classList.toggle('on', (b.dataset.pvm === '2') === pvTwo())); }, 120); };
+      const pvTwo = () => { try { return localStorage.getItem('naracal-bk-pv2') === '2'; } catch (e) { return false; } };
       const splitAt = (i) => { const el = tEl(i), sel = window.getSelection(); if (!el || !sel.rangeCount) return; const r = sel.getRangeAt(0); r.deleteContents(); const tail = document.createRange(); tail.setStart(r.startContainer, r.startOffset); tail.setEnd(el, el.childNodes.length); const tmp = document.createElement('div'); tmp.appendChild(tail.extractContents()); const after = htmlToInline(tmp).trim(), b = blocks[i]; b.t = htmlToInline(el).trim(); const nst = /^h\d$/.test(b.st) ? 'body' : b.st; blocks.splice(i + 1, 0, { st: nst, t: after }); focusI = i + 1; changed(true); render(i + 1, 0); };
       const mergeUp = (i) => { const p = blocks[i - 1], b = blocks[i]; if (!p || p.t == null) { if (p && p.st === 'break') { blocks.splice(i - 1, 1); focusI = i - 1; changed(true); render(i - 1, 0); } return; } const off = String(p.t).replace(/\*\*/g, '').length; p.t = (p.t || '') + (b.t || ''); blocks.splice(i, 1); focusI = i - 1; changed(true); render(i - 1, off); };
       const setSt = (i, st) => { const b = blocks[i]; if (!b || b.t == null) return; b.st = st; changed(true); const el = tEl(i), off = el ? caretOffset(el) : 0; render(i, off); };
@@ -521,10 +566,10 @@
       const draw = () => {
         dl.innerHTML = `<div class="dhead"><h2>✍ 원고 쓰기·고치기</h2><div class="seg st-mode"><button data-mode="view" aria-pressed="${mode === 'view'}">보기 모드</button><button data-mode="code" aria-pressed="${mode === 'code'}">기호 모드 (고급)</button></div><span style="flex:1"></span><button class="btn primary sm" data-bact="done">완료</button></div>
         <div class="dbody st-ed2">
-          <div class="st-bar">${ED_STY.map(k => `<button class="btn sm" data-stl="${k}" title="지금 단락을 ${PS_NAME[k]}(으)로${k === 'h1' ? ' (Ctrl+1)' : k === 'h2' ? ' (Ctrl+2)' : k === 'h3' ? ' (Ctrl+3)' : k === 'body' ? ' (Ctrl+0)' : ''}">${PS_NAME[k]}</button>`).join('')}<span class="st-sep"></span><button class="btn sm" data-sti="bold" title="고른 글자를 굵게 (Ctrl+B)"><b>굵게</b></button><button class="btn sm" data-sti="break" title="여기서 다음 쪽으로 (Ctrl+Enter)">쪽 나눔</button><span class="st-sep"></span><button class="btn sm" data-bact="photo" title="지금 단락 아래에 사진 넣기 (Ctrl+Shift+P) — 사진 파일을 원고에 끌어 놓아도 돼요">🖼 사진 넣기</button><button class="btn sm" data-bact="table" title="지금 단락 아래에 표 넣기 — 띠별 수련 기간·준비물·시간표">▦ 표 넣기</button><button class="btn sm" data-bact="qr" title="지금 단락 아래에 QR 코드 넣기 — 품새 영상·밴드·신청서 주소 (사진처럼 글과 함께 흐름)">🔳 QR 넣기</button><button class="btn sm" data-bact="import" title="워드(docx)·한글에서 저장한 txt·md 원고 가져오기">📂 파일 가져오기</button><button class="btn sm" data-bact="keys" title="단축키">⌨</button></div>
+          <div class="st-bar">${ED_STY.map(k => `<button class="btn sm" data-stl="${k}" title="지금 단락을 ${PS_NAME[k]}(으)로${k === 'h1' ? ' (Ctrl+1)' : k === 'h2' ? ' (Ctrl+2)' : k === 'h3' ? ' (Ctrl+3)' : k === 'body' ? ' (Ctrl+0)' : ''}">${PS_NAME[k]}</button>`).join('')}<span class="st-sep"></span><button class="btn sm" data-sti="bold" title="고른 글자를 굵게 (Ctrl+B)"><b>굵게</b></button><button class="btn sm" data-sti="break" title="여기서 다음 쪽으로 (Ctrl+Enter)">쪽 나눔</button><button class="btn sm" data-bact="fn" title="글자 뒤에 각주 넣기 — 그 쪽 아래에 작은 글로 들어가고, 번호는 장마다 1부터 (기호: [^각주 글])">¹ 각주</button><button class="btn sm" data-bact="ix" title="고른 낱말을 책 끝 「찾아보기」에 넣기 — 쪽 번호가 저절로 붙음 (기호: {{낱말}})">🔍 찾아보기</button><span class="st-sep"></span><button class="btn sm" data-bact="photo" title="지금 단락 아래에 사진 넣기 (Ctrl+Shift+P) — 사진 파일을 원고에 끌어 놓아도 돼요">🖼 사진 넣기</button><button class="btn sm" data-bact="table" title="지금 단락 아래에 표 넣기 — 띠별 수련 기간·준비물·시간표">▦ 표 넣기</button><button class="btn sm" data-bact="qr" title="지금 단락 아래에 QR 코드 넣기 — 품새 영상·밴드·신청서 주소 (사진처럼 글과 함께 흐름)">🔳 QR 넣기</button><button class="btn sm" data-bact="import" title="워드(docx)·한글에서 저장한 txt·md 원고 가져오기">📂 파일 가져오기</button><button class="btn sm" data-bact="keys" title="단축키">⌨</button></div>
           <div class="st-main">
             ${mode === 'view' ? '<div class="be" id="beList"></div>' : `<textarea id="stText" spellcheck="false">${esc(d.bstory.md)}</textarea>`}
-            <div class="st-side2">${mode === 'view' ? '' : `<div class="st-legend"><b>줄 앞 기호</b><code>[부] 제목</code> 부 나눔 쪽<code># 제목</code> 장<code>## 제목</code> 절<code>### 제목</code> 소제목<code>&gt; 글</code> 인용<code>- 글</code> 목록<code>[가운데]</code> <code>[작은글]</code> <code>[도움말]</code> <code>[주의]</code> <code>[글쓴이]</code><code>[쪽 나눔]</code> 다음 쪽으로<code>| 칸 | 칸 |</code> 표 (둘째 줄에 <code>|---|---|</code>이면 첫 줄은 머리줄, <code>|:---:|</code> 가운데)<code>**글**</code> 굵게<code>{번호없음}</code> 장·부 번호 빼기</div>`}<div class="be-pvh">이 단락이 들어간 쪽 <b id="bePvN"></b></div><div class="be-pv" id="bePv"></div><b style="margin-top:8px">차례 (누르면 그 장으로)</b><div id="beOutline"></div><div class="hint" id="beCount"></div></div>
+            <div class="st-side2">${mode === 'view' ? '' : `<div class="st-legend"><b>줄 앞 기호</b><code>[부] 제목</code> 부 나눔 쪽<code># 제목</code> 장<code>## 제목</code> 절<code>### 제목</code> 소제목<code>&gt; 글</code> 인용<code>- 글</code> 목록<code>[가운데]</code> <code>[작은글]</code> <code>[도움말]</code> <code>[주의]</code> <code>[글쓴이]</code><code>[쪽 나눔]</code> 다음 쪽으로<code>| 칸 | 칸 |</code> 표 (둘째 줄에 <code>|---|---|</code>이면 첫 줄은 머리줄, <code>|:---:|</code> 가운데)<code>**글**</code> 굵게<code>[^각주 글]</code> 각주 (쪽 아래)<code>{{낱말}}</code> 찾아보기에 넣기 (<code>{{보이는 말|찾아보기 말}}</code>)<code>| 글 | &lt; |</code> 왼쪽 칸과 합치기 · <code>| ^ |</code> 위 칸과 합치기<code>{번호없음}</code> 장·부 번호 빼기</div>`}<div class="be-pvh">이 단락이 들어간 쪽 <b id="bePvN"></b><span class="be-pvm" title="미리보기 보기 방식"><button type="button" data-pvm="1" title="한 쪽만 크게">1쪽</button><button type="button" data-pvm="2" title="펼침면 — 왼쪽·오른쪽 쪽을 함께 (책을 펼친 모양)">2쪽</button></span></div><div class="be-pv" id="bePv"></div><b style="margin-top:8px">차례 (누르면 그 장으로)</b><div id="beOutline"></div><div class="hint" id="beCount"></div></div>
           </div>
           <div class="st-foot"><span id="beStat"></span><span style="flex:1"></span><span class="hint">Esc · Ctrl+S도 「완료」</span><button class="btn primary" data-bact="done">완료</button></div></div>`;
         if (mode === 'view') render(focusI, 0); else { const ta = dl.querySelector('#stText'); ta.oninput = () => { d.bstory.md = ta.value; A.markDirty(); blocks = mdToBlocks(ta.value); changed(false); }; outline(); }
@@ -533,7 +578,8 @@
       /* 원고 칸 안의 입력 */
       dl.oninput = e => { const t = e.target; if (t.classList.contains('be-td')) { const b = blocks[Number(t.dataset.i)], r = Number(t.dataset.r), c = Number(t.dataset.c); if (!b || !b.rows[r]) return; while (b.rows[r].length <= c) b.rows[r].push(''); b.rows[r][c] = t.value.replace(/\|/g, '/'); changed(false); return; } if (t.classList.contains('be-t')) { const i = Number(t.dataset.i); blocks[i].t = htmlToInline(t); changed(false); } else if (t.classList.contains('be-cap')) { const b = blocks[Number(t.dataset.i)]; if (b.row && t.dataset.j != null) { b.caps[Number(t.dataset.j)] = t.value; b.cap = b.caps[0]; } else b.cap = t.value; changed(false); } };
       dl.onchange = e => { const t = e.target; if (t.dataset.tbal) { const [bi2, c] = t.dataset.tbal.split(':').map(Number), b = blocks[bi2]; if (b) { b.al = b.al || []; b.al[c] = t.value; changed(true); render(bi2); } return; } if (t.dataset.tbhead != null) { const b = blocks[Number(t.dataset.tbhead)]; if (b) { b.head = t.checked; changed(true); render(Number(t.dataset.tbhead)); } return; } if (t.classList.contains('be-st')) { setSt(Number(t.dataset.i), t.value); focusI = Number(t.dataset.i); } };
-      dl.addEventListener('focusin', e => { const b = e.target.closest && e.target.closest('[data-i]'); if (b && b.dataset.i != null && dl.contains(b)) { const i = Number(b.dataset.i); if (i !== focusI) { focusI = i; toolbarState(); preview(); } } });
+      dl.addEventListener('mousedown', e => { if (e.target.closest && e.target.closest('[data-bact="fn"],[data-bact="ix"]')) e.preventDefault(); }); /* 단추를 눌러도 글 칸의 커서·고른 글이 그대로 */
+      dl.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('be-td')) tdSel = { i: Number(e.target.dataset.i), r: Number(e.target.dataset.r), c: Number(e.target.dataset.c) }; const b = e.target.closest && e.target.closest('[data-i]'); if (b && b.dataset.i != null && dl.contains(b)) { const i = Number(b.dataset.i); if (i !== focusI) { focusI = i; toolbarState(); preview(); } } });
       dl.onkeydown = e => {
         const mod = e.ctrlKey || e.metaKey, k = e.key;
         if (mod && (k === 's' || k === 'S')) { e.preventDefault(); done(); return; }
@@ -565,12 +611,31 @@
         const md_ = e.target.closest('[data-mode]'); if (md_) { if (mode === 'view') persist(); else { const ta = dl.querySelector('#stText'); if (ta) { d.bstory.md = ta.value; blocks = mdToBlocks(ta.value); } } mode = md_.dataset.mode; try { localStorage.setItem('naracal-bk-edmode', mode); } catch (er) {} draw(); return; }
         const s = e.target.closest('[data-stl]'); if (s) { if (mode === 'view') setSt(focusI, s.dataset.stl); else { const ta = dl.querySelector('#stText'), v = ta.value, a = v.lastIndexOf('\n', ta.selectionStart - 1) + 1; let b2 = v.indexOf('\n', ta.selectionEnd); if (b2 < 0) b2 = v.length; const lines = v.slice(a, b2).split('\n').map(l => { const t = l.replace(/^\s*(#{1,3}\s*|>\s?|[-*•·]\s+|\[가운데\]\s*|\[작은\s?글\]\s*)/, ''); return t && !/^!\[/.test(t) ? (PS_MARK[s.dataset.stl] || '') + t : l; }).join('\n'); ta.focus(); ta.setSelectionRange(a, b2); document.execCommand('insertText', false, lines); } return; }
         const it = e.target.closest('[data-sti]'); if (it) { if (mode === 'view') { const t = tEl(focusI); if (it.dataset.sti === 'bold') { if (t) { document.execCommand('bold'); blocks[focusI].t = htmlToInline(t); changed(true); } } else insertAfter(focusI, [{ st: 'break' }]); } else { const ta = dl.querySelector('#stText'); ta.focus(); if (it.dataset.sti === 'bold') { const a = ta.selectionStart, b2 = ta.selectionEnd; if (b2 > a) document.execCommand('insertText', false, `**${ta.value.slice(a, b2)}**`); } else { const a = ta.value.lastIndexOf('\n', ta.selectionStart - 1) + 1; ta.setSelectionRange(a, a); document.execCommand('insertText', false, '[쪽 나눔]\n'); } } return; }
+        const pvm = e.target.closest('[data-pvm]'); if (pvm) { try { localStorage.setItem('naracal-bk-pv2', pvm.dataset.pvm); } catch (er) {} preview(); return; }
         const go = e.target.closest('[data-goi]'); if (go) { const i = Number(go.dataset.goi); focusI = i; if (mode === 'view') { const t = tEl(i); if (t) { t.scrollIntoView({ block: 'center' }); setCaret(t, 0); } } preview(); return; }
         const pv = e.target.closest('#bePv .pvb'); if (pv) { const pi = Number(dl.querySelector('#bePv').dataset.pi); await done(); A.goto(pi); return; }
         const bwr = e.target.closest('[data-bwrap]'); if (bwr) { const i = Number(bwr.closest('.be-b').dataset.i), I = (d.bimgs || {})[blocks[i].ref]; if (I) { snap(); I.wrap = bwr.dataset.bwrap || undefined; if (I.wrap && (I.wp || 100) > 55) { I.wp = 45; A.toast('글이 옆으로 흐르게 사진을 작게(45%) 맞췄어요 — 크기는 바로 위에서 바꿀 수 있어요'); } } changed(true); render(i); return; }
         const bw = e.target.closest('[data-bw]'); if (bw) { const i = Number(bw.closest('.be-b').dataset.i), I = (d.bimgs || {})[blocks[i].ref]; if (I) { I.wp = Number(bw.dataset.bw); delete I.ar_user; } snap(); changed(true); render(i); return; }
         const ac = e.target.closest('[data-bact]'); if (!ac) return; const a = ac.dataset.bact, bi = ac.closest('.be-b') ? Number(ac.closest('.be-b').dataset.i) : focusI;
         if (a === 'done') { done(); return; }
+        if (a === 'fn' || a === 'ix') { /* 각주 · 찾아보기 */
+          if (mode !== 'view') { const ta = dl.querySelector('#stText'), a0 = ta.selectionStart, b0 = ta.selectionEnd;
+            if (a === 'fn') { const v = window.prompt('각주에 쓸 글 (그 쪽 아래에 작은 글로 들어갑니다)'); if (!v || !v.trim()) return; ta.focus(); ta.setSelectionRange(b0, b0); document.execCommand('insertText', false, `[^${v.trim().replace(/[[\]]/g, '')}]`); }
+            else { const w = ta.value.slice(a0, b0).trim(); if (!w || /[\n{}]/.test(w)) { A.toast('찾아보기에 넣을 낱말을 먼저 끌어서 고르세요'); return; } ta.focus(); ta.setSelectionRange(a0, b0); document.execCommand('insertText', false, `{{${w}}}`); } return; }
+          const t = tEl(focusI); if (!t) { A.toast('글 단락을 먼저 눌러 주세요'); return; }
+          const sel = window.getSelection(), inT = sel.rangeCount && t.contains(sel.getRangeAt(0).startContainer), saved = inT ? sel.getRangeAt(0).cloneRange() : null;
+          if (a === 'ix') { const w = saved ? saved.toString().trim() : ''; if (!w || /[\n{}]/.test(w)) { A.toast('찾아보기에 넣을 낱말을 먼저 끌어서 고르세요 (예: 앞차기)'); return; } snap(); t.focus(); sel.removeAllRanges(); sel.addRange(saved); document.execCommand('insertText', false, `{{${w}}}`); }
+          else { const v = window.prompt('각주에 쓸 글 (그 쪽 아래에 작은 글로 들어갑니다)\n예: 국기원 「태권도 교본」(2020), 45쪽.'); if (!v || !v.trim()) { t.focus(); return; } snap(); t.focus(); if (saved) { saved.collapse(false); sel.removeAllRanges(); sel.addRange(saved); } else setCaret(t, t.textContent.length); document.execCommand('insertText', false, `[^${v.trim().replace(/[[\]]/g, '')}]`); }
+          const off = caretOffset(t); blocks[focusI].t = htmlToInline(t); changed(true); render(focusI, off); A.toast(a === 'fn' ? '각주를 넣었어요 — 쪽 아래에 번호와 함께 나옵니다' : '찾아보기에 넣었어요 — 책 끝 「찾아보기」 쪽에 쪽 번호와 함께 나옵니다'); return; }
+        if (['mgR', 'mgD', 'mgX'].includes(a)) { const b = blocks[bi]; if (!b || b.st !== 'table') return; const T = tdSel && tdSel.i === bi ? tdSel : null; if (!T) { A.toast('먼저 합칠 칸을 한 번 눌러 주세요'); return; }
+          const n = Math.max(1, ...b.rows.map(r => r.length)); b.rows.forEach(r => { while (r.length < n) r.push(''); }); let r = Math.min(T.r, b.rows.length - 1), c = Math.min(T.c, n - 1);
+          for (let g = 0; g < 100 && ((c > 0 && b.rows[r][c] === '<') || (r > 0 && b.rows[r][c] === '^')); g++) { if (c > 0 && b.rows[r][c] === '<') c--; else r--; } /* 합친 칸 안을 눌렀으면 그 묶음의 첫 칸으로 */
+          const W = () => { let k = c + 1; while (k < n && b.rows[r][k] === '<') k++; return k - c; }, Hh = () => { let k = r + 1; while (k < b.rows.length && b.rows[k][c] === '^') k++; return k - r; }, w = W(), h = Hh();
+          const take = (rr, cc) => { const v = String(b.rows[rr][cc] || '').trim(); if (v && v !== '<' && v !== '^') b.rows[r][c] = (String(b.rows[r][c] || '').trim() + ' ' + v).trim(); };
+          if (a === 'mgR') { const cc = c + w; if (cc >= n) { A.toast('오른쪽에 합칠 칸이 없어요 — 「+ 칸」으로 칸을 더하세요'); return; } snap(); for (let k = 0; k < h; k++) { take(r + k, cc); b.rows[r + k][cc] = '<'; } }
+          if (a === 'mgD') { const rr = r + h; if (b.head && r === 0) { A.toast('머리줄은 아래 칸과 합치지 않아요 — 머리줄을 끄거나 아래 줄끼리 합쳐 주세요'); return; } if (rr >= b.rows.length) { A.toast('아래에 합칠 칸이 없어요 — 「+ 줄」로 줄을 더하세요'); return; } snap(); for (let j = 0; j < w; j++) { take(rr, c + j); b.rows[rr][c + j] = j ? '<' : '^'; } }
+          if (a === 'mgX') { if (w === 1 && h === 1) { A.toast('이 칸은 합쳐져 있지 않아요'); return; } snap(); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (x || y) b.rows[r + y][c + x] = ''; }
+          changed(true); render(bi); setTimeout(() => { const el = dl.querySelector(`.be-td[data-i="${bi}"][data-r="${r}"][data-c="${c}"]`); if (el) el.focus(); }, 0); return; }
         if (a === 'photo') { pickPhotos(); return; }
         if (a === 'table') { snap(); insertAfter(Math.min(focusI, blocks.length - 1), [{ st: 'table', head: true, rows: [['항목', '내용'], ['', ''], ['', '']] }]); return; }
         if (['tr+', 'tc+', 'tr-', 'tc-', 'deltbl'].includes(a)) { const b = blocks[bi]; if (!b || b.st !== 'table') return; snap(); const n = Math.max(1, ...b.rows.map(r => r.length));
@@ -602,7 +667,8 @@
         if (/^H1$/.test(t)) out.push('# ' + txt().replace(/\*\*/g, '')); else if (/^H2$/.test(t)) out.push('## ' + txt().replace(/\*\*/g, '')); else if (/^H[3-6]$/.test(t)) out.push('### ' + txt().replace(/\*\*/g, ''));
         else if (t === 'LI') out.push('- ' + txt()); else if (t === 'BLOCKQUOTE') txt().split('\n').forEach(l => l.trim() && out.push('> ' + l.trim()));
         else if ((t === 'P' || (t === 'DIV' && !c.querySelector('p,div,h1,h2,h3,li,table'))) && !(onImg && c.querySelector('img'))) { const x = txt(); if (x) x.split('\n').forEach(l => l.trim() && out.push(l.trim())); }
-        else if (t === 'TABLE') { const trs = [...c.querySelectorAll('tr')]; if (out.length && /^\|/.test(out[out.length - 1])) out.push(''); trs.forEach((tr, k) => { const cells = [...tr.children].map(td => td.textContent.replace(/\s+/g, ' ').replace(/\|/g, '/').trim()); out.push('| ' + cells.map(x => x || ' ').join(' | ') + ' |'); if (k === 0 && (tr.querySelector('th') || trs.length > 2)) out.push('| ' + cells.map(() => '---').join(' | ') + ' |'); }); out.push(''); } /* 워드·한글 표 → 원고 표 (첫 줄은 머리줄) */
+        else if (t === 'TABLE') { const trs = [...c.querySelectorAll('tr')]; if (out.length && /^\|/.test(out[out.length - 1])) out.push(''); const grid = []; trs.forEach((tr, r) => { grid[r] = grid[r] || []; let cc = 0; [...tr.children].forEach(td => { while (grid[r][cc] != null) cc++; const v = td.textContent.replace(/\s+/g, ' ').replace(/\|/g, '/').trim(), cs = Math.max(1, Math.min(20, Number(td.getAttribute('colspan')) || 1)), rs = Math.max(1, Math.min(50, Number(td.getAttribute('rowspan')) || 1)); for (let y = 0; y < rs; y++) { grid[r + y] = grid[r + y] || []; for (let x = 0; x < cs; x++) grid[r + y][cc + x] = !x && !y ? v : !x ? '^' : '<'; } cc += cs; }); }); /* 워드·한글의 합친 칸(colspan·rowspan) → 원고 < ^ */
+          trs.forEach((tr, k) => { const cells = Array.from({ length: Math.max(...grid.map(g => g.length)) }, (_, j) => (grid[k] || [])[j] == null ? '' : grid[k][j]); out.push('| ' + cells.map(x => x || ' ').join(' | ') + ' |'); if (k === 0 && (tr.querySelector('th') || trs.length > 2)) out.push('| ' + cells.map(() => '---').join(' | ') + ' |'); }); out.push(''); } /* 워드·한글 표 → 원고 표 (첫 줄은 머리줄) */
         else if (t === 'IMG') { const s = c.getAttribute('src') || ''; if (onImg && /^data:image\//.test(s)) out.push(`![${(c.getAttribute('alt') || '').replace(/[\[\]\n]/g, ' ').trim()}](img:${onImg(s)})`); }
         else if (t === 'STYLE' || t === 'SCRIPT' || t === 'META') return; else { if (c.querySelector && c.querySelector('img') && (t === 'P' || t === 'DIV')) { const x = txt(); if (x) out.push(x); c.querySelectorAll('img').forEach(im => walk({ childNodes: [im] })); return; } walk(c); } });
       walk(doc_.body); return out.join('\n');
@@ -957,7 +1023,7 @@
     }
     function onFrameDbl(el) { openStory(el.flowLine); }
     /* 불러온 파일의 본문 상자 HTML 정리: 흘리기가 만드는 태그(p·span·b)와 서식 속성만 남김 (파일에 끼어든 스크립트·링크·그림 주소 차단) */
-    const OK_TAG = new Set(['P', 'SPAN', 'B']), OK_CSS = new Set(['margin', 'padding', 'border-left', 'border-top', 'width', 'background', 'margin-right', 'text-indent', 'font-family', 'font-size', 'line-height', 'font-weight', 'color', 'text-align', 'text-align-last', 'letter-spacing', 'word-break', 'overflow-wrap', 'line-break', 'display', 'align-items', 'gap', 'flex', 'border-bottom', 'opacity', 'transform', 'font-variant-numeric']);
+    const OK_TAG = new Set(['P', 'SPAN', 'B']), OK_CSS = new Set(['margin', 'padding', 'border-left', 'border-top', 'width', 'background', 'margin-right', 'text-indent', 'font-family', 'font-size', 'line-height', 'font-weight', 'color', 'text-align', 'text-align-last', 'letter-spacing', 'word-break', 'overflow-wrap', 'line-break', 'display', 'align-items', 'gap', 'flex', 'border-bottom', 'opacity', 'transform', 'font-variant-numeric', 'vertical-align', 'box-sizing']);
     function sanitize(html) {
       const box = document.implementation.createHTMLDocument('').createElement('div'); box.innerHTML = String(html || '');
       const walk = n => { let s = ''; n.childNodes.forEach(c => { if (c.nodeType === 3) s += esc(c.nodeValue); else if (c.nodeType === 1) { const inner = walk(c); if (!OK_TAG.has(c.tagName)) { s += inner; return; }

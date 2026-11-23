@@ -322,7 +322,10 @@ function elHTML(el, mode, ext) {
   const blend = el.blend && el.blend !== 'normal' && el.type !== 'text' ? `mix-blend-mode:${el.blend};` : '';
   if (el.type === 'text') {
     if (el.warp && el.warp !== 'none') return `<div class="el el-text warp${lock}" data-id="${el.id}" style="${base}${el.blend && el.blend !== 'normal' ? `mix-blend-mode:${el.blend};` : ''}">${FX.warpSVG(el)}</div>`;
-    return `<div class="el el-text${lock}" data-id="${el.id}" style="${base}${FX.textStyle(el)}">${el.html && el.htmlFor === el.text ? (el.valign && el.valign !== 'top' ? `<div class="txw">${el.html}</div>` : el.html) : esc(el.text)}</div>`;
+    const sx = el.sx && Number(el.sx) !== 100 ? Math.max(0.2, Math.min(4, Number(el.sx) / 100)) : 1, sy = el.sy && Number(el.sy) !== 100 ? Math.max(0.2, Math.min(4, Number(el.sy) / 100)) : 1, sk = Number(el.skew) || 0;
+    let bs = base; if (sx !== 1 || sy !== 1 || sk) { /* 장평(가로 비율)·세로 비율·기울기 (인디자인 문자 패널) — 상자는 보이는 크기 그대로, 안쪽 글자만 눌리고 늘어남. 줄바꿈은 바뀐 폭에 맞춰 다시 */
+      const W = w / sx, H = h / sy; bs = base.replace(/width:[^;]+;/, el.sizing === 'autow' ? 'width:max-content;' : `width:${Math.round(W * 100) / 100}mm;`).replace(/(min-height|height):[^;]+;/, `$1:${Math.round(H * 100) / 100}mm;`).replace(/transform:rotate\(([^)]*)\);/, `transform:rotate($1) translate(${Math.round((sx - 1) * w / 2 * 100) / 100}mm,${Math.round((sy - 1) * h / 2 * 100) / 100}mm) scale(${sx},${sy}) skewX(${-sk}deg);transform-origin:${Math.round(w / 2 * 100) / 100}mm ${Math.round(h / 2 * 100) / 100}mm;`); }
+    return `<div class="el el-text${lock}" data-id="${el.id}" style="${bs}${FX.textStyle(el)}">${el.html && el.htmlFor === el.text ? (el.valign && el.valign !== 'top' ? `<div class="txw">${el.html}</div>` : el.html) : esc(el.text)}</div>`;
   }
   if (el.type === 'image') {
     const s = elSrcOv.get(el.id) || viewSrc(el, mode); const clip = FX.clipPath(el.clip, el.w * MM, el.h * MM); const z = el.zoom || 1;
@@ -405,8 +408,8 @@ function marks(b) { const L = Math.max(0, b - 0.5), t = 0.15; return `<div class
 /* ---- 글 상자 고도화 (Figma 크기 방식·인디자인 넘침 표시·파워포인트 자동 맞춤) ---- */
 const textOver = new Set(); /* 고정 크기 상자에서 글이 넘친 요소 (인디자인 빨간 + 표시) */
 function textContentH(d) { const h0 = d.style.height, m0 = d.style.minHeight, o0 = d.style.overflow; d.style.height = 'auto'; d.style.minHeight = '0'; const ch = d.offsetHeight / MM, cw = d.scrollWidth / MM; d.style.height = h0; d.style.minHeight = m0; d.style.overflow = o0; return { ch, cw }; }
-function textOverflows(d, el) { if (Number(el.maxLines) > 0 && !(Number(el.cols) > 1)) return d.scrollHeight > d.clientHeight + 2; const { ch, cw } = textContentH(d); return ch > el.h + 0.3 || cw > el.w + 0.6; }
-function autoWidth(d, el) { const nw = r1(d.offsetWidth / MM); if (Math.abs(nw - el.w) < 0.05) return; if (el.align === 'center') el.x = r1(el.x + (el.w - nw) / 2); else if (el.align === 'right') el.x = r1(el.x + el.w - nw); el.w = nw; d.style.left = el.x + 'mm'; }
+function textOverflows(d, el) { if (Number(el.maxLines) > 0 && !(Number(el.cols) > 1)) return d.scrollHeight > d.clientHeight + 2; const { ch, cw } = textContentH(d), kx = el.sx && Number(el.sx) !== 100 ? Number(el.sx) / 100 : 1, ky = el.sy && Number(el.sy) !== 100 ? Number(el.sy) / 100 : 1; return ch > el.h / ky + 0.3 || cw > el.w / kx + 0.6; } /* 장평·세로 비율: 상자 안쪽은 늘어난 폭·높이로 잼 */
+function autoWidth(d, el) { const nw = r1(d.offsetWidth / MM * (el.sx && Number(el.sx) !== 100 ? Number(el.sx) / 100 : 1)); if (Math.abs(nw - el.w) < 0.05) return; if (el.align === 'center') el.x = r1(el.x + (el.w - nw) / 2); else if (el.align === 'right') el.x = r1(el.x + el.w - nw); el.w = nw; d.style.left = el.x + 'mm'; }
 /* 글자 크기 자동 맞춤: 고정 상자 안에 들어가는 가장 큰 글자 크기(최대 = 켤 때 크기 fitMax)를 찾아 el.size(부분 서식 크기도)에 씀 → 내보내기도 같음 */
 const fitCache = new Map();
 function autoFitText(d, el) {
@@ -427,8 +430,8 @@ function renderCanvas() {
   pg.els.forEach(el => { if (el.type === 'text' && !isWarp(el)) { let d = c.querySelector(`[data-id="${el.id}"]`); if (!d) return; if (el.sizing === 'autow') autoWidth(d, el); if (el.fitText && el.sizing === 'fixed') d = autoFitText(d, el) || d; const hh = fitTextH(d, el, true); if (hh != null) el.h = hh; if (el.sizing === 'fixed' && textOverflows(d, el)) textOver.add(el.id); } });
   if (pg.certTpl) { pg.els.forEach(el => { if (el.tplField) { const d9 = c.querySelector(`[data-id="${el.id}"]`); if (d9) d9.classList.add('tplf'); } }); }  /* 상장 양식: 사람마다 바뀌는 자리 */
   c.querySelectorAll('.el-cal .cell[data-day]').forEach(x => { const n = x.dataset.day && x.scrollHeight > x.clientHeight + 1; x.classList.toggle('ovf', !!n); if (n) x.title = '일정이 칸을 넘쳐 아래가 잘립니다 — 글자를 줄이거나 칸 높이를 늘리세요'; });  /* 달력 칸 넘침 표시(편집 화면에만) */
-  renderGhost(); fitCanvas(); renderOverlay(); NC.live.paint();
-  $('#pageLabel').textContent = `${pgNo(cur)} / ${pgNo(doc.pages.length - 1)}${pg.label ? ' · ' + pg.label : ''}`;
+  renderFacing(); renderGhost(); fitCanvas(); renderOverlay(); NC.live.paint(); viewBtns();
+  { const mp = $('#mainPager'), hasLb = doc.pages.some(p => p.label), key = [cur, doc.pages.length, pgOff(), hasLb ? pg.label || '' : null].join('|'); if (mp && (mp._k !== key || !mp.firstChild)) { const act = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('pg-in') && mp.contains(document.activeElement); mp._k = key; mp.innerHTML = pagerHTML('main', cur, doc.pages.length, { base: pgOff(), label: hasLb ? pg.label || '' : null }); if (act) { const q = mp.querySelector('.pg-in'); if (q) q.focus(); } } } pnFit();
   $('#stage').classList.toggle('pen', tool === 'pen');
 }
 /* ---------- 문서 밖 (미리캔버스처럼 페이지 밖도 작업 공간) ---------- */
@@ -483,11 +486,13 @@ function fitCanvas() {
   if (tb && !vt) tbMaxH = Math.max(tbMaxH, tb.offsetHeight); const top = tb && !vt ? tb.offsetTop + tbMaxH + (st.classList.contains('compact') ? 6 : 14) : 24, bot = st.classList.contains('tlon') && $('#vtl') && !document.body.classList.contains('tl-wide') ? $('#vtl').offsetHeight + 18 : 64;
   st.style.setProperty('--pgm-top', Math.max(0, top - 6) + 'px');  /* 나란히 보기: 결과 화면도 도구 막대 아래에서 시작 */
   const w = (st.classList.contains('pgm-on') ? st.clientWidth / 2 - 64 : st.clientWidth - 80) - Math.max(0, lx), h = st.clientHeight - top - bot - 4;
-  const k = zoom || Math.max(0.03, Math.min(Math.max(w, 60) / (doc.w * MM), Math.max(h, 60) / (doc.h * MM)));
+  const mate = $('#facing') ? Number($('#facing').dataset.i) : null, spr = mate != null && !isNaN(mate);
+  const k = zoom || Math.max(0.03, Math.min(Math.max(w, 60) / (doc.w * MM * (spr ? 2 : 1)), Math.max(h, 60) / (doc.h * MM))); /* 펼침면이면 두 쪽이 들어가게 맞춤 */
   // 문서 밖으로 나간 요소가 있으면 그만큼 작업 화면을 넓혀 스크롤로 닿게 함 (좌우·위아래 같은 폭이라 페이지가 가운데에 그대로)
   const ov = pageOverflow(page()), px = Math.ceil(Math.max(ov.l, ov.r) * MM * k), py = Math.ceil(Math.max(ov.t, ov.b) * MM * k);
   const sc = $('#scroller'), prev = fitCanvas.pad || [0, 0], padCh = sc && (px !== prev[0] || py !== prev[1]) && prev.k === k, r0 = padCh ? $('#canvasWrap').getBoundingClientRect() : null;
-  $('#canvasWrap').style.margin = `${top + py}px ${40 + px}px ${bot + py}px ${40 + px + Math.max(0, lx)}px`; // 도구 막대가 두 줄로 접혀도 페이지를 가리지 않게
+  { const fw = spr ? doc.w * MM * k : 0, fl = spr && mate < cur, f = $('#facing'); $('#canvasWrap').style.margin = `${top + py}px ${40 + px + (spr && !fl ? fw : 0)}px ${bot + py}px ${40 + px + Math.max(0, lx) + (fl ? fw : 0)}px`;
+    if (f) { f.style.cssText = `position:absolute;top:0;${fl ? 'right:100%' : 'left:100%'};width:${fw}px;height:${doc.h * MM * k}px`; const fi_ = f.firstChild; if (fi_) fi_.style.transform = `scale(${k})`; f.classList.toggle('left', fl); } } // 도구 막대가 두 줄로 접혀도 페이지를 가리지 않게
   /* 여백이 바뀌면(쪽 밖 요소) 바뀌기 전 페이지 자리를 재 두었다가 스크롤로 되돌림 — 여백 차이만큼만 옮기면 '가운데 정렬 → 넘침'으로 바뀔 때 정렬 기준이 달라져 화면이 튀었음 */
   if (padCh) queueMicrotask(() => { const r1 = $('#canvasWrap').getBoundingClientRect(); sc.scrollLeft += r1.x - r0.x; sc.scrollTop += r1.y - r0.y; });
   fitCanvas.pad = [px, py]; fitCanvas.pad.k = k;
@@ -514,7 +519,15 @@ function formatGuides() {
 }
 function bleedFor(f) { if (!f || !['print', 'doc', 'cal'].includes(f[2]) || f[5] !== 'mm') return 0; return ['namecard', 'coupon'].includes(f[0]) || Math.max(f[3], f[4]) <= 100 ? 1 : 3; }
 function safeMM() { return SAFE_BY[doc.fmt] || (Math.max(doc.w, doc.h) >= 2000 ? 30 : SAFE); }
-function showGuides() { try { return localStorage.getItem('naracal-guides') !== '0'; } catch (e) { return true; } }
+function showGuides() { if (pvMode) return false; try { return localStorage.getItem('naracal-guides') !== '0'; } catch (e) { return true; } }
+/* 보기 방식 (인디자인·쿽 보기 메뉴처럼, 팀장님 11/23): 한 쪽 · 펼침면(2쪽 — 왼쪽·오른쪽 쪽을 맞대어) · 미리 보기(안내선·화면 안내 없이 인쇄 결과처럼) */
+var pvMode = false;
+function viewSpread() { try { return localStorage.getItem('naracal-view') === 'spread'; } catch (e) { return false; } }
+function spreadMate(i) { if (!viewSpread() || doc.pages.length < 2 || doc.bookCover || !book().facing) return null; const st = $('#stage'); if (st && (st.classList.contains('pgm-on') || st.classList.contains('tlon'))) return null; if (i <= 0) return null; const j = isRightPage(i) ? i - 1 : i + 1; return j > 0 && j < doc.pages.length ? j : null; } /* 1쪽(표지)은 오른쪽에 혼자 */
+function renderFacing() { const wrap = $('#canvasWrap'); if (!wrap) return; let f = $('#facing'); const j = spreadMate(cur); if (j == null) { if (f) f.remove(); return; }
+  if (!f) { f = document.createElement('div'); f.id = 'facing'; f.className = 'facing'; wrap.appendChild(f); f.onclick = () => { const t = Number(f.dataset.i); if (!isNaN(t)) goto(t); }; }
+  f.dataset.i = j; f.title = `${pgNo(j)}쪽 — 누르면 이 쪽을 고칩니다`; f.innerHTML = `<div class="facing-in">${sheetHTML(doc.pages[j], 'thumb')}</div><span class="facing-lb">${pgNo(j)}쪽 · 누르면 고치기</span>`; }
+function viewBtns() { const a = $('#pnSpread'), b = $('#pnPv'); if (a) { const can = doc.pages.length > 1 && book().facing && !doc.bookCover; a.hidden = !can; a.setAttribute('aria-pressed', String(can && viewSpread())); a.classList.toggle('on', can && viewSpread()); a.querySelector('use').setAttribute('href', viewSpread() ? '#i-single' : '#i-spread'); a.title = viewSpread() ? '한 쪽 보기로 (지금: 펼침면)' : '펼침면(2쪽) 보기 — 책처럼 왼쪽·오른쪽 쪽을 함께'; } if (b) { b.setAttribute('aria-pressed', String(pvMode)); b.classList.toggle('on', pvMode); } }
 document.addEventListener('change', e => { if (e.target.id === 'guideToggle') { try { localStorage.setItem('naracal-guides', e.target.checked ? '1' : '0'); } catch (err) {} renderOverlay(); } });
 // 쪽을 거의 다 덮는 잠긴 배경: 클릭이 통과해 그 위에서 끌어 고르기가 됨 (레이어 목록이나 우클릭으로는 고를 수 있음)
 const lockedBg = el => el.locked && el.w * el.h >= doc.w * doc.h * 0.6;
@@ -532,7 +545,7 @@ function renderOverlay(guides) {
   els.forEach(el => { const single = els.length === 1, kpx = kScale() * MM, sw = el.w * kpx, sh = el.h * kpx, tiny = single && Math.min(sw, sh) < 26; h += `<div class="sel${single ? '' : ' multi'}${tiny ? ' tiny' : ''}${imgPan === el.id ? ' panning' : ''}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].filter(d => !((d === 'n' || d === 's') && (sh < 34 || sw < 16)) && !((d === 'e' || d === 'w') && (sw < 34 || sh < 16))).map(d =>  /* 위·아래 손잡이는 높이가 낮으면, 좌·우 손잡이는 너비가 좁으면 가운데를 가리므로 뺌 (한 줄 글 상자는 좌·우 손잡이 유지) */ `<div class="h ${d}" data-h="${d}"${el.rot ? ` style="cursor:${rotCursor(d, el.rot)}"` : ''}></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; if (el.locked) h += `<button class="lockbadge" data-unlock="${el.id}" title="잠금 풀기 (Ctrl+L)">🔒 잠금 풀기</button>`; h += '</div>'; });
   if (els.length > 1) { const U = unionBox(els), bx = U.x, by = U.y, bw = U.w, bh = U.h; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm">${els.some(e => e.locked) ? '' : ['nw', 'ne', 'se', 'sw'].map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="함께 크기 조절 (비율 유지)"></div>`).join('') + (() => { const kp = kScale() * MM, sw = bw * kp, sh = bh * kp; return ['n', 's', 'e', 'w'].filter(d => /[ns]/.test(d) ? sw >= 34 && sh >= 16 : sh >= 34 && sw >= 16).map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="한쪽으로 늘이기·줄이기 (Shift: 비율 유지)"></div>`).join(''); })() + '<div class="rotline"></div><div class="h rot" data-h="rot" data-g="1" title="함께 돌리기 (Shift: 15°씩)"></div>'}</div>`; }
   (guides || []).forEach(g => { h += g.v != null ? `<div class="guide v" style="left:${g.v}mm"></div>` : `<div class="guide h" style="top:${g.h}mm"></div>`; });
-  h += calOverlay(); h += userGuidesHTML(); h += bookGuidesHTML(); h += bookNoteHTML(els);
+  if (!pvMode) { h += calOverlay(); h += userGuidesHTML(); h += bookGuidesHTML(); h += bookNoteHTML(els); } /* 미리 보기: 화면 안내 숨김 */
   page().els.forEach(el => { if (textOver.has(el.id) && !el.hidden) h += `<button class="ovf" data-ovf="${el.id}" style="left:${el.x + el.w}mm;top:${el.y + el.h}mm" title="글이 상자를 넘칩니다 — 누르면 상자를 글에 맞춤 (인디자인의 넘침 표시)">+</button>`; }); try { if (showRulers()) requestAnimationFrame(drawRulers); } catch (e) {} // 고른 요소 범위를 눈금자에 표시
   // 인쇄 안내선: 도련(잘려 나가는 영역)·안전 여백(글자를 두지 않을 영역)
   if (showGuides() && Number(doc.bleed) > 0) { const b = Number(doc.bleed); h += `<div class="pg-bleed" style="left:${-b}mm;top:${-b}mm;width:${doc.w + 2 * b}mm;height:${doc.h + 2 * b}mm" title="도련 ${b}mm: 이 선까지 배경을 채우세요"></div><div class="pg-safe" style="left:${safeMM()}mm;top:${safeMM()}mm;width:${doc.w - 2 * safeMM()}mm;height:${doc.h - 2 * safeMM()}mm" title="안전 여백 ${safeMM()}mm: 글자·로고는 이 안쪽에"></div>`; }
@@ -544,6 +557,25 @@ let thumbTimer;
 let pgSel = new Set(), pgAnchor = 0, pgSelCur = -1, pgFocus = false, pageClip = null;
 /* 쪽 번호: 상장 문서는 맨 앞 양식 쪽이 0쪽(출력 안 됨), 상장이 1쪽부터 (11/19 팀장님) */
 const pgOff = () => (doc.pages[0] && doc.pages[0].certTpl ? 0 : 1), pgNo = i => i + pgOff();
+/* 쪽 넘김 막대 — 편집 화면·발표·출력 미리보기·크기 바꾸기 미리보기 모두 같은 모양 (팀장님 11/23: 누를 때마다 폭이 바뀌지 않게, 처음·마지막 쪽, 번호 쓰고 이동)
+   ⏮ ‹ [번호] / 전체 › ⏭ · 숫자 칸은 전체 쪽 수 자릿수만큼 고정 폭, 쪽 이름은 고정 폭에서 말줄임. 누르면 PAGER_GO[key](새 순번) */
+const PAGER_GO = {};
+function pagerHTML(key, i, n, o) {
+  o = o || {}; const base = o.base == null ? 1 : o.base, dg = String(Math.max(1, n - 1 + base)).length, u = o.unit || '쪽', b = (a, ic, t, dis) => `<button type="button" class="pg-b" data-pg="${a}" title="${t}" aria-label="${t}" ${dis ? 'disabled' : ''}><svg class="ic"><use href="#${ic}"/></svg></button>`;
+  return `<div class="pager${o.dark ? ' dark' : ''}${o.sm ? ' sm' : ''}" data-pgkey="${key}" data-i="${i}" data-n="${n}" data-base="${base}">${n > 2 ? b('first', 'i-first', `처음 ${u}으로`, i <= 0) : ''}${b('prev', 'i-prev', `앞 ${u}`, i <= 0)}<span class="pg-n"><input class="pg-in" type="text" inputmode="numeric" autocomplete="off" value="${i + base}" style="width:${dg + 0.9}ch" aria-label="${u} 번호 — 쓰고 Enter" title="번호를 쓰고 Enter를 누르면 그 ${u}으로"><span class="pg-tot" style="min-width:${dg + 1.6}ch">/ ${n - 1 + base}</span></span>${b('next', 'i-next', `다음 ${u}`, i >= n - 1)}${n > 2 ? b('last', 'i-last', `마지막 ${u}으로`, i >= n - 1) : ''}${o.label != null ? `<span class="pg-lb" title="${esc(o.label)}">${esc(o.label)}</span>` : ''}</div>`;
+}
+/* 편집 화면이 좁으면(패널을 넓힌 경우) 쪽 이름 → 처음·마지막 단추 순으로 숨김 — 같은 화면 폭에서는 막대 폭이 늘 같음 */
+function pnFit() { const nav = document.querySelector('.stage .pagenav'), st = document.getElementById('stage'); if (!nav || !st || !st.clientWidth) return; nav.classList.remove('nolb', 'tiny'); if (nav.offsetWidth > st.clientWidth - 16) nav.classList.add('nolb'); if (nav.offsetWidth > st.clientWidth - 16) nav.classList.add('tiny'); }
+if (window.ResizeObserver) setTimeout(() => { const st = document.getElementById('stage'); if (st) new ResizeObserver(() => pnFit()).observe(st); }, 0);
+const pagerOf = el => el && el.closest && el.closest('.pager[data-pgkey]');
+const pagerGo = (pg, t) => { const n = Number(pg.dataset.n), f = PAGER_GO[pg.dataset.pgkey]; if (!f || !n) return; f(Math.max(0, Math.min(n - 1, t))); };
+document.addEventListener('click', e => { const pg = pagerOf(e.target); if (!pg) return; e.stopPropagation(); if (e.target.classList.contains('pg-in') && e.target._fresh) { e.target._fresh = false; e.target.select(); } /* 처음 누르면 번호 전체가 골라져 바로 새 번호를 씀 */ const bt = e.target.closest('[data-pg]'); if (!bt || bt.disabled) return; const i = Number(pg.dataset.i), n = Number(pg.dataset.n); pagerGo(pg, { first: 0, prev: i - 1, next: i + 1, last: n - 1 }[bt.dataset.pg]); }, true); /* 발표 화면처럼 '누르면 다음 쪽'인 곳에서도 막대 안 클릭은 막대만 */
+document.addEventListener('keydown', e => { const t = e.target; if (!t.classList || !t.classList.contains('pg-in')) return; const pg = pagerOf(t); e.stopImmediatePropagation(); if (!pg) return;
+  if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); const v = parseInt(String(t.value).replace(/[^0-9]/g, ''), 10); if (isNaN(v)) { t.value = Number(pg.dataset.i) + Number(pg.dataset.base); toast('쪽 번호를 숫자로 써 주세요', true); return; } const n = Number(pg.dataset.n), base = Number(pg.dataset.base), x = v - base; if (x < 0 || x > n - 1) toast(`1~${n - 1 + base} 사이로 써 주세요 — 가까운 쪽으로 갑니다`); t.blur(); pagerGo(pg, x); }
+  else if (e.key === 'Escape') { e.preventDefault(); t.value = Number(pg.dataset.i) + Number(pg.dataset.base); t.blur(); }
+  else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); pagerGo(pg, Number(pg.dataset.i) + (e.key === 'ArrowUp' ? -1 : 1)); } }, true);
+document.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('pg-in')) { e.target._fresh = true; setTimeout(() => { try { e.target.select(); } catch (er) {} }, 0); } });
+document.addEventListener('focusout', e => { const t = e.target; if (t.classList && t.classList.contains('pg-in')) { const pg = pagerOf(t); if (pg) t.value = Number(pg.dataset.i) + Number(pg.dataset.base); } }); /* 쓰다 말고 나가면 원래 번호로 */
 function renderThumbs() {
   const box = $('#thumbs'); if (!box) return;
   const tw = box.clientWidth - 12 || 200; const k = tw / (doc.w * MM);
@@ -924,7 +956,7 @@ function sizeSel(f) {
   editing.dispatchEvent(new Event('input', { bubbles: true }));
 }
 // 글 상자 높이 맞추기: 위쪽 정렬이면 내용 높이로(늘고 줄어듦), 중앙·아래 정렬이면 내용보다 작을 때만 늘림
-function fitTextH(d, el, growOnly) { if (el.sizing === 'fixed') return null; const mh = d.style.minHeight; d.style.minHeight = '0'; const ch = r1(d.offsetHeight / MM); d.style.minHeight = mh; const top = !el.valign || el.valign === 'top'; if (top && !growOnly ? Math.abs(ch - el.h) > 0.05 : ch > el.h + 0.05) return Math.max(2, ch); return null; }
+function fitTextH(d, el, growOnly) { if (el.sizing === 'fixed') return null; const mh = d.style.minHeight; d.style.minHeight = '0'; const ch = r1(d.offsetHeight / MM * (el.sy && Number(el.sy) !== 100 ? Number(el.sy) / 100 : 1)); d.style.minHeight = mh; const top = !el.valign || el.valign === 'top'; if (top && !growOnly ? Math.abs(ch - el.h) > 0.05 : ch > el.h + 0.05) return Math.max(2, ch); return null; }
 $('#canvas').addEventListener('input', e => { if (editing && e.target === editing) { const el = find(editing.dataset.id); if (el) { if (el.sizing === 'autow') { autoWidth(editing, el); renderOverlay(); } const hh = fitTextH(editing, el); if (hh != null) { el.h = hh; editing.style.minHeight = hh + 'mm'; renderOverlay(); placeTextBar(); } } } });
 // 붙여넣기는 글자만 (다른 곳 서식·글꼴이 섞여 들어오지 않게)
 $('#canvas').addEventListener('paste', e => { if (!editing || !editing.contains(e.target)) return; e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData('text/plain'); document.execCommand('insertText', false, t); });
@@ -954,7 +986,9 @@ document.addEventListener('keydown', e => { if (!(e.ctrlKey || e.metaKey) || e.a
 $('#zoomIn').onclick = () => zoomAt((zoom || kScale()) * 1.2);
 $('#zoomOut').onclick = () => zoomAt((zoom || kScale()) / 1.2);
 $('#zoomFit').onclick = () => { zoom = 0; fitCanvas(); };
-$('#pnTl').onclick = () => tlShow(!tlOn()); $('#prevPage').onclick = () => goto(cur - 1); $('#nextPage').onclick = () => goto(cur + 1);
+$('#pnTl').onclick = () => tlShow(!tlOn());
+$('#pnSpread').onclick = () => { try { localStorage.setItem('naracal-view', viewSpread() ? 'single' : 'spread'); } catch (e) {} zoom = 0; renderCanvas(); toast(viewSpread() ? '펼침면 보기 — 옆 쪽을 누르면 그 쪽을 고칩니다' : '한 쪽 보기'); };
+$('#pnPv').onclick = () => { pvMode = !pvMode; $('#stage').classList.toggle('pvmode', pvMode); renderCanvas(); toast(pvMode ? '미리 보기 — 안내선 없이 인쇄 결과처럼 봅니다 (눈 단추를 다시 누르면 돌아옴)' : '편집 보기로 돌아왔습니다'); }; PAGER_GO.main = i => goto(i);
 { let rzRaf = 0; window.addEventListener('resize', () => { if (rzRaf) return; rzRaf = requestAnimationFrame(() => { rzRaf = 0; fitCanvas(); rescaleThumbs(); }); }); } /* 창 크기를 바꾸는 동안 화면 한 번에 한 번만, 미리보기는 배율만 */
 function setTool(t) { tool = t; $$('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t)); $('#stage').classList.toggle('pen', t === 'pen'); if (t === 'pen') { select([]); toast('펜: 페이지 위에서 끌어 선을 그립니다. Esc로 끝냅니다.'); } }
 $$('[data-tool]').forEach(b => b.onclick = () => setTool(tool === b.dataset.tool ? 'select' : b.dataset.tool));
@@ -2762,13 +2796,14 @@ async function settingsClick(e) {
 function openPresent(from) {
   const list = doc.pages.map((p, i) => i).filter(i => !doc.pages[i].dlOff); if (!list.length) { toast('보여 줄 쪽이 없습니다', true); return; }
   const c0 = from != null ? from : cur; let k = list.indexOf(c0); if (k < 0) { k = list.findIndex(i => i > c0); if (k < 0) k = list.length - 1; } /* 숨긴 쪽에서 시작하면 그다음 보이는 쪽부터 */ const box = document.createElement('div'); box.id = 'present'; box.tabIndex = -1;
-  box.innerHTML = '<div class="prs-stage"></div><div class="prs-bar"><button data-p="-1">‹</button><span></span><button data-p="1">›</button><button data-p="x">끝내기 (Esc)</button></div>'; document.body.appendChild(box);
-  const stage = box.querySelector('.prs-stage'), lab = box.querySelector('.prs-bar span');
+  box.innerHTML = '<div class="prs-stage"></div><div class="prs-bar"><span class="prs-pg"></span><button data-p="x">끝내기 (Esc)</button></div>'; document.body.appendChild(box);
+  const stage = box.querySelector('.prs-stage'), lab = box.querySelector('.prs-pg');
   const show = () => { const p = doc.pages[list[k]], W = box.clientWidth || innerWidth, H = box.clientHeight || innerHeight, pw = doc.w * MM, ph = doc.h * MM, z = Math.min(W / pw, H / ph);
-    stage.innerHTML = `<div style="width:${pw * z}px;height:${ph * z}px;overflow:hidden;position:relative"><div style="width:${pw}px;height:${ph}px;transform:scale(${z});transform-origin:0 0">${sheetHTML(p, 'thumb')}</div></div>`; lab.textContent = `${k + 1} / ${list.length}`; };
-  const go = d => { const k0 = k; k = Math.max(0, Math.min(list.length - 1, k + d)); show(); if (k === k0) { lab.textContent = `${k + 1} / ${list.length} · ${d > 0 ? '마지막' : '첫'} 쪽입니다`; wake(); } };
+    stage.innerHTML = `<div style="width:${pw * z}px;height:${ph * z}px;overflow:hidden;position:relative"><div style="width:${pw}px;height:${ph}px;transform:scale(${z});transform-origin:0 0">${sheetHTML(p, 'thumb')}</div></div>`; lab.innerHTML = pagerHTML('present', k, list.length, { dark: true }); };
+  PAGER_GO.present = t => { k = t; show(); wake(); };
+  const go = d => { const k0 = k; k = Math.max(0, Math.min(list.length - 1, k + d)); show(); if (k === k0) { toast(`${d > 0 ? '마지막' : '첫'} 쪽입니다`); wake(); } };
   let hideT = 0; const wake = () => { box.classList.add('awake'); clearTimeout(hideT); hideT = setTimeout(() => box.classList.remove('awake'), 2200); };
-  const end = () => { document.removeEventListener('keydown', key, true); removeEventListener('resize', show); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); box.remove(); goto(list[k]); };
+  const end = () => { delete PAGER_GO.present; document.removeEventListener('keydown', key, true); removeEventListener('resize', show); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); box.remove(); goto(list[k]); };
   const key = e => { if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(e.key)) { go(1); } else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(e.key)) { go(-1); } else if (e.key === 'Home') { k = 0; show(); } else if (e.key === 'End') { k = list.length - 1; show(); } else if (e.key === 'Escape') { end(); } else return; e.preventDefault(); e.stopPropagation(); };
   document.addEventListener('keydown', key, true); addEventListener('resize', show);
   box.onclick = e => { const b = e.target.closest('[data-p]'); if (b) { if (b.dataset.p === 'x') end(); else go(Number(b.dataset.p)); return; } go(e.clientX < innerWidth * 0.25 ? -1 : 1); };
@@ -3405,7 +3440,8 @@ function fontLabel(fam) { const f = allFonts().find(x => x.family === fam); retu
 const fontPicker = (k, cur_) => `<button type="button" class="fp-btn" data-fp="${k}" data-cur="${esc(cur_)}" style="font-family:'${esc(cur_)}'"><span>${esc(fontLabel(cur_))}</span><i>▾</i></button>`;
 let fpState = { cat: 'all', q: '' };
 function openFontPop(btn) {
-  closeFontPop(); const k = btn.dataset.fp, cur_ = btn.dataset.cur; const pop = document.createElement('div'); pop.id = 'fpPop';
+  { const ex = $('#fpPop'); if (ex && ex._k === btn.dataset.fp && (ex._btn === btn || !(ex._btn && ex._btn.isConnected))) { closeFontPop(); return; } } /* 같은 글꼴 단추를 한 번 더 누르면 닫힘 (팀장님 11/23) */
+  closeFontPop(); const k = btn.dataset.fp, cur_ = btn.dataset.cur; const pop = document.createElement('div'); pop.id = 'fpPop'; pop._k = k; pop._btn = btn; btn.setAttribute('aria-expanded', 'true');
   const cats = [['all', '전체'], ['hot', '인기'], ['title', '제목'], ['brush', '붓'], ['hand', '손글씨'], ['body', '본문'], ['latin', '영문'], ['mine', '내 글꼴']];
   const row = f => `<div class="fp-row ${f.family === cur_ ? 'on' : ''}" data-font="${esc(f.family)}" style="font-family:'${esc(f.family)}'">${f.preview ? `<img class="fpimg" src="${esc(f.preview)}" alt="" loading="lazy">` : '<span class="sm">나라차 태권도 가나다 ABC 123</span>'}<span class="nm">${esc(f.label)}${f.lib ? ' <em class="ftag">자료실</em>' : f.web ? ' <em class="ftag web">인기</em>' : ''}</span></div>`;
   /* 찾기 칸은 한 번만 그리고 목록만 다시 그림 — 칸을 다시 그리면 한글 조합이 끊겨 자소가 분리됨(ㄴㅏㄴㅜ) */
@@ -3427,7 +3463,7 @@ function openFontPop(btn) {
   pop.onclick = e => { const c = e.target.closest('[data-fc]'); if (c) { fpState.cat = c.dataset.fc; pop.querySelectorAll('[data-fc]').forEach(b => b.classList.toggle('on', b === c)); renderList(); return; } const rw = e.target.closest('[data-font]'); if (rw) { applyFontChoice(k, rw.dataset.font); closeFontPop(); return; } if (e.target.id === 'fpMore') { closeFontPop(); openFonts(); } };
   setTimeout(() => { const q = pop.querySelector('#fpQ'); if (q) q.focus(); }, 0);
 }
-function closeFontPop() { const p = $('#fpPop'); if (p) p.remove(); }
+function closeFontPop() { const p = $('#fpPop'); if (p) { if (p._btn) p._btn.removeAttribute('aria-expanded'); p.remove(); } }
 let multiLockNote = '';
 // 글 상자 html 안 부분 서식에서 한 가지 속성만 지움 (브라우저로 읽어서 — 글꼴 이름의 따옴표·&quot;도 안전)
 function stripStyle(html, prop) { const t = document.createElement('div'); t.innerHTML = html; t.querySelectorAll('[style]').forEach(n => { n.style.removeProperty(prop); if (!n.getAttribute('style')) n.removeAttribute('style'); }); return t.innerHTML; }
@@ -3481,6 +3517,13 @@ function renderInspector() {
     <p class="hint" style="margin:2px 0 8px">글자를 두 번 눌러 편집하면서 일부만 드래그하면, 위에 뜨는 작은 도구 막대(또는 여기 B·I·U·S)로 <b>고른 글자만</b> 굵게·기울임·밑줄·색·크기를 바꿀 수 있습니다.</p>
     ${tboxHTML(el)}
     <div class="grid2">${F('줄 간격', 'lh', el.lh, { type: 'slider', min: 0.6, max: 3, step: 0.05, def: 1.35 })}${F('자간', 'ls', el.ls, { type: 'slider', min: -0.2, max: 1, step: 0.01, unit: 'em', def: 0 })}</div>
+    <div class="grid2">${F('장평', 'sx', el.sx || 100, { type: 'slider', min: 50, max: 200, step: 1, unit: '%', def: 100 })}${F('세로 비율', 'sy', el.sy || 100, { type: 'slider', min: 50, max: 200, step: 1, unit: '%', def: 100 })}</div>
+    <div class="tfq"><span>장평</span>${[[80, '80%'], [90, '90%'], [95, '95%'], [100, '100%'], [110, '110%']].map(([v, t]) => `<button type="button" data-set="sx:${v}" class="${Math.round(el.sx || 100) === v ? 'on' : ''}" title="글자 폭 ${t}${v < 100 ? ' — 좁게 (제목·표에 많이 씀)' : v > 100 ? ' — 넓게' : ' — 원래대로'}">${t}</button>`).join('')}</div>
+    <details class="fx" ${el.skew || el.ws || el.ti || el.kern || el.smallcaps ? 'open' : ''}><summary>글자 서식 더 보기 <small>기울기·낱말 간격·들여쓰기·커닝</small></summary>
+      <div class="grid2">${F('기울기', 'skew', el.skew || 0, { type: 'slider', min: -30, max: 30, step: 1, unit: '°', def: 0 })}${F('낱말 간격', 'ws', el.ws || 0, { type: 'slider', min: -0.3, max: 1, step: 0.01, unit: 'em', def: 0 })}</div>
+      <div class="grid2">${F('첫 줄 들여', 'ti', el.ti || 0, { type: 'slider', min: -3, max: 6, step: 0.5, unit: '글자', def: 0 })}${F('커닝 (글자 짝 간격)', 'kern', el.kern || '', { type: 'select', options: [['', '글꼴 기본'], ['opt', '비례 (글자 모양대로 붙임)'], ['none', '끔 (모든 글자 같은 폭)']] })}</div>
+      ${F('작은 대문자 (영문)', 'smallcaps', !!el.smallcaps, { type: 'check' })}
+      <p class="hint" style="margin:2px 0 0">기울기는 기울임체가 없는 한글 글꼴을 비스듬히 눕힐 때(가짜 기울임) 씁니다. 장평·세로 비율·기울기는 글 상자 전체에 적용됩니다.</p></details>
     <div class="row"><div class="seg" style="flex:1">${[['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽'], ['justify', '양쪽']].map(([a, t]) => `<button data-set="align:${a}" aria-pressed="${el.align === a}" title="${t} 정렬">${t}</button>`).join('')}</div><div class="seg" style="flex:1">${[['top', '위'], ['middle', '중앙'], ['bottom', '아래']].map(([a, t]) => `<button data-set="valign:${a}" aria-pressed="${(el.valign || 'top') === a}">${t}</button>`).join('')}</div></div>
     ${F('혼합 모드', 'blend', el.blend || 'normal', { type: 'select', options: [['normal', '보통'], ['multiply', '곱하기'], ['screen', '스크린'], ['overlay', '오버레이'], ['difference', '차이']] })}
     <h3>채우기</h3>${fillBlock}${(el.fillType || 'solid') === 'solid' ? `${F('글자 색', 'color', el.color, { type: 'color' })}${sw('color', el.color)}` : ''}
@@ -6283,7 +6326,7 @@ function pvHTML(S, list, L, pvI) {
   const M = L.M, mgBox = `<div class="prmgline ${M.t || M.b || M.l || M.r ? '' : 'zero'}" style="left:${M.l * mmpx}px;top:${M.t * mmpx}px;right:${M.r * mmpx}px;bottom:${M.b * mmpx}px"></div>`
     + [['t', `left:0;right:0;top:${M.t * mmpx}px`], ['b', `left:0;right:0;bottom:${M.b * mmpx}px`], ['l', `top:0;bottom:0;left:${M.l * mmpx}px`], ['r', `top:0;bottom:0;right:${M.r * mmpx}px`]].map(([k, st]) => `<div class="prmgh prmgh-${k}" data-mgh="${k}" style="${st}" title="끌어서 ${({ t: '위', b: '아래', l: '왼쪽', r: '오른쪽' })[k]} 여백 바꾸기 (${M[k]}mm)"></div>`).join('');  /* 여백 선 끌기 (워드 눈금자처럼) */
   return `<div class="prpaper" style="width:${L.pw * mmpx}px;height:${L.ph * mmpx}px"><div class="prmargin" style="inset:${3 * mmpx}px" title="보통 프린터가 못 찍는 가장자리(약 3mm) — 테두리 없음이 아니면 이 밖은 잘릴 수 있음"></div>${sheet}${mgBox}</div>
-        <div class="prpvnav">${(L.cells ? nSh : list.length) > 1 ? `<button class="btn sm icon" data-prnav="-1" ${S.pv ? '' : 'disabled'}>‹</button>` : ''}<span>${!list.length ? '출력할 쪽이 없습니다' : L.cells ? `종이 ${sh + 1} / ${nSh}장 · ${list.slice(sh * nup, sh * nup + nup).map(i => pgNo(i)).join('·')}쪽` : `${S.pv + 1} / ${list.length}쪽 (문서 ${pgNo(pvI)}쪽)`}</span>${(L.cells ? nSh : list.length) > 1 ? `<button class="btn sm icon" data-prnav="1" ${S.pv < (L.cells ? nSh : list.length) - 1 ? '' : 'disabled'}>›</button>` : ''}</div>
+        <div class="prpvnav">${(L.cells ? nSh : list.length) > 1 ? pagerHTML('print', L.cells ? sh : S.pv, L.cells ? nSh : list.length, { sm: true, unit: L.cells ? '장' : '쪽' }) : ''}<span class="prpvlb">${!list.length ? '출력할 쪽이 없습니다' : L.cells ? `${nSh > 1 ? '' : '종이 1장 · '}${list.slice(sh * nup, sh * nup + nup).map(i => pgNo(i)).join('·')}쪽` : (list.length > 1 ? `문서 ${pgNo(pvI)}쪽` : `${list.length}쪽 (문서 ${pgNo(pvI)}쪽)`)}</span></div>
         <p class="hint prsize">${L.cells ? `<b>한 장에 ${L.nup}쪽</b> (${L.rows}×${L.cols}, 종이 ${Math.round(L.pw)}×${Math.round(L.ph)} ${L.pw > L.ph ? '가로' : '세로'}) · ` : ''}디자인 ${Math.round(doc.w)}×${Math.round(doc.h)}mm → ${L.cells ? '한 칸에' : '종이에'} <b>${Math.round(L.w * 10) / 10}×${Math.round(L.h * 10) / 10}mm (${Math.round(L.k * 1000) / 10}%)</b>${L.note ? ` · <b style="color:#b3261e">${esc(L.note)}</b>` : ''}</p>`;
 }
 /* 여백 그림 (워드 여백 대화창의 미리 보기처럼): 종이와 여백 안쪽(찍히는 자리) */
@@ -6302,6 +6345,7 @@ function openPrint(pre) {
   else if (prState.pages === 'sel' || prState.pages === 'range' || (prState.pages === 'pick' && !(prState.pick && prState.pick.size))) prState.pages = 'all';
   if (prState.pick) prState.pick = new Set([...prState.pick].filter(i => i < doc.pages.length)); prState.pv = 0; prState.at = pgNo(cur); let pickAnchor = -1;
   const preset = k => { const S = prState; if (k === 'safe') { Object.assign(S, { fit: 'fit', ax: 0.5, ay: 0.5, dx: 0, dy: 0 }); prSetMg(S, 4); } if (k === 'full') { Object.assign(S, { fit: 'fit', ax: 0.5, ay: 0.5, dx: 0, dy: 0 }); prSetMg(S, 0); } if (k === 'exact') { Object.assign(S, { fit: 'actual', ax: 0.5, ay: 0.5 }); prSetMg(S, 0); } };
+  PAGER_GO.print = t => { prState.pv = t; draw(); };
   const draw = () => {
     const S = prState, list = prPages(), L = prLayout(), C = doc.cert, pvI = list[Math.min(S.pv, list.length - 1)];
     const pvHTML_ = pvHTML(S, list, L, pvI);
@@ -6910,7 +6954,7 @@ function renderResize() {
     <h3>내용 맞추는 방법</h3>
     <div class="rsmodes">${[['fit', '알맞게 다시 배치 (추천)', '비율을 지키며 크기를 맞추고, 가장자리 요소는 가장자리에, 배경·띠는 새 쪽을 꽉 채웁니다'], ['contain', '전체 크기 맞추기 (잘림 없음)', '디자인 전체를 비율 그대로 줄이거나 키워 새 쪽 안에 모두 들어오게 합니다. 배경·가로지르는 띠는 새 쪽에 맞춰 늘어납니다'], ['cover', '꽉 채우기 (넘치는 곳 잘림)', '디자인 전체를 비율 그대로 키워 새 쪽을 빈틈없이 채웁니다. 기준 위치의 반대쪽이 잘립니다'], ['stretch', '늘려서 채우기 (모양 변형)', '가로·세로를 따로 늘립니다. 비율 차이가 작을 때'], ['keep', '내용 크기 그대로', '요소 크기는 그대로 두고 기준 위치로만 옮깁니다']].map(([m, t, dd]) => `<label class="rsmode ${S.mode === m ? 'on' : ''}"><input type="radio" name="rsMode" value="${m}" ${S.mode === m ? 'checked' : ''}><b>${t}</b><small>${dd}</small></label>`).join('')}</div>
     ${['contain', 'cover', 'keep'].includes(S.mode) ? `<div class="row" style="align-items:center;gap:10px;margin-top:8px"><span class="hint" style="margin:0">기준 위치</span><div class="rsanchor">${[0, 0.5, 1].map(y => [0, 0.5, 1].map(x => `<button type="button" data-rsa="${x},${y}" class="${S.A[0] === x && S.A[1] === y ? 'on' : ''}" title="${['위', '가운데', '아래'][y * 2]}${['왼쪽', '가운데', '오른쪽'][x * 2] === '가운데' && y === 0.5 ? '' : ' ' + ['왼쪽', '가운데', '오른쪽'][x * 2]}"></button>`).join('')).join('')}</div><span class="hint" style="margin:0">${S.mode === 'cover' ? '이 쪽은 남기고 반대쪽이 잘립니다' : '남는 곳이 반대쪽에 생깁니다'}</span></div>` : ''}
-  </div><div class="rsprev"><span class="hint">${doc.pages.length > 1 ? `<button class="btn sm icon" id="rsPrev" title="앞 쪽" ${S.pi ? '' : 'disabled'}>‹</button> ` : ''}미리보기 (${S.pi + 1} / ${doc.pages.length}쪽)${doc.pages.length > 1 ? ` <button class="btn sm icon" id="rsNext" title="다음 쪽" ${S.pi < doc.pages.length - 1 ? '' : 'disabled'}>›</button>` : ''}</span><div class="rsbox" style="width:${ok ? W * k : box}px;height:${ok ? H * k : box}px">${ok ? `<div style="transform:scale(${k * 25.4 / 96});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(W, H, prevPage.els, srcPg.bg)}</div>` : ''}</div>
+  </div><div class="rsprev"><span class="hint">미리보기${doc.pages.length > 1 ? '' : ' (1쪽)'}</span>${doc.pages.length > 1 ? pagerHTML('resize', S.pi, doc.pages.length, { sm: true }) : ''}<div class="rsbox" style="width:${ok ? W * k : box}px;height:${ok ? H * k : box}px">${ok ? `<div style="transform:scale(${k * 25.4 / 96});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(W, H, prevPage.els, srcPg.bg)}</div>` : ''}</div>
   <p class="hint" style="text-align:center">${ok ? sizeLabelFor(W, H, S.fmt, S.unit) : '크기를 확인해 주세요'}</p></div></div>
   <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="rsCopy" ${ok ? '' : 'disabled'}>새 크기로 사본 만들기</button><button class="btn primary" id="rsApply" ${ok ? '' : 'disabled'}>이 디자인 크기 바꾸기</button></div>`;
   const B = $('#rsBody');
@@ -6920,7 +6964,7 @@ function renderResize() {
   $('#rsSwap').onclick = () => { [S.w, S.h] = [S.h, S.w]; S.fmt = ''; renderResize(); };
   B.querySelectorAll('[name=rsMode]').forEach(r => r.onchange = () => { S.mode = r.value; renderResize(); });
   B.querySelectorAll('[data-rsa]').forEach(b => b.onclick = () => { S.A = b.dataset.rsa.split(',').map(Number); renderResize(); });
-  if ($('#rsPrev')) $('#rsPrev').onclick = () => { S.pi--; renderResize(); }; if ($('#rsNext')) $('#rsNext').onclick = () => { S.pi++; renderResize(); };
+  PAGER_GO.resize = t => { S.pi = t; renderResize(); };
   $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode, S.A); doc.pages = nd.pages; doc.w = W; doc.h = H; doc.fmt = S.fmt || ''; { const f = FORMATS.find(x => x[0] === S.fmt); if (f) doc.bleed = bleedFor(f); } commit();  /* 인쇄물↔SNS로 바꾸면 도련도 맞춤 */ zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toastUndo(`크기를 ${sizeLabelFor(W, H, S.fmt, S.unit)}로 바꿨습니다`, () => { zoom = 0; fitCanvas(); }); };
   $('#rsCopy').onclick = async () => {
     const f = FORMATS.find(x => x[0] === S.fmt); const nd = resizedDoc(doc, W, H, S.mode, S.A); nd.fmt = S.fmt || ''; nd.name = `${doc.name || '새 디자인'} (${f ? f[1] : `${Math.round(W)}×${Math.round(H)}`})`;

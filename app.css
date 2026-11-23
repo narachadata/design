@@ -1702,3 +1702,46 @@ dialog.st-dlg{max-width:1280px;width:96vw}
 .be-tbn{font-size:11.5px;color:var(--ui-fg2);margin:5px 0 0}
 .be-tt tr.al td{border:0;background:transparent;padding:3px 2px 0}.be-tt tr.al select{width:100%;font-size:11.5px;padding:2px 4px;border:1px solid var(--ui-line);border-radius:5px;background:#fff;color:#444}
 .st-legend{margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--ui-line);font-size:11.5px;line-height:1.9;color:var(--ui-fg2)}.st-legend b{display:block;color:var(--ui-fg);margin-bottom:2px}.st-legend code{display:inline-block;background:var(--ui-field);border-radius:4px;padding:0 5px;margin:0 3px 0 0;font-size:11px;color:#333}
+/* 도서 편집 원고: 각주·찾아보기 표시, 합친 표 칸 (11/23) */
+.be-fn{color:#b4531f;background:#fdf0e6;border-radius:3px;font-size:.86em;padding:0 2px}
+.be-ix{background:#e7f0ff;border-bottom:1.5px dotted #2f6fe4;border-radius:2px}
+.be-tsep{display:inline-block;width:1px;height:18px;background:var(--ui-line,#d5d9e0);margin:0 4px}
+.be-tt td.mg{background:#f6f7f9}.be-td.mg{color:#8a93a3;font-size:12px;cursor:pointer}.be-td.mg::placeholder{color:#9aa3b2}
+/* 쪽 넘김 막대 (모든 곳 같은 모양 · 11/23) — 폭이 바뀌지 않게 고정 칸 */
+.pager{display:inline-flex;align-items:center;gap:2px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;user-select:none}
+.pager .pg-b{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;border-radius:8px;color:inherit;cursor:pointer;padding:0;flex:0 0 auto}
+.pager .pg-b .ic{width:18px;height:18px}
+.pager .pg-b:hover:not(:disabled){background:var(--ui-field,#f1f3f6)}
+.pager .pg-b:disabled{opacity:.28;cursor:default}
+.pager .pg-n{display:inline-flex;align-items:center;gap:3px;padding:0 4px}
+.pager .pg-in{box-sizing:content-box;text-align:center;font:inherit;font-variant-numeric:tabular-nums;color:inherit;background:var(--ui-field,#f1f3f6);border:1px solid transparent;border-radius:6px;padding:3px 2px;height:18px}
+.pager .pg-in:hover{border-color:var(--ui-line,#d5d9e0)}
+.pager .pg-in:focus{outline:none;border-color:var(--ui-accent,#2f6fe4);background:#fff}
+.pager .pg-tot{display:inline-block;text-align:left;color:var(--ui-sub,#667085);font-weight:500}
+.pager .pg-lb{display:inline-block;width:8.5em;overflow:hidden;text-overflow:ellipsis;color:var(--ui-sub,#667085);font-weight:500;padding:0 4px 0 6px;border-left:1px solid var(--ui-line,#e3e6eb)}
+.pager.sm{font-size:12px}.pager.sm .pg-b{width:26px;height:26px}.pager.sm .pg-b .ic{width:16px;height:16px}
+.pager.dark{color:#fff}.pager.dark .pg-b:hover:not(:disabled){background:rgba(255,255,255,.15)}.pager.dark .pg-in{background:rgba(255,255,255,.14);color:#fff}.pager.dark .pg-in:focus{background:rgba(255,255,255,.24);border-color:rgba(255,255,255,.6)}.pager.dark .pg-tot{color:rgba(255,255,255,.75)}
+.stage .pagenav #mainPager{display:flex}
+#present .prs-bar .prs-pg{min-width:0}
+.prpvnav{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center}.prpvnav .prpvlb{font-size:12px;color:var(--ui-sub,#667085)}
+#present .prs-bar .pager .pg-b{border:0;padding:0;border-radius:8px}#present .prs-bar .pager span.pg-n{min-width:0}#present .prs-bar .pager span.pg-tot{text-align:left}
+.stage .pagenav.nolb .pg-lb{display:none}.stage .pagenav.tiny [data-pg=first],.stage .pagenav.tiny [data-pg=last]{display:none}
+.fp-btn[aria-expanded="true"]{border-color:var(--ui-accent,#2f6fe4)}.fp-btn[aria-expanded="true"] i{transform:rotate(180deg)}.fp-btn i{display:inline-block;transition:transform .15s}
+.tfq{display:flex;align-items:center;gap:4px;margin:-2px 0 8px;font-size:12px;color:var(--ui-sub,#667085)}.tfq span{margin-right:2px}.tfq button{border:1px solid var(--ui-line2,#d5d9e0);background:#fff;border-radius:6px;padding:3px 7px;font:inherit;font-size:11.5px;cursor:pointer;color:var(--ui-fg,#111)}.tfq button.on{background:var(--ui-accent,#2f6fe4);border-color:var(--ui-accent,#2f6fe4);color:#fff}
+/* 보기 방식: 펼침면(옆 쪽)·미리 보기 (11/23) */
+.stage .canvas-wrap .facing{cursor:pointer;z-index:0}
+.stage .canvas-wrap .facing .facing-in{transform-origin:0 0;position:absolute;left:0;top:0}
+.stage .canvas-wrap .facing .sheet{position:relative;box-shadow:0 18px 48px rgba(16,24,40,.18),0 2px 6px rgba(16,24,40,.08)}
+.stage .canvas-wrap .facing::after{content:'';position:absolute;inset:0;background:rgba(255,255,255,.0);transition:background .15s;pointer-events:none}
+.stage .canvas-wrap .facing:hover::after{background:rgba(47,111,228,.06);outline:2px solid rgba(47,111,228,.35);outline-offset:-2px}
+.stage .canvas-wrap .facing.left::before,.stage .canvas-wrap .facing:not(.left)::before{content:'';position:absolute;top:0;bottom:0;width:18px;z-index:2;pointer-events:none}
+.stage .canvas-wrap .facing.left::before{right:0;background:linear-gradient(to left,rgba(0,0,0,.10),rgba(0,0,0,0))}
+.stage .canvas-wrap .facing:not(.left)::before{left:0;background:linear-gradient(to right,rgba(0,0,0,.10),rgba(0,0,0,0))}
+.stage .canvas-wrap .facing .facing-lb{position:absolute;left:50%;bottom:-22px;transform:translateX(-50%);font-size:11.5px;color:var(--ui-sub,#667085);white-space:nowrap;opacity:0;transition:opacity .15s}
+.stage .canvas-wrap .facing:hover .facing-lb{opacity:1}
+.stage .pagenav .pn-sep{width:1px;height:20px;background:var(--ui-line,#e3e6eb);margin:0 2px}
+.stage .pagenav #pnSpread.on,.stage .pagenav #pnPv.on{background:var(--ui-accent-soft,#e8f0ff);color:var(--ui-accent,#2f6fe4)}
+.stage.pvmode .pagenav #pnPv{box-shadow:0 0 0 2px var(--ui-accent,#2f6fe4) inset}
+.be-pvh{display:flex;align-items:center;gap:6px}.be-pvm{margin-left:auto;display:inline-flex;border:1px solid var(--ui-line,#d5d9e0);border-radius:7px;overflow:hidden}.be-pvm button{border:0;background:#fff;font:inherit;font-size:11.5px;padding:2px 8px;cursor:pointer;color:var(--ui-sub,#667085)}.be-pvm button+button{border-left:1px solid var(--ui-line,#d5d9e0)}.be-pvm button.on{background:var(--ui-accent,#2f6fe4);color:#fff}
+.stage .pagenav span.pn-sep{padding:0;width:1px;height:20px;background:var(--ui-line,#e3e6eb);margin:0 3px}
+.stage .pagenav .pager span.pg-n{padding:0 4px}.stage .pagenav .pager span.pg-tot{padding:0}.stage .pagenav .pager span.pg-lb{padding:0 4px 0 8px}

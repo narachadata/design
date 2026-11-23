@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://narachadata.github.io/design/og.png">
 <meta property="og:type" content="website">
 <link rel="stylesheet" href="fonts/fonts.css?v=20261120.1357">
-<link rel="stylesheet" href="app.css?v=20261123.1158">
+<link rel="stylesheet" href="app.css?v=20261123.1541">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -63,6 +63,11 @@
 <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></symbol>
 <symbol id="i-prev" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
 <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+<symbol id="i-first" viewBox="0 0 24 24"><path d="m17 6-6 6 6 6"/><path d="M7 6v12"/></symbol>
+<symbol id="i-last" viewBox="0 0 24 24"><path d="m7 6 6 6-6 6"/><path d="M17 6v12"/></symbol>
+<symbol id="i-spread" viewBox="0 0 24 24"><path d="M3 5.5h7.5a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 0-1.5-1.5H3z"/><path d="M21 5.5h-7.5A1.5 1.5 0 0 0 12 7v12a1.5 1.5 0 0 1 1.5-1.5H21z"/></symbol>
+<symbol id="i-single" viewBox="0 0 24 24"><rect x="6" y="3.5" width="12" height="17" rx="1.5"/><path d="M9 8h6M9 11.5h6M9 15h4"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></symbol>
 <symbol id="i-elems" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><circle cx="17" cy="7" r="4"/><path d="m3 21 4-8 4 8z"/><rect x="13" y="13" width="8" height="8" rx="4"/></symbol>
 <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 5h14M12 5v14M8 19h8"/></symbol>
 <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
@@ -145,9 +150,10 @@
     </div>
     <div class="scroller" id="scroller"><div class="canvas-wrap" id="canvasWrap"><div class="sheet" id="canvas"></div><div class="ghost" id="ghost"></div><div class="ovl" id="ovl"></div></div></div>
     <div class="pagenav">
-      <button class="btn icon" id="prevPage" aria-label="이전 페이지"><svg class="ic"><use href="#i-prev"/></svg></button>
-      <span id="pageLabel"></span>
-      <button class="btn icon" id="nextPage" aria-label="다음 페이지"><svg class="ic"><use href="#i-next"/></svg></button>
+      <div id="mainPager"></div>
+      <span class="pn-sep"></span>
+      <button class="btn icon" id="pnSpread" title="펼침면(2쪽) 보기 — 책처럼 왼쪽·오른쪽 쪽을 함께 (다시 누르면 한 쪽 보기)" aria-pressed="false"><svg class="ic"><use href="#i-spread"/></svg></button>
+      <button class="btn icon" id="pnPv" title="미리 보기 — 안내선·여백선·화면 안내를 숨기고 인쇄 결과처럼 (다시 누르면 돌아옴)" aria-pressed="false"><svg class="ic"><use href="#i-eye"/></svg></button>
       <button class="btn icon" id="pnTl" title="영상 타임라인 열기/닫기"><svg class="ic"><use href="#i-video"/></svg></button>
     </div>
   </main>
@@ -209,35 +215,35 @@
 <style id="pageStyle"></style>
 <div class="toast" id="toast" popover="manual" hidden></div>
 
-<script src="version.js?v=20261123.1158"></script>
-<script src="fonts/fonts.js?v=20261123.1158"></script>
-<script src="fonts/webfonts.js?v=20261123.1158"></script>
-<script src="assets.js?v=20261123.1158"></script>
-<script src="assets-brand.js?v=20261123.1158"></script>
-<script src="defaults.js?v=20261123.1158"></script>
-<script src="ai.js?v=20261123.1158"></script>
-<script src="storage.js?v=20261123.1158"></script>
-<script src="live.js?v=20261123.1158"></script>
-<script src="lib.js?v=20261123.1158"></script>
-<script src="calendar.js?v=20261123.1158"></script>
-<script src="templates.js?v=20261123.1158"></script>
-<script src="templates2.js?v=20261123.1158"></script>
-<script src="templates3.js?v=20261123.1158"></script>
-<script src="templates4.js?v=20261123.1158"></script>
-<script src="templates5.js?v=20261123.1158"></script>
-<script src="templates6.js?v=20261123.1158"></script>
-<script src="effects.js?v=20261123.1158"></script>
-<script src="imgedit.js?v=20261123.1158"></script>
-<script src="elements.js?v=20261123.1158"></script>
-<script src="news.js?v=20261123.1158"></script>
-<script src="astream.js?v=20261123.1158"></script>
-<script src="media.js?v=20261123.1158"></script>
-<script src="vtemplates.js?v=20261123.1158"></script>
-<script src="video.js?v=20261123.1158"></script>
-<script src="manual.js?v=20261123.1158"></script>
-<script src="aichat.js?v=20261123.1158"></script>
-<script src="book.js?v=20261123.1158"></script>
-<script src="import.js?v=20261123.1158"></script>
-<script src="app.js?v=20261123.1158"></script>
+<script src="version.js?v=20261123.1541"></script>
+<script src="fonts/fonts.js?v=20261123.1541"></script>
+<script src="fonts/webfonts.js?v=20261123.1541"></script>
+<script src="assets.js?v=20261123.1541"></script>
+<script src="assets-brand.js?v=20261123.1541"></script>
+<script src="defaults.js?v=20261123.1541"></script>
+<script src="ai.js?v=20261123.1541"></script>
+<script src="storage.js?v=20261123.1541"></script>
+<script src="live.js?v=20261123.1541"></script>
+<script src="lib.js?v=20261123.1541"></script>
+<script src="calendar.js?v=20261123.1541"></script>
+<script src="templates.js?v=20261123.1541"></script>
+<script src="templates2.js?v=20261123.1541"></script>
+<script src="templates3.js?v=20261123.1541"></script>
+<script src="templates4.js?v=20261123.1541"></script>
+<script src="templates5.js?v=20261123.1541"></script>
+<script src="templates6.js?v=20261123.1541"></script>
+<script src="effects.js?v=20261123.1541"></script>
+<script src="imgedit.js?v=20261123.1541"></script>
+<script src="elements.js?v=20261123.1541"></script>
+<script src="news.js?v=20261123.1541"></script>
+<script src="astream.js?v=20261123.1541"></script>
+<script src="media.js?v=20261123.1541"></script>
+<script src="vtemplates.js?v=20261123.1541"></script>
+<script src="video.js?v=20261123.1541"></script>
+<script src="manual.js?v=20261123.1541"></script>
+<script src="aichat.js?v=20261123.1541"></script>
+<script src="book.js?v=20261123.1541"></script>
+<script src="import.js?v=20261123.1541"></script>
+<script src="app.js?v=20261123.1541"></script>
 </body>
 </html>
