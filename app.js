@@ -2754,7 +2754,7 @@ function renderManual() {
 function manZoom(im) { let z = $('#manZoom'); if (z) z.remove(); z = document.createElement('div'); z.id = 'manZoom'; z.innerHTML = `<div class="mzwrap">${im.innerHTML.replace('<span class="mzoom">🔍 크게</span>', '')}</div><button class="btn" data-mzc>닫기 (Esc)</button>`; $('#dlgManual').appendChild(z); const close = () => { z.remove(); document.removeEventListener('keydown', key, true); }; const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }; document.addEventListener('keydown', key, true); z.onclick = close; }
 /* 매뉴얼의 '바로 해 보기' */
 function manualGo(g) { const rail = k => { const b = $(`#rail [data-tab="${k}"]`); if (b) b.click(); };
-  ({ tpl: () => rail('tpl'), virtueTpl: () => { tplCat = 'all'; tplQ = ''; tplF = { format: '', season: '', age: '', occasion: '인성', biz: '' }; rail('tpl'); }, photo: () => rail('photo'), nara: () => rail('naracha'), elems: () => rail('elems'), video: () => rail('video'), settings: () => openSettings(), cert: () => naraGo('cert'), att: () => naraGo('att'), attPick: () => { naraGo('att'); openAttPick(); }, news: () => naraGo('news'), calendar: () => naraGo('calendar'), pages: () => rail('pages'), book: () => { rail('pages'); openBook(); }, bookedit: () => rail('book'), drive: () => openDrive(), import: () => openImport(), resize: () => openResize(), print: () => openPrint(), qr: () => openQr(), dday: () => openDday(), dojang: () => openDojang(), wizard: () => openWizard(doc.calendar.year || 2027), rules: () => openRules(), download: () => openDownload(), vkeys: () => tlKeysHelp(), aichat: () => { if (NC.aichat) NC.aichat.show(true); }, filemenu: () => $('#btnFileMenu').click() }[g] || (() => {}))(); }
+  ({ tpl: () => rail('tpl'), aitools: () => rail('ai'), virtueTpl: () => { tplCat = 'all'; tplQ = ''; tplF = { format: '', season: '', age: '', occasion: '인성', biz: '' }; rail('tpl'); }, photo: () => rail('photo'), nara: () => rail('naracha'), elems: () => rail('elems'), video: () => rail('video'), settings: () => openSettings(), cert: () => naraGo('cert'), att: () => naraGo('att'), attPick: () => { naraGo('att'); openAttPick(); }, news: () => naraGo('news'), calendar: () => naraGo('calendar'), pages: () => rail('pages'), book: () => { rail('pages'); openBook(); }, bookedit: () => rail('book'), drive: () => openDrive(), import: () => openImport(), resize: () => openResize(), print: () => openPrint(), qr: () => openQr(), dday: () => openDday(), dojang: () => openDojang(), wizard: () => openWizard(doc.calendar.year || 2027), rules: () => openRules(), download: () => openDownload(), vkeys: () => tlKeysHelp(), aichat: () => { if (NC.aichat) NC.aichat.show(true); }, filemenu: () => $('#btnFileMenu').click() }[g] || (() => {}))(); }
 /* ---- 설정 (세로 메뉴 맨 아래 ⚙): 여러 곳에 흩어져 있던 설정을 한곳에. 바꾸면 바로 적용되고 이 PC에 기억(일부는 동기화 폴더로 두 PC 같이) ---- */
 let setTab = (() => { try { return localStorage.getItem('naracal-settab') || 'view'; } catch (e) { return 'view'; } })(); /* 마지막으로 본 설정 칸 기억 */
 function openSettings(tab) {
@@ -2949,7 +2949,7 @@ function renderSide0() {
     };
     const ps = $('#photoSearch'); if (ps) imeSafe(ps, () => { photoQ = ps.value; const pos = ps.selectionStart; renderSide(); const n = $('#photoSearch'); n.focus(); n.setSelectionRange(pos, pos); });
     $('#imgFile').onchange = async e => { for (const f of e.target.files) addImage(addAsset(await imageFileToURL(f))); e.target.value = ''; renderSide(); };
-    $('#imgAI').onclick = () => openAI('image');
+    $('#imgAI').onclick = () => { if (NC.aiStudio) { NC.aiStudio.state.intent = 'img'; sideTab = 'ai'; renderRail(); renderSide(); } else openAI('image'); };
   } else if (sideTab === 'upload') {
     const mine = Object.keys(doc.assets);
     body.innerHTML = `<div class="tile"><label><svg class="ic" style="width:22px;height:22px"><use href="#i-upload"/></svg>이미지 올리기<input type="file" accept="image/*" id="upImg" hidden multiple></label><label><svg class="ic" style="width:22px;height:22px"><use href="#i-font"/></svg>글꼴 올리기<input type="file" accept=".ttf,.otf,.woff,.woff2" id="upFont" hidden></label></div>
@@ -2975,6 +2975,7 @@ function renderSide0() {
     <h3>도장 정보</h3><p class="hint">전화·주소·도장 이름을 저장하면 템플릿에 자동으로 들어가고, 바뀌면 한꺼번에 고칩니다.</p><button class="btn sm" data-dojang>🏠 도장 정보 편집</button>`;
     body.onclick = e => { const b = e.target.closest('[data-pj]'); if (!b) return; const k = b.dataset.pj; if (k === 'save') openSaveDialog(); if (k === 'open') $('#btnOpen').click(); if (k === 'new') $('#btnNew').click(); if (k === 'down') { gcAssets(); store.download(doc); } if (k === 'pdf') openDownload('pdfhq'); if (k === 'png') openDownload('png'); if (k === 'hol') openHoliday(); if (k === 'present') openPresent(); if (k === 'rules') openRules(); };
     body.oninput = e => { const t = e.target, k = t.dataset.k; if (!k) return; const v = t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) : t.value; doc[k.slice(4)] = v; if (k === 'doc.name') $('#pname').value = v; markDirty(); };
+  } else if (sideTab === 'ai' && NC.aiStudio) { NC.aiStudio.renderPanel(body); /* 새 AI 작업대 (11/23) — 아래는 예전 화면(모듈이 없을 때만) */
   } else if (sideTab === 'ai') {
     body.innerHTML = `<p class="hint">${chatMode() ? '지금 쓰는 채팅 요금제(Claude·Gemini·ChatGPT)로 씁니다 — 지시문을 복사해 채팅에 붙여 넣고, 받은 답·그림을 공방에 붙여 넣습니다. 방식은 "AI 설정"에서 바꿉니다.' : 'Claude가 문구와 이미지 프롬프트를 만들고, Gemini가 삽화를 그립니다. API 키는 "AI 설정"에 넣습니다.'}</p>
     <button class="btn primary" data-aichat style="width:100%;margin:0 0 10px">💬 AI 도우미와 대화하기 (오른쪽 채팅창)</button>
@@ -3592,7 +3593,7 @@ function renderInspector() {
   } else if (el.type === 'image') {
     const f = el.fx || {};
     h += `<h3>그림</h3><div class="imgprev">${src(el.src) ? `<img src="${src(el.src)}" alt="">` : '<span class="hint">그림 없음</span>'}</div>
-    <div class="row"><label class="btn sm">바꾸기(파일)<input type="file" accept="image/*" id="imgReplace" hidden></label><button class="btn sm" id="imgLib">사진 보관함</button><button class="btn sm ai" id="imgAI">AI로 만들기</button></div>
+    <div class="row"><label class="btn sm">바꾸기(파일)<input type="file" accept="image/*" id="imgReplace" hidden></label><button class="btn sm" id="imgLib">사진 보관함</button><button class="btn sm ai" id="imgAI" title="흰 배경 지우기·비슷하게 새로 그리기·말로 바꾸기">✨ 사진 AI</button></div>
     <div class="row" style="margin-top:6px"><button class="btn sm primary" id="imgEdit" ${src(el.src) ? '' : 'disabled'}>편집기 (배경 지우기·브러시·자르기)</button>${el.srcOrig ? '<button class="btn sm" id="imgOrig">원본으로</button>' : ''}</div>
     <h3>필터 <small>포토샵 조정</small></h3><div class="pk fthumbs">${(() => { const u = src(el.src); return FX.IMG_PRESETS.map(([id, n, fx]) => { const on = JSON.stringify(el.fx || {}) === JSON.stringify(fx) || (id === 'none' && !Object.keys(el.fx || {}).length); return `<button type="button" class="pk-b${on ? ' on' : ''}" data-imgpreset="${id}" title="${n}"><span class="pk-ft">${u ? `<img src="${esc(u)}" alt="" style="${FX.imageFilter({ fx })}">` : ''}</span><span class="pk-t">${n}</span></button>`; }).join(''); })()}</div>
     <div class="grid2 sls">${F('밝기', 'fx.bri', f.bri == null ? 100 : f.bri, { type: 'slider', min: 20, max: 200, step: 1, unit: '%', def: 100 })}${F('대비', 'fx.con', f.con == null ? 100 : f.con, { type: 'slider', min: 20, max: 200, step: 1, unit: '%', def: 100 })}${F('채도', 'fx.sat', f.sat == null ? 100 : f.sat, { type: 'slider', min: 0, max: 250, step: 1, unit: '%', def: 100 })}${F('색조', 'fx.hue', f.hue || 0, { type: 'slider', min: 0, max: 360, step: 1, unit: '°', def: 0 })}${F('흐림', 'fx.blur', f.blur || 0, { type: 'slider', min: 0, max: 5, step: 0.1, unit: 'mm', def: 0 })}${F('흑백', 'fx.gray', f.gray || 0, { type: 'slider', min: 0, max: 100, step: 1, unit: '%', def: 0 })}${F('세피아', 'fx.sepia', f.sepia || 0, { type: 'slider', min: 0, max: 100, step: 1, unit: '%', def: 0 })}${F('반전', 'fx.inv', f.inv, { type: 'check' })}</div>
@@ -3705,7 +3706,7 @@ function renderInspector() {
     if (b.id === 'iDup') duplicate(); if (b.id === 'iDel') removeSel(); if (b.id === 'iFront') reorder('front'); if (b.id === 'iBack') reorder('back');
     if (b.id === 'fontBrowse') openFonts();
     if (b.id === 'imgLib') { sideTab = 'photo'; renderRail(); renderSide(); }
-    if (b.id === 'imgAI') openAI('image');
+    if (b.id === 'imgAI') { if (NC.aiStudio && selEls()[0] && selEls()[0].type === 'image') NC.aiStudio.imageMenu(b, selEls()[0]); else openAI('image'); }
     if (b.id === 'imgEdit') openImgEditor(el);
     if (b.id === 'imgOrig') { el.src = el.srcOrig; delete el.srcOrig; commit(); rerender(); }
     if (b.id === 'imgFitBox') { const i = new Image(); i.onload = () => { el.h = r1(el.w * i.naturalHeight / i.naturalWidth); commit(); rerender(); }; i.src = src(el.src); }
@@ -6734,7 +6735,8 @@ function renderQbar() {
     + `<label class="qcol" title="글자 색"><span style="background:${esc(el.color || '#000')}">A</span><input type="color" id="qColor" value="${/^#[0-9a-f]{6}$/i.test(el.color) ? el.color : '#000000'}"></label>`
     + [['bold', '<b>B</b>', '굵게 (Ctrl+B)'], ['italic', '<i>I</i>', '기울임 (Ctrl+I)'], ['underline', '<u>U</u>', '밑줄 (Ctrl+U)']].map(([k, t, ti]) => `<button type="button" class="btn icon ${fmtOn(el, k) ? 'on' : ''}" data-qf="${k}" title="${ti}">${t}</button>`).join('')
     + `<button type="button" class="btn icon" data-qa="${{ left: 'center', center: 'right', right: 'justify', justify: 'left' }[al]}" title="글자 정렬: ${{ left: '왼쪽', center: '가운데', right: '오른쪽', justify: '양쪽' }[al]} (누르면 바뀜)">${ic(al)}</button>`
-    + `<button type="button" class="btn sm" data-qp title="스타일 프리셋·효과는 오른쪽 패널에서">스타일 ▸</button>`;
+    + `<button type="button" class="btn sm" data-qp title="스타일 프리셋·효과는 오른쪽 패널에서">스타일 ▸</button>`
+    + (NC.aiStudio ? `<button type="button" class="btn sm ai" data-qai title="AI로 글 다듬기 — 맞춤법·짧게·쉽게·공손하게·영어로">✨ AI</button>` : '');
 }
 (function () {
   const q = $('#qbar'); if (!q) return;
@@ -6742,6 +6744,7 @@ function renderQbar() {
   q.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return; const el = selEls()[0]; if (!el) return;
     if (b.dataset.fp) { openFontPop(b); return; }
+    if (b.dataset.qai != null && NC.aiStudio) { NC.aiStudio.rewriteMenu(b, selEls().filter(x => x.type === 'text')); return; }
     if (b.dataset.qf) { toggleFmt(b.dataset.qf); return; }
     if (b.dataset.qa) { setK(el, 'align', b.dataset.qa); commit(); rerender(); return; }
     if (b.hasAttribute('data-qp')) { try { localStorage.setItem('naracal-presets-open', '1'); } catch (err) {} renderInspector(); const g = $('#presetGrid'); if (g) g.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
@@ -7453,6 +7456,13 @@ async function runRacha() {
   bf.onclick = () => { st.fold = !st.fold; apply(); bf.blur(); };  /* 누른 뒤 파란 테두리가 남지 않게 */
   apply();
 })();
+/* ---- AI 작업대 (aistudio.js) 다리 ---- */
+async function aiInsertImage(u, o = {}) { const ref = addAsset(u); let ar = 1; try { const im = await AI.loadImg(u); ar = im.naturalHeight / Math.max(1, im.naturalWidth); } catch (e) {}
+  if (o.asBg) { const pg = page(); pg.els.unshift({ id: uid(), type: 'image', src: ref, x: 0, y: 0, w: doc.w, h: doc.h, rot: 0, fit: 'cover', pos: '50% 50%', flip: false, radius: 0, opacity: 1, locked: true, name: o.name || 'AI 배경' }); commit(); renderAll(); toast('지금 쪽 배경으로 깔았습니다 (잠김 — 오른쪽 클릭으로 풀기 · 되돌리기 Ctrl+Z)'); return; }
+  const w = r1(Math.min(doc.w, doc.h) * (o.small ? 0.18 : 0.45)); addEl({ type: 'image', src: ref, x: 0, y: 0, w, h: r1(w * ar), rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: o.name || 'AI 그림' }); }
+async function aiPagesAsNewDoc(pgs, o) { if (doc.pages.some(p => p.els.length) && !window.confirm(`새 발표자료(${pgs.length}쪽)를 새 문서로 엽니다. (${keepNote()})`)) return; await keepCurrentDoc(); fillDojang(pgs); await store.disconnect(); const nd = newDoc(); nd.w = o.w; nd.h = o.h; nd.fmt = o.fmt || ''; nd.name = o.name || '발표자료'; nd.pages = pgs; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = {}; nd.fonts = doc.fonts; nd.rules = doc.rules; nd.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다'); zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); toast(`발표자료 ${pgs.length}쪽을 만들었습니다 — 글·그림은 쪽에서 바로 고치세요. 다운로드 → PowerPoint로 내보내기`); }
+function aiAppendPages(pgs) { if (Math.abs(doc.w / doc.h - 16 / 9) > 0.02 && !window.confirm('지금 문서가 16:9가 아니어서 쪽 모양이 어긋날 수 있어요. 그래도 뒤에 붙일까요? (새 발표자료로 만들기를 권해요)')) return; fillDojang(pgs); const at = cur + 1; doc.pages.splice(at, 0, ...pgs); commit(); renderAll(); goto(at); toast(`발표 쪽 ${pgs.length}장을 지금 쪽 뒤에 붙였습니다`); }
+if (NC.aiStudio) NC.aiStudio.init({ chatMode, chatName: k => CHAT_SITES[k === 'image' ? AI.cfg.chatImage : AI.cfg.chatText][0], sendToChat, copyImg, toast: (m, b) => toast(m, b), goSide: k => { sideTab = k; renderRail(); renderSide(); }, sideIs: k => sideTab === k, renderSide, insertImage: aiInsertImage, openPagesAsNewDoc: aiPagesAsNewDoc, appendPages: aiAppendPages, uid, commit, rerender, addAsset, src: r => src(r), openRachaMaker, openAI, aichatShow: () => { if (NC.aichat) NC.aichat.show(true); }, imgEditorSel: () => { const el = selEls()[0]; if (el && el.type === 'image' && src(el.src)) openImgEditor(el); else toast('먼저 이미지 요소를 선택하세요', true); } });
 if (NC.aichat) NC.aichat.init({
   get doc() { return doc; }, get cur() { return cur; }, get sel() { return sel.slice(); }, get hptr() { return hptr; },
   pgOff, commit, undo, renderAll, goto, select, uid, TEXT_DEF, docK, isPx: isPxDoc, sizeLabel: () => { updDocSize(); const t = ($('#docSize') || {}).textContent; return t && /px/.test(t) ? `${t} (${docSizeLabel(' × ')})` : t || docSizeLabel(' × '); }, toast, openAI, tplItems, openTplPreview,

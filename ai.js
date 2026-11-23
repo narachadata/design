@@ -208,5 +208,5 @@ Output the prompt text only.`;
     return c.toDataURL('image/png');
   }
 
-  return { cfg, saveCfg, chat, readMonth, readYear, suggestMonth, suggestYear, imagePrompt, refinePrompt, geminiImage, removeWhite, loadImg };
+  return { cfg, saveCfg, chat, readMonth, readYear, suggestMonth, suggestYear, imagePrompt, refinePrompt, geminiImage, removeWhite, loadImg, claudeText, claudeJSON }; /* claudeText·claudeJSON: AI 작업대(aistudio.js)가 씀 */
 })();
