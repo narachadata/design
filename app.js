@@ -2624,7 +2624,7 @@ async function openVideoPlayer(fromCur) {
     if (fromCur) { const x = VIDEO.timing(doc, videoPages()).list.find(q => q.i >= cur); P.seek(x ? x.t0 : 0); }  /* 타임라인과 같은 시간표 */
     $('#vpPlay').onclick = () => { P.toggle(); ic(); }; seek.oninput = () => P.seek(Number(seek.value));
     d.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); P.toggle(); ic(); } });
-    $('#vpSave').onclick = () => { d.close(); openVideoMaker(); };
+    $('#vpSave').onclick = () => { stackOpen(openVideoMaker); }; /* 저장 창을 미리보기 위에 — 닫으면 미리보기로 */
     P.play(); ic();
   } catch (e) { const l = $('#vpLoad'); if (l) l.textContent = '준비하지 못했습니다: ' + e.message; }
 }
@@ -2805,6 +2805,10 @@ function settingsChange(e) { const t = e.target, k = t.dataset && t.dataset.set;
   else if (k === 'skim') { if (tlSkimOn !== on) tlToggleSkim(); }
   else if (k === 'tlonly') { tlOnlyVideo = on; try { localStorage.setItem('naracal-tlonly', on ? '1' : '0'); } catch (er) {} toast(on ? '영상 메뉴에서만 타임라인을 엽니다' : '다른 메뉴에서도 타임라인이 열려 있습니다'); }
   else if (k === 'vshare') { try { localStorage.setItem('naracal-video-share', on ? '1' : '0'); } catch (er) {} toast(on ? '영상을 저장할 때 결과물 폴더에도 저장합니다' : '결과물 폴더에는 저장하지 않습니다'); } }
+/* 저장·적용하지 않은 변경이 있으면 닫기(닫기 단추·Esc) 전에 한 번 묻기 (UX 검토 11/23) */
+function guardClose(d, dirty, msg) { if (d._guard) { d._guard.dirty = dirty; d._guard.msg = msg; return; } d._guard = { dirty, msg };
+  const ask = e => { const g = d._guard; if (g.dirty() && !window.confirm(g.msg)) { e.preventDefault(); e.stopImmediatePropagation(); } };
+  d.addEventListener('cancel', ask); d.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-close]')) ask(e); }, true); }
 /* 지금 창 위에 다른 창을 겹쳐 열고, 그 창이 닫히면 after() — 「하위 창을 닫으면 앞 창까지 닫힘」 막기 (팀장님 11/23) */
 function stackOpen(fn, after) { const before = new Set([...document.querySelectorAll('dialog[open]')]); let n = 0; Promise.resolve().then(fn).catch(e => toast(e.message, true));
   const look = () => { const ch = [...document.querySelectorAll('dialog[open]')].find(x => !before.has(x)); if (!ch) { if (++n < 40) setTimeout(look, 50); return; } if (after) ch.addEventListener('close', () => setTimeout(after, 0), { once: true }); }; setTimeout(look, 0); }
@@ -3904,7 +3908,7 @@ async function renderSaveDialog() {
     ${row('📂', '다른 곳의 문서 열기', '폴더 밖이나 받은 파일', '<button class="btn sm" data-sv="other">열기</button>')}
   </div>
   ${ready ? `<details class="bk-more"><summary>📁 폴더 맨 위의 문서 (${docs.length})</summary><div>${docs.length ? `<ul class="list">${docs.map((x, i) => `<li data-doc="${i}" title="누르면 엽니다"><span>${esc(x.name.replace(/\.design\.json$/i, ''))}</span><small class="hint" style="margin:0">${when(x.lastModified)} · ${Math.max(1, Math.round(x.size / 1024)).toLocaleString()}KB</small>${st.handle && x.name === st.fileName && curIn ? '<b style="min-width:auto">작업 중</b>' : ''}</li>`).join('')}</ul>` : '<p class="hint">아직 문서가 없습니다.</p>'}</div></details>` : ''}`;
-  $('#saveBody').innerHTML = `<h3 class="svh">📍 지금 저장 상태</h3>` + flow + todo + mine + `<details class="bk-more svlive"><summary>🔗 실시간 같이 편집 <small>두 PC에서 같은 문서를 동시에 — 고급, 안 써도 저장에는 문제없음</small></summary><div>${NC.live.settingsHTML()}</div></details>` + `<details class="bk-more"><summary>ⓘ 문서 파일에는 무엇이 들어가나요?</summary><div>올린 이미지와 AI 이미지가 문서 파일에 함께 들어갑니다. 내장 글꼴과 2026 삽화는 프로그램에 있으므로 파일이 가벼워집니다. 두 PC에서 같은 문서를 동시에 고쳐 내용이 갈라지면 어느 쪽으로 계속할지 묻고, 다른 쪽은 "충돌 사본" 파일로 보관해 지워지는 내용이 없습니다.</div></details>`;
+  $('#saveBody').innerHTML = `<h3 class="svh">📍 지금 저장 상태</h3>` + flow + todo + mine + `<details class="bk-more svlive"><summary>🔗 실시간 같이 편집 — 지금 ${(() => { try { return NC.live.cfg().on ? '<b style="color:#1f7a45">켜짐</b>' : '꺼짐'; } catch (e) { return '꺼짐'; } })()} <small>두 PC에서 같은 문서를 동시에 — 고급, 안 써도 저장에는 문제없음</small></summary><div>${NC.live.settingsHTML()}</div></details>` + `<details class="bk-more"><summary>ⓘ 문서 파일에는 무엇이 들어가나요?</summary><div>올린 이미지와 AI 이미지가 문서 파일에 함께 들어갑니다. 내장 글꼴과 2026 삽화는 프로그램에 있으므로 파일이 가벼워집니다. 두 PC에서 같은 문서를 동시에 고쳐 내용이 갈라지면 어느 쪽으로 계속할지 묻고, 다른 쪽은 "충돌 사본" 파일로 보관해 지워지는 내용이 없습니다.</div></details>`;
   const run = async fn => { try { await fn(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } };
   const act = {
     dir: async () => { await store.connectFolder(); await afterFolderReady(); updateSaveBadge(); toast('저장 폴더를 연결했습니다 — 문서와 설정이 이 폴더로 같아집니다'); renderSaveDialog(); },
@@ -4333,9 +4337,12 @@ function renderFonts() {
 /* ---- 공휴일 ---- */
 let holState = { year: 2027, source: 'builtin', list: null };
 function openHoliday(year) { holState.year = year || doc.calendar.year || new Date().getFullYear(); holState.list = (doc.holidays[holState.year] || []).map(h => Object.assign({}, h)); holState.source = CAL.canAuto(holState.year) ? 'builtin' : (AI.cfg.datagoKey ? 'datago' : 'nager'); renderHoliday(); $('#dlgHoliday').showModal(); }
+const holNorm = l => JSON.stringify((l || []).filter(h => h.date && h.name).map(h => [h.date, h.name.trim()]).sort());
+const holDirty = () => { const d = $('#dlgHoliday'); return !!(d && d.open) && holNorm(holState.list) !== holNorm(doc.holidays[holState.year]); };
+function holStat() { const el = $('#holStat'); if (!el) return; const n = (doc.holidays[holState.year] || []).length; el.innerHTML = holDirty() ? `<span class="no">⚠ ${holState.year}년 — 아직 적용 안 됨</span><b style="color:#8a5a00;font-weight:600">아래 「적용」을 눌러야 달력에 반영돼요</b>` : `<span class="${n ? 'ok' : 'no'}">📍 ${holState.year}년 ${n ? `✔ ${n}개 적용 중` : '○ 아직 공휴일 없음'}</span><b style="color:var(--ui-muted);font-weight:500">${n ? '달력에 빨간 날로 표시' : '「가져오기」 → 「적용」'}</b>`; }
 function renderHoliday() {
   const s = holState; const years = []; for (let y = 2020; y <= 2040; y++) years.push(y);
-  $('#holBody').innerHTML = `<div class="row" style="margin-bottom:8px"><label class="f" style="margin:0"><span>연도</span><select id="holYear">${years.map(y => `<option ${y === s.year ? 'selected' : ''}>${y}</option>`).join('')}</select></label>
+  $('#holBody').innerHTML = `<div class="svmini" id="holStat" style="cursor:default"></div><div class="row" style="margin-bottom:8px"><label class="f" style="margin:0"><span>연도</span><select id="holYear">${years.map(y => `<option ${y === s.year ? 'selected' : ''}>${y}</option>`).join('')}</select></label>
   <label class="f" style="margin:0;flex:1"><span>출처</span><select id="holSrc"><option value="builtin" ${s.source === 'builtin' ? 'selected' : ''}>자동 계산 (2023~2036년, 대체공휴일·2027년 신설 노동절·제헌절·선거일 포함)</option><option value="datago" ${s.source === 'datago' ? 'selected' : ''}>공공데이터포털 특일정보 (공식, 서비스 키 필요)</option><option value="nager" ${s.source === 'nager' ? 'selected' : ''}>Nager.Date 공개 API (키 없음, 한국 데이터 정확도 낮음)</option></select></label>
   <button class="btn primary" id="holFetch" style="margin-top:16px">가져오기</button></div>
   <div id="holKeyRow" ${s.source === 'datago' ? '' : 'hidden'}><label class="f"><span>공공데이터포털 서비스 키 (data.go.kr → 한국천문연구원 특일 정보)</span><input type="text" id="holKey" value="${esc(AI.cfg.datagoKey || '')}" placeholder="일반 인증키(Decoding)"></label></div>
@@ -4345,7 +4352,8 @@ function renderHoliday() {
   $('#holYear').onchange = e => { s.year = Number(e.target.value); s.list = (doc.holidays[s.year] || []).map(h => Object.assign({}, h)); renderHoliday(); };
   $('#holSrc').onchange = e => { s.source = e.target.value; renderHoliday(); };
   $('#holFetch').onclick = async () => { const b = $('#holFetch'); b.disabled = true; b.textContent = '가져오는 중…'; try { const key = ($('#holKey') || {}).value || ''; if (key) { AI.cfg.datagoKey = key.trim(); AI.saveCfg(); } s.list = await CAL.fetchHolidays({ source: s.source, year: s.year, key: key.trim() }); renderHoliday(); $('#holMsg').textContent = `${s.list.length}개를 가져왔습니다.`; } catch (e) { toast(e.message, true); b.disabled = false; b.textContent = '가져오기'; } };
-  $('#holRows').oninput = e => { const t = e.target; if (t.dataset.hd != null) s.list[Number(t.dataset.hd)].date = t.value; if (t.dataset.hn != null) s.list[Number(t.dataset.hn)].name = t.value; };
+  $('#holRows').oninput = e => { const t = e.target; if (t.dataset.hd != null) s.list[Number(t.dataset.hd)].date = t.value; if (t.dataset.hn != null) s.list[Number(t.dataset.hn)].name = t.value; holStat(); };
+  holStat(); guardClose($('#dlgHoliday'), holDirty, '고친 공휴일을 아직 적용하지 않았습니다. 적용하지 않고 닫을까요?\n(「적용」을 눌러야 달력에 반영됩니다)');
   $('#holRows').onclick = e => { const b = e.target.closest('[data-hx]'); if (b) { s.list.splice(Number(b.dataset.hx), 1); renderHoliday(); } };
   $('#holAdd').onclick = () => { s.list = s.list || []; s.list.push({ date: `${s.year}-01-01`, name: '' }); renderHoliday(); };
   $('#holClear').onclick = () => { delete doc.holidays[s.year]; s.list = []; commit(); rerender(); renderHoliday(); };
@@ -4368,6 +4376,8 @@ function parseRuleLines(txt) { /* "3/2 개학식", "3월 2일 개학", "매월 2
   });
   const res = out.filter(r => r.text && (r.kind !== 'date' || ok(r.m, r.d))); res.skipped = skipped; return res;
 }
+const ruleKey = l => JSON.stringify((l || []).filter(r => r.text).map(r => [r.kind || 'w', r.m, r.d, r.week, r.dow, r.text, r.color || '', !!r.noHol]));
+function ruleStat() { const el = $('#ruleStat'); if (!el) return; const n = doc.rules.filter(r => r.text).length, sv = savedRules(), same = sv && ruleKey(sv) === ruleKey(doc.rules); el.innerHTML = `<span class="ok">✔ 이 문서 ${n}개 — 고치면 바로 저장</span><i>·</i>${sv ? `<span class="${same ? 'ok' : 'no'}">⭐ 도장 기본 목록 ${sv.length}개 ${same ? '(같음)' : '(다름)'}</span>` : '<span class="no">⭐ 도장 기본 목록 없음</span>'}<b style="color:${same ? 'var(--ui-muted)' : '#8a5a00'};font-weight:${same ? 500 : 600}">${same ? '새 문서·다음 해 달력에도 이대로' : '새 문서에도 쓰려면 아래 「⭐ 도장 기본 목록으로 저장」'}</b>`; } /* 이 문서 목록과 도장 기본 목록이 같은지 (UX 검토 11/23) */
 function openRules() {
   let d = $('#dlgRules'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgRules'; d.className = 'wide'; d.innerHTML = `<div class="dhead"><h2>반복 일정 · 연간 행사</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="rulesBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
   const colorSel = (r, k) => `${colorDots(`select[data-rk="color"][data-r="${k}"]`, r.color)}<select data-rk="color" data-r="${k}" hidden>${Object.entries(COLOR_NAMES).map(([c, t]) => `<option value="${c}" ${(r.color || '') === c ? 'selected' : ''}>${t}</option>`).join('')}</select>`; /* 일정 색: 색 점 (팀장님 11/23 — 글보다 그림) */
@@ -4377,28 +4387,29 @@ function openRules() {
     : `<div class="evrow" style="grid-template-columns:90px 90px 1fr 80px 70px 28px;margin-bottom:4px"><select data-rk="week" data-r="${k}">${[['every', '매주'], ['1', '첫째'], ['2', '둘째'], ['3', '셋째'], ['4', '넷째'], ['last', '마지막']].map(([v, t]) => `<option value="${v}" ${String(r.week) === v ? 'selected' : ''}>${t}</option>`).join('')}</select><select data-rk="dow" data-r="${k}">${CAL.WD.ko1.map((w, i) => `<option value="${i}" ${Number(r.dow) === i ? 'selected' : ''}>${w}요일</option>`).join('')}</select><input type="text" data-rk="text" data-r="${k}" value="${esc(r.text)}" placeholder="일정 내용">${colorSel(r, k)}${nhBox(r, k)}<button class="x" data-rd="${k}">×</button></div>`;
   const render = () => {
     const wk = doc.rules.map((r, k) => [r, k]).filter(([r]) => r.kind !== 'date'), dt = doc.rules.map((r, k) => [r, k]).filter(([r]) => r.kind === 'date');
-    $('#rulesBody').innerHTML = `<p class="hint">달력 요소의 "반복 일정 넣기"(또는 "문서의 모든 달력에")를 누르면 이 목록대로 일정이 들어갑니다. 이미 같은 일정이 있으면 건너뜁니다. <b>휴일 빼기</b>를 켠 일정은 공휴일(빨간 날)에는 넣지 않습니다.</p>
+    $('#rulesBody').innerHTML = `<div class="svmini" id="ruleStat" style="cursor:default"></div><p class="hint">달력 요소의 "반복 일정 넣기"(또는 "문서의 모든 달력에")를 누르면 이 목록대로 일정이 들어갑니다. 이미 같은 일정이 있으면 건너뜁니다. <b>휴일 빼기</b>를 켠 일정은 공휴일(빨간 날)에는 넣지 않습니다.</p>
     <h3>요일 규칙 <small>매월 몇째 주 무슨 요일</small></h3><div id="rulesList">${wk.map(([r, k]) => row(r, k)).join('') || '<p class="hint">없음</p>'}</div><button class="btn sm" data-radd="week">+ 요일 규칙</button>
     <h3>날짜 규칙 <small>매년 같은 날 · 매월 같은 날 (생일·기념일·원비)</small></h3><div id="rulesList2">${dt.map(([r, k]) => row(r, k)).join('') || '<p class="hint">없음</p>'}</div><button class="btn sm" data-radd="date">+ 날짜 규칙</button>
     <details class="fx" style="margin-top:10px"><summary><b>여러 줄 한 번에 붙여넣기</b> <small class="hint" style="margin:0">엑셀·메모에서 복사</small></summary><textarea id="rulePaste" rows="5" placeholder="3/2 개학식&#10;5월 5일 어린이날 행사&#10;매월 25일 원비 납부&#10;마지막 화요일 승급심사&#10;매주 수요일 품새반 (휴일 제외)"></textarea><button class="btn sm" id="rulePasteGo">목록에 더하기</button></details>
     <div class="row" style="margin-top:12px;gap:6px;flex-wrap:wrap"><button class="btn sm primary" id="ruleSave" title="새 문서·다음 해 달력에 이 목록이 자동으로 들어갑니다 (두 PC 설정 동기화)">⭐ 도장 기본 목록으로 저장</button><button class="btn sm" id="ruleLoad" ${savedRules() ? '' : 'disabled'}>저장된 목록 불러오기${savedRules() ? ` (${savedRules().length})` : ''}</button></div>`;
   };
   const B = $('#rulesBody');
+  if (!B._rs) { B._rs = 1; ['input', 'change', 'click'].forEach(t => B.addEventListener(t, () => setTimeout(ruleStat, 0))); }
   B.oninput = e => { const t = e.target; if (t.dataset.r != null && t.dataset.rk) { if (t.type === 'checkbox') { if (t.checked) doc.rules[Number(t.dataset.r)][t.dataset.rk] = true; else delete doc.rules[Number(t.dataset.r)][t.dataset.rk]; markDirty(); return; } doc.rules[Number(t.dataset.r)][t.dataset.rk] = t.value; if (t.dataset.rk === 'd') delete doc.rules[Number(t.dataset.r)].last; markDirty(); } };
   B.onclick = e => {
     const x = e.target.closest('[data-rd]'); if (x) { doc.rules.splice(Number(x.dataset.rd), 1); markDirty(); render(); return; }
     const a = e.target.closest('[data-radd]'); if (a) { doc.rules.push(a.dataset.radd === 'date' ? { kind: 'date', m: 0, d: 1, text: '', color: '' } : { week: 'last', dow: 1, text: '', color: '' }); markDirty(); render(); return; }
     if (e.target.id === 'rulePasteGo') { const add = parseRuleLines($('#rulePaste').value), key = r => [r.kind || 'w', r.m, r.d, r.week, r.dow, r.text].join('|'), have = new Set(doc.rules.map(key)); const nw = add.filter(r => !have.has(key(r))); doc.rules.push(...nw); markDirty(); render(); toast(add.length ? `${nw.length}개를 더했습니다${add.length > nw.length ? ` (같은 것 ${add.length - nw.length}개 건너뜀)` : ''}` : '알아볼 수 있는 줄이 없습니다 — 예: 3/2 개학식, 3/2~3/4 방학, 매월 25일 원비, 매주 화요일 줄넘기, 매월 말일 정산', !add.length); if (add.skipped && add.skipped.length) { const keepTxt = add.skipped.join('\n'); setTimeout(() => { const ta = $('#rulePaste'); if (ta) ta.value = keepTxt; }, 0); } /* render() 뒤 입력칸에 다시 넣어 고쳐 쓸 수 있게 */ if (add.skipped && add.skipped.length) setTimeout(() => toast(`알아보지 못한 줄 ${add.skipped.length}개는 입력칸에 남겼습니다 (없는 날짜 포함): ${add.skipped.slice(0, 3).map(x => `"${x}"`).join(', ')}${add.skipped.length > 3 ? ' …' : ''}`, true), 1200); return; }
-    if (e.target.id === 'ruleSave') { lsSet('naracal-rules-saved', doc.rules.filter(r => r.text)); render(); toast('도장 기본 목록으로 저장했습니다 — 새 문서·다음 해 달력에 자동으로 들어갑니다'); return; }
+    if (e.target.id === 'ruleSave') { lsSet('naracal-rules-saved', doc.rules.filter(r => r.text)); render(); ruleStat(); toast('도장 기본 목록으로 저장했습니다 — 새 문서·다음 해 달력에 자동으로 들어갑니다'); return; }
     if (e.target.id === 'ruleLoad') { const sv = savedRules() || [], key = r => [r.kind || 'w', r.m, r.d, r.week, r.dow, r.text].join('|'), have = new Set(doc.rules.map(key)); const nw = sv.filter(r => !have.has(key(r))); doc.rules.push(...clone(nw)); markDirty(); render(); toast(`${nw.length}개를 불러왔습니다`); }
   };
-  render(); d.showModal();
+  render(); ruleStat(); d.showModal();
 }
 
 /* ---- AI 도우미 ---- */
 let aiCtx = { tab: 'content', monthIdx: 0 };
 $('#btnAI').onclick = () => { if (NC.aichat) NC.aichat.toggle(); else openAI(selEls()[0] && selEls()[0].type === 'image' ? 'image' : 'content'); }; /* 11/19 팀장님: AI 도우미 = 오른쪽 채팅창(aichat.js) */
-function openAI(tab) { aiCtx.tab = tab; const el = selEls()[0]; if (el && el.month) aiCtx.monthIdx = el.month - 1; if (!chatMode() && !AI.cfg.anthropicKey && !AI.cfg.geminiKey && tab !== 'keys') aiCtx.tab = 'keys'; renderAI(); $('#dlgAI').showModal(); }
+function openAI(tab) { aiCtx.tab = tab; const el = selEls()[0]; if (el && el.month) aiCtx.monthIdx = el.month - 1; const toKeys = !chatMode() && !AI.cfg.anthropicKey && !AI.cfg.geminiKey && tab !== 'keys'; if (toKeys) aiCtx.tab = 'keys'; renderAI(); $('#dlgAI').showModal(); if (toKeys) toast('API 키로 쓰기로 되어 있는데 키가 없어 「AI 설정」을 먼저 열었습니다 — 키를 넣거나 「내 채팅 요금제로」를 고르세요'); }
 $$('#dlgAI [role=tab]').forEach(b => b.onclick = () => { aiCtx.tab = b.dataset.tab; renderAI(); });
 /* 인성 데이터 (2026-11-18 관장님 결정): 표는 각 프로그램 안에 두고, 기준은 메인 프로그램 데이터(기본표 VIRTUE24 + 설정에서 고친 virtueEdits).
    ① 관리 앱(R4.819~)이 업무 창고를 받은 뒤 '고친 내용까지 적용된 24달 표'를 같은 주소 localStorage 'naracha-virtue24'에 써 둠 → 공방은 이것을 먼저 읽음(읽기만)
@@ -4942,8 +4953,9 @@ function renderStudio(body) {
 }
 function aiF(label, key, type) { return `<label class="f"><span>${label}</span><input type="${type || 'text'}" data-ai="${key}" value="${esc(AI.cfg[key])}" autocomplete="off"></label>`; }
 // 키 저장 표시: 이 브라우저에 바로 저장되고, 동기화 폴더가 있으면 몇 초 안에 설정 파일로 올라가 다른 PC에도 적용됨
-function keySavedText() { const has = [AI.cfg.geminiKey && 'Gemini', AI.cfg.anthropicKey && 'Claude'].filter(Boolean); if (!has.length) return '아직 저장된 키가 없습니다. 칸에 붙여 넣으면 바로 저장됩니다.'; return `✓ ${has.join('·')} 키 저장됨 — ${store.state.dir ? '동기화 폴더(구글 드라이브)에도 저장되어 같은 폴더를 연결한 다른 PC에서도 그대로 쓰입니다' : '이 브라우저에 저장됨 · 다른 PC에서도 쓰려면 저장 ▾ → 동기화 폴더를 연결하세요'}`; }
-$('#aiBody').addEventListener('input', e => { const k = e.target.dataset.ai; if (k) { AI.cfg[k] = e.target.value.trim(); AI.saveCfg(); const ks = $('#keySaved'); if (ks) ks.textContent = keySavedText(); if (/Key$/.test(k) && store.state.dir) setTimeout(() => store.pushSettings().catch(() => {}), 300); } });
+function keySavedText() { const tail = k => { const v = String(AI.cfg[k] || ''); return v.length > 8 ? '••••' + v.slice(-4) : '••••'; }; const has = [AI.cfg.anthropicKey && ['Claude', 'anthropicKey'], AI.cfg.geminiKey && ['Gemini', 'geminiKey']].filter(Boolean); if (!has.length) return '○ 아직 저장된 키가 없습니다. 칸에 붙여 넣으면 바로 저장됩니다.'; return has.map(([n, k]) => `<span class="kchip">✔ ${n} 키 ${tail(k)} <button type="button" class="btn sm danger" data-aikeydel="${k}" title="이 키를 지웁니다">지우기</button></span>`).join(' ') + `<small style="display:block;margin-top:4px">${store.state.dir ? '동기화 폴더(구글 드라이브)에도 저장되어 같은 폴더를 연결한 다른 PC에서도 쓰입니다' : '이 브라우저에 저장됨'}</small>`; } /* 끝 4자리만 보여 어느 키인지 알게 + 지우기 (UX 검토 11/23) */
+$('#aiBody').addEventListener('input', e => { const k = e.target.dataset.ai; if (k) { AI.cfg[k] = e.target.value.trim(); AI.saveCfg(); const ks = $('#keySaved'); if (ks) ks.innerHTML = keySavedText(); if (/Key$/.test(k) && store.state.dir) setTimeout(() => store.pushSettings().catch(() => {}), 300); } });
+$('#aiBody').addEventListener('click', e => { const b = e.target.closest('[data-aikeydel]'); if (!b) return; const k = b.dataset.aikeydel; if (!window.confirm(`${k === 'anthropicKey' ? 'Claude' : 'Gemini'} 키를 지울까요? (다시 쓰려면 키를 새로 붙여 넣어야 합니다)`)) return; AI.cfg[k] = ''; AI.saveCfg(); if (store.state.dir) store.pushSettings().catch(() => {}); renderAI(); toast('키를 지웠습니다'); });
 $('#aiBody').addEventListener('change', e => { const k = e.target.dataset.ai; if (k) { AI.cfg[k] = e.target.value.trim(); AI.saveCfg(); if (aiCtx.tab === 'keys' && (k === 'chatText' || k === 'chatImage' || /Key$/.test(k))) renderAI(); } }); /* 바꾸면 맨 위 「지금」 줄도 바로 */
 async function runAI(fn) { const busy = $('#aiBusy'); const btns = $$('#aiBody button'); btns.forEach(b => b.disabled = true); if (busy) busy.innerHTML = '<span class="spin"></span>요청 중…'; try { await fn(); if (busy) busy.textContent = '완료'; } catch (err) { if (busy) busy.textContent = ''; toast(err.message, true); } finally { btns.forEach(b => b.disabled = false); } }
 
@@ -6479,7 +6491,7 @@ function openPrint(pre) {
       fit: VSV('0 0 26 26', '<rect x="5" y="2" width="16" height="22" rx="1" fill="#fff" stroke-width="1.1"/><rect x="7" y="4" width="12" height="18" fill="currentColor" stroke="none" opacity=".35"/>', 26, 26), actual: VSV('0 0 26 26', '<rect x="5" y="2" width="16" height="22" rx="1" fill="#fff" stroke-width="1.1"/><rect x="9" y="7" width="8" height="11" fill="currentColor" stroke="none" opacity=".35"/>', 26, 26), custom: VSV('0 0 26 26', '<rect x="5" y="2" width="16" height="22" rx="1" fill="#fff" stroke-width="1.1"/><path d="M9 17 17 9"/><circle cx="9.5" cy="9.5" r="1.4"/><circle cx="16.5" cy="16.5" r="1.4"/>', 26, 26),
       nup: n => { const [c, r] = { 1: [1, 1], 2: [1, 2], 4: [2, 2], 6: [2, 3], 8: [2, 4] }[n]; return VSV('0 0 26 26', `<rect x="5" y="2" width="16" height="22" rx="1" fill="#fff" stroke-width="1.1"/>` + Array.from({ length: c * r }, (_, i) => `<rect x="${r1(6.5 + (i % c) * 13 / c)}" y="${r1(3.5 + Math.floor(i / c) * 19 / r)}" width="${r1(13 / c - 1)}" height="${r1(19 / r - 1)}" fill="currentColor" stroke="none" opacity=".32"/>`).join(''), 26, 26); },
       feed: k => VSV('0 0 26 26', `<rect x="5" y="2" width="16" height="22" rx="1" fill="#fff" stroke-width="1.1"/><text x="13" y="16.5" font-size="9" text-anchor="middle" fill="currentColor" stroke="none" font-weight="700" transform="rotate(${k === 'cw' ? -90 : k === 'ccw' ? 90 : 0} 13 13)">가</text>`, 26, 26) };
-    d.innerHTML = `<div class="dhead"><h2>🖨 출력 <small>${prKey === 'naracal-print-cert' ? '상장용 설정(따로 기억) · ' : prKey === 'naracal-print-att' ? '출석부용 설정(따로 기억) · ' : ''}${list.length}쪽 · ${esc(S.paper === 'doc' ? '문서 크기' : S.paper)} ${L.pw > L.ph ? '가로' : '세로'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody prdlg2">
+    d.innerHTML = `<div class="dhead"><h2>🖨 출력 <small>${prKey === 'naracal-print-cert' ? '상장용 설정(따로 기억) · ' : prKey === 'naracal-print-att' ? '출석부용 설정(따로 기억) · ' : ''}${list.length}쪽 · ${esc(S.paper === 'doc' ? '문서 크기' : S.paper)} ${L.pw > L.ph ? '가로' : '세로'} · ${{ fit: '맞춤', fill: '꽉 채움', actual: '실제 크기', pct: (S.pct || 100) + '%' }[S.fit] || esc(S.fit || '')} · 여백 ${Number(S.margin) || 0}mm${Number(S.nup) > 1 ? ` · ${S.nup}장 모아` : ''}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody prdlg2">
       <div class="prpv">${pvHTML_}</div>
       <div class="prset"><div class="prcolA">
         <div class="prrange"><div class="prr-h">인쇄 범위</div><div class="prr-opts">${(() => { const cnt = m => { const sv = S.pages; S.pages = m; let n = 0; try { n = prPages().length; } finally { S.pages = sv; } return n; };
@@ -6655,11 +6667,14 @@ function fillDojang(pages, prev) {
 function openDojang() {
   let d = $('#dlgDojang'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgDojang'; document.body.appendChild(d); }
   const D = getDojang(), nSet = DJ_FIELDS.filter(([k]) => String(D[k] || '').trim()).length;
-  d.innerHTML = `<div class="dhead"><h2>🏠 도장 정보</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="width:min(460px,90vw)"><div class="svmini" style="cursor:default"><span class="${nSet ? 'ok' : 'no'}">📍 지금 ${nSet ? `✔ ${nSet}칸 저장됨` : '○ 아직 저장 안 함'}</span><b style="color:var(--ui-muted);font-weight:500">${nSet ? '고치고 「저장」' : '채우고 「저장」'}</b></div><p class="hint" style="margin-top:0">한 번 저장해 두면 템플릿을 넣을 때 전화·주소 자리(010-0000-0000, ○○시 ○○구 ○○로 00)를 자동으로 채웁니다. 정보가 바뀌면 여기서 고치고 저장하면 <b>지금 문서</b>의 옛 값도 새 값으로 바뀝니다.</p>
+  d.innerHTML = `<div class="dhead"><h2>🏠 도장 정보</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="width:min(460px,90vw)"><div class="svmini" id="djStat" style="cursor:default"></div><p class="hint" style="margin-top:0">한 번 저장해 두면 템플릿을 넣을 때 전화·주소 자리(010-0000-0000, ○○시 ○○구 ○○로 00)를 자동으로 채웁니다. 정보가 바뀌면 여기서 고치고 저장하면 <b>지금 문서</b>의 옛 값도 새 값으로 바뀝니다.</p>
     ${DJ_FIELDS.map(([k, t, ph]) => `<label class="f"><span>${t}</span><input type="text" data-dj="${k}" value="${esc(D[k] || '')}" placeholder="${ph}"></label>`).join('')}
     <div class="row" style="justify-content:flex-end;gap:6px;margin-top:8px"><button class="btn" id="djFill">지금 문서에 채우기</button><button class="btn primary" id="djSave">저장</button></div></div>`;
   d.querySelector('[data-close]').onclick = () => d.close();
   const read = () => { const o = {}; d.querySelectorAll('[data-dj]').forEach(i => { o[i.dataset.dj] = i.value.trim(); }); return o; };
+  const djDirty = () => DJ_FIELDS.some(([k]) => String(getDojang()[k] || '').trim() !== String(read()[k] || '')); /* 저장 안 한 변경 (UX 검토 11/23) */
+  const djStat = () => { const el = $('#djStat'); if (!el) return; const n = DJ_FIELDS.filter(([k]) => String(getDojang()[k] || '').trim()).length; el.innerHTML = djDirty() ? `<span class="no">⚠ 저장 안 한 변경이 있어요</span><b style="color:#8a5a00;font-weight:600">아래 「저장」을 눌러야 기억해요</b>` : `<span class="${n ? 'ok' : 'no'}">📍 지금 ${n ? `✔ ${n}칸 저장됨` : '○ 아직 저장 안 함'}</span><b style="color:var(--ui-muted);font-weight:500">${n ? '고치고 「저장」' : '채우고 「저장」'}</b>`; };
+  d.oninput = djStat; djStat(); guardClose(d, () => d.open && djDirty(), '도장 정보를 고쳤는데 아직 저장하지 않았습니다. 저장하지 않고 닫을까요?');
   $('#djSave').onclick = () => { const prev = getDojang(), now = read(); lsSet('naracal-dojang', now); const n = fillDojang(doc.pages, prev); if (n) { commit(); rerender(); } d.close(); toast(n ? `저장했습니다 — 지금 문서에서 ${n}곳을 새 정보로 바꿨습니다` : '도장 정보를 저장했습니다 — 템플릿을 넣을 때 자동으로 채웁니다'); };
   $('#djFill').onclick = () => { lsSet('naracal-dojang', read()); const n = fillDojang(doc.pages); if (n) { commit(); rerender(); } toast(n ? `${n}곳을 도장 정보로 채웠습니다 (Ctrl+Z로 되돌리기)` : '채울 자리(010-0000-0000, ○○시 ○○구 ○○로 00, ○○태권도)가 없습니다'); };
   d.showModal();
