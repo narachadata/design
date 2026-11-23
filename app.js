@@ -5163,7 +5163,7 @@ function BK() { if (BKm) return BKm; if (!NC.bookMod) return null; BKm = NC.book
   get doc() { return doc; }, get cur() { return cur; }, setCur(i) { cur = clamp(i, 0, doc.pages.length - 1); }, page, uid, clone, esc, MM, FONTS, TEXT_DEF, BOOK_DEF, addAsset,
   toast: (m, bad) => toast(m, bad), commit, renderAll, renderCanvas, renderSide, goto, book, bookNum, sheetHTML, fitBoxes, isRightPage, newDoc, newPage, setStatus, endEdit, ensureLibFonts, loadScript, printIssues, openSpreads, bookletPdf, openDownload,
   imgUrl: el => { try { return viewSrc(el, 'print'); } catch (e) { return ''; } },
-  markDirty: () => markDirty(), amendCommit, selectIds: ids => select(ids),
+  markDirty: () => markDirty(), amendCommit, selectIds: ids => select(ids), openQr: (t, o) => openQr(t, o),
   async openPrevDoc(id, name) { const L = await prevDocList(), i = L.findIndex(x => x.docId === id); if (i >= 0) { await restorePrevDoc(i); return; } toast(`책 "${name || ''}"을 직전 문서에서 찾지 못했습니다 — 파일로 저장해 두셨다면 「내 드라이브 → 도서」에서 여세요`, true); },
   async newDocKeep() { keepCurrentDoc.kept = ''; if (doc.pages.some(p => p.els.length) && !(await keepCurrentDoc())) return false; const k = keepCurrentDoc.kept; await store.disconnect(); return k || ''; },
   setDoc(d) { doc = d; doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; },
@@ -6499,11 +6499,11 @@ function qrSVG(text, color, bg) {
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c + m} ${r + m}h1v1h-1z`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${N} ${N}" shape-rendering="crispEdges">${bg ? `<rect width="${N}" height="${N}" fill="${bg}"/>` : ''}<path d="${d}" fill="${color}"/></svg>`;
 }
-async function openQr(target) {
+async function openQr(target, opt) { /* opt.onMake(ref, qr): 쪽에 바로 넣지 않고 부른 쪽(도서 편집 원고·표지)이 앉힘 */
   try { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', () => window.qrcode, 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1'); window.qrcode.stringToBytes = window.qrcode.stringToBytesFuncs['UTF-8']; } catch (e) { toast('QR 모듈을 불러오지 못했습니다 (인터넷 연결 확인)', true); return; }
   const S = Object.assign({ text: '', color: '#1E2B5A', bg: '#ffffff' }, target && target.qr); if (!/^#[0-9a-f]{6}$/i.test(S.color)) S.color = '#1E2B5A'; if (S.bg && !/^#[0-9a-f]{6}$/i.test(S.bg)) S.bg = '#ffffff'; let d = $('#dlgQr');
   if (!d) { d = document.createElement('dialog'); d.id = 'dlgQr'; document.body.appendChild(d); }
-  d.innerHTML = `<div class="dhead"><h2>QR 코드 ${target ? '고치기' : '넣기'}</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><div class="qrgrid"><div>
+  d.innerHTML = `<div class="dhead"><h2>QR 코드 ${target ? '고치기' : '넣기'}${opt && opt.where ? ` <small>${esc(opt.where)}</small>` : ''}</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><div class="qrgrid"><div>
     <label class="f"><span>연결할 주소 또는 글</span><textarea id="qrText" rows="3" placeholder="예: https://band.us/... · 신청서 주소 · 유튜브 영상 주소 · 전화 tel:0100000000">${esc(S.text)}</textarea></label>
     <div class="grid2"><label class="f"><span>QR 색</span><input type="color" id="qrColor" value="${S.color}"></label><label class="f"><span>바탕</span><select id="qrBg"><option value="#ffffff" ${S.bg === '#ffffff' ? 'selected' : ''}>흰색 (추천)</option><option value="" ${!S.bg ? 'selected' : ''}>투명</option></select></label></div>
     <div class="swrow">${['#000000', '#1E2B5A', '#2F5BEA', '#E0564B', '#2E7D4F', '#6B3FA0'].map(c => `<button class="swb" data-qrc="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>
@@ -6516,6 +6516,7 @@ async function openQr(target) {
   $('#qrGo').onclick = () => {
     prev(); if (!S.text) return; let svg; try { svg = qrSVG(S.text, S.color, S.bg); } catch (e) { toast('글이 너무 길어 QR로 만들 수 없습니다', true); return; }
     const ref = addAsset('data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)))), qr = { text: S.text, color: S.color, bg: S.bg };
+    if (opt && opt.onMake) { d.close(); opt.onMake(ref, qr); return; }
     if (target && find(target.id)) { const el = find(target.id); el.src = ref; el.qr = qr; commit(); rerender(); }
     else { const w = Math.max(25, Math.min(doc.w, doc.h) * 0.22); addEl({ type: 'image', src: ref, x: 0, y: 0, w: r1(w), h: r1(w), rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: 'QR 코드', qr }); }
     d.close(); toast(target ? 'QR 코드를 바꿨습니다' : 'QR 코드를 넣었습니다 — 휴대폰으로 찍어 확인해 보세요');
