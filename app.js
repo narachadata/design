@@ -897,6 +897,7 @@ function richHTML(dom) {
     const dec = ['underline', 'line-through'].filter(x => td.includes(x)); if (dec.length) o.push('text-decoration:' + dec.join(' '));
     if (st.color) o.push('color:' + st.color); if (tag === 'FONT' && n.getAttribute('color')) o.push('color:' + n.getAttribute('color'));
     if (st.fontSize && /pt|px|em|%/.test(st.fontSize)) o.push('font-size:' + st.fontSize);
+    { const m = /scaleX\(([\d.]+)\)/.exec(st.transform || ''); if (m && tag === 'SPAN') o.push(`display:inline-block;transform:scaleX(${m[1]});transform-origin:0 50%;margin-right:${/^-?[\d.]+em$/.test(st.marginRight) ? st.marginRight : '0'}`); } /* 고른 글자 장평 */
     return o.join(';'); };
   const walk = (n, top) => {
     if (n.nodeType === 3) { out.push(esc(n.nodeValue)); return; }
@@ -925,11 +926,12 @@ function toggleFmt(kind) {
 function fmtOn(el, kind) { return kind === 'bold' ? Number(el.weight) >= 600 : !!el[kind]; }
 function showTextBar() {
   let b = $('#textBar'); if (!b) { b = document.createElement('div'); b.id = 'textBar'; b.className = 'textbar'; document.body.appendChild(b);
-    b.innerHTML = `<button data-tf="bold" title="굵게 (Ctrl+B)"><b>B</b></button><button data-tf="italic" title="기울임 (Ctrl+I)"><i>I</i></button><button data-tf="underline" title="밑줄 (Ctrl+U)"><u>U</u></button><button data-tf="strike" title="취소선"><s>S</s></button><span class="sep"></span><label title="고른 글자 색"><input type="color" id="tbColor" value="#e0564b"><span class="sw"></span></label><button data-tf="smaller" title="고른 글자 작게">가−</button><button data-tf="bigger" title="고른 글자 크게">가+</button><span class="sep"></span><button data-tf="clear" title="고른 글자 서식 지우기">서식 지우기</button>`;
+    b.innerHTML = `<button data-tf="bold" title="굵게 (Ctrl+B)"><b>B</b></button><button data-tf="italic" title="기울임 (Ctrl+I)"><i>I</i></button><button data-tf="underline" title="밑줄 (Ctrl+U)"><u>U</u></button><button data-tf="strike" title="취소선"><s>S</s></button><span class="sep"></span><label title="고른 글자 색"><input type="color" id="tbColor" value="#e0564b"><span class="sw"></span></label><button data-tf="smaller" title="고른 글자 작게">가−</button><button data-tf="bigger" title="고른 글자 크게">가+</button><button data-tf="sxdown" title="고른 글자만 장평 좁게 (글자 폭 −10%)">↔−</button><button data-tf="sxup" title="고른 글자만 장평 넓게 (글자 폭 +10%)">↔+</button><span class="sep"></span><button data-tf="clear" title="고른 글자 서식 지우기">서식 지우기</button>`;
     b.addEventListener('mousedown', e => { if (!e.target.closest('input')) e.preventDefault(); });
     b.addEventListener('click', e => { const t = e.target.closest('[data-tf]'); if (!t || !editing) return; const k = t.dataset.tf;
       if (FMT_CMD[k]) toggleFmt(k);
       else if (k === 'clear') { document.execCommand('removeFormat', false, null); updTextBar(); }
+      else if (k === 'sxdown' || k === 'sxup') sxSel(k === 'sxup' ? 1.1 : 1 / 1.1);
       else sizeSel(k === 'bigger' ? 1.2 : 1 / 1.2); });
     $('#tbColor').addEventListener('input', e => { if (!editing) return; editing.focus(); restoreSel(); document.execCommand('foreColor', false, e.target.value); saveSel(); b.querySelector('.sw').style.background = e.target.value; });
     $('#tbColor').addEventListener('change', () => { if (editing) { editing.focus(); restoreSel(); } });
@@ -946,6 +948,17 @@ function updTextBar() { const b = $('#textBar'); if (!b || !editing) return; Obj
 document.addEventListener('selectionchange', () => { if (editing) updTextBar(); });
 // 편집 중이 아닐 때 Ctrl+B·I·U는 고른 글 상자 전체에
 document.addEventListener('keydown', e => { if (editing || !(e.ctrlKey || e.metaKey) || (e.target.matches && e.target.matches('input,textarea,select')) || document.querySelector('dialog[open]')) return; const k = { b: 'bold', i: 'italic', u: 'underline' }[keyOf(e)]; if (k && selEls().some(x => x.type === 'text')) { e.preventDefault(); e.stopImmediatePropagation(); toggleFmt(k); } }, true);
+// 고른 글자만 장평 (팀장님 11/23 — 인디자인 문자 패널의 '가로 비율'을 고른 글자에): 글자를 inline-block span으로 감싸 scaleX, 줄어든 폭만큼 오른쪽 여백(em)을 당겨 뒤 글자가 붙게
+const sxOf = sp => { const m = /scaleX\(([\d.]+)\)/.exec((sp && sp.style && sp.style.transform) || ''); return m ? Number(m[1]) : 0; };
+function sxFit(sp, k) { sp.style.display = 'inline-block'; sp.style.transformOrigin = '0 50%'; sp.style.marginRight = '0'; sp.style.transform = k === 1 ? '' : `scaleX(${k})`; if (k === 1) { const p = sp.parentNode; while (sp.firstChild) p.insertBefore(sp.firstChild, sp); sp.remove(); return; } const fs = parseFloat(getComputedStyle(sp).fontSize) || 16; sp.style.marginRight = (Math.round((k - 1) * sp.offsetWidth / fs * 1000) / 1000) + 'em'; }
+function sxSel(f) {
+  if (!editing) return; const sel = getSelection(); if (!sel.rangeCount || sel.isCollapsed) { toast('장평을 바꿀 글자를 먼저 드래그해 고르세요'); return; }
+  const r = sel.getRangeAt(0); let host = r.commonAncestorContainer; if (host.nodeType !== 1) host = host.parentElement;
+  let sp = host && host.closest ? host.closest('span') : null; while (sp && editing.contains(sp) && !sxOf(sp)) sp = sp.parentElement && sp.parentElement.closest ? sp.parentElement.closest('span') : null;
+  if (sp && editing.contains(sp) && sp.textContent.trim() === sel.toString().trim()) { const k = Math.round(Math.max(0.5, Math.min(2, sxOf(sp) * f)) * 100) / 100; sxFit(sp, Math.abs(k - 1) < 0.02 ? 1 : k); }
+  else { sp = document.createElement('span'); sp.appendChild(r.extractContents()); r.insertNode(sp); const k = Math.round(Math.max(0.5, Math.min(2, f)) * 100) / 100; sxFit(sp, k); const nr = document.createRange(); nr.selectNodeContents(sp); sel.removeAllRanges(); sel.addRange(nr); }
+  editing.dispatchEvent(new Event('input', { bubbles: true })); toast(`고른 글자 장평 ${sp && sp.isConnected ? Math.round(sxOf(sp) * 100) || 100 : 100}%`);
+}
 // 고른 글자 크기 바꾸기: 임시 font 태그로 감싼 뒤 pt 크기 span으로 바꿈
 function sizeSel(f) {
   const el = find(editing.dataset.id); if (!el) return; const sel = getSelection(); if (!sel.rangeCount || sel.isCollapsed) { toast('크기를 바꿀 글자를 먼저 드래그해 고르세요'); return; }

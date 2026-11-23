@@ -158,6 +158,7 @@
     /* ---------- 흘리기 엔진: 단락을 판면 상자에 차례로 채우고, 넘치면 다음 단·다음 쪽 (쪽은 필요한 만큼 만들어짐) ---------- */
     function layoutStream(paras, abs0, S, kind, extras) {
       const ixColsN = kind === 'idx' ? Math.max(1, Math.min(3, Number(A.doc.book.ixCols) || 2)) : 0; /* 찾아보기는 기본 2단 */
+      let ixCur = null, ixCurAt = '';
       const pages = [], heads = [], placed = [], ixHits = []; let pg = null, frames = [], fi = 0, fy = 0, content = [], plain = [], lastAfter = 0, chap = kind === 'idx' ? (A.doc.book.ixTitle || '찾아보기') : '', sec = '', chapN = 0, partN = 0, firstLine = -1, overflow = 0;
       const numOn = kind === 'body' && A.doc.book.chapNum === true;
       /* 각주 (인디자인 '각주'): 이 단(칸) 아래에 짧은 줄 + 작은 글. 각주가 들어갈 만큼 본문 자리를 줄이고, 본문이 다음 단·쪽으로 넘어가면 그 단 아래에 앉힘 */
@@ -261,6 +262,8 @@
         while (runs && guard++ < 400) {
           const first = !content.length, o = { first, cont, noIndent, sink: first ? sink : 0, toc: p.toc, chapNo, tocNo: p.tocNo, noLeader: p.noLeader };
           /* 끝줄 한두 글자 막기: 마지막 줄이 아주 짧으면(줄 하나를 더 먹으면) 자간을 살짝 좁혀 한 줄 위로 (조판 전문가 — 짧은 끝줄 당기기) */
+          if (kind === 'idx' && p.st === 'ixHead') { ixCur = p; ixCurAt = pages.length + ':' + fi; }
+          if (kind === 'idx' && p.st === 'ixItem' && ixCur && !content.length && ixCurAt !== pages.length + ':' + fi) { const sh = S.ixHead, hh = pHTML([{ t: ixCur.plain + ' (이어서)' }], Object.assign({}, sh, { before: 0 }), { first: true }); content.push(hh); plain.push(''); ixCurAt = pages.length + ':' + fi; } /* 찾아보기가 단·쪽을 넘으면 「ㅇ (이어서)」 머리를 다시 */
           if (p.st === 'trow' && !content.length && !p.head && p.hd && !p.first) { const hh = rowHTML(p.hd, s, true); if (hOf(hh + rowHTML(p, s), 0) < fr().h) { content.push(hh); plain.push(''); } } /* 표가 쪽을 넘으면 머리줄을 다시 (인디자인 '머리글 행 반복') */
           if (tight && !p.toc) { const h0 = hOf(pHTML(runs, s, o), 0), o2 = Object.assign({}, o, { ls: r1((s.ls || 0) * 100 - 3) / 100 }), h1 = hOf(pHTML(runs, s, o2), 0); if (h1 < h0 - 0.3) o.ls = o2.ls; }
           fnPend = fnOf(p.st === 'trow' ? p.cells.flat() : runs);
