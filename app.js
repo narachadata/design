@@ -2756,30 +2756,46 @@ function manZoom(im) { let z = $('#manZoom'); if (z) z.remove(); z = document.cr
 function manualGo(g) { const rail = k => { const b = $(`#rail [data-tab="${k}"]`); if (b) b.click(); };
   ({ tpl: () => rail('tpl'), virtueTpl: () => { tplCat = 'all'; tplQ = ''; tplF = { format: '', season: '', age: '', occasion: '인성', biz: '' }; rail('tpl'); }, photo: () => rail('photo'), nara: () => rail('naracha'), elems: () => rail('elems'), video: () => rail('video'), settings: () => openSettings(), cert: () => naraGo('cert'), att: () => naraGo('att'), attPick: () => { naraGo('att'); openAttPick(); }, news: () => naraGo('news'), calendar: () => naraGo('calendar'), pages: () => rail('pages'), book: () => { rail('pages'); openBook(); }, bookedit: () => rail('book'), drive: () => openDrive(), import: () => openImport(), resize: () => openResize(), print: () => openPrint(), qr: () => openQr(), dday: () => openDday(), dojang: () => openDojang(), wizard: () => openWizard(doc.calendar.year || 2027), rules: () => openRules(), download: () => openDownload(), vkeys: () => tlKeysHelp(), aichat: () => { if (NC.aichat) NC.aichat.show(true); }, filemenu: () => $('#btnFileMenu').click() }[g] || (() => {}))(); }
 /* ---- 설정 (세로 메뉴 맨 아래 ⚙): 여러 곳에 흩어져 있던 설정을 한곳에. 바꾸면 바로 적용되고 이 PC에 기억(일부는 동기화 폴더로 두 PC 같이) ---- */
-let setTab = 'view';
+let setTab = (() => { try { return localStorage.getItem('naracal-settab') || 'view'; } catch (e) { return 'view'; } })(); /* 마지막으로 본 설정 칸 기억 */
 function openSettings(tab) {
   if (tab) setTab = tab; let d = $('#dlgSettings');
   if (!d) { d = document.createElement('dialog'); d.id = 'dlgSettings'; d.className = 'wide setdlg'; d.innerHTML = `<div class="dhead"><h2>⚙ 설정</h2><button class="btn sm" data-close>닫기</button></div><div class="setbody"><nav id="setNav"></nav><div id="setMain"></div></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close();
-    d.addEventListener('click', settingsClick); d.addEventListener('change', settingsChange); }
+    d.addEventListener('click', settingsClick); d.addEventListener('change', settingsChange);
+    d.addEventListener('input', e => { if (e.target.id === 'setQ') { setQ = e.target.value; renderSettings(); } });
+    d.addEventListener('keydown', e => { if (e.target.id === 'setQ' && e.key === 'Escape' && setQ) { e.preventDefault(); setQ = ''; e.target.value = ''; renderSettings(); return; } /* 찾기 칸 Esc는 찾기만 지움 */
+      const b = e.target.closest && e.target.closest('#setNav [data-st]'); if (!b || !['ArrowUp', 'ArrowDown'].includes(e.key)) return; e.preventDefault(); const i = SET_TABS.findIndex(t => t[0] === b.dataset.st), n = SET_TABS[(i + (e.key === 'ArrowDown' ? 1 : SET_TABS.length - 1)) % SET_TABS.length][0]; setTab = n; try { localStorage.setItem('naracal-settab', n); } catch (er) {} renderSettings().then(() => { const x = d.querySelector(`#setNav [data-st="${n}"]`); if (x) x.focus(); }); }); }
   renderSettings(); if (!d.open) d.showModal();
 }
-const SET_TABS = [['view', '🖥 화면 · 편집'], ['video', '🎬 영상'], ['save', '💾 저장 · 이 PC'], ['dojang', '🥋 도장 · 브랜드'], ['print', '🖨 출력 · AI'], ['clean', '🧹 정리'], ['about', 'ⓘ 정보 · 도움']];
+const SET_TABS = [['view', '🖥', '화면 · 편집'], ['video', '🎬', '영상'], ['save', '💾', '저장 · 이 PC'], ['dojang', '🥋', '도장 · 브랜드'], ['print', '🖨', '출력 · AI'], ['clean', '🧹', '지우기 · 정리'], ['about', 'ⓘ', '정보 · 도움']];
+/* 설정 줄마다 그림(팀장님 11/23 「설정도 사용자 경험 고려해 고도화」 · UX 전문가 검토: 그림·지금 상태·찾기·마지막 칸 기억·줄 전체 누르기·처음대로 모으기) */
+const SET_IC = { guides: '📐', rulers: '📏', snap: '🧲', panels: '↔️', keys: '⌨️', pgm: '🖥', skim: '👆', tlonly: '🎬', vshare: '📤', tlh: '↕️', sync: '☁️', versions: '🕘', local: '💻', dojang: '🥋', brandreset: '🎨', rules: '📅', calendar: '🗓', print: '🖨', ai: '🤖', recent: '🧹', blocks: '🧩', blocksdel: '🗑', manual: '📘', help: '❓', vkeys: '🎞', reload: '🔄', resetall: '↩️', pc: '🏷' };
+const setOk = (on, t1, t0) => `<em class="sst ${on ? 'ok' : 'no'}">${on ? '● ' + t1 : '○ ' + t0}</em>`;
+async function setTabHTML(k) {
+  const ic = id => `<i class="sic">${SET_IC[id] || '•'}</i>`;
+  const sw = (id, on, t, d) => `<label class="setrow">${ic(id)}<span><b>${t}</b>${d ? `<small>${d}</small>` : ''}</span><input type="checkbox" class="sw" data-set="${id}" ${on ? 'checked' : ''}></label>`;
+  const btn = (act, t, d, label, st, danger) => `<div class="setrow act${danger ? ' danger' : ''}" title="누르면 ${esc(label || '열기')}">${ic(act)}<span><b>${t}</b>${d ? `<small>${d}</small>` : ''}</span>${st || ''}<button class="btn sm${danger ? ' danger' : ''}" data-sa="${act}">${label || '열기'} ›</button></div>`;
+  let h = '';
+  if (k === 'view') h = `<h3>화면 · 편집</h3>${sw('guides', showGuides(), '인쇄 안내선', '도련(빨강)·안전 여백(파랑)·리플렛 접는 선·스토리 가림 영역')}${sw('rulers', showRulers(), '눈금자', '위·왼쪽 눈금자 — 눈금자에서 끌어 안내선 만들기')}${sw('snap', tlSnapOn, '타임라인 자석(스냅)', '끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙음 (단축키 N)')}${btn('panels', '패널 너비 처음대로', '왼쪽 패널·오른쪽 속성 패널을 끌어 바꾼 너비를 기본으로', '처음대로')}${btn('keys', '디자인 단축키', '복사·붙여넣기·정렬·묶기 등')}${btn('resetall', '화면 설정 모두 처음대로', '안내선·눈금자·패널 너비·타임라인 높이를 처음 상태로 (문서는 그대로)', '처음대로')}`;
+  else if (k === 'video') h = `<h3>영상</h3>${sw('pgm', pgmPref, '나란히 보기 (결과 화면)', '타임라인을 열면 왼쪽 편집·오른쪽 결과 화면으로 나눠 봄')}${sw('skim', tlSkimOn, '훑어보기', '타임라인 위에서 마우스를 움직이면 그 자리 화면을 미리 봄 (단축키 S)')}${sw('tlonly', tlOnlyVideo, '영상 메뉴에서만 타임라인', '끄면 다른 메뉴에서도 타임라인이 열려 있음')}${sw('vshare', (() => { try { return localStorage.getItem('naracal-video-share') === '1'; } catch (e) { return false; } })(), '영상 저장 때 결과물 폴더에도', '동기화 폴더의 결과물 폴더에 MP4를 함께 저장 (다른 PC·TV에서 바로)')}${btn('tlh', '타임라인 높이 처음대로', '끌어 바꾼 타임라인 높이를 기본으로', '처음대로')}${btn('vkeys', '영상 편집 단축키', '파이널컷 방식 J·K·L·B·Q·W·I·O 등 (타임라인에서 ?)')}`;
+  else if (k === 'save') { const ready = await store.folderReady().catch(() => false); let est = ''; try { const e = await navigator.storage.estimate(); est = `${(e.usage / 1048576).toFixed(0)}MB 사용 / 약 ${(e.quota / 1073741824).toFixed(0)}GB 가능`; } catch (e) {}
+    h = `<h3>저장 · 이 PC</h3><div class="svmini" data-sa="sync" title="누르면 저장 설정"><span class="ok">💻 브라우저 ✔</span><i>→</i><span class="${ready ? 'ok' : 'no'}">☁️ 드라이브 ${ready ? '✔' : '○'}</span><i>→</i><span class="${store.state.handle ? 'ok' : 'no'}">📄 지금 문서 ${store.state.handle ? '✔' : '○'}</span><b>${ready ? '바꾸기 ›' : '처음 설정 ›'}</b></div><div class="setrow"><i class="sic">🏷</i><span><b>이 PC 이름</b><small>충돌 안내·버전 기록·실시간에 표시 (예: 도장 PC, 집 맥북)</small></span><input type="text" id="setPc" value="${esc(store.pcName())}" maxlength="20" style="width:150px"></div>${btn('sync', '저장 설정 (폴더·지금 문서·종류 폴더)', ready ? `연결됨 — ${esc(store.state.dirName || '동기화 폴더')} (두 PC에서 같은 문서·설정)` : '연결 안 됨 — 구글 드라이브 폴더를 연결하면 두 PC에서 같이 씀', '', setOk(ready, '연결됨', '연결 안 됨'))}${btn('versions', '버전 기록', '자동으로 남긴 예전 판을 보고 되살리기')}${btn('local', '이 브라우저에만 있는 문서', '파일로 저장 안 한 직전 문서·다른 탭 문서')}<div class="setrow"><span><b>브라우저 저장 공간</b><small>${est || '알 수 없음'} — 사진·동영상 원본은 이 PC 파일 그대로 (저장 공간을 쓰지 않음)</small></span></div>`; }
+  else if (k === 'dojang') { const bc = brandColors();
+    h = `<h3>도장 · 브랜드</h3>${btn('dojang', '도장 정보', '전화·주소·도장 이름 — 템플릿에 자동으로 채움', '', setOk(Object.values(getDojang()).some(v => String(v || '').trim()), '저장됨', '비어 있음'))}<div class="setrow"><span><b>브랜드 색</b><small>색 고르기 창 맨 위에 나오는 도장 색 — 색 고르기 창에서 더하거나 뺄 수 있음</small></span><span class="setcolors">${bc.map(c => `<i style="background:${esc(c)}" title="${esc(c)}"></i>`).join('')}<button class="btn sm" data-sa="brandreset">처음 색으로</button></span></div>${btn('rules', '반복 일정 · 연간 행사', '매주 수련·승급심사·생일 — 달력에 넣는 목록 (도장 기본 목록 저장)')}${btn('calendar', '캘린더 · 인성 문구', '나라차 → 캘린더 패널 (캘린더 마법사·인성 문구 넣기·공휴일)')}`; }
+  else if (k === 'print') h = `<h3>출력 · AI</h3>${btn('print', '프린터 출력 설정', '용지·방향·맞춤·여백 — 이 PC에 기억 (상장은 따로)', '', (() => { const o = Object.assign({}, PR_DEF, prLoad('naracal-print') || {}); return `<em class="sst">${esc(o.paper === 'doc' ? '문서 크기' : o.paper)} · ${{ auto: '방향 자동', portrait: '세로', landscape: '가로' }[o.orient] || esc(o.orient)} · ${{ fit: '맞춤', fill: '꽉 채움', actual: '실제 크기', pct: o.pct + '%' }[o.fit] || esc(o.fit)}</em>`; })())}${btn('ai', 'AI 도우미 설정', 'Claude·Gemini 키 또는 채팅 요금제로 쓰기, 그림 스튜디오', '', chatMode() ? '<em class="sst ok">💬 채팅 요금제로</em>' : setOk(!!(AI.cfg.anthropicKey || AI.cfg.geminiKey), '키 넣음', '키 없음'))}`;
+  else if (k === 'clean') h = `<h3>정리</h3>${btn('recent', '최근 사용 목록 비우기', '최근 템플릿·요소·글꼴·색·크기·넘김 목록 (문서는 그대로)', '비우기', '', true)}${btn('blocks', `내 블록 (${myBlocks.length}개)`, '요소 → 내 블록에서 보기 · 오른쪽 클릭으로 하나씩 지우기', '보기')}${myBlocks.length ? btn('blocksdel', '내 블록 모두 지우기', '이 PC 브라우저에 보관한 블록을 모두 지움 (되돌릴 수 없음)', '모두 지우기', '', true) : ''}`;
+  else if (k === 'about') h = `<h3>정보 · 도움</h3><div class="setrow"><span><b>나라차 디자인 공방</b><small>버전 ${esc(window.NARACAL_VER || '')} · 나라차태권도 전용 디자인·영상·상장·소식지·캘린더</small></span></div>${btn('manual', '매뉴얼', '나라차 운영 상황별 따라 하기 (그림으로)')}${btn('help', '도움말', '기능 설명 한눈에')}${btn('keys', '디자인 단축키', '')}${btn('vkeys', '영상 편집 단축키', '')}${btn('reload', '새 버전 확인', '새 버전이 있으면 받아서 다시 엶 (작업은 브라우저에 저장된 채)', '확인')}`;
+  return h;
+}
+let setQ = '';
 async function renderSettings() {
   const nav = $('#setNav'), main = $('#setMain'); if (!nav) return;
-  nav.innerHTML = SET_TABS.map(([k, t]) => `<button data-st="${k}" class="${setTab === k ? 'on' : ''}">${t}</button>`).join('');
-  const sw = (id, on, t, d) => `<label class="setrow"><span><b>${t}</b>${d ? `<small>${d}</small>` : ''}</span><input type="checkbox" class="sw" data-set="${id}" ${on ? 'checked' : ''}></label>`;
-  const btn = (act, t, d, label) => `<div class="setrow"><span><b>${t}</b>${d ? `<small>${d}</small>` : ''}</span><button class="btn sm" data-sa="${act}">${label || '열기'}</button></div>`;
-  let h = '';
-  if (setTab === 'view') h = `<h3>화면 · 편집</h3>${sw('guides', showGuides(), '인쇄 안내선', '도련(빨강)·안전 여백(파랑)·리플렛 접는 선·스토리 가림 영역')}${sw('rulers', showRulers(), '눈금자', '위·왼쪽 눈금자 — 눈금자에서 끌어 안내선 만들기')}${sw('snap', tlSnapOn, '타임라인 자석(스냅)', '끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙음 (단축키 N)')}${btn('panels', '패널 너비 처음대로', '왼쪽 패널·오른쪽 속성 패널을 끌어 바꾼 너비를 기본으로', '처음대로')}${btn('keys', '디자인 단축키', '복사·붙여넣기·정렬·묶기 등')}`;
-  else if (setTab === 'video') h = `<h3>영상</h3>${sw('pgm', pgmPref, '나란히 보기 (결과 화면)', '타임라인을 열면 왼쪽 편집·오른쪽 결과 화면으로 나눠 봄')}${sw('skim', tlSkimOn, '훑어보기', '타임라인 위에서 마우스를 움직이면 그 자리 화면을 미리 봄 (단축키 S)')}${sw('tlonly', tlOnlyVideo, '영상 메뉴에서만 타임라인', '끄면 다른 메뉴에서도 타임라인이 열려 있음')}${sw('vshare', (() => { try { return localStorage.getItem('naracal-video-share') === '1'; } catch (e) { return false; } })(), '영상 저장 때 결과물 폴더에도', '동기화 폴더의 결과물 폴더에 MP4를 함께 저장 (다른 PC·TV에서 바로)')}${btn('tlh', '타임라인 높이 처음대로', '끌어 바꾼 타임라인 높이를 기본으로', '처음대로')}${btn('vkeys', '영상 편집 단축키', '파이널컷 방식 J·K·L·B·Q·W·I·O 등 (타임라인에서 ?)')}`;
-  else if (setTab === 'save') { const ready = await store.folderReady().catch(() => false); let est = ''; try { const e = await navigator.storage.estimate(); est = `${(e.usage / 1048576).toFixed(0)}MB 사용 / 약 ${(e.quota / 1073741824).toFixed(0)}GB 가능`; } catch (e) {}
-    h = `<h3>저장 · 이 PC</h3><div class="setrow"><span><b>이 PC 이름</b><small>충돌 안내·버전 기록·실시간에 표시 (예: 도장 PC, 집 맥북)</small></span><input type="text" id="setPc" value="${esc(store.pcName())}" maxlength="20" style="width:150px"></div>${btn('sync', '저장 · 동기화 폴더', ready ? `연결됨 — ${esc(store.state.dirName || '동기화 폴더')} (두 PC에서 같은 문서·설정)` : '연결 안 됨 — 구글 드라이브 폴더를 연결하면 두 PC에서 같이 씀')}${btn('versions', '버전 기록', '자동으로 남긴 예전 판을 보고 되살리기')}${btn('local', '이 브라우저에만 있는 문서', '파일로 저장 안 한 직전 문서·다른 탭 문서')}<div class="setrow"><span><b>브라우저 저장 공간</b><small>${est || '알 수 없음'} — 사진·동영상 원본은 이 PC 파일 그대로 (저장 공간을 쓰지 않음)</small></span></div>`; }
-  else if (setTab === 'dojang') { const bc = brandColors();
-    h = `<h3>도장 · 브랜드</h3>${btn('dojang', '도장 정보', '전화·주소·도장 이름 — 템플릿에 자동으로 채움')}<div class="setrow"><span><b>브랜드 색</b><small>색 고르기 창 맨 위에 나오는 도장 색 — 색 고르기 창에서 더하거나 뺄 수 있음</small></span><span class="setcolors">${bc.map(c => `<i style="background:${esc(c)}" title="${esc(c)}"></i>`).join('')}<button class="btn sm" data-sa="brandreset">처음 색으로</button></span></div>${btn('rules', '반복 일정 · 연간 행사', '매주 수련·승급심사·생일 — 달력에 넣는 목록 (도장 기본 목록 저장)')}${btn('calendar', '캘린더 · 인성 문구', '나라차 → 캘린더 패널 (캘린더 마법사·인성 문구 넣기·공휴일)')}`; }
-  else if (setTab === 'print') h = `<h3>출력 · AI</h3>${btn('print', '프린터 출력 설정', '용지·방향·맞춤·여백 — 이 PC에 기억 (상장은 따로)')}${btn('ai', 'AI 도우미 설정', 'Claude·Gemini 키 또는 채팅 요금제로 쓰기, 그림 스튜디오')}`;
-  else if (setTab === 'clean') h = `<h3>정리</h3>${btn('recent', '최근 사용 목록 비우기', '최근 템플릿·요소·글꼴·색·크기·넘김 목록 (문서는 그대로)', '비우기')}${btn('blocks', `내 블록 (${myBlocks.length}개)`, '요소 → 내 블록에서 보기 · 오른쪽 클릭으로 하나씩 지우기', '보기')}${myBlocks.length ? btn('blocksdel', '내 블록 모두 지우기', '이 PC 브라우저에 보관한 블록을 모두 지움 (되돌릴 수 없음)', '모두 지우기') : ''}`;
-  else if (setTab === 'about') h = `<h3>정보 · 도움</h3><div class="setrow"><span><b>나라차 디자인 공방</b><small>버전 ${esc(window.NARACAL_VER || '')} · 나라차태권도 전용 디자인·영상·상장·소식지·캘린더</small></span></div>${btn('manual', '매뉴얼', '나라차 운영 상황별 따라 하기 (그림으로)')}${btn('help', '도움말', '기능 설명 한눈에')}${btn('keys', '디자인 단축키', '')}${btn('vkeys', '영상 편집 단축키', '')}${btn('reload', '새 버전 확인', '새 버전이 있으면 받아서 다시 엶 (작업은 브라우저에 저장된 채)', '확인')}`;
-  main.innerHTML = h;
+  if (!nav.querySelector('#setQ')) nav.innerHTML = `<input type="search" id="setQ" placeholder="🔍 설정 찾기" title="예: 프린터, 자석, 동기화, 단축키" autocomplete="off"><div class="snav" role="tablist"></div>`;
+  const q = setQ.trim().toLowerCase(), tl = nav.querySelector('.snav');
+  tl.innerHTML = SET_TABS.map(([k, i, t]) => `<button data-st="${k}" role="tab" aria-selected="${!q && setTab === k}" class="${!q && setTab === k ? 'on' : ''}" title="${t}"><span class="sti">${i}</span><span class="stx">${t}</span></button>`).join('');
+  if (!q) { main.innerHTML = await setTabHTML(setTab); return; }
+  /* 찾기: 모든 칸에서 이름·설명이 맞는 줄만 */
+  let out = ''; for (const [k, i, t] of SET_TABS) { const box = document.createElement('div'); box.innerHTML = await setTabHTML(k); const rows = [...box.querySelectorAll('.setrow')].filter(r => r.textContent.toLowerCase().includes(q)); if (rows.length) out += `<h4 class="sqh"><button class="btn sm" data-st="${k}">${i} ${t} ›</button></h4>` + rows.map(r => r.outerHTML).join(''); }
+  main.innerHTML = out || `<p class="hint" style="padding:20px 0">「${esc(setQ)}」에 맞는 설정이 없어요 — 다른 말로 찾아보세요 (예: 프린터, 저장, 단축키)</p>`;
 }
 function settingsChange(e) { const t = e.target, k = t.dataset && t.dataset.set; if (t.id === 'setPc') { store.setPcName(t.value); t.value = store.pcName(); toast('이 PC 이름을 저장했습니다'); return; } if (!k) return; const on = t.checked;
   if (k === 'guides') { try { localStorage.setItem('naracal-guides', on ? '1' : '0'); } catch (er) {} renderOverlay(); }
@@ -2789,9 +2805,19 @@ function settingsChange(e) { const t = e.target, k = t.dataset && t.dataset.set;
   else if (k === 'skim') { if (tlSkimOn !== on) tlToggleSkim(); }
   else if (k === 'tlonly') { tlOnlyVideo = on; try { localStorage.setItem('naracal-tlonly', on ? '1' : '0'); } catch (er) {} toast(on ? '영상 메뉴에서만 타임라인을 엽니다' : '다른 메뉴에서도 타임라인이 열려 있습니다'); }
   else if (k === 'vshare') { try { localStorage.setItem('naracal-video-share', on ? '1' : '0'); } catch (er) {} toast(on ? '영상을 저장할 때 결과물 폴더에도 저장합니다' : '결과물 폴더에는 저장하지 않습니다'); } }
+function setChildWatch() { /* 지금 열린 창 목록을 기억했다가 새로 열린 하위 창이 닫히면 설정으로 돌아옴 */
+  const d = $('#dlgSettings'); if (!d || !d.open) return; const before = new Set([...document.querySelectorAll('dialog[open]')]), snap = { tab: sideTab, id: doc.docId }; let n = 0;
+  const look = () => { const ch = [...document.querySelectorAll('dialog[open]')].find(x => x !== d && !before.has(x)); if (!ch) { if (++n < 40) setTimeout(look, 50); return; }
+    ch.addEventListener('close', () => setTimeout(() => { if (!d.open) return; if (sideTab !== snap.tab || doc.docId !== snap.id) { d.close(); return; } renderSettings(); const on = d.querySelector('#setNav .on'); if (on) on.focus({ preventScroll: true }); }, 0), { once: true }); };
+  look();
+}
 async function settingsClick(e) {
-  const st = e.target.closest('[data-st]'); if (st) { setTab = st.dataset.st; renderSettings(); return; }
-  const b = e.target.closest('[data-sa]'); if (!b) return; const a = b.dataset.sa, close = () => $('#dlgSettings').close();
+  const st = e.target.closest('[data-st]'); if (st) { setTab = st.dataset.st; try { localStorage.setItem('naracal-settab', setTab); } catch (er) {} if (setQ) { setQ = ''; const qi = $('#setQ'); if (qi) qi.value = ''; } renderSettings(); return; }
+  if (!e.target.closest('[data-sa],input,select,label,textarea')) { const row = e.target.closest('.setrow.act'); if (row) { const bb = row.querySelector('[data-sa]'); if (bb) bb.click(); return; } } /* 줄 어디를 눌러도 */
+  const b = e.target.closest('[data-sa]'); if (!b) return; const a = b.dataset.sa;
+  /* 하위 창(도움말·매뉴얼·도장 정보…)은 설정 위에 겹쳐 열고, 닫으면 설정의 같은 칸으로 돌아옴 (팀장님 11/23 「하위 메뉴를 닫으면 설정이 모두 닫힘」).
+     하위 창에서 다른 메뉴·문서로 넘어갔으면(세로 메뉴·문서가 바뀜) 설정도 함께 닫음. close(true) = 바로 메뉴로 가는 단추(캘린더·내 블록) */
+  const close = nav => { if (nav === true) { $('#dlgSettings').close(); return; } setChildWatch(); };
   if (a === 'panels') { try { localStorage.removeItem('naracal-panels'); } catch (er) {} document.documentElement.style.removeProperty('--side-w'); document.documentElement.style.removeProperty('--insp-w'); fitCanvas(); toast('패널 너비를 처음대로 되돌렸습니다'); }
   else if (a === 'tlh') { try { localStorage.removeItem('naracal-tlh-tall'); localStorage.removeItem('naracal-tlh-wide'); } catch (er) {} if (typeof applyTlView === 'function') applyTlView(); toast('타임라인 높이를 처음대로 되돌렸습니다'); }
   else if (a === 'keys') { close(); $('#dlgHelp').showModal(); setTimeout(() => { const p = [...document.querySelectorAll('#dlgHelp p')].find(x => /단축키/.test(x.textContent)); if (p) p.scrollIntoView({ block: 'center' }); }, 60); }
@@ -2802,11 +2828,12 @@ async function settingsClick(e) {
   else if (a === 'dojang') { close(); openDojang(); }
   else if (a === 'brandreset') { lsSet('naracal-brand-colors', BRAND_DEF); renderSettings(); toast('브랜드 색을 처음 색으로 되돌렸습니다'); }
   else if (a === 'rules') { close(); openRules(); }
-  else if (a === 'calendar') { close(); sideTab = 'calendar'; renderRail(); renderSide(); }
+  else if (a === 'calendar') { close(true); sideTab = 'calendar'; renderRail(); renderSide(); }
   else if (a === 'print') { close(); openPrint(); }
   else if (a === 'ai') { close(); openAI('keys'); }
-  else if (a === 'recent') { ['naracal-recent-tpls', 'naracal-recent-elems', 'naracal-recent-fonts', 'naracal-recent-colors', 'naracal-recent-formats', 'naracal-trans-recent'].forEach(k => { try { localStorage.removeItem(k); } catch (er) {} }); renderSide(); toast('최근 사용 목록을 비웠습니다'); }
-  else if (a === 'blocks') { close(); elCat = 'myblock'; sideTab = 'elems'; renderRail(); renderSide(); }
+  else if (a === 'resetall') { if (!window.confirm('화면 설정(안내선·눈금자·패널 너비·타임라인 높이)을 처음 상태로 되돌릴까요? 문서는 그대로입니다.')) return; ['naracal-panels', 'naracal-tlh-tall', 'naracal-tlh-wide', 'naracal-guides'].forEach(k => { try { localStorage.removeItem(k); } catch (er) {} }); if (showRulers()) toggleRulers(); document.documentElement.style.removeProperty('--side-w'); document.documentElement.style.removeProperty('--insp-w'); if (typeof applyTlView === 'function') applyTlView(); fitCanvas(); renderOverlay(); renderSettings(); toast('화면 설정을 처음대로 되돌렸습니다'); }
+  else if (a === 'recent') { if (!window.confirm('최근 사용 목록(템플릿·요소·글꼴·색·크기·넘김)을 비울까요? 문서는 그대로입니다.')) return; ['naracal-recent-tpls', 'naracal-recent-elems', 'naracal-recent-fonts', 'naracal-recent-colors', 'naracal-recent-formats', 'naracal-trans-recent'].forEach(k => { try { localStorage.removeItem(k); } catch (er) {} }); renderSide(); toast('최근 사용 목록을 비웠습니다'); }
+  else if (a === 'blocks') { close(true); elCat = 'myblock'; sideTab = 'elems'; renderRail(); renderSide(); }
   else if (a === 'blocksdel') { if (!window.confirm(`내 블록 ${myBlocks.length}개를 모두 지울까요? 되돌릴 수 없습니다.${myBlocks.some(b => b.synced) ? ' 동기화 폴더에 있는 블록은 다른 PC에서도 지워집니다.' : ''}`)) return; const gone = myBlocks; myBlocks = []; await store.idbSet('my-blocks', []).catch(() => {}); await blkForget(gone); renderSettings(); if (sideTab === 'elems') renderElems(); toast('내 블록을 모두 지웠습니다'); }
   else if (a === 'manual') { close(); openManual(); }
   else if (a === 'help') { close(); $('#dlgHelp').showModal(); }
@@ -3835,43 +3862,63 @@ $('#btnHoliday').onclick = () => openHoliday();
 $$('dialog [data-close]').forEach(b => b.onclick = () => b.closest('dialog').close());
 
 async function openSaveDialog() {
-  let d = $('#dlgSave'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgSave'; d.innerHTML = `<div class="dhead"><h2>저장 · 동기화</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="saveBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
+  let d = $('#dlgSave'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgSave'; d.innerHTML = `<div class="dhead"><h2>💾 저장 설정 <small>지금 상태 · 처음 설정 · 바꾸기</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="saveBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
   await renderSaveDialog();
   if (!d.open) d.showModal();
 }
 async function renderSaveDialog() {
+  /* 저장 설정 (팀장님 11/23 「내가 설정했는데 어떻게 되었는지, 고칠 수 있는지 모르겠다 — 처음 설정·나중 설정을 쉽게」)
+     ① 지금 저장 상태 그림(이 브라우저 → 구글 드라이브 폴더 → 지금 문서) ② 다음에 할 일 한 가지(처음 설정 3단계) ③ 내 저장 설정 — 줄마다 지금 값 + 바꾸기 */
   const d = $('#dlgSave'), st = store.state;
   const ready = await store.folderReady();
   const docs = ready ? await store.listDocs() : [];
   const curIn = ready && st.handle && await store.inFolder(st.handle);
   const when = t => new Date(t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const folderPart = ready ? `<p><b>동기화 폴더:</b> <code>${esc(st.dirName)}</code> — 설정값과 아래 문서들이 이 폴더를 통해 모든 PC에서 같아집니다.</p>
-    <label class="f" style="max-width:320px"><span>이 PC 이름 (충돌 안내에 표시, 예: 도장 PC·집 맥북)</span><input type="text" id="svPcName" value="${esc(store.pcName())}" maxlength="20"></label>
-    <h3>종류별 폴더</h3><label class="chk"><input type="checkbox" id="svKind" ${prefOn('naracal-kind-folders') ? 'checked' : ''}> 새 문서를 저장할 때 종류 폴더(이미지·인쇄물 · 영상 · 도서 · 캘린더 · 소식지 · 상장·증서 · 출석부)를 미리 골라 두기</label><label class="chk"><input type="checkbox" id="svExp" ${prefOn('naracal-export-copy') ? 'checked' : ''}> 내려받은 PNG·JPG·PDF·영상도 「종류 폴더 › 내보낸 파일」에 함께 저장 (구글 드라이브에 올라감)</label>
-    <h3>폴더 맨 위의 문서 (${docs.length})</h3>
-    ${docs.length ? `<ul class="list">${docs.map((x, i) => `<li data-doc="${i}" title="누르면 엽니다"><span>${esc(x.name.replace(/\.design\.json$/i, ''))}</span><small class="hint" style="margin:0">${when(x.lastModified)} · ${Math.max(1, Math.round(x.size / 1024)).toLocaleString()}KB</small>${st.handle && x.name === st.fileName && curIn ? '<b style="min-width:auto">작업 중</b>' : ''}</li>`).join('')}</ul>` : '<p class="hint">아직 문서가 없습니다.</p>'}
-    <div class="row" style="margin-top:10px">${curIn ? '' : '<button class="btn primary" id="svIntoDir">지금 문서를 이 폴더에 저장</button>'}<button class="btn" id="svNow" ${st.handle ? '' : 'disabled'}>지금 저장</button><button class="btn" id="svOther">다른 위치의 파일 열기</button><button class="btn" id="svDown">내려받기 (JSON 사본)</button><button class="btn danger" id="svDiscDir">폴더 연결 해제</button></div>`
-  : `<p><b>지금 상태:</b> ${st.handle ? `파일 <code>${esc(st.fileName)}</code>에 연결되어 자동 저장 중입니다.` : '브라우저 안에만 자동 저장되고 있습니다 (이 PC, 이 브라우저에서만 보임).'}</p>
-    ${st.dir ? `<p class="hint">동기화 폴더 <b>${esc(st.dirName)}</b>가 연결되어 있지만 이 창에서 아직 허락하지 않았습니다.</p><div class="row"><button class="btn primary" id="svReDir">동기화 폴더 다시 연결</button></div>` : ''}
-    <h3>여러 PC에서 쓰기 (구글 드라이브)</h3>
-    <ol style="margin:0 0 10px 18px;line-height:1.7"><li>각 PC에 <b>Google Drive 데스크톱 앱</b>을 설치하고 같은 계정으로 로그인합니다.</li><li>아래 <b>"동기화 폴더 연결"</b>을 누르고 <b>내 드라이브 → 나라차디자인공방</b> 폴더를 고릅니다 (없으면 그 창에서 새 폴더로 만듭니다). Windows는 보통 <code>G:\\내 드라이브</code>, Mac은 Finder 왼쪽의 <code>Google Drive → 내 드라이브</code>입니다.</li><li>그러면 <b>설정값(API 키·모델·최근 사용 글꼴·요소·템플릿)</b>과 <b>모든 문서</b>가 그 폴더에 저장되고, 다른 PC에서 같은 폴더를 연결하면 그대로 이어집니다.</li><li>PC마다 처음 한 번만 연결하면 됩니다. 브라우저가 "방문할 때마다 허용"을 물으면 허용해 두면 편합니다.</li></ol>
-    ${st.dirSupported ? '' : '<p class="hint">이 브라우저는 폴더 연결을 지원하지 않습니다. Chrome 또는 Edge를 쓰세요. 지금은 "내려받기"로 저장하세요.</p>'}
-    <div class="row"><button class="btn primary" id="svDir" ${st.dirSupported ? '' : 'disabled'}>동기화 폴더 연결</button><button class="btn" id="svConnect" ${st.supported ? '' : 'disabled'}>${st.handle ? '다른 파일에 연결' : '파일 하나만 연결'}</button><button class="btn" id="svNow" ${st.handle ? '' : 'disabled'}>지금 저장</button><button class="btn" id="svDown">내려받기 (JSON 사본)</button>${st.handle ? '<button class="btn danger" id="svDisc">파일 연결 해제</button>' : ''}</div>`;
-  $('#saveBody').innerHTML = folderPart + NC.live.settingsHTML() + `<details class="bk-more"><summary>ⓘ 문서 파일에는 올린 이미지와 AI 이미지가 함께 들어갑니다.</summary><div>내장 글꼴과 2026 삽화는 프로그램에 있으므로 파일이 가벼워집니다. 두 PC에서 같은 문서를 동시에 고쳐 내용이 갈라지면 어느 쪽으로 계속할지 묻고, 다른 쪽은 "충돌 사본" 파일로 보관해 지워지는 내용이 없습니다.</div></details>`;
-  const on = (id, fn) => { const b = $('#' + id); if (b) b.onclick = async () => { try { await fn(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } }; };
-  on('svDir', async () => { await store.connectFolder(); await afterFolderReady(); updateSaveBadge(); toast('동기화 폴더를 연결했습니다. 설정과 문서가 이 폴더로 동기화됩니다.'); renderSaveDialog(); });
-  on('svReDir', async () => { if (await store.requestFolderPermission()) { await afterFolderReady({ loadCurrent: true }); updateSaveBadge(); renderSaveDialog(); } });
-  on('svIntoDir', async () => { d.close(); await saveNow(); });
-  on('svDiscDir', async () => { if (!window.confirm('이 PC에서 동기화 폴더 연결을 끊을까요? (폴더 안 파일은 그대로 남습니다)')) return; await store.disconnectFolder(); await store.disconnect(); updateSaveBadge(); setStatus('브라우저에만 저장됩니다'); renderSaveDialog(); });
-  on('svConnect', async () => { gcAssets(); await store.connectNew(doc); updateSaveBadge(); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); toast('파일에 연결했습니다. 이제 자동으로 저장됩니다.'); d.close(); });
-  on('svNow', async () => { gcAssets(); await saveFileNow(); d.close(); });
-  on('svOther', async () => { d.close(); await openOtherFile(); });
-  on('svDown', async () => { gcAssets(); store.download(doc); toast('사본을 내려받았습니다'); });
-  on('svDisc', async () => { await store.disconnect(); updateSaveBadge(); setStatus('브라우저에만 저장됩니다'); d.close(); });
-  { const k1 = $('#svKind'), k2 = $('#svExp'); if (k1) k1.onchange = () => { setPref('naracal-kind-folders', k1.checked); toast(k1.checked ? '저장할 때 종류 폴더를 미리 골라 둡니다' : '저장할 때 마지막에 쓴 폴더를 골라 둡니다'); }; if (k2) k2.onchange = () => { setPref('naracal-export-copy', k2.checked); toast(k2.checked ? '내려받은 파일도 내 드라이브 종류 폴더에 저장합니다' : '내려받은 파일은 다운로드 폴더에만 저장합니다'); }; }
+  const fileOK = !!st.handle && (!ready || curIn), oc = b => b ? 'ok' : 'no';
+  const flow = `<div class="svflow">
+    <div class="svstep ok"><i>💻</i><b>이 브라우저</b><small>늘 자동으로 임시 보관</small><em>✔ 켜짐</em></div><span class="svarr">→</span>
+    <div class="svstep ${oc(ready)}"><i>☁️</i><b>구글 드라이브 폴더</b><small>${ready ? esc(st.dirName || '동기화 폴더') : st.dir ? '연결했지만 이 창에서 허락이 필요' : '아직 연결 안 함'}</small><em>${ready ? '✔ 연결됨' : '○ 아직'}</em></div><span class="svarr">→</span>
+    <div class="svstep ${oc(fileOK)}"><i>📄</i><b>지금 문서</b><small>${st.handle ? esc(String(st.fileName || '').replace(/\.design\.json$/i, '')) + (ready ? (curIn ? ' · 폴더 안' : ' · 폴더 밖') : '') : '파일로는 아직 안 저장'}</small><em>${fileOK ? '✔ 파일에 자동 저장' : '○ 브라우저에만'}</em></div></div>`;
+  let todo;
+  if (!st.dirSupported && !ready) todo = `<div class="svtodo warn"><b>⚠️ 이 브라우저는 폴더 연결을 못 합니다</b><p>Chrome이나 Edge에서 열면 구글 드라이브 폴더에 저장할 수 있어요. 지금은 「사본 내려받기」로 보관하세요.</p></div>`;
+  else if (st.dir && !ready) todo = `<div class="svtodo"><b>🔑 한 번만 허락해 주세요</b><p>전에 연결한 폴더 <b>${esc(st.dirName || '')}</b>를 이 창에서 다시 쓰려면 브라우저 허락이 필요합니다.</p><button class="btn primary" data-sv="redir">폴더 다시 허락하기</button></div>`;
+  else if (!ready) todo = `<div class="svtodo"><b>🚀 처음 설정 — 3단계면 끝</b><ol class="svsteps">
+      <li><span>1</span><div><b>구글 드라이브 앱 설치</b><small>각 PC에 「Google Drive 데스크톱」을 설치하고 같은 구글 계정으로 로그인 (이미 했으면 넘어가기)</small></div></li>
+      <li><span>2</span><div><b>저장 폴더 고르기</b><small>아래 단추 → <b>내 드라이브 → 나라차디자인공방</b> 폴더 고르기 (없으면 그 창에서 「새 폴더」). Windows는 <code>G:\\내 드라이브</code>, Mac은 Finder 왼쪽 <code>Google Drive</code></small><button class="btn primary" data-sv="dir">☁️ 저장 폴더 고르기</button></div></li>
+      <li><span>3</span><div><b>이 PC 이름 정하기</b><small>아래 「내 저장 설정」의 이 PC 이름 (예: 도장 PC, 집 맥북) — 두 PC에서 함께 쓸 때 어느 PC인지 알려 줌</small></div></li></ol>
+      <p class="hint" style="margin:6px 0 0">연결하면 문서와 설정(글꼴·요소·API 키 등)이 이 폴더를 통해 다른 PC와 같아집니다. 안 해도 이 브라우저에는 저장됩니다.</p></div>`;
+  else if (!curIn) todo = `<div class="svtodo"><b>📥 지금 문서를 폴더에 넣기</b><p>폴더는 연결됐지만 지금 문서는 ${st.handle ? '폴더 밖 파일' : '아직 브라우저에만'} 있습니다. 폴더에 저장하면 다른 PC에서도 열 수 있어요.</p><button class="btn primary" data-sv="intodir">지금 문서를 폴더에 저장</button></div>`;
+  else todo = `<div class="svtodo done"><b>✅ 저장 설정이 모두 되어 있습니다</b><p>고칠 때는 아래 「내 저장 설정」에서 바꾸세요. 문서는 고칠 때마다 저절로 폴더에 저장됩니다.</p></div>`;
+  const row = (ic, t, val, ctl) => `<div class="svrow"><i>${ic}</i><span><b>${t}</b><small>${val}</small></span><div class="svctl">${ctl}</div></div>`;
+  const swc = (id, on) => `<input type="checkbox" class="sw" id="${id}" ${on ? 'checked' : ''}>`;
+  const mine = `<h3 class="svh">⚙ 내 저장 설정 <small>지금 값 · 바꾸기</small></h3><div class="svlist">
+    ${row('☁️', '저장 폴더 (구글 드라이브)', ready ? `<code>${esc(st.dirName || '')}</code> — 두 PC가 이 폴더로 같아짐` : st.dir ? `${esc(st.dirName || '')} (허락 필요)` : '연결 안 함 — 이 브라우저에만 저장', ready ? `<button class="btn sm" data-sv="dir">바꾸기</button><button class="btn sm danger" data-sv="discdir">연결 끊기</button>` : st.dir ? `<button class="btn sm primary" data-sv="redir">허락</button>` : `<button class="btn sm primary" data-sv="dir" ${st.dirSupported ? '' : 'disabled'}>연결</button>`)}
+    ${row('🏷', '이 PC 이름', '두 PC에서 함께 쓸 때·버전 기록에 표시', `<input type="text" id="svPcName" value="${esc(store.pcName())}" maxlength="20" placeholder="예: 도장 PC">`)}
+    ${row('📄', '지금 문서', st.handle ? `${esc(String(st.fileName || ''))}${ready ? (curIn ? ' — 폴더 안 (자동 저장)' : ' — 폴더 밖 파일') : ' — 파일에 자동 저장'}` : '파일 없이 브라우저에만', `<button class="btn sm" data-sv="now" ${st.handle ? '' : 'disabled'}>지금 저장</button>${ready ? (curIn ? '' : '<button class="btn sm primary" data-sv="intodir">폴더에 저장</button>') : `<button class="btn sm" data-sv="connect" ${st.supported ? '' : 'disabled'}>${st.handle ? '다른 파일로' : '파일 하나 연결'}</button>`}${st.handle && !ready ? '<button class="btn sm danger" data-sv="disc">연결 해제</button>' : ''}`)}
+    ${ready ? row('🗂', '새 문서 저장 위치', prefOn('naracal-kind-folders') ? '종류 폴더(이미지·영상·도서·캘린더…)를 미리 골라 둠' : '마지막에 쓴 폴더를 골라 둠', swc('svKind', prefOn('naracal-kind-folders'))) : ''}
+    ${ready ? row('📤', '내려받은 파일 사본', prefOn('naracal-export-copy') ? 'PNG·PDF·영상도 「종류 폴더 › 내보낸 파일」에 함께 (드라이브에 올라감)' : '다운로드 폴더에만', swc('svExp', prefOn('naracal-export-copy'))) : ''}
+    ${row('💾', '사본 내려받기', '지금 문서를 파일 한 개(JSON)로 — USB·메일로 옮길 때', '<button class="btn sm" data-sv="down">내려받기</button>')}
+    ${row('📂', '다른 곳의 문서 열기', '폴더 밖이나 받은 파일', '<button class="btn sm" data-sv="other">열기</button>')}
+  </div>
+  ${ready ? `<details class="bk-more"><summary>📁 폴더 맨 위의 문서 (${docs.length})</summary><div>${docs.length ? `<ul class="list">${docs.map((x, i) => `<li data-doc="${i}" title="누르면 엽니다"><span>${esc(x.name.replace(/\.design\.json$/i, ''))}</span><small class="hint" style="margin:0">${when(x.lastModified)} · ${Math.max(1, Math.round(x.size / 1024)).toLocaleString()}KB</small>${st.handle && x.name === st.fileName && curIn ? '<b style="min-width:auto">작업 중</b>' : ''}</li>`).join('')}</ul>` : '<p class="hint">아직 문서가 없습니다.</p>'}</div></details>` : ''}`;
+  $('#saveBody').innerHTML = `<h3 class="svh">📍 지금 저장 상태</h3>` + flow + todo + mine + `<details class="bk-more svlive"><summary>🔗 실시간 같이 편집 <small>두 PC에서 같은 문서를 동시에 — 고급, 안 써도 저장에는 문제없음</small></summary><div>${NC.live.settingsHTML()}</div></details>` + `<details class="bk-more"><summary>ⓘ 문서 파일에는 무엇이 들어가나요?</summary><div>올린 이미지와 AI 이미지가 문서 파일에 함께 들어갑니다. 내장 글꼴과 2026 삽화는 프로그램에 있으므로 파일이 가벼워집니다. 두 PC에서 같은 문서를 동시에 고쳐 내용이 갈라지면 어느 쪽으로 계속할지 묻고, 다른 쪽은 "충돌 사본" 파일로 보관해 지워지는 내용이 없습니다.</div></details>`;
+  const run = async fn => { try { await fn(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } };
+  const act = {
+    dir: async () => { await store.connectFolder(); await afterFolderReady(); updateSaveBadge(); toast('저장 폴더를 연결했습니다 — 문서와 설정이 이 폴더로 같아집니다'); renderSaveDialog(); },
+    redir: async () => { if (await store.requestFolderPermission()) { await afterFolderReady({ loadCurrent: true }); updateSaveBadge(); renderSaveDialog(); } },
+    intodir: async () => { d.close(); await saveNow(); },
+    discdir: async () => { if (!window.confirm('이 PC에서 저장 폴더 연결을 끊을까요? (폴더 안 파일은 그대로 남고, 언제든 다시 연결할 수 있습니다)')) return; await store.disconnectFolder(); await store.disconnect(); updateSaveBadge(); setStatus('브라우저에만 저장됩니다'); renderSaveDialog(); },
+    connect: async () => { gcAssets(); await store.connectNew(doc); updateSaveBadge(); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); toast('파일에 연결했습니다. 이제 자동으로 저장됩니다.'); renderSaveDialog(); },
+    now: async () => { gcAssets(); await saveFileNow(); renderSaveDialog(); },
+    other: async () => { d.close(); await openOtherFile(); },
+    down: async () => { gcAssets(); store.download(doc); toast('사본을 내려받았습니다'); },
+    disc: async () => { await store.disconnect(); updateSaveBadge(); setStatus('브라우저에만 저장됩니다'); renderSaveDialog(); },
+  };
+  $('#saveBody').onclick = async e => { const b = e.target.closest('[data-sv]'); if (b && act[b.dataset.sv]) { await run(act[b.dataset.sv]); return; }
+    const li = e.target.closest('[data-doc]'); if (li) { const x = docs[Number(li.dataset.doc)]; if (st.handle && x.name === st.fileName && curIn) { d.close(); return; } try { await openFolderDoc(x.handle); d.close(); } catch (err) { toast('열 수 없습니다: ' + err.message, true); } } };
+  { const k1 = $('#svKind'), k2 = $('#svExp'); if (k1) k1.onchange = () => { setPref('naracal-kind-folders', k1.checked); toast(k1.checked ? '저장할 때 종류 폴더를 미리 골라 둡니다' : '저장할 때 마지막에 쓴 폴더를 골라 둡니다'); renderSaveDialog(); }; if (k2) k2.onchange = () => { setPref('naracal-export-copy', k2.checked); toast(k2.checked ? '내려받은 파일도 내 드라이브 종류 폴더에 저장합니다' : '내려받은 파일은 다운로드 폴더에만 저장합니다'); renderSaveDialog(); }; }
   const pn = $('#svPcName'); if (pn) pn.onchange = () => { store.setPcName(pn.value); pn.value = store.pcName(); toast('이 PC 이름을 저장했습니다'); };
   NC.live.bindSettings(d, () => { if (d.open) renderSaveDialog(); });
-  const ul = d.querySelector('.list'); if (ul) ul.onclick = async e => { const li = e.target.closest('[data-doc]'); if (!li) return; const x = docs[Number(li.dataset.doc)]; if (st.handle && x.name === st.fileName && curIn) { d.close(); return; } try { await openFolderDoc(x.handle); d.close(); } catch (err) { toast('열 수 없습니다: ' + err.message, true); } };
 }
 
 /* ---- 새 디자인 만들기 (미리캔버스식) ---- */

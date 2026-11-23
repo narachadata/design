@@ -389,7 +389,7 @@ NC.live = (function () {
     <p><b>지금 상태:</b> ${esc(s.t)}${s.tip ? ` <small class="hint" style="margin:0">(${esc(s.tip)})</small>` : ''}${ps.length ? ` · 함께 보는 PC: ${ps.map(p => esc(p.pc)).join(', ')}` : ''}</p>
     <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="lvOn" ${c.on ? 'checked' : ''}> 실시간 같이 편집 켜기</label>
     <div class="row" style="margin:8px 0">${c.fb ? `<button class="btn primary" id="lvLogin" ${fb.user ? 'hidden' : ''}>Google 로그인 (실시간 연결)</button><button class="btn" id="lvLogout" ${fb.user ? '' : 'hidden'}>로그아웃 (${esc(fb.user ? fb.user.email : '')})</button>` : ''}</div>
-    <details id="lvSetup" ${c.fb ? '' : 'open'}><summary style="cursor:pointer;font-weight:600">다른 PC와 연결하기 — Firebase 설정 (처음 한 번, 관장님이 직접)</summary>
+    <details id="lvSetup"><summary style="cursor:pointer;font-weight:600">다른 PC와 연결하기 — Firebase 설정 (처음 한 번만)</summary>
       <ol style="margin:8px 0 10px 18px;line-height:1.7">
         <li><a href="https://console.firebase.google.com/" target="_blank" rel="noopener">console.firebase.google.com</a>에 Google 계정으로 들어가 <b>프로젝트 추가</b> → 이름 <code>나라차공방</code> → Google 애널리틱스는 <b>끄고</b> 만들기.</li>
         <li>왼쪽 <b>빌드 → Realtime Database → 데이터베이스 만들기</b> → 위치 <code>asia-southeast1</code>(싱가포르) → <b>잠금 모드</b>로 시작.</li>
