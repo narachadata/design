@@ -1901,3 +1901,12 @@ dialog.aimk.wide{width:min(960px,96vw)}dialog.aimk .dbody{max-height:80vh}
 .ecard{position:relative}.ecard .edel{position:absolute;top:2px;right:2px;z-index:2;width:20px;height:20px;line-height:18px;border-radius:50%;background:rgba(255,255,255,.95);box-shadow:0 0 0 1px rgba(0,0,0,.15);color:#c0392b;font-style:normal;font-size:15px;font-weight:700;display:none;cursor:pointer}.ecard:hover .edel{display:block}.ecard .edel:hover{background:#c0392b;color:#fff}
 .eoff{margin-top:14px;border:1px dashed var(--ui-line2,#d0d5dd);border-radius:10px;padding:8px 10px;font-size:12.5px}.eoff summary{cursor:pointer;font-weight:700;color:var(--ui-fg2)}.eoffrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0}.eoffrow small{color:var(--ui-muted)}.eoff .egrid{margin-top:8px}.ecard.eoffc{opacity:.75}.ecard.eoffc:hover{opacity:1}
 #sidebody.edrop{outline:3px dashed #2f5bea;outline-offset:-6px;background:#f4f7ff}
+/* 왼쪽·오른쪽 창 접기 (11/24) — 칸은 남기고 너비만 0 (그리드 자리가 밀리지 않게) */
+body.fold-l .app{--side-w:0px}body.fold-r .app{--insp-w:0px}
+body.fold-l .side,body.fold-r .inspector{visibility:hidden;overflow:hidden;min-width:0;padding:0;border:0}
+body.fold-l #rszL,body.fold-r #rszR{cursor:pointer}body.fold-l #rszL::before,body.fold-r #rszR::before{display:none}
+.rsz-fold{position:absolute;top:50%;margin-top:24px;left:50%;transform:translateX(-50%);width:16px;height:40px;padding:0;border:1px solid var(--ui-line2,#d0d5dd);border-radius:8px;background:#fff;color:var(--ui-fg2,#475467);font-size:15px;font-weight:700;line-height:36px;text-align:center;cursor:pointer;box-shadow:0 2px 6px rgba(16,24,40,.12);z-index:7}
+.rsz-fold:hover{background:var(--ui-accent,#2f6fe4);border-color:var(--ui-accent,#2f6fe4);color:#fff}
+body.fold-l #rszL .rsz-fold,body.fold-r #rszR .rsz-fold{margin-top:-20px;width:18px;height:48px;line-height:44px;border-color:var(--ui-accent,#2f6fe4);color:var(--ui-accent,#2f6fe4)}
+.stage .pagenav #pnFocus.on{background:var(--ui-accent-soft,#e8f0ff);color:var(--ui-accent,#2f6fe4)}
+body.fold-r #rszR .rsz-fold{left:auto;right:1px;transform:none}
