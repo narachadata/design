@@ -4961,7 +4961,7 @@ async function runAI(fn) { const busy = $('#aiBusy'); const btns = $$('#aiBody b
 
 /* ---- 내보내기 ---- */
 /* ---- 다운로드 (미리캔버스식): PNG · JPG · PDF(웹/인쇄) — 작업한 크기 그대로 바로 받기 ---- */
-const DL_FMTS = [['pdfhq', 'PDF (고화질)', '보관·인쇄에 알맞은 300dpi 문서', '권장'], ['jpg', 'JPG', '공유에 알맞은 이미지'], ['png', 'PNG', '압축 손실 없는 고품질 이미지'], ['pdfweb', 'PDF (가벼운 공유용)', '카톡·메일로 보내기 좋은 200dpi 문서'], ['pdfprint', 'PDF (인쇄소용)', '300dpi 최고 화질 · 도련·재단 상자 포함 (재단선은 왼쪽 프로젝트 메뉴에서 켬)'], ['pdfvector', 'PDF (벡터 · 인쇄 창)', '글자가 가장 선명 · 브라우저 인쇄 창에서 "PDF로 저장"']];
+const DL_FMTS = [['pdfhq', 'PDF (고화질)', '보관·인쇄에 알맞은 300dpi 문서', '권장'], ['jpg', 'JPG', '공유에 알맞은 이미지'], ['png', 'PNG', '압축 손실 없는 고품질 이미지'], ['pdfweb', 'PDF (가벼운 공유용)', '카톡·메일로 보내기 좋은 200dpi 문서'], ['pdfprint', 'PDF (인쇄소용)', '300dpi 최고 화질 · 도련·재단 상자 포함 (재단선은 왼쪽 프로젝트 메뉴에서 켬)'], ['pdfvector', 'PDF (벡터 · 인쇄 창)', '글자가 가장 선명 · 브라우저 인쇄 창에서 "PDF로 저장"'], ['pptx', 'PowerPoint (.pptx)', '발표자료 — 파워포인트·키노트·구글 슬라이드에서 열기 (쪽마다 그림 한 장, 발표자 메모 포함)']];
 // PDF 종류별 해상도·압축 품질
 let dlTenth = false;
 const PDF_TENTH = (w, h) => w > 5080 || h > 5080; // PDF 쪽 한 변 200인치(5.08m) 한계
@@ -5155,6 +5155,7 @@ async function runDownload() {
   try {
     say('모듈 불러오는 중…');
     try { await ensureLibFonts(pages.map(i => doc.pages[i])); await document.fonts.ready; } catch (e) {}
+    if (S.fmt === 'pptx') { await exportPPTX(pages, say, base); say('완료'); go.disabled = false; return; }
     const img = S.fmt === 'jpg' || S.fmt === 'png';
     if (img) {
       const bl = S.imgBleed && Number(doc.bleed) > 0 ? Number(doc.bleed) : 0, mode = bl ? 'print' : 'thumb';
@@ -5221,6 +5222,15 @@ async function setDpi(blob, dpi, type) {
     if (type === 'image/jpeg' && u[2] === 0xFF && u[3] === 0xE0 && u[6] === 0x4A && u[7] === 0x46) { u[13] = 1; u[14] = d >> 8; u[15] = d & 255; u[16] = d >> 8; u[17] = d & 255; return new Blob([u], { type }); }
     if (type === 'image/png' && u[12] === 0x49 && u[13] === 0x48) { const p = Math.round(d / 0.0254), c = new Uint8Array(21), v = new DataView(c.buffer); v.setUint32(0, 9); c.set([0x70, 0x48, 0x59, 0x73], 4); v.setUint32(8, p); v.setUint32(12, p); c[16] = 1; v.setUint32(17, CRC32(c.subarray(4, 17))); return new Blob([u.subarray(0, 33), c, u.subarray(33)], { type }); }
   } catch (e) {} return blob; }
+/* PowerPoint 내보내기 (팀장님 11/23 — PPT 템플릿·발표자료): 쪽마다 1920px 그림 한 장 + 발표자 메모(pg.notes). 글자를 고치려면 공방에서 고쳐 다시 내보내기 */
+async function exportPPTX(pages, say, base) {
+  await loadScript('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', () => window.PptxGenJS, 'sha384-Cck14aA9cifjYolcnjebXRfWGkz5ltHMBiG4px/j8GS+xQcb7OhNQWZYyWjQ+UwQ');
+  const pptx = new window.PptxGenJS(), iw = doc.w / 25.4, ih = doc.h / 25.4; pptx.defineLayout({ name: 'NC', width: iw, height: ih }); pptx.layout = 'NC'; pptx.title = doc.name || '발표자료'; pptx.author = '나라차 디자인 공방';
+  const dpi = Math.min(220, Math.max(96, 1920 / iw)); /* 가로 1920px 안팎 */
+  for (let i = 0; i < pages.length; i++) { say(`${i + 1}/${pages.length} 쪽 그리는 중…`); const pg = doc.pages[pages[i]], c = await renderPageCanvas(pg, dpi, 'thumb', '#ffffff'); const data = c.toDataURL('image/jpeg', 0.92); c.width = c.height = 0;
+    const s = pptx.addSlide(); s.addImage({ data, x: 0, y: 0, w: iw, h: ih }); if (pg.notes) s.addNotes(String(pg.notes)); }
+  say('파일 만드는 중…'); const blob = await pptx.write({ outputType: 'blob' }); saveBlob(blob, `${base}.pptx`); toast(`PowerPoint 파일로 저장했습니다 — ${pages.length}쪽`);
+}
 function saveBlob(b, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); exportCopy(b, name); }
 /* ---- 종류별 폴더 (팀장님 11/21 「이미지·동영상·도서처럼 형식이 다른 파일은 미리 나눈 종류 폴더에 저절로, 열기·저장도 종류별로」) ----
    저장 위치는 구글 드라이브 데스크톱 앱의 '내 드라이브' 안 동기화 폴더(브라우저 폴더 연결). 그 안에 종류 폴더: 이미지·인쇄물 / 영상 / 도서 / 캘린더 / 소식지 / 상장·증서 / 출석부
