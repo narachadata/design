@@ -5164,7 +5164,7 @@ function BK() { if (BKm) return BKm; if (!NC.bookMod) return null; BKm = NC.book
   toast: (m, bad) => toast(m, bad), commit, renderAll, renderCanvas, renderSide, goto, book, bookNum, sheetHTML, fitBoxes, isRightPage, newDoc, newPage, setStatus, endEdit, ensureLibFonts, loadScript, printIssues, openSpreads, bookletPdf, openDownload,
   imgUrl: el => { try { return viewSrc(el, 'print'); } catch (e) { return ''; } },
   markDirty: () => markDirty(), amendCommit, selectIds: ids => select(ids), openQr: (t, o) => openQr(t, o),
-  async openPrevDoc(id, name) { const L = await prevDocList(), i = L.findIndex(x => x.docId === id); if (i >= 0) { await restorePrevDoc(i); return; } toast(`책 "${name || ''}"을 직전 문서에서 찾지 못했습니다 — 파일로 저장해 두셨다면 「내 드라이브 → 도서」에서 여세요`, true); },
+  async openPrevDoc(id, name) { const L = await prevDocList(), i = L.findIndex(x => x.docId === id); if (i >= 0) { await restorePrevDoc(i); return doc.docId === id; } toast(`책 "${name || ''}"을 직전 문서에서 찾지 못했습니다 — 파일로 저장해 두셨다면 「내 드라이브 → 도서」에서 여세요`, true); return false; },
   async newDocKeep() { keepCurrentDoc.kept = ''; if (doc.pages.some(p => p.els.length) && !(await keepCurrentDoc())) return false; const k = keepCurrentDoc.kept; await store.disconnect(); return k || ''; },
   setDoc(d) { doc = d; doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; },
   afterNewDoc() { hist = []; histMeta = []; hptr = -1; { const pn = $('#pname'); if (pn) pn.value = doc.name; } commit(); zoom = 0; renderAll(); updateSaveBadge(); fitCanvas(); goto(0); },

@@ -1700,3 +1700,4 @@ dialog.st-dlg{max-width:1280px;width:96vw}
 .be-tt{width:100%;border-collapse:collapse;border-top:2px solid #333;border-bottom:2px solid #333;background:#fff}.be-tt td{border:1px solid #c9ced6;padding:0}.be-tt tr.hd td{background:#eef1f5}.be-tt tr.hd input{font-weight:700}
 .be-td{width:100%;box-sizing:border-box;border:0;background:transparent;padding:6px 8px;font:inherit;font-size:14px;color:#111}.be-td:focus{outline:2px solid #2f6fe4;outline-offset:-2px}
 .be-tbn{font-size:11.5px;color:var(--ui-fg2);margin:5px 0 0}
+.be-tt tr.al td{border:0;background:transparent;padding:3px 2px 0}.be-tt tr.al select{width:100%;font-size:11.5px;padding:2px 4px;border:1px solid var(--ui-line);border-radius:5px;background:#fff;color:#444}
