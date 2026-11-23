@@ -524,6 +524,12 @@ function showGuides() { if (pvMode) return false; try { return localStorage.getI
 var pvMode = false;
 function viewSpread() { try { return localStorage.getItem('naracal-view') === 'spread'; } catch (e) { return false; } }
 function spreadMate(i) { if (!viewSpread() || doc.pages.length < 2 || doc.bookCover || !book().facing) return null; const st = $('#stage'); if (st && (st.classList.contains('pgm-on') || st.classList.contains('tlon'))) return null; if (i <= 0) return null; const j = isRightPage(i) ? i - 1 : i + 1; return j > 0 && j < doc.pages.length ? j : null; } /* 1쪽(표지)은 오른쪽에 혼자 */
+/* 펼침면 옆 쪽 (팀장님 11/24 「요소를 오른쪽 쪽으로 끌고 가면 오른쪽 쪽이 편집 활성 되도록」): 놓은 자리가 옆 쪽 위면 그 쪽으로 옮기고 그 쪽을 고침 */
+function facingAt(e) { const f = $('#facing'), sh = f && f.querySelector('.sheet'); if (!sh) return null; const r = sh.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return null; const j = Number(f.dataset.i); if (isNaN(j) || !doc.pages[j]) return null; const k = sh.offsetWidth / r.width / MM; return { j, x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k }; }
+function dropToFacing(d, e) { const at = facingAt(e); if (!at || !d.els || !d.els.length || d.els.some(x => x.flowFrame)) return false;
+  const p = toMM(e), dx = at.x - p.x, dy = at.y - p.y, ids = d.els.map(x => x.id), from = page(), moving = from.els.filter(x => ids.includes(x.id)); if (!moving.length) return false;
+  from.els = from.els.filter(x => !ids.includes(x.id)); moving.forEach(el => { el.x = r1(el.x + dx); el.y = r1(el.y + dy); }); doc.pages[at.j].els.push(...moving);
+  commit(); goto(at.j); select(ids); toast(`${pgNo(at.j)}쪽으로 옮겼습니다 — 이제 ${pgNo(at.j)}쪽을 고칩니다 (되돌리기 Ctrl+Z)`); return true; }
 function renderFacing() { const wrap = $('#canvasWrap'); if (!wrap) return; let f = $('#facing'); const j = spreadMate(cur); if (j == null) { if (f) f.remove(); return; }
   if (!f) { f = document.createElement('div'); f.id = 'facing'; f.className = 'facing'; wrap.appendChild(f); f.onclick = () => { const t = Number(f.dataset.i); if (!isNaN(t)) goto(t); }; }
   f.dataset.i = j; f.title = `${pgNo(j)}쪽 — 누르면 이 쪽을 고칩니다`; f.innerHTML = `<div class="facing-in">${sheetHTML(doc.pages[j], 'thumb')}</div><span class="facing-lb">${pgNo(j)}쪽 · 누르면 고치기</span>`; }
@@ -783,6 +789,7 @@ function dragMove(e) {
     if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
     drag.els.forEach(el => { const o = drag.orig.find(q => q.id === el.id); el.x = r1(o.x + dx); el.y = r1(o.y + dy); });
     liveUpdate(drag.els); renderOverlay(guides);
+    { const f = $('#facing'); if (f) { $('#stage').classList.add('xdrag'); f.classList.toggle('drop-on', !!facingAt(e)); } } /* 펼침면: 끄는 동안 쪽 밖도 보이게 · 옆 쪽 위면 표시 */
   } else if (drag.kind === 'resize') {
     const el = drag.el, o = drag.o, rad = -(o.rot || 0) * Math.PI / 180;
     const lx = dx * Math.cos(rad) - dy * Math.sin(rad), ly = dx * Math.sin(rad) + dy * Math.cos(rad);
@@ -839,6 +846,8 @@ document.addEventListener('pointerup', e => {
   flushMove(); { const t = $('#dragTip'); if (t) t.hidden = true; } /* flushMove가 마지막 움직임에서 말풍선을 다시 띄우므로 그 뒤에 숨김 */
   if (pen) { const pts = pen.pts; pen = null; const pv = $('#ovl .penprev'); if (pv) pv.remove(); if (pts.length < 3) return; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); const x0 = Math.min(...xs) - 1, y0 = Math.min(...ys) - 1, w = Math.max(2, Math.max(...xs) - x0 + 1), h = Math.max(2, Math.max(...ys) - y0 + 1); const el = { id: uid(), type: 'path', pts: pts.map(p => [r1(p[0] - x0), r1(p[1] - y0)]), x: r1(x0), y: r1(y0), w: r1(w), h: r1(h), rot: 0, stroke: penStyle.stroke, strokeW: penStyle.strokeW, fill: '', closed: false, smooth: true, opacity: 1, name: '펜 선' }; page().els.push(el); commit(); select([el.id]); rerender(); return; }
   if (!drag) return; const d = drag; drag = null;
+  { const st = $('#stage'); if (st) st.classList.remove('xdrag'); const f = $('#facing'); if (f) f.classList.remove('drop-on'); }
+  if (d.kind === 'move' && d.moved && dropToFacing(d, e)) return;
   if (d.kind === 'cells') { renderInspector(); showCellBar(); return; }
   if (d.kind === 'cgl') { if (d.moved) commit(); rerender(); return; }
   if (d.kind === 'marq') { renderInspector(); if (sideTab === 'layers') renderSide(); renderOverlay(); updateToolbarState(); return; }
@@ -4964,7 +4973,7 @@ async function runAI(fn) { const busy = $('#aiBusy'); const btns = $$('#aiBody b
 
 /* ---- 내보내기 ---- */
 /* ---- 다운로드 (미리캔버스식): PNG · JPG · PDF(웹/인쇄) — 작업한 크기 그대로 바로 받기 ---- */
-const DL_FMTS = [['pdfhq', 'PDF (고화질)', '보관·인쇄에 알맞은 300dpi 문서', '권장'], ['jpg', 'JPG', '공유에 알맞은 이미지'], ['png', 'PNG', '압축 손실 없는 고품질 이미지'], ['pdfweb', 'PDF (가벼운 공유용)', '카톡·메일로 보내기 좋은 200dpi 문서'], ['pdfprint', 'PDF (인쇄소용)', '300dpi 최고 화질 · 도련·재단 상자 포함 (재단선은 왼쪽 프로젝트 메뉴에서 켬)'], ['pdfvector', 'PDF (벡터 · 인쇄 창)', '글자가 가장 선명 · 브라우저 인쇄 창에서 "PDF로 저장"'], ['pptx', 'PowerPoint (.pptx)', '발표자료 — 파워포인트·키노트·구글 슬라이드에서 열기 (쪽마다 그림 한 장, 발표자 메모 포함)']];
+const DL_FMTS = [['pdfhq', 'PDF (고화질)', '보관·인쇄에 알맞은 300dpi 문서', '권장'], ['jpg', 'JPG', '공유에 알맞은 이미지'], ['png', 'PNG', '압축 손실 없는 고품질 이미지'], ['pdfweb', 'PDF (가벼운 공유용)', '카톡·메일로 보내기 좋은 200dpi 문서'], ['pdfprint', 'PDF (인쇄소용)', '300dpi 최고 화질 · 도련·재단 상자 포함 (재단선은 왼쪽 프로젝트 메뉴에서 켬)'], ['pdfvector', 'PDF (벡터 · 인쇄 창)', '글자가 가장 선명 · 브라우저 인쇄 창에서 "PDF로 저장"'], ['pptx', 'PowerPoint (.pptx)', '발표자료 — 파워포인트·키노트·구글 슬라이드에서 열기 · 글은 거기서 바로 고칠 수 있게 (발표자 메모 포함)'], ['pptximg', 'PowerPoint (그림으로)', '쪽마다 그림 한 장 — 모양이 공방과 똑같이, 글은 고칠 수 없음']];
 // PDF 종류별 해상도·압축 품질
 let dlTenth = false;
 const PDF_TENTH = (w, h) => w > 5080 || h > 5080; // PDF 쪽 한 변 200인치(5.08m) 한계
@@ -5006,10 +5015,11 @@ function renderDownload() {
   ${img ? `<label class="f" style="margin-bottom:2px"><span>크기</span></label>${proxyPick('#dlScale', S.scale, [[1, '📱', '1배', '1배 — 화면·SNS용 (96dpi)'], [2, '💻', '2배', '2배 — 선명하게 (192dpi)'], [3.125, '🖨', '300dpi', '인쇄용 300dpi'], [3.646, '🖨✨', '350dpi', '고급 인쇄 350dpi']], 'txt')}<select id="dlScale" hidden>${[[1, '1배'], [2, '2배'], [3.125, '300dpi'], [3.646, '350dpi']].map(([v, t]) => `<option value="${v}" ${S.scale === v ? 'selected' : ''}>${t}</option>`).join('')}</select>` : ''}
   <label class="f" style="margin-bottom:2px"><span>페이지</span></label>${proxyPick('#dlPages', S.pages, [['all', '📚', '모든 쪽', doc.pages.some(p => p.dlOff) && doc.pages.some(p => !p.dlOff) ? `모든 쪽 (숨긴 ${doc.pages.filter(p => p.dlOff).length}쪽 빼고)` : `모든 쪽 (1~${doc.pages.length})`], ['cur', '📄', '지금 쪽', `지금 쪽 (${cur + 1})`], ['range', '✍', '골라서', '쪽 번호 직접 쓰기 (예: 1-3, 5)']].concat(img && sel.length ? [['sel', '▣', '고른 것만', `선택한 요소만 (${sel.length}개)`]] : []), 'txt')}<label class="f" hidden><select id="dlPages"><option value="all" ${S.pages === 'all' ? 'selected' : ''}>${doc.pages.some(p => p.dlOff) && doc.pages.some(p => !p.dlOff) ? `모든 페이지 (숨긴 ${doc.pages.filter(p => p.dlOff).length}쪽 빼고 ${doc.pages.filter(p => !p.dlOff).length}쪽)` : `모든 페이지 (1~${doc.pages.length})`}</option><option value="cur" ${S.pages === 'cur' ? 'selected' : ''}>현재 페이지 (${cur + 1})</option><option value="range" ${S.pages === 'range' ? 'selected' : ''}>직접 입력</option>${img && sel.length ? `<option value="sel" ${S.pages === 'sel' ? 'selected' : ''}>선택한 요소만 (${sel.length}개)</option>` : ''}</select></label>
   ${S.pages === 'range' ? `<label class="f"><input id="dlRange" placeholder="예: 1-3, 5" value="${esc(S.range)}"></label>` : ''}
+  ${S.fmt === 'pptx' ? `<label class="f"><span>글꼴</span></label><div class="seg dlpf"><button type="button" data-pptf="safe" class="${S.pptFont !== 'keep' ? 'on' : ''}">🖥 어느 PC에서나 같게<small>맑은 고딕·바탕으로</small></button><button type="button" data-pptf="keep" class="${S.pptFont === 'keep' ? 'on' : ''}">🔤 공방 글꼴 이름 그대로<small>그 글꼴을 깐 PC에서만 똑같이</small></button></div>` : ''}
   ${S.fmt === 'png' ? `<label class="chk"><input type="checkbox" id="dlTransp" ${S.transp ? 'checked' : ''}> <span class="pk-chk">▦</span> 투명 배경 <small class="hint" style="margin:0">로고·스티커용</small></label>` : ''}
   ${img && n > 1 ? `<label class="chk"><input type="checkbox" id="dlMerge" ${S.merge ? 'checked' : ''}> <span class="pk-chk">🧷</span> 한 장으로 이어 붙이기 <small class="hint" style="margin:0">세로로</small></label>` : ''}
   ${img && Number(doc.bleed) > 0 ? `<label class="chk"><input type="checkbox" id="dlImgBleed" ${S.imgBleed ? 'checked' : ''}> <span class="pk-chk">✂</span> 도련 ${doc.bleed}mm 포함 <small class="hint" style="margin:0">명함·스티커를 인쇄소에 그림으로 보낼 때</small></label>` : ''}
-  <div class="dlinfo"><b>다운로드 정보</b><ul><li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${docSizeLabel(' × ')}${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${(px(doc.h + 2 * bleed) * (img && S.merge && n > 1 ? n : 1)).toLocaleString()} px · ${Math.round(dpi)}dpi${(img ? Math.round(dpi) < Math.round(96 * S.scale) - 1 : DL_PDF[S.fmt] && Math.round(dpi) < DL_PDF[S.fmt].dpi - 1) ? (Math.max(doc.w, doc.h) >= 1500 ? ' <small>(현수막처럼 큰 인쇄물은 멀리서 보므로 60~100dpi면 충분)</small>' : ' <b>(크기가 커서 브라우저 한계에 맞춰 낮춤)</b>') : ''}</li>${(() => { const pc = px(doc.w + 2 * bleed) * px(doc.h + 2 * bleed) * n, f = img ? S.fmt : 'jpg', q = img ? 0.92 : DL_PDF[S.fmt].q, mb = dlEstMB(pc, f, q); return `<li>파일 크기 최대 약 ${mb < 1 ? '1MB' : mb < 10 ? mb.toFixed(1) + 'MB' : Math.round(mb) + 'MB'} <small>(사진이 적은 디자인은 훨씬 작아짐)</small>${mb > 300 ? ' <b>— 아주 클 수 있으니 인쇄소 웹하드로 보내거나 쪽을 나눠 받으세요</b>' : ''}</li>`; })()}${!img && DL_PDF[S.fmt] && PDF_TENTH(doc.w + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0)), doc.h + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0))) ? '<li><b>5.08m가 넘어 PDF를 1/10 크기로 만듭니다</b> — 인쇄소에 "1000% 확대 출력" 요청 (화질은 그대로)</li>' : ''}` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
+  <div class="dlinfo"><b>다운로드 정보</b><ul><li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${docSizeLabel(' × ')}${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${(px(doc.h + 2 * bleed) * (img && S.merge && n > 1 ? n : 1)).toLocaleString()} px · ${Math.round(dpi)}dpi${(img ? Math.round(dpi) < Math.round(96 * S.scale) - 1 : DL_PDF[S.fmt] && Math.round(dpi) < DL_PDF[S.fmt].dpi - 1) ? (Math.max(doc.w, doc.h) >= 1500 ? ' <small>(현수막처럼 큰 인쇄물은 멀리서 보므로 60~100dpi면 충분)</small>' : ' <b>(크기가 커서 브라우저 한계에 맞춰 낮춤)</b>') : ''}</li>${(() => { const pc = px(doc.w + 2 * bleed) * px(doc.h + 2 * bleed) * n, f = img ? S.fmt : 'jpg', q = img ? 0.92 : DL_PDF[S.fmt].q, mb = dlEstMB(pc, f, q); return `<li>파일 크기 최대 약 ${mb < 1 ? '1MB' : mb < 10 ? mb.toFixed(1) + 'MB' : Math.round(mb) + 'MB'} <small>(사진이 적은 디자인은 훨씬 작아짐)</small>${mb > 300 ? ' <b>— 아주 클 수 있으니 인쇄소 웹하드로 보내거나 쪽을 나눠 받으세요</b>' : ''}</li>`; })()}${!img && DL_PDF[S.fmt] && PDF_TENTH(doc.w + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0)), doc.h + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0))) ? '<li><b>5.08m가 넘어 PDF를 1/10 크기로 만듭니다</b> — 인쇄소에 "1000% 확대 출력" 요청 (화질은 그대로)</li>' : ''}` : /^pptx/.test(S.fmt) ? `<li>PowerPoint 쪽 ${n}장 · 쪽마다 ${S.fmt === 'pptx' ? '바탕(도형·그림)은 그림 한 장 + <b>글은 고칠 수 있는 글 상자</b>' : '그림 한 장(글은 못 고침)'} · 발표자 메모 포함</li>` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
   ${S.fmt === 'pdfprint' ? `<p class="hint" style="margin:6px 0 0">${bleed ? `도련 ${bleed}mm 포함 작업 사이즈${doc.cropMarks ? ` + 재단선(도련 바깥 5mm) — 파일 한 장은 ${r1(doc.w + 2 * bleed + 10)}×${r1(doc.h + 2 * bleed + 10)}mm` : ''}.` : ((FORMATS.find(x => x[0] === doc.fmt) || [])[2] === 'sign' ? '도련 없음(0mm) — 현수막·간판은 보통 도련 없이 작업 사이즈 그대로 맡깁니다.' : `도련 없음(0mm) — 바탕색·그림이 종이 끝까지 닿으면 도련이 필요합니다(아래 인쇄 점검이 알려 드림, 이 문서는 ${bleedFor(FORMATS.find(x => x[0] === doc.fmt)) || 3}mm 권장).`)} 대부분의 인쇄소는 재단선 없는 작업 사이즈 파일을 받습니다.<br>이 PDF는 sRGB 그림(${Math.round(dpi || 300)}dpi)으로 된 파일입니다. 인쇄소에 "sRGB 기준 CMYK 변환"을 요청하고, 밝은 파랑·초록은 탁해질 수 있으니 시안(교정쇄)으로 확인하세요. 명함처럼 작은 검정 글자가 많으면 "PDF (벡터)"가 더 선명합니다(검정 단색 처리 가능).</p><details class="fx dlshop"><summary>📋 인쇄소에 보낼 말</summary><textarea id="dlShopTxt" rows="6" readonly>${esc(shopTxt)}</textarea><button type="button" class="btn sm" data-dl="shopcopy">복사하기</button></details>` : ''}${S.fmt === 'pdfweb' ? '<p class="hint" style="margin:6px 0 0">확대하거나 인쇄하면 글자가 덜 선명할 수 있습니다. 인쇄·보관용은 "PDF (고화질)"을 쓰세요.</p>' : ''}</div>
   <div id="dlWarn"></div><div class="dlprog" id="dlProg"></div>
   <button class="btn primary full" id="dlGo"><svg class="ic"><use href="#i-upload"/></svg>${S.fmt === 'pdfvector' ? '인쇄 창 열기' : '다운로드'}</button>`;
@@ -5021,6 +5031,7 @@ function renderDownload() {
   const mg = $('#dlMerge'); if (mg) mg.onchange = e => { S.merge = e.target.checked; renderDownload(); };
   const ib = $('#dlImgBleed'); if (ib) ib.onchange = e => { S.imgBleed = e.target.checked; renderDownload(); };
   const tp = $('#dlTransp'); if (tp) tp.onchange = e => { S.transp = e.target.checked; renderDownload(); };
+  p.querySelectorAll('[data-pptf]').forEach(b => b.onclick = () => { S.pptFont = b.dataset.pptf; renderDownload(); });
   $('#dlGo').onclick = runDownload;
   const printy = S.fmt === 'pdfprint' || S.fmt === 'pdfhq'; // 인쇄 점검은 인쇄용·고화질 PDF에서만
   if (printy) { const w0 = $('#dlWarn'); if (w0) w0.innerHTML = '<div class="dlok">인쇄 점검 중… (쪽이 많으면 몇 초 걸립니다)</div>'; }
@@ -5158,7 +5169,7 @@ async function runDownload() {
   try {
     say('모듈 불러오는 중…');
     try { await ensureLibFonts(pages.map(i => doc.pages[i])); await document.fonts.ready; } catch (e) {}
-    if (S.fmt === 'pptx') { await exportPPTX(pages, say, base); say('완료'); go.disabled = false; return; }
+    if (S.fmt === 'pptx' || S.fmt === 'pptximg') { await exportPPTX(pages, say, base, S.fmt === 'pptximg', S.pptFont === 'keep'); say('완료'); go.disabled = false; return; }
     const img = S.fmt === 'jpg' || S.fmt === 'png';
     if (img) {
       const bl = S.imgBleed && Number(doc.bleed) > 0 ? Number(doc.bleed) : 0, mode = bl ? 'print' : 'thumb';
@@ -5226,13 +5237,41 @@ async function setDpi(blob, dpi, type) {
     if (type === 'image/png' && u[12] === 0x49 && u[13] === 0x48) { const p = Math.round(d / 0.0254), c = new Uint8Array(21), v = new DataView(c.buffer); v.setUint32(0, 9); c.set([0x70, 0x48, 0x59, 0x73], 4); v.setUint32(8, p); v.setUint32(12, p); c[16] = 1; v.setUint32(17, CRC32(c.subarray(4, 17))); return new Blob([u.subarray(0, 33), c, u.subarray(33)], { type }); }
   } catch (e) {} return blob; }
 /* PowerPoint 내보내기 (팀장님 11/23 — PPT 템플릿·발표자료): 쪽마다 1920px 그림 한 장 + 발표자 메모(pg.notes). 글자를 고치려면 공방에서 고쳐 다시 내보내기 */
-async function exportPPTX(pages, say, base) {
+/* PowerPoint (팀장님 11/24 「PowerPoint에서 글도 고칠 수 있게」): 보통 글 상자는 PowerPoint 글 상자로(글꼴·크기·색·굵게·정렬·줄 간격·회전·서식 있는 글 그대로),
+   나머지(바탕·도형·그림·무지개/휘어진/세로/입체/빛 글자·쪽 번호 자리)는 그 글을 뺀 채 쪽마다 그림 한 장으로 맨 뒤에 깔기. asImg = 예전처럼 쪽 전체를 그림 한 장으로 */
+const pptEditable = e => e.type === 'text' && !elHidden(e) && String(e.text || '').trim() && (e.fillType || 'solid') === 'solid' && (!e.warp || e.warp === 'none') && !e.vertical && !(Number(e.d3) > 0) && !e.glow && (!e.blend || e.blend === 'normal') && !/\{(쪽|전체쪽|디데이:|남은날:)/.test(e.text || '');
+const hex6 = c => { c = String(c || '').trim(); let m = c.match(/^#([0-9a-f]{3})$/i); if (m) return m[1].split('').map(x => x + x).join('').toUpperCase(); m = c.match(/^#([0-9a-f]{6})/i); if (m) return m[1].toUpperCase(); m = c.match(/rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/i); if (m) return [m[1], m[2], m[3]].map(v => Number(v).toString(16).padStart(2, '0')).join('').toUpperCase(); return null; };
+function pptRuns(e) {
+  const up = t => e.upper ? t.toUpperCase() : t, base = { fontFace: e.font || 'Pretendard', fontSize: Number(e.size) || 14, bold: (Number(e.weight) || 400) >= 600, italic: !!e.italic, color: hex6(e.color) || '1A1A1A' };
+  if (e.underline) base.underline = { style: 'sng' }; if (e.strike) base.strike = 'sngStrike';
+  if (!(e.html && e.htmlFor === e.text)) return String(e.text).split('\n').map((t, i, a) => ({ text: up(t), options: Object.assign({}, base, { breakLine: i < a.length - 1 }) }));
+  const root = document.createElement('div'); root.innerHTML = e.html; const runs = [], brk = () => { if (runs.length && !runs[runs.length - 1].options.breakLine) runs[runs.length - 1].options.breakLine = true; };
+  const walk = (n, st) => { if (n.nodeType === 3) { if (n.nodeValue) runs.push({ text: up(n.nodeValue), options: Object.assign({}, st) }); return; } if (n.nodeType !== 1) return; const tag = n.tagName;
+    if (tag === 'BR') { if (runs.length && !runs[runs.length - 1].options.breakLine) brk(); else runs.push({ text: '', options: Object.assign({}, st, { breakLine: true }) }); return; }
+    const o = Object.assign({}, st), cs = n.style; if (tag === 'B' || tag === 'STRONG') o.bold = true; if (tag === 'I' || tag === 'EM') o.italic = true; if (tag === 'U') o.underline = { style: 'sng' }; if (tag === 'S' || tag === 'STRIKE' || tag === 'DEL') o.strike = 'sngStrike';
+    if (cs) { if (cs.fontWeight) o.bold = cs.fontWeight === 'bold' || Number(cs.fontWeight) >= 600; if (cs.fontStyle === 'italic') o.italic = true; const col = hex6(cs.color); if (col) o.color = col; if (/pt$/.test(cs.fontSize)) o.fontSize = parseFloat(cs.fontSize); if (cs.fontFamily) o.fontFace = cs.fontFamily.split(',')[0].replace(/["']/g, '').trim(); if (/underline/.test(cs.textDecoration || '')) o.underline = { style: 'sng' }; }
+    const block = /^(DIV|P|LI|H[1-6])$/.test(tag); if (block) brk(); n.childNodes.forEach(c => walk(c, o)); if (block) brk(); };
+  root.childNodes.forEach(c => walk(c, base)); if (runs.length) runs[runs.length - 1].options.breakLine = false; return runs.length ? runs : [{ text: '', options: base }];
+}
+function pptTextOpts(e) { const PT = 72 / 25.4, o = { x: e.x / 25.4, y: e.y / 25.4, w: Math.max(0.1, e.w / 25.4), h: Math.max(0.1, e.h / 25.4), align: ['left', 'center', 'right', 'justify'].includes(e.align) ? e.align : 'left', valign: e.valign === 'middle' ? 'middle' : e.valign === 'bottom' ? 'bottom' : 'top', margin: Math.max(0, (Number(e.pad) || 0) * PT), lineSpacingMultiple: Number(e.lh) || 1.3, wrap: true, fit: 'none', objectName: e.name || '글' };
+  if (e.rot) o.rotate = Number(e.rot); if (e.ls) o.charSpacing = Math.round(Number(e.ls) * (Number(e.size) || 14) * 10) / 10; if (e.opacity != null && e.opacity < 1) o.transparency = Math.round((1 - e.opacity) * 100);
+  const bg = hex6(e.bg); if (bg) o.fill = { color: bg }; if (Number(e.strokeW) > 0) o.outline = { size: Math.max(0.25, e.strokeW * PT), color: hex6(e.strokeC) || 'FFFFFF' };
+  if (e.shadow) { const dx = Number(e.shX) || 0, dy = Number(e.shY) || 0; o.shadow = { type: 'outer', color: hex6(e.shC) || '000000', opacity: Math.min(1, Number(e.shA) || 0.25), blur: Math.max(0, (Number(e.shB) || 0) * PT), offset: Math.hypot(dx, dy) * PT, angle: Math.round(((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360) }; }
+  return o; }
+/* 공방 글꼴은 대부분 웹 글꼴이라 다른 PC의 PowerPoint에 없음 → 기본은 어느 PC(Windows·Mac Office)에나 있는 맑은 고딕(명조 계열은 바탕)으로 */
+const PPT_SERIF = /Myeongjo|Batang|MaruBuri|Serif|명조|바탕|Song|Gowun Batang|Hahmlet|Cinzel|Playfair/i;
+async function exportPPTX(pages, say, base, asImg, keepFonts) {
   await loadScript('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', () => window.PptxGenJS, 'sha384-Cck14aA9cifjYolcnjebXRfWGkz5ltHMBiG4px/j8GS+xQcb7OhNQWZYyWjQ+UwQ');
   const pptx = new window.PptxGenJS(), iw = doc.w / 25.4, ih = doc.h / 25.4; pptx.defineLayout({ name: 'NC', width: iw, height: ih }); pptx.layout = 'NC'; pptx.title = doc.name || '발표자료'; pptx.author = '나라차 디자인 공방';
-  const dpi = Math.min(220, Math.max(96, 1920 / iw)); /* 가로 1920px 안팎 */
-  for (let i = 0; i < pages.length; i++) { say(`${i + 1}/${pages.length} 쪽 그리는 중…`); const pg = doc.pages[pages[i]], c = await renderPageCanvas(pg, dpi, 'thumb', '#ffffff'); const data = c.toDataURL('image/jpeg', 0.92); c.width = c.height = 0;
-    const s = pptx.addSlide(); s.addImage({ data, x: 0, y: 0, w: iw, h: ih }); if (pg.notes) s.addNotes(String(pg.notes)); }
-  say('파일 만드는 중…'); const blob = await pptx.write({ outputType: 'blob' }); saveBlob(blob, `${base}.pptx`); toast(`PowerPoint 파일로 저장했습니다 — ${pages.length}쪽`);
+  const dpi = Math.min(220, Math.max(96, 1920 / iw)); /* 가로 1920px 안팎 */ let nText = 0, nKeep = 0; const fonts = new Set();
+  for (let i = 0; i < pages.length; i++) { say(`${i + 1}/${pages.length} 쪽 그리는 중…`); const pg = doc.pages[pages[i]], tx = asImg ? [] : pg.els.filter(pptEditable), set = new Set(tx);
+    nKeep += asImg ? 0 : pg.els.filter(e => e.type === 'text' && !elHidden(e) && String(e.text || '').trim() && !set.has(e)).length;
+    const c = await renderPageCanvas(tx.length ? Object.assign({}, pg, { els: pg.els.filter(e => !set.has(e)) }) : pg, dpi, 'thumb', '#ffffff'); const data = c.toDataURL('image/jpeg', 0.92); c.width = c.height = 0;
+    const s = pptx.addSlide(); s.addImage({ data, x: 0, y: 0, w: iw, h: ih, altText: '바탕(도형·그림)' });
+    for (const e of tx) { const runs = pptRuns(e); runs.forEach(r => { if (!keepFonts) r.options.fontFace = PPT_SERIF.test(r.options.fontFace || '') ? 'Batang' : 'Malgun Gothic'; fonts.add(r.options.fontFace); }); s.addText(runs, pptTextOpts(e)); nText++; }
+    if (pg.notes) s.addNotes(String(pg.notes)); }
+  say('파일 만드는 중…'); const blob = await pptx.write({ outputType: 'blob' }); saveBlob(blob, `${base}.pptx`);
+  toast(asImg ? `PowerPoint 파일로 저장했습니다 — ${pages.length}쪽 (쪽마다 그림 한 장)` : `PowerPoint 파일로 저장했습니다 — ${pages.length}쪽 · 고칠 수 있는 글 상자 ${nText}개${nKeep ? ` (특수 효과 글자 ${nKeep}개는 그림으로)` : ''} ${keepFonts ? ` · 글꼴(${[...fonts].slice(0, 4).join(', ')}${fonts.size > 4 ? ' …' : ''})이 그 PC에 없으면 다른 글꼴로 보여요` : ' · 글꼴은 맑은 고딕·바탕'}`);
 }
 function saveBlob(b, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); exportCopy(b, name); }
 /* ---- 종류별 폴더 (팀장님 11/21 「이미지·동영상·도서처럼 형식이 다른 파일은 미리 나눈 종류 폴더에 저절로, 열기·저장도 종류별로」) ----
