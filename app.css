@@ -1893,8 +1893,9 @@ dialog.aimk.wide{width:min(960px,96vw)}dialog.aimk .dbody{max-height:80vh}
 .tcats.tmood{align-items:center;margin-top:6px}.tcats.tmood b{font-size:12px;margin-right:2px;color:var(--ui-fg2)}.tcats.tmood button i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:2px;box-shadow:0 0 0 1px rgba(0,0,0,.12) inset;vertical-align:-1px}.tcats.tmood button i+i{margin-right:4px;margin-left:-5px}
 /* 펼침면에서 요소 끌기: 끄는 동안 쪽 밖도 보이게, 옆 쪽 위면 파란 테두리 (11/24) */
 .stage.xdrag #canvas,.stage.xdrag #canvas .sheet{overflow:visible}.stage.xdrag #canvas{z-index:3}
-.stage .canvas-wrap .facing.drop-on .sheet{outline:3px solid #2f5bea;outline-offset:2px}
-.stage .canvas-wrap .facing.drop-on::after{content:'여기에 놓으면 이 쪽으로 옮겨요';position:absolute;left:50%;top:-26px;transform:translateX(-50%);background:#2f5bea;color:#fff;font-size:12px;padding:3px 10px;border-radius:999px;white-space:nowrap;z-index:5}
+.stage .canvas-wrap .facing.drop-on::after{background:rgba(47,111,228,.07);outline:2px solid #2f5bea;outline-offset:-2px}
+.stage .canvas-wrap .facing .facing-drop{display:none;position:absolute;left:50%;bottom:-27px;transform:translateX(-50%);z-index:3;background:#2f5bea;color:#fff;font-size:11.5px;font-weight:600;line-height:1;padding:5px 10px;border-radius:7px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(16,24,40,.18)}
+.stage .canvas-wrap .facing.drop-on .facing-drop{display:block}.stage .canvas-wrap .facing.drop-on .facing-lb{opacity:0}
 .seg.dlpf{margin-bottom:8px}.seg.dlpf button{display:flex;flex-direction:column;gap:1px;line-height:1.3}.seg.dlpf button small{font-weight:400;font-size:11px;opacity:.8}.seg.dlpf button.on{background:#fff;color:var(--ui-fg);box-shadow:var(--sh)}
 /* 요소 빼기·되살리기 (11/24) */
 .ecard{position:relative}.ecard .edel{position:absolute;top:2px;right:2px;z-index:2;width:20px;height:20px;line-height:18px;border-radius:50%;background:rgba(255,255,255,.95);box-shadow:0 0 0 1px rgba(0,0,0,.15);color:#c0392b;font-style:normal;font-size:15px;font-weight:700;display:none;cursor:pointer}.ecard:hover .edel{display:block}.ecard .edel:hover{background:#c0392b;color:#fff}
