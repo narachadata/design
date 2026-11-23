@@ -3023,8 +3023,28 @@ function renderSide0() {
   }
 }
 /* ---- 요소 패널 ---- */
-function elemCard(it) { const els = it.make(uid, { year: doc.calendar.year || 2027 }); return `<button class="ecard" data-el="${it.id}" title="${esc(it.name)} — 누르면 가운데에, 끌면 원하는 자리에" draggable="true"><div class="ebox" data-w="${it.w}" data-h="${it.h}">${tmpSheet(it.w, it.h, els, it.dark ? '#002559' : it.cat === 'icon' || it.cat === 'illust' || it.cat === 'naracha' ? 'transparent' : '#ffffff')}</div>${it.cat === 'icon' ? '' : `<span>${esc(it.name)}</span>`}</button>`; }
+/* 요소 빼기·되살리기 (팀장님 11/24 「태권도 캐릭터(만화)는 예쁘지 않아 삭제, 요소를 삭제·추가할 수 있게」)
+   프로그램·자료실 요소는 목록에서만 뺌(원본 파일은 그대로 · 맨 아래 「뺀 요소」에서 되살리기), 내 요소·AI 그림·내 블록은 정말 지움(물어보고).
+   뺀 목록은 자료실 폴더 「요소 숨김.json」에 보관해 두 PC가 같고, 폴더가 없으면 이 PC에. 처음에는 태권도 캐릭터(만화) 묶음을 뺀 상태 */
+let elOff = new Set((() => { try { const v = JSON.parse(localStorage.getItem('naracal-el-off') || 'null'); return Array.isArray(v) ? v : ['sub:cartoon']; } catch (e) { return ['sub:cartoon']; } })());
+const isOff = it => elOff.has(it.id) || (!!it.sub && elOff.has('sub:' + it.sub));
+async function saveElOff() { const l = [...elOff]; try { localStorage.setItem('naracal-el-off', JSON.stringify(l)); } catch (e) {} try { if (NC.lib.ready) await NC.lib.writeOff(l); } catch (e) { console.warn('요소 숨김 저장', e); } }
+NC.lib.onReady(async () => { const r = await NC.lib.readOff(); if (r && Array.isArray(r.off)) { elOff = new Set(r.off); try { localStorage.setItem('naracal-el-off', JSON.stringify(r.off)); } catch (e) {} if (sideTab === 'elems') renderElems(); } else saveElOff(); });
+async function elemDelete(id) { const it = getElem(id); if (!it) return;
+  if (id.startsWith('blk-')) { delMyBlock(id); return; }
+  if (it.lib && /^ai-/.test(it.lib.id || '')) { if (!window.confirm(`'${it.name}'${eul(it.name)} 지울까요?\n자료실 「내 그림」에서 파일까지 지워져 두 PC 모두에서 사라지고, 되살릴 수 없습니다. (이미 문서에 넣은 그림은 그대로)`)) return; try { await NC.lib.removeMine(it.lib.id); toast(`'${it.name}'${eul(it.name)} 지웠습니다`); } catch (e) { toast('지우지 못했습니다: ' + e.message, true); } renderElems(); return; }
+  elOff.add(id); await saveElOff(); renderElems(); toast(`'${it.name}'${eul(it.name)} 요소에서 뺐습니다 — 패널 맨 아래 「뺀 요소」에서 되살릴 수 있어요`); }
+function offHTML() { if (!elOff.size) return ''; const subs = [...elOff].filter(x => x.startsWith('sub:')).map(x => x.slice(4)), items = [...elOff].filter(x => !x.startsWith('sub:')).map(getElem).filter(Boolean);
+  if (!subs.length && !items.length) return '';
+  return `<details class="eoff"><summary>🗂 뺀 요소 ${subs.length ? subs.length + '묶음' : ''}${subs.length && items.length ? ' · ' : ''}${items.length ? items.length + '개' : ''} — 되살리기</summary>${subs.map(k => `<div class="eoffrow"><span>${esc((LIB_ECATS.find(c => c[0] === k) || [k, k])[1])} <small>묶음 전체</small></span><button class="btn sm" data-eon="sub:${esc(k)}">↩ 되살리기</button></div>`).join('')}${items.length ? `<div class="egrid">${items.map(it => `<button class="ecard eoffc" data-eon="${esc(it.id)}" title="${esc(it.name)} — 누르면 요소에 되살리기"><div class="ebox" data-w="${it.w}" data-h="${it.h}">${tmpSheet(it.w, it.h, it.make(uid, { year: doc.calendar.year || 2027 }), 'transparent')}</div><span>↩ ${esc(it.name)}</span></button>`).join('')}</div>` : ''}<button class="btn sm" data-eonall style="margin-top:6px">모두 되살리기</button></details>`; }
+function elemCard(it) { const els = it.make(uid, { year: doc.calendar.year || 2027 }); return `<button class="ecard" data-el="${it.id}" title="${esc(it.name)} — 누르면 가운데에, 끌면 원하는 자리에" draggable="true"><i class="edel" data-edel="${it.id}" title="${it.mine || (it.lib && /^ai-/.test(it.lib.id || '')) ? '지우기 (내가 올린·만든 것 — 정말 지움)' : '요소에서 빼기 (맨 아래에서 되살리기)'}">×</i><div class="ebox" data-w="${it.w}" data-h="${it.h}">${tmpSheet(it.w, it.h, els, it.dark ? '#002559' : it.cat === 'icon' || it.cat === 'illust' || it.cat === 'naracha' ? 'transparent' : '#ffffff')}</div>${it.cat === 'icon' ? '' : `<span>${esc(it.name)}</span>`}</button>`; }
 const LIB_ECATS = [['brand', '로고 · 심볼'], ['logo', '로고 (자료실)'], ['emblem', '엠블럼·패치'], ['mascot', '마스코트 라차'], ['mine-el', '내 요소'], ['cartoon', '태권도 캐릭터 (만화)'], ['ai-char', 'AI 캐릭터·사람'], ['ai-sticker', 'AI 스티커'], ['ai-scene', 'AI 배경·장면'], ['ai-photo', 'AI 사진'], ['ai-coloring', 'AI 색칠 도안'], ['ai-icon', 'AI 아이콘'], ['ai-mascot', 'AI 라차'], ['aiimg', 'AI로 만든 그림'], ['pose', '태권도 포즈 (사진)'], ['pair', '겨루기 · 두 사람'], ['silhouette', '동작 실루엣'], ['illust', '태권도 일러스트'], ['belt', '띠·라벨'], ['pattern', '패턴·장식']];
+/* 요소 칸 나누기 (팀장님 11/24 「나라차로고를 뺀 모든 태권도 동작 요소는 '태권도'로, '나라차'는 '나라차로고'로」):
+   로고·엠블럼 → 나라차로고(cat 'naracha') · 태권도 동작·포즈·실루엣·라차·띠 → 태권도('tkd') · 패턴 → 장식('deco') · 내가 올린 것·AI 그림(태권도 동작이 아닌 것) → 내 요소·AI('mine') */
+const LIB_TO_CAT = { brand: 'naracha', logo: 'naracha', emblem: 'naracha', pattern: 'deco', 'mine-el': 'mine', 'ai-sticker': 'mine', 'ai-scene': 'mine', 'ai-photo': 'mine', 'ai-coloring': 'mine', 'ai-icon': 'mine', aiimg: 'mine' };
+const libCat = sub => LIB_TO_CAT[sub] || 'tkd';
+function libSections(cat, libEls) { const known = new Set(LIB_ECATS.map(c => c[0]));
+  return LIB_ECATS.filter(([k]) => libCat(k) === cat).concat([['__etc', '그 밖의 자료실 요소']]).map(([k, t]) => { const list = libEls.filter(i => i.cat === cat && (k === '__etc' ? !known.has(i.sub) : i.sub === k)); return list.length ? `<div class="esec"><h3>${t} <small>${list.length}</small></h3>${k === 'brand' || k === 'mine-el' || k === '__etc' ? '' : `<button class="more" data-eoffsub="${k}" title="이 묶음을 요소에서 빼기 (원본은 그대로 · 맨 아래에서 되살리기)">묶음 빼기</button>`}</div><div class="egrid">${list.map(elemCard).join('')}</div>` : (k === 'mine-el' ? `<h3>내 요소</h3><p class="hint">위의 <b>＋ 내 요소 추가</b>로 PNG·SVG를 올리면 여기에 모입니다 (자료실에 보관되어 두 PC 모두에서 보임).</p>` : ''); }).join(''); }
 // 프로그램에 들어 있는 나라차 로고·심볼 (자료실이 없어도 늘 맨 위에)
 const BRAND_ELS = [['brand-horizontal', '가로 로고'], ['brand-horizontal-navy', '가로 로고 (남색)'], ['brand-horizontal-white', '가로 로고 (흰색)'], ['brand-horizontal-mono', '가로 로고 (한 색)'], ['brand-korean', '한글 로고'], ['brand-korean-navy', '한글 로고 (남색)'], ['brand-korean-white', '한글 로고 (흰색)'], ['brand-since', 'Since 2002 로고'], ['brand-since-white', 'Since 2002 (흰색)'], ['brand-hex', '육각 심볼'], ['brand-symbol-gray', '심볼 (회색)'], ['logo-wordmark-white', '워드마크 (흰색)']];
 const brandAR = {};
@@ -3040,7 +3060,7 @@ function libElemItems() {
 }
 function libElemItems0() {
   return NC.lib.items('element').map(it => { const w = it.ratio >= 1 ? 60 : Math.round(60 * it.ratio), h = it.ratio >= 1 ? Math.round(60 / it.ratio) : 60;
-    return { id: 'lib-' + it.id, cat: 'naracha', sub: it.cat, name: it.name, kw: '나라차 자료실 ' + it.kw, w: Math.max(w, 4), h: Math.max(h, 4), dark: it.dark, lib: it,
+    return { id: 'lib-' + it.id, cat: libCat(it.cat), sub: it.cat, name: it.name, kw: '나라차 자료실 ' + it.kw, w: Math.max(w, 4), h: Math.max(h, 4), dark: it.dark, lib: it,
       make: (uid) => [{ id: uid(), type: 'image', src: 'lib:' + it.file, x: 0, y: 0, w: Math.max(w, 4), h: Math.max(h, 4), rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: it.name }] }; });
 }
 const rachaBtn = '<div class="row" style="margin:4px 0 2px"><button class="btn sm ai" data-racha>🐧 라차 동작 한 번에 만들기</button></div>';
@@ -3099,7 +3119,7 @@ async function addMyElements() {
   const files = await new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.multiple = true; i.accept = 'image/png,image/svg+xml,image/jpeg,image/webp'; i.onchange = () => res([...i.files]); i.click(); }); if (!files.length) return;
   if (!(await store.folderReady())) { for (const f of files) { const d = await fileToDataURL(f); addImage(addAsset(d)); } toast('동기화 폴더가 연결되어 있지 않아 이 문서에만 넣었습니다. 연결하면 요소로 보관됩니다.', true); return; }
   let n = 0; for (const f of files) { try { const d = await fileToDataURL(f); await NC.lib.saveMine(d, { name: f.name.replace(/\.[^.]+$/, ''), kw: '내 요소 ' + f.name, cat: 'mine-el' }); n++; } catch (e) { toast(`${f.name}: ${e.message}`, true); } }
-  if (n) { elCat = 'naracha'; renderElems(); toast(`내 요소 ${n}개를 추가했습니다 — 요소 → 나라차 → 내 요소`); }
+  if (n) { elCat = 'mine'; renderElems(); toast(`내 요소 ${n}개를 추가했습니다 — 요소 → 내 요소·AI`); }
 }
 /* 요소 검색 비슷한 말: 태권도 낱말로 찾아도 영어·다른 표현으로 적힌 요소가 나오게 */
 const EL_SYN = { '도복': ['태권도', 'dobok', '캐릭터', '포즈', '수련생'], '품새': ['poomsae', '포즈', '동작', 'pose', '태권도', '도복', '수련생', '지르기', '막기', '발차기', 'kick', '캐릭터'], '겨루기': ['sparring', 'pair', '발차기', 'kick', '보호구'], '발차기': ['kick', '차기', '돌려', '옆차기', '앞차기'], '띠': ['belt', '띠'], '라차': ['mascot', '마스코트', '펭귄'], '펭귄': ['mascot', '라차'], '로고': ['logo', 'brand', '엠블럼'], '상장': ['cert', '상장', '트로피', 'trophy', '메달', 'medal', '리본', 'ribbon', '왕관', 'crown', '테두리', 'frame', '월계수', '별', 'star', '축하'], '아이': ['어린이', 'kid', 'boy', 'girl', '캐릭터'], '어린이': ['kid', 'boy', 'girl', '아이'], '격파': ['break', '송판'], '메달': ['medal', '트로피', 'trophy'] };
@@ -3107,25 +3127,34 @@ function renderElems() {
   { const si = $('#elSearch'); if (si && si._comp) { if (!si._pend) { si._pend = true; si.addEventListener('compositionend', () => { si._pend = false; setTimeout(() => { if (sideTab === 'elems') renderElems(); }, 0); }, { once: true }); } return; } }
   const si0 = $('#elSearch'), hadF = !!si0 && document.activeElement === si0, caret = hadF ? si0.selectionStart : 0;  // 다시 그려도 검색창 입력이 끊기지 않게
   const body = $('#sidebody'); const q = elQ.trim().toLowerCase();
-  const libEls = libElemItems(); const cats = NC.elems.cats.slice(0, 1).concat([['naracha', '나라차']], myBlocks.length ? [['myblock', `내 블록 ${myBlocks.length}`]] : [], NC.elems.cats.slice(1));
-  const qw = q.split(/\s+/).filter(Boolean), pool = libEls.concat(myBlockItems(), NC.elems.items), txtOf = i => (i.name + ' ' + i.kw).toLowerCase(), has = (i, w) => { const t = txtOf(i); return koHas(t, w) || (EL_SYN[w] || []).some(x => t.includes(x)); }; let all = pool.filter(i => qw.every(w => has(i, w))); if (!all.length && qw.length > 1) { const hits = i => qw.filter(w => has(i, w)).length; all = pool.filter(i => hits(i) > 0).sort((a, b) => hits(b) - hits(a)); }  // 모든 낱말이 맞는 것이 없으면 맞는 낱말이 많은 순
-  const recent = recentElems().map(getElem).filter(Boolean);
+  const libEls = libElemItems().filter(i => !isOff(i)); const cats = NC.elems.cats.slice(0, 1).concat([['naracha', '나라차로고']], NC.elems.cats.slice(1, 3), [['mine', '내 요소·AI']], myBlocks.length ? [['myblock', `내 블록 ${myBlocks.length}`]] : [], NC.elems.cats.slice(3));
+  const qw = q.split(/\s+/).filter(Boolean), pool = libEls.concat(myBlockItems(), NC.elems.items.filter(i => !isOff(i))), txtOf = i => (i.name + ' ' + i.kw).toLowerCase(), has = (i, w) => { const t = txtOf(i); return koHas(t, w) || (EL_SYN[w] || []).some(x => t.includes(x)); }; let all = pool.filter(i => qw.every(w => has(i, w))); if (!all.length && qw.length > 1) { const hits = i => qw.filter(w => has(i, w)).length; all = pool.filter(i => hits(i) > 0).sort((a, b) => hits(b) - hits(a)); }  // 모든 낱말이 맞는 것이 없으면 맞는 낱말이 많은 순
+  const recent = recentElems().map(getElem).filter(i => i && !isOff(i));
   let h = `<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:wrap"><label class="f" style="flex:1 1 100%;margin:0"><input type="text" id="elSearch" placeholder="요소 검색 (예: 로고, 라차, 별, 말풍선)" value="${esc(elQ)}"></label><button class="btn sm" data-addmine title="내 PC의 PNG·SVG·JPG를 요소로 추가 (자료실에 보관돼 두 PC 모두에서 보임)">＋ 내 요소</button><button class="btn sm" data-addqr title="신청서·밴드·유튜브 주소를 QR 코드로 넣기">▦ QR</button><button class="btn sm" data-addcal title="한 달 달력 칸 넣기 (공휴일·일정·음력 표시)">📅 달력</button></div><div class="tcats" id="elcats">${cats.map(([k, t]) => `<button data-ec="${k}" class="${elCat === k ? 'on' : ''}">${t}</button>`).join('')}</div>${(() => { const s0 = selEls(); return s0.length === 1 && s0[0].type === 'image' ? '<p class="hint el-swap">🖼 그림을 골라 두었습니다 — 그림 요소를 누르면 그 자리에 <b>바꿔 넣습니다</b> (Shift+누르기: 새로 넣기)</p>' : ''; })()}`;
   if (elCat === 'naracha' && !q) {
-    h += libEls.length ? `<div class="row" style="margin:4px 0 2px;flex-wrap:wrap;gap:6px"><button class="btn sm primary" data-addmine>＋ 내 요소 추가</button><button class="btn sm ai" data-aistudio>✨ AI로 태권도 그림 만들기</button><button class="btn sm ai" data-racha>🐧 라차 동작 한 번에 만들기</button></div><p class="hint">사진 포즈는 배경을 지운 사람만 들어갑니다. 실루엣은 이미지 속성의 "색 입히기"로 색을 바꿀 수 있습니다. AI로 만든 그림은 우클릭으로 이름 바꾸기·삭제를 합니다.</p>` + LIB_ECATS.map(([k, t]) => { const list = libEls.filter(i => i.sub === k); return list.length ? `<h3>${t} <small>${list.length}</small></h3><div class="egrid">${list.map(elemCard).join('')}</div>` : (k === 'mine-el' ? `<h3>내 요소</h3><p class="hint">위의 <b>＋ 내 요소 추가</b>로 PNG·SVG를 올리면 여기에 모입니다 (자료실에 보관되어 두 PC 모두에서 보임).</p>` : ''); }).join('') + (NC.lib.ready ? '' : rachaBtn + libHint()) : rachaBtn + libHint();
+    h += libSections('naracha', libEls) + (NC.lib.ready ? '' : libHint());
+  } else if (elCat === 'tkd' && !q) {
+    const base = all.filter(i => i.cat === 'tkd' && !i.lib);
+    h += `<div class="row" style="margin:4px 0 2px;flex-wrap:wrap;gap:6px"><button class="btn sm ai" data-aistudio>✨ AI로 태권도 그림 만들기</button><button class="btn sm ai" data-racha>🐧 라차 동작 한 번에 만들기</button></div>${base.length ? `<div class="esec"><h3>기본 태권도 요소 <small>${base.length}</small></h3></div><div class="egrid">${base.map(elemCard).join('')}</div>` : ''}` + libSections('tkd', libEls) + (NC.lib.ready ? '<p class="hint">사진 포즈는 배경을 지운 사람만 들어갑니다. 실루엣은 이미지 속성의 "색 입히기"로 색을 바꿀 수 있습니다.</p>' : libHint());
+  } else if (elCat === 'mine' && !q) {
+    h += `<div class="row" style="margin:4px 0 2px;flex-wrap:wrap;gap:6px"><button class="btn sm primary" data-addmine>＋ 내 요소 추가</button><button class="btn sm ai" data-aistudio>✨ AI로 그림 만들기</button></div><p class="hint">내 PC의 PNG·SVG·JPG를 올리거나 AI로 만든 그림이 모입니다(자료실에 보관 — 두 PC 모두). 마우스를 올려 <b>×</b>로 지우고, AI 그림은 우클릭으로 이름을 바꿉니다.</p>` + libSections('mine', libEls) + (NC.lib.ready ? '' : libHint());
   } else if (elCat === 'all' && !q) {
     if (recent.length) h += `<h3>최근 사용</h3><div class="egrid">${recent.map(elemCard).join('')}</div>`;
     if (myBlocks.length) h += `<div class="esec"><h3>내 블록 <small>${myBlocks.length}</small></h3><button class="more" data-ec="myblock">더보기 ›</button></div><div class="egrid">${myBlockItems().slice(0, 6).map(elemCard).join('')}</div>`;
-    h += libEls.length ? `<div class="esec"><h3>나라차 자료실 <small>${libEls.length}</small></h3><button class="more" data-ec="naracha">더보기 ›</button></div><div class="egrid">${['brand', 'cartoon', 'pose', 'illust', 'mascot', 'silhouette'].flatMap(k => libEls.filter(i => i.sub === k).slice(0, k === 'brand' ? 3 : k === 'cartoon' ? 2 : 1)).slice(0, 9).map(elemCard).join('')}</div>` : rachaBtn + libHint(true);
+    { const lg = libEls.filter(i => i.cat === 'naracha'); if (lg.length) h += `<div class="esec"><h3>나라차로고 <small>${lg.length}</small></h3><button class="more" data-ec="naracha">더보기 ›</button></div><div class="egrid">${lg.slice(0, 6).map(elemCard).join('')}</div>`; }
+    { const mn = libEls.filter(i => i.cat === 'mine'); if (mn.length) h += `<div class="esec"><h3>내 요소·AI <small>${mn.length}</small></h3><button class="more" data-ec="mine">더보기 ›</button></div><div class="egrid">${mn.slice(0, 6).map(elemCard).join('')}</div>`; }
+    if (!NC.lib.ready) h += rachaBtn + libHint(true);
     NC.elems.cats.slice(1).forEach(([k, t]) => { const list = all.filter(i => i.cat === k); if (!list.length) return; h += `<div class="esec"><h3>${t} <small>${list.length}</small></h3><button class="more" data-ec="${k}">더보기 ›</button></div><div class="egrid ${k === 'icon' ? 'icons' : ''}">${list.slice(0, k === 'icon' ? 16 : 6).map(elemCard).join('')}</div>`; });
   } else {
     const list = all.filter(i => elCat === 'all' || i.cat === elCat);
     h += `<p class="hint" style="margin:4px 0">${list.length}개</p><div class="egrid ${elCat === 'icon' ? 'icons' : ''}">${list.map(elemCard).join('') || `<div class="el-none"><p class="hint" style="margin:0 0 6px">맞는 요소가 없습니다${q ? ` — '${esc(q)}'` : ''}</p>${q ? `<button class="btn sm primary" data-aiq="${esc(q)}">✨ AI로 '${esc(q)}' 그림 만들기</button><p class="hint" style="margin:6px 0 0">AI 그림 스튜디오가 열리고 검색어가 '더 바라는 점'에 들어갑니다.</p>` : ''}</div>`}</div>`;
   }
-  h += `<p class="hint" style="margin-top:12px">요소를 누르면 페이지 가운데에 들어갑니다. 여러 조각으로 된 요소는 자동으로 그룹이 되어 함께 움직입니다 (Ctrl+G로 그룹 해제·묶기).</p>`;
+  if (!q) h += offHTML();
+  h += `<p class="hint" style="margin-top:12px">요소 위에 마우스를 올리면 <b>×</b>로 빼거나 지울 수 있고, 내 그림은 <b>＋ 내 요소</b>로 더합니다. 요소를 누르면 페이지 가운데에 들어갑니다. 여러 조각으로 된 요소는 자동으로 그룹이 되어 함께 움직입니다 (Ctrl+G로 그룹 해제·묶기).</p>`;
   body.innerHTML = h;
   requestAnimationFrame(() => fitBoxes(body, '.ebox', 64));
-  body.onclick = e => { const aq = e.target.closest('[data-aiq]'); if (aq) { /* 맞는 요소가 없을 때: 검색어를 AI 그림 스튜디오 '더 바라는 점'에 넣고 열기 */ { const q = aq.dataset.aiq, ex = String(stu.extra || '').trim(); stu.extra = ex && ex.indexOf(q) < 0 ? ex + ', ' + q : (ex || q); } stu.step = 7; stuSave(); openAI('image'); return; } if (e.target.closest('[data-addmine]')) { addMyElements(); return; } if (e.target.closest('[data-aistudio]')) { openAI('image'); return; } if (e.target.closest('[data-racha]')) { openRachaMaker(); return; } const c = e.target.closest('[data-ec]'); if (c) { elCat = c.dataset.ec; renderElems(); return; } const b = e.target.closest('[data-el]'); if (b) insertElem(b.dataset.el, null, { add: e.shiftKey }); };
+  body.onclick = e => { { const ed = e.target.closest('[data-edel]'); if (ed) { e.preventDefault(); e.stopPropagation(); elemDelete(ed.dataset.edel); return; } const eo = e.target.closest('[data-eon]'); if (eo) { elOff.delete(eo.dataset.eon); saveElOff(); renderElems(); toast('요소에 되살렸습니다'); return; } if (e.target.closest('[data-eonall]')) { elOff = new Set(); saveElOff(); renderElems(); toast('뺀 요소를 모두 되살렸습니다'); return; } const es = e.target.closest('[data-eoffsub]'); if (es) { const k = es.dataset.eoffsub, nm = (LIB_ECATS.find(c => c[0] === k) || [k, k])[1]; if (!window.confirm(`'${nm}' 묶음을 요소에서 뺄까요?\n자료실 원본 파일은 그대로이고, 패널 맨 아래 「뺀 요소」에서 되살릴 수 있어요.`)) return; elOff.add('sub:' + k); saveElOff(); renderElems(); toast(`'${nm}' 묶음을 뺐습니다`); return; } }
+    const aq = e.target.closest('[data-aiq]'); if (aq) { /* 맞는 요소가 없을 때: 검색어를 AI 그림 스튜디오 '더 바라는 점'에 넣고 열기 */ { const q = aq.dataset.aiq, ex = String(stu.extra || '').trim(); stu.extra = ex && ex.indexOf(q) < 0 ? ex + ', ' + q : (ex || q); } stu.step = 7; stuSave(); openAI('image'); return; } if (e.target.closest('[data-addmine]')) { addMyElements(); return; } if (e.target.closest('[data-aistudio]')) { openAI('image'); return; } if (e.target.closest('[data-racha]')) { openRachaMaker(); return; } const c = e.target.closest('[data-ec]'); if (c) { elCat = c.dataset.ec; renderElems(); return; } const b = e.target.closest('[data-el]'); if (b) insertElem(b.dataset.el, null, { add: e.shiftKey }); };
   // 내 그림(AI로 만든 그림): 우클릭으로 이름 바꾸기·지우기
   body.oncontextmenu = async e => { const bk = e.target.closest('[data-el^="blk-"]'); if (bk) { e.preventDefault(); delMyBlock(bk.dataset.el); return; } const b = e.target.closest('[data-el^="lib-ai-"]'); if (!b) return; e.preventDefault(); const it = getElem(b.dataset.el); if (!it) return;
     const nm = window.prompt(`"${it.name}"\n\n새 이름을 넣으면 이름을 바꿉니다. "삭제"라고 쓰면 내 그림에서 지웁니다 (두 PC 모두에서 사라짐).`, it.name); if (nm == null) return;
@@ -4820,7 +4849,7 @@ function renderStudio(body) {
         <div id="stuEdBar"></div><div class="stu-actions" id="stuActs"></div>
         <div class="chatzone" id="stuZone" tabindex="0" role="button" aria-label="받은 그림 넣기"><b id="stuZoneT">받은 그림을 여기에 넣기</b><span>${CN} 그림 오른쪽 클릭 → 이미지 복사 → 여기서 ⌘V·Ctrl+V<br>내려받은 파일 끌어다 놓기 · 눌러서 고르기</span><small id="stuCat"></small></div>
         <label class="chk" style="margin-top:2px"><input type="checkbox" id="stuAuto" ${stu.autoSave && canSave ? 'checked' : ''} ${canSave ? '' : 'disabled'}> 받은 그림을 보관함에 자동으로 분류해 넣기</label>
-        ${canSave ? '' : '<p class="hint" style="margin:0">동기화 폴더를 연결하면 보관함(요소 → 나라차)에 분류해 넣습니다.</p>'}
+        ${canSave ? '' : '<p class="hint" style="margin:0">동기화 폴더를 연결하면 보관함(요소 → 태권도 · 내 요소·AI)에 분류해 넣습니다.</p>'}
         ${targetImg ? `<p class="hint" style="margin:0">고른 이미지 "${esc(elName(targetImg))}"를 받은 그림으로 바꿀 수 있습니다.</p>` : ''}
         <div class="aiimgs stu-res" id="aiImgs"></div>
         <details class="stu-en"><summary>${CN}에 보낼 글(영어) 보기·고치기</summary><textarea id="stuEn" rows="6"></textarea><div class="row" style="margin-top:4px"><button class="btn sm" data-act="resetEn">고른 내용대로 다시 쓰기</button></div></details>
@@ -4957,7 +4986,7 @@ function renderStudio(body) {
       const kb = fig.querySelector('[data-keep]'); if (kb) kb.onclick = async () => { kb.disabled = true; try { await NC.lib.saveMine(s, meta); fig.querySelector('.stu-saved').textContent = `✓ 보관됨 · ${c.catName}`; kb.remove(); toast(`보관했습니다 — 요소 → 나라차 → ${c.catName}`); } catch (er) { kb.disabled = false; toast(er.message, true); } };
       fig.querySelector('[data-dl]').onclick = () => { const a2 = document.createElement('a'); a2.href = s; a2.download = c.name.replace(/[\\/:*?"<>|]/g, '_') + '.png'; a2.click(); };
       $('#aiImgs').prepend(fig); fig.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      toast(meta.saved ? `받은 그림을 보관했습니다 — 요소 → 나라차 → ${c.catName}` : '받은 그림이 들어왔습니다 — 넣기를 누르세요');
+      toast(meta.saved ? `받은 그림을 보관했습니다 — 요소 → ${({ naracha: '나라차로고', tkd: '태권도', deco: '장식', mine: '내 요소·AI' })[libCat(c.cat)]} → ${c.catName}` : '받은 그림이 들어왔습니다 — 넣기를 누르세요');
     } finally { zone.classList.remove('busy'); $('#stuZoneT').textContent = '받은 그림을 여기에 넣기'; }
   };
   chatImgZone($('#stuZone'), take);

@@ -89,6 +89,9 @@ NC.lib = (function () {
     const it = Object.assign({ kind: 'element', group: 'mine', cat: 'aiimg', file, thumb }, m); st.mine.unshift(it);
     return it;
   }
+  /* 요소에서 뺀 목록 (두 PC가 같게 — 디자인자료/요소 숨김.json) */
+  async function readOff() { try { if (!st.dir) return null; return JSON.parse(await (await blob('요소 숨김.json')).text()); } catch (e) { return null; } }
+  async function writeOff(list) { if (!st.dir) return false; await writeBlob(st.dir, '요소 숨김.json', new Blob([JSON.stringify({ off: list, t: Date.now(), by: NC.store.pcName() }, null, 1)], { type: 'application/json' })); return true; }
   async function removeMine(id) {
     const d = await mineDir();
     for (const n of [id + '.png', id + '.svg', id + '.jpg', id + '.webp', id + '.thumb.jpg', id + '.json']) { try { await d.removeEntry(n); } catch (e) {} }
@@ -158,7 +161,7 @@ NC.lib = (function () {
 
   return {
     fonts() { return st.fonts || []; }, ensureFont, isLibFont: fam => !!fontInfo(fam),
-    st, load, url, dataURL, materialize, reset, saveMine, removeMine, renameMine, loadMine, listBlocks, saveBlock, removeBlock,
+    st, load, url, dataURL, materialize, reset, saveMine, removeMine, readOff, writeOff, renameMine, loadMine, listBlocks, saveBlock, removeBlock,
     mine() { return st.mine || []; },
     onReady(f) { st.listeners.push(f); },
     get ready() { return st.ready; },
