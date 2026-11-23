@@ -276,7 +276,9 @@
             /* 제목은 다음 단락 첫머리와 함께 (다음 줄과 함께 — 쪽 끝에 제목만 남지 않게) */
             const nx = paras[n + 1];
             if ((s.keepNext || (p.st === 'trow' && (p.head || p.first) && !p.last)) && nx && nx.st !== 'break' && !first) { /* 제목 아래에 다음 단락이 적어도 2줄(짧으면 통째로) 들어갈 자리가 있어야 함 — 없으면 제목도 다음 쪽으로 */
-              const s2 = S[nx.st] || S.body, nxH = hOf(pHTML(nx.runs, s2, {}), s2.after), need = Math.min(nxH, 2 * lineMM(s2) + (s2.before || 0)) - 0.3;
+              const s2 = S[nx.st === 'trow' ? 'table' : nx.st] || S.body; let need;
+              if (nx.st === 'trow') { const rows = []; for (let q = n + 1; q < paras.length && paras[q].st === 'trow' && paras[q].tbl === nx.tbl; q++) rows.push(paras[q]); const take = rows.length <= 8 ? rows : rows.slice(0, 2); need = hOf(take.map(r => rowHTML(r, s2)).join(''), 0) - 0.3; } /* 제목 다음이 표면: 짧은 표는 통째로, 긴 표는 머리줄+한 줄이 함께 들어가야 (제목만 쪽 끝에 남지 않게) */
+              else { const nxH = hOf(pHTML(nx.runs, s2, {}), s2.after); need = Math.min(nxH, 2 * lineMM(s2) + (s2.before || 0)) - 0.3; }
               const remain = avail() - hOf(content.join('') + html, 0); if (!/^h\d$/.test(nx.st) && remain < need) { nextFrame(); continue; } }
             content.push(html); plain.push(plainOf(runs)); lastAfter = s.after || 0; if (firstLine < 0) firstLine = p.line; { const R = p.st === 'trow' ? p.cells.flat() : runs; fnTake(R); ixTake(R); } runs = null; break;
           }
@@ -391,7 +393,10 @@
       const lv = B.tocLevel || 2, rows = heads.filter(h => h.st === 'part' || h.st === 'h1' || (lv >= 2 && h.st === 'h2') || (lv >= 3 && h.st === 'h3'));
       const paras = [{ st: 'tocTitle', runs: [{ t: B.tocTitle || '차례' }], plain: B.tocTitle || '차례', line: -1 }].concat(rows.map(h => ({ st: h.st === 'part' ? 'tocPart' : h.st === 'h1' ? 'toc1' : 'toc2', runs: [{ t: h.text }], plain: h.text, line: -1, toc: h.st === 'part' ? ' ' : String(A.bookNum(h.abs) == null ? h.abs + 1 : A.bookNum(h.abs)), tocNo: h.st === 'h1' || h.st === 'part' ? h.no || '' : '', noLeader: h.st === 'h1' || h.st === 'part' })));
       const oldN = d.pages.filter(p => p.toc).length, extras = d.pages.filter(p => p.toc).map(p => p.els.filter(e => !e.flowFrame && !e.flowImg));
-      const res = layoutStream(paras, t0, S, 'toc', extras);
+      let res = layoutStream(paras, t0, S, 'toc', extras.slice());
+      if (res.pages.length > 1 && B.tocTight !== false) { /* 차례가 다음 쪽으로 몇 줄만 넘어가면 줄 사이 간격을 줄여 한 쪽 덜 쓰게 (조판 관행 — 인디자인에서는 손으로) */
+        const S2 = Object.assign({}, S); ['tocTitle', 'tocPart', 'toc1', 'toc2'].forEach(k => { if (S[k]) S2[k] = Object.assign({}, S[k], { before: r1((S[k].before || 0) * 0.55), after: r1((S[k].after || 0) * 0.55), sink: S[k].sink ? r1(S[k].sink * 0.5) : S[k].sink }); });
+        const r2 = layoutStream(paras, t0, S2, 'toc', extras.slice()); if (r2.pages.length < res.pages.length) res = r2; }
       d.pages = d.pages.filter(p => !p.toc); d.pages.splice(t0, 0, ...res.pages);
       return { changed: res.pages.length !== oldN, n: rows.length };
     }
