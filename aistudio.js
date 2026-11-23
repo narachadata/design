@@ -143,7 +143,7 @@
       ${chat() ? `<p class="hint ais-tip">채팅에 붙여 넣고 답이 오면, 그림·글을 복사해 <b>공방 아무 데서나 ⌘V</b>${['img', 'sticker'].includes(it) ? ' — 그림은 한 장에 4가지로 받아 저절로 4장으로 나눠요' : ''}.</p>` : ''}
       ${res}
       ${boxHTML()}
-      <details class="ais-more"><summary>더보기 — 그림 스튜디오 · 인성 문구 · AI와 대화 · AI 설정</summary><div class="ais-row"><button class="btn sm" data-aact="studio">🎨 그림 스튜디오</button><button class="btn sm" data-aact="virtue">📝 인성 문구</button><button class="btn sm" data-aact="chat">💬 AI와 대화</button><button class="btn sm" data-aact="keys">⚙ AI 설정</button><button class="btn sm" data-aact="imged">🖌 이미지 편집기</button></div></details></div>`;
+      <details class="ais-more"><summary>더보기 — 그림 스튜디오 · AI와 대화 · AI 설정</summary><div class="ais-row"><button class="btn sm" data-aact="studio">🎨 그림 스튜디오</button><button class="btn sm" data-aact="chat">💬 AI와 대화</button><button class="btn sm" data-aact="keys">⚙ AI 설정</button><button class="btn sm" data-aact="imged">🖌 이미지 편집기</button></div></details></div>`;
     body.onclick = async e => { const g = k => e.target.closest(k);
       const ch = g('[data-ain]'); if (ch) { saveQ(); S.intent = ch.dataset.ain; renderPanel(body); return; }
       const s1 = g('[data-ast]'); if (s1) { saveQ(); S.style = s1.dataset.ast; renderPanel(body); return; } const s2 = g('[data-ara]'); if (s2) { saveQ(); S.ratio = s2.dataset.ara; renderPanel(body); return; }

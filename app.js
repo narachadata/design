@@ -2990,7 +2990,7 @@ function renderSide0() {
   } else if (sideTab === 'ai') {
     body.innerHTML = `<p class="hint">${chatMode() ? '지금 쓰는 채팅 요금제(Claude·Gemini·ChatGPT)로 씁니다 — 지시문을 복사해 채팅에 붙여 넣고, 받은 답·그림을 공방에 붙여 넣습니다. 방식은 "AI 설정"에서 바꿉니다.' : 'Claude가 문구와 이미지 프롬프트를 만들고, Gemini가 삽화를 그립니다. API 키는 "AI 설정"에 넣습니다.'}</p>
     <button class="btn primary" data-aichat style="width:100%;margin:0 0 10px">💬 AI 도우미와 대화하기 (오른쪽 채팅창)</button>
-    <div class="tile"><button data-ai="content"><svg class="ic" style="width:22px;height:22px"><use href="#i-ai"/></svg>인성 문구 제안</button><button data-ai="image"><svg class="ic" style="width:22px;height:22px"><use href="#i-img"/></svg>AI 이미지 생성</button><button data-ai="keys"><svg class="ic" style="width:22px;height:22px"><use href="#i-help"/></svg>AI 설정</button><button data-racha><span style="font-size:20px">🐧</span>라차 동작 만들기</button><button data-ai="edit"><svg class="ic" style="width:22px;height:22px"><use href="#i-elems"/></svg>이미지 편집기</button></div>
+    <div class="tile"><button data-ai="image"><svg class="ic" style="width:22px;height:22px"><use href="#i-img"/></svg>AI 이미지 생성</button><button data-ai="keys"><svg class="ic" style="width:22px;height:22px"><use href="#i-help"/></svg>AI 설정</button><button data-racha><span style="font-size:20px">🐧</span>라차 동작 만들기</button><button data-ai="edit"><svg class="ic" style="width:22px;height:22px"><use href="#i-elems"/></svg>이미지 편집기</button></div>
     <h3>이미지 편집기</h3><p class="hint">선택한 이미지의 배경을 색으로 지정해 지우고(스포이트·허용 범위·부드러운 가장자리), 지우개·복원 브러시로 세밀하게 다듬고, 자를 수 있습니다.</p>`;
     body.onclick = e => { if (e.target.closest('[data-aichat]')) { if (NC.aichat) NC.aichat.show(true); return; } if (e.target.closest('[data-racha]')) { openRachaMaker(); return; } const b = e.target.closest('[data-ai]'); if (!b) return; if (b.dataset.ai === 'edit') { const el = selEls()[0]; if (el && el.type === 'image' && src(el.src)) openImgEditor(el); else toast('먼저 이미지 요소를 선택하세요', true); } else openAI(b.dataset.ai); };
   } else if (sideTab === 'bg') {
@@ -4465,9 +4465,11 @@ function openRules() {
 }
 
 /* ---- AI 도우미 ---- */
-let aiCtx = { tab: 'content', monthIdx: 0 };
-$('#btnAI').onclick = () => { if (NC.aichat) NC.aichat.toggle(); else openAI(selEls()[0] && selEls()[0].type === 'image' ? 'image' : 'content'); }; /* 11/19 팀장님: AI 도우미 = 오른쪽 채팅창(aichat.js) */
-function openAI(tab) { aiCtx.tab = tab; const el = selEls()[0]; if (el && el.month) aiCtx.monthIdx = el.month - 1; const toKeys = !chatMode() && !AI.cfg.anthropicKey && !AI.cfg.geminiKey && tab !== 'keys'; if (toKeys) aiCtx.tab = 'keys'; renderAI(); $('#dlgAI').showModal(); if (toKeys) toast('API 키로 쓰기로 되어 있는데 키가 없어 「AI 설정」을 먼저 열었습니다 — 키를 넣거나 「내 채팅 요금제로」를 고르세요'); }
+let aiCtx = { tab: 'image', monthIdx: 0 };
+$('#btnAI').onclick = () => { if (NC.aichat) NC.aichat.toggle(); else openAI('image'); }; /* 11/19 팀장님: AI 도우미 = 오른쪽 채팅창(aichat.js) */
+/* 인성 문구 제안(AI) 탭은 뺌 (팀장님 11/24 「이제 필요없지 않아?」) — 캘린더 문구는 나라차 → 캘린더의 「인성 문구 넣기」가 인성덕목 2년 계획(메인 프로그램·소식지·학부모앱과 같은 글)으로 넣음. AI가 지은 문구는 계획과 달라져 점검 경고가 뜨므로, 예전 입구는 그 자리로 보냄 */
+function goVirtueCal() { const ov = $('#dlgAI'); if (ov && ov.open) ov.close(); naraGo('calendar'); toast('인성 문구는 나라차 → 캘린더의 「인성 문구 넣기」로 넣습니다 (메인 프로그램·소식지와 같은 글)'); }
+function openAI(tab) { if (tab === 'content') { goVirtueCal(); return; } aiCtx.tab = tab; const el = selEls()[0]; if (el && el.month) aiCtx.monthIdx = el.month - 1; const toKeys = !chatMode() && !AI.cfg.anthropicKey && !AI.cfg.geminiKey && tab !== 'keys'; if (toKeys) aiCtx.tab = 'keys'; renderAI(); $('#dlgAI').showModal(); if (toKeys) toast('API 키로 쓰기로 되어 있는데 키가 없어 「AI 설정」을 먼저 열었습니다 — 키를 넣거나 「내 채팅 요금제로」를 고르세요'); }
 $$('#dlgAI [role=tab]').forEach(b => b.onclick = () => { aiCtx.tab = b.dataset.tab; renderAI(); });
 /* 인성 데이터 (2026-11-18 관장님 결정): 표는 각 프로그램 안에 두고, 기준은 메인 프로그램 데이터(기본표 VIRTUE24 + 설정에서 고친 virtueEdits).
    ① 관리 앱(R4.819~)이 업무 창고를 받은 뒤 '고친 내용까지 적용된 24달 표'를 같은 주소 localStorage 'naracha-virtue24'에 써 둠 → 공방은 이것을 먼저 읽음(읽기만)

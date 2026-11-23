@@ -411,7 +411,7 @@ ${manualText()}`;
       if (t.closest('#achSend')) { if (busy) { if (aborter) aborter.abort(); return; } const x = $('#achText'); const v = x.value; x.value = ''; send(v); return; }
       if (t.closest('#achKeySave')) { const v = $('#achKey').value.trim(); if (S.prov === 'gemini') cfg().geminiKey = v; else cfg().anthropicKey = v; const m = $('#achModel'); if (m) { if (S.prov === 'gemini') S.geminiModel = m.value.trim(); else S.claudeModel = m.value; } window.AI.saveCfg(); save(); renderSet(); renderHead(); B.toast('AI 설정을 저장했습니다'); openSet(false); return; }
       if (t.closest('#achKeyDel')) { if (S.prov === 'gemini') cfg().geminiKey = ''; else cfg().anthropicKey = ''; window.AI.saveCfg(); renderSet(); renderHead(); B.toast('이 PC에서 키를 지웠습니다'); return; }
-      if (t.closest('#achOld')) { B.openAI('content'); return; }
+      if (t.closest('#achOld')) { B.openAI('image'); return; }
     });
     a.addEventListener('change', e => { if (e.target.id === 'achPg') { S.sendPage = e.target.checked; save(); } if (e.target.id === 'achModel' && S.prov === 'claude') { S.claudeModel = e.target.value; save(); renderHead(); } });
     a.addEventListener('keydown', e => { if (e.target.id === 'achText' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); const v = e.target.value; e.target.value = ''; send(v); } e.stopPropagation(); });
