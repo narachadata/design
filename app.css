@@ -1871,3 +1871,23 @@ dialog.st-dlg{max-width:1280px;width:96vw}
 #aiPop .aip-ed{display:flex;gap:5px}#aiPop .aip-ed input{flex:1;min-width:0;border:1px solid var(--ui-line,#d9dee8);border-radius:8px;padding:6px 8px;font:inherit;font-size:12.5px}
 #aiPop .aip-g{margin:6px 0;display:flex;flex-direction:column;gap:4px}#aiPop .aip-g>small{color:var(--ui-muted);font-size:11px}
 #aiPop .aip-c{text-align:left;border:1px solid var(--ui-line,#e3e6ee);border-radius:9px;background:#fff;padding:7px 9px;font:inherit;font-size:13px;cursor:pointer;white-space:pre-wrap}#aiPop .aip-c:hover{background:#f4f6fb}#aiPop .aip-c.on{border-color:#1f7a45;background:#eefaf2}
+/* AI 2단계 (aistudio.js): 칠한 곳만 바꾸기 · 사진 넓히기 · 배경 지우기 · 결과함 · 개요 고치기 */
+dialog.aimk.wide{width:min(960px,96vw)}dialog.aimk .dbody{max-height:80vh}
+.aimk-b{display:flex;gap:16px;align-items:flex-start}.aimk-st{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center}
+.aimk-cv{position:relative;max-width:100%;background:repeating-conic-gradient(#e9ecf2 0 25%,#fff 0 50%) 50%/18px 18px;border-radius:8px;overflow:hidden;box-shadow:0 0 0 1px var(--ui-line,#e3e6ee)}
+.aimk-cv canvas{position:absolute;inset:0;width:100%;height:100%;display:block}.aimk-cv .amk-mask{opacity:.55;cursor:none;touch-action:none}.abg-cv canvas{cursor:crosshair}
+.amk-ring{position:absolute;display:none;border:2px solid #fff;box-shadow:0 0 0 1px #c0007a;border-radius:50%;pointer-events:none;z-index:2}
+.aimk-side{width:270px;flex:none}.aimk-side textarea{width:100%;box-sizing:border-box;margin-top:8px;border:1.5px solid var(--ui-line,#d9dee8);border-radius:10px;padding:8px 10px;font:inherit;font-size:13px;resize:vertical}
+.aimk-sl{display:flex;align-items:center;gap:8px;font-size:12.5px;margin:10px 0}.aimk-sl input{flex:1}
+.aex-pv{max-width:100%;border-radius:8px;box-shadow:0 0 0 1px var(--ui-line,#e3e6ee)}
+.abg-sw{display:inline-block;width:26px;height:26px;border-radius:7px;margin:0 5px 0 0;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset}
+@media (max-width:720px){.aimk-b{flex-direction:column}.aimk-side{width:100%}}
+.ais-card{position:relative}.ais-rep{position:absolute;left:4px;right:4px;bottom:4px;background:rgba(31,63,174,.88);color:#fff;font-style:normal;font-size:11px;border-radius:6px;padding:2px 0}
+.ais-box{margin-top:14px;font-size:12.5px}.ais-box summary{cursor:pointer;font-weight:700}.ais-box summary small{font-weight:400;color:var(--ui-muted)}
+.ais-bx{position:relative}.ais-bx.wide{grid-column:span 2}.ais-bx .ais-card{width:100%}.ais-bx .ajx{position:absolute;top:2px;right:2px;background:rgba(255,255,255,.9);border-radius:50%;width:20px;height:20px;line-height:18px;padding:0;color:#333;opacity:0;font-size:14px}.ais-bx:hover .ajx{opacity:1}
+.ais-out .ais-ol{list-style:none;margin:8px 0 0;padding:0;counter-reset:ol}.ais-ol li{counter-increment:ol;border-radius:8px;margin:1px 0}.ais-ol li.on{background:#eef3ff}
+.ais-olr{display:flex;align-items:center;gap:5px;padding:3px 4px;cursor:pointer;font-size:12.5px;border-radius:8px}.ais-olr:hover{background:#f3f5fa}.ais-olr::before{content:counter(ol);color:var(--ui-muted);font-size:11px;width:16px;text-align:right;flex:none}
+.ais-olt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ais-oa{display:none;gap:1px}.ais-olr:hover .ais-oa,.ais-ol li.on .ais-oa{display:flex}
+.ais-oa button{border:0;background:#fff;border-radius:5px;padding:0 5px;cursor:pointer;font-size:11.5px;line-height:20px}.ais-oa button:disabled{opacity:.3;cursor:default}
+.ais-oe{display:flex;flex-direction:column;gap:5px;padding:4px 6px 8px 25px}.ais-oe select,.ais-oe input,.ais-oe textarea{font:inherit;font-size:12.5px;border:1px solid var(--ui-line,#d9dee8);border-radius:7px;padding:5px 7px;background:#fff;width:100%;box-sizing:border-box}.ais-oe small{margin:-2px 0 0}
+.tcats.tmood{align-items:center;margin-top:6px}.tcats.tmood b{font-size:12px;margin-right:2px;color:var(--ui-fg2)}.tcats.tmood button i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:2px;box-shadow:0 0 0 1px rgba(0,0,0,.12) inset;vertical-align:-1px}.tcats.tmood button i+i{margin-right:4px;margin-left:-5px}
