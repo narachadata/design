@@ -2805,6 +2805,9 @@ function settingsChange(e) { const t = e.target, k = t.dataset && t.dataset.set;
   else if (k === 'skim') { if (tlSkimOn !== on) tlToggleSkim(); }
   else if (k === 'tlonly') { tlOnlyVideo = on; try { localStorage.setItem('naracal-tlonly', on ? '1' : '0'); } catch (er) {} toast(on ? '영상 메뉴에서만 타임라인을 엽니다' : '다른 메뉴에서도 타임라인이 열려 있습니다'); }
   else if (k === 'vshare') { try { localStorage.setItem('naracal-video-share', on ? '1' : '0'); } catch (er) {} toast(on ? '영상을 저장할 때 결과물 폴더에도 저장합니다' : '결과물 폴더에는 저장하지 않습니다'); } }
+/* 지금 창 위에 다른 창을 겹쳐 열고, 그 창이 닫히면 after() — 「하위 창을 닫으면 앞 창까지 닫힘」 막기 (팀장님 11/23) */
+function stackOpen(fn, after) { const before = new Set([...document.querySelectorAll('dialog[open]')]); let n = 0; Promise.resolve().then(fn).catch(e => toast(e.message, true));
+  const look = () => { const ch = [...document.querySelectorAll('dialog[open]')].find(x => !before.has(x)); if (!ch) { if (++n < 40) setTimeout(look, 50); return; } if (after) ch.addEventListener('close', () => setTimeout(after, 0), { once: true }); }; setTimeout(look, 0); }
 function setChildWatch() { /* 지금 열린 창 목록을 기억했다가 새로 열린 하위 창이 닫히면 설정으로 돌아옴 */
   const d = $('#dlgSettings'); if (!d || !d.open) return; const before = new Set([...document.querySelectorAll('dialog[open]')]), snap = { tab: sideTab, id: doc.docId }; let n = 0;
   const look = () => { const ch = [...document.querySelectorAll('dialog[open]')].find(x => x !== d && !before.has(x)); if (!ch) { if (++n < 40) setTimeout(look, 50); return; }
@@ -4108,7 +4111,7 @@ async function fillThumb(box, x) {
 }
 async function driveClick(e) {
   const t = e.target;
-  const nav = t.closest('[data-dvnav]'); if (nav) { const v = nav.dataset.dvnav; if (v === 'sync') { $('#dlgDrive').close(); openSaveDialog(); return; } drv.view = v; drv.q = ''; if (v === 'drive') drv.path = drv.path || []; renderDrive(); return; }
+  const nav = t.closest('[data-dvnav]'); if (nav) { const v = nav.dataset.dvnav; if (v === 'sync') { stackOpen(openSaveDialog, () => { if ($('#dlgDrive').open) renderDrive(); }); return; } /* 저장 설정을 내 드라이브 위에 겹쳐 열고, 닫으면 내 드라이브로 (폴더가 바뀌었을 수 있어 다시 그림) */ drv.view = v; drv.q = ''; if (v === 'drive') drv.path = drv.path || []; renderDrive(); return; }
   const kb = t.closest('[data-dvkind]'); if (kb) { drv.view = 'kind'; drv.kind = kb.dataset.dvkind; drv.q = ''; renderDrive(); return; }
   const ex = t.closest('[data-dvexp]'); if (ex) { const x = drv.exp[Number(ex.dataset.dvexp)]; try { const f = await x.handle.getFile(); const u = URL.createObjectURL(f); window.open(u, '_blank'); setTimeout(() => URL.revokeObjectURL(u), 60000); } catch (err) { toast('열 수 없습니다: ' + err.message, true); } return; }
   const ga = t.closest('[data-dvgather]'); if (ga) { const K = kindInfo(drv.kind), list = drv.stray.slice(); if (!window.confirm(`${list.length}개 문서를 「내 드라이브 › ${K[1]}」 폴더로 옮길까요?\n(지금 작업 중인 문서도 옮겨지며 그 자리에서 계속 저장됩니다)`)) return;
@@ -7354,7 +7357,7 @@ function renderRacha() {
   B.onchange = cnt;
   B.onclick = async e => {
     const a = e.target.closest('[data-rall],[data-rnone]'); if (a) { const g = a.dataset.rall || a.dataset.rnone, on = !!a.dataset.rall; RACHA.find(x => x[0] === g)[2].forEach(([id]) => { const c = B.querySelector(`[data-rid="${id}"]`); if (c) c.checked = on; }); cnt(); return; }
-    if (e.target.id === 'rkKey') { $('#dlgRacha').close(); openAI('keys'); return; }
+    if (e.target.id === 'rkKey') { stackOpen(() => openAI('keys')); return; } /* AI 키 창을 라차 그림 창 위에 — 닫으면 라차 그림으로 */
     if (e.target.id === 'rStop') { rachaStop = true; e.target.disabled = true; return; }
     const ins = e.target.closest('[data-rins]'); if (ins) { addImage(addAsset(ins.dataset.rins.startsWith('data:') ? ins.dataset.rins : ins.querySelector('img').src)); return; }
     if (e.target.id === 'rGo') { if (chatMode()) runRachaChat(); else runRacha(); }
