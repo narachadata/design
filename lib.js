@@ -92,6 +92,20 @@ NC.lib = (function () {
   /* 요소에서 뺀 목록 (두 PC가 같게 — 디자인자료/요소 숨김.json) */
   async function readOff() { try { if (!st.dir) return null; return JSON.parse(await (await blob('요소 숨김.json')).text()); } catch (e) { return null; } }
   async function writeOff(list) { if (!st.dir) return false; await writeBlob(st.dir, '요소 숨김.json', new Blob([JSON.stringify({ off: list, t: Date.now(), by: NC.store.pcName() }, null, 1)], { type: 'application/json' })); return true; }
+  /* 뺀 요소 비우기 (팀장님 11/24 「묶음 빼기 한 것들을 비우기도」): library.json에서 항목을 빼고 그림 파일을 지움
+     — 지우기 전에 목록을 「library.json 백업 날짜.json」으로 남기고, 자료실 템플릿이 쓰는 그림 파일은 남김. 지운 파일은 구글 드라이브 휴지통(30일)으로 감 */
+  async function removePath(p) { let d = st.dir; const parts = p.split('/'); for (const s of parts.slice(0, -1)) d = await d.getDirectoryHandle(s); await d.removeEntry(parts[parts.length - 1]); }
+  async function removeItems(ids) {
+    if (!st.dir || !st.data) throw new Error('자료실이 연결되어 있지 않습니다');
+    const set = new Set(ids), text = await (await blob('library.json')).text(), data = JSON.parse(text), gone = (data.items || []).filter(i => set.has(i.id)); if (!gone.length) return { n: 0, files: 0 };
+    const d = new Date(), stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+    await writeBlob(st.dir, `library.json 백업 ${stamp}.json`, new Blob([text], { type: 'application/json' }));
+    data.items = data.items.filter(i => !set.has(i.id)); await writeBlob(st.dir, 'library.json', new Blob([JSON.stringify(data)], { type: 'application/json' }));
+    const used = new Set(); const walk = v => { if (typeof v === 'string' && v.startsWith('lib:')) used.add(v.slice(4)); else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(data.templates || []);
+    const keepF = new Set(); data.items.forEach(i => { keepF.add(i.file); keepF.add(i.thumb); });
+    let files = 0; for (const it of gone) for (const p of new Set([it.file, it.thumb])) { if (!p || used.has(p) || keepF.has(p)) continue; try { await removePath(p); files++; if (st.urls[p]) { URL.revokeObjectURL(st.urls[p]); delete st.urls[p]; } } catch (e) {} }
+    st.data.items = st.data.items.filter(i => !set.has(i.id)); return { n: gone.length, files };
+  }
   async function removeMine(id) {
     const d = await mineDir();
     for (const n of [id + '.png', id + '.svg', id + '.jpg', id + '.webp', id + '.thumb.jpg', id + '.json']) { try { await d.removeEntry(n); } catch (e) {} }
@@ -161,7 +175,7 @@ NC.lib = (function () {
 
   return {
     fonts() { return st.fonts || []; }, ensureFont, isLibFont: fam => !!fontInfo(fam),
-    st, load, url, dataURL, materialize, reset, saveMine, removeMine, readOff, writeOff, renameMine, loadMine, listBlocks, saveBlock, removeBlock,
+    st, load, url, dataURL, materialize, reset, saveMine, removeMine, readOff, writeOff, removeItems, renameMine, loadMine, listBlocks, saveBlock, removeBlock,
     mine() { return st.mine || []; },
     onReady(f) { st.listeners.push(f); },
     get ready() { return st.ready; },

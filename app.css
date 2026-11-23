@@ -1899,3 +1899,4 @@ dialog.aimk.wide{width:min(960px,96vw)}dialog.aimk .dbody{max-height:80vh}
 /* 요소 빼기·되살리기 (11/24) */
 .ecard{position:relative}.ecard .edel{position:absolute;top:2px;right:2px;z-index:2;width:20px;height:20px;line-height:18px;border-radius:50%;background:rgba(255,255,255,.95);box-shadow:0 0 0 1px rgba(0,0,0,.15);color:#c0392b;font-style:normal;font-size:15px;font-weight:700;display:none;cursor:pointer}.ecard:hover .edel{display:block}.ecard .edel:hover{background:#c0392b;color:#fff}
 .eoff{margin-top:14px;border:1px dashed var(--ui-line2,#d0d5dd);border-radius:10px;padding:8px 10px;font-size:12.5px}.eoff summary{cursor:pointer;font-weight:700;color:var(--ui-fg2)}.eoffrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0}.eoffrow small{color:var(--ui-muted)}.eoff .egrid{margin-top:8px}.ecard.eoffc{opacity:.75}.ecard.eoffc:hover{opacity:1}
+#sidebody.edrop{outline:3px dashed #2f5bea;outline-offset:-6px;background:#f4f7ff}
