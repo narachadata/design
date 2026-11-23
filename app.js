@@ -521,6 +521,7 @@ const lockedBg = el => el.locked && el.w * el.h >= doc.w * doc.h * 0.6;
 // 회전한 요소: 손잡이 커서도 그만큼 돌림
 function rotCursor(d, rot) { const base = { n: 0, ne: 45, e: 90, se: 135, s: 180, sw: 225, w: 270, nw: 315 }[d] || 0; return ['ns-resize', 'nesw-resize', 'ew-resize', 'nwse-resize'][Math.round((((base + rot) % 180) + 180) % 180 / 45) % 4]; }
 function bookNoteHTML(els) { /* 도서 편집: 화면에만 보이는 안내 (인쇄·PDF에는 안 나옴) */
+  if (doc.bookCover) return BK() ? BK().coverOverlay(1 / (kScale() || 1)) : '';
   if (!(doc.book && doc.book.bookMode)) return ''; const pg = page(), k9 = 1 / (kScale() || 1); let h = '';
   if (pg.blank) h += `<div class="bk-note" style="left:0;top:${doc.h / 2 - 8}mm;width:${doc.w}mm;font-size:${15 * k9}px">비워 둔 쪽<small>다음 장을 오른쪽(홀수) 쪽에서 시작하려고 저절로 생긴 쪽 · 인쇄하면 하얀 쪽</small></div>`;
   const f = els.length === 1 && els[0].flowFrame ? els[0] : null;
@@ -820,6 +821,7 @@ function snap(x, y, w, h, selfIds) {
   const T = Math.max(0.1, 6 / (kScale() * MM)), guides = []; const xs = [0, doc.w / 2, doc.w], ys = [0, doc.h / 2, doc.h];
   if (showGuides() && (Number(doc.bleed) > 0 || doc.fmt)) { const m = safeMM(); xs.push(m, doc.w - m); ys.push(m, doc.h - m); } // 안전 여백 선에도 붙음
   if (doc.guides && showGuides()) { xs.push(...(doc.guides.x || [])); ys.push(...(doc.guides.y || [])); } // 사용자 안내선
+  if (doc.bookCover && BK()) xs.push(...BK().coverSnapX()); // 표지 펼침면: 접는 선·칸 가운데
   page().els.forEach(el => { if (selfIds.includes(el.id) || el.hidden) return; xs.push(el.x, el.x + el.w / 2, el.x + el.w); ys.push(el.y, el.y + el.h / 2, el.y + el.h); });
   let bx = null, by = null, bdx = T, bdy = T, gx = null, gy = null;
   [[x, 0], [x + w / 2, w / 2], [x + w, w]].forEach(([v, off]) => xs.forEach(g => { const dd = Math.abs(v - g); if (dd < bdx) { bdx = dd; bx = g - off; gx = g; } }));
@@ -3445,6 +3447,7 @@ function renderInspector() {
     <p class="hint">그라데이션·패턴 배경은 왼쪽 "배경" 메뉴에서 고릅니다. 요소를 누르면 그 요소의 속성이 여기에 나옵니다. 빈 곳을 끌면 여러 요소를 함께 고릅니다.</p>
     <details class="fx pgvid" ${tlOn() || (doc.video && doc.video.isCopy) ? 'open' : ''}><summary><span class="anim-h"><svg class="ic"><use href="#i-video"/></svg>영상 장면 설정</span> <small class="hint" style="margin:0">영상으로 만들 때만</small></summary><div class="grid2">${F('보여 주는 시간', 'pg.vdur', pg.vdur || vset().dur, { type: 'slider', min: 1, max: Math.max(20, Math.ceil(Number(pg.vdur || 0))), step: 0.5, unit: '초', def: vset().dur })}${F('다음으로 넘김', 'pg.vtrans', pg.vtrans || '', { type: 'select', options: [['', '기본 (' + VIDEO.TRANS.find(t => t[0] === vset().trans)[1] + ')']].concat(VIDEO.TRANS) })}</div><div class="grid2">${F('넘김 길이', 'pg.vturn', pg.vturn || vset().turn, { type: 'slider', min: 0.2, max: 2, step: 0.1, unit: '초', def: vset().turn })}${F('카메라', 'pg.vcam', pg.vcam || '', { type: 'select', options: [['', '없음']].concat(VIDEO.CAMS.slice(1)) })}</div><div class="row" style="gap:6px"><button class="btn sm" id="pgVplay"><svg class="ic"><use href="#i-play"/></svg>이 쪽부터 미리보기</button><button class="btn sm" id="pgVtab">영상 메뉴</button></div></details>
     <h3>단축키</h3><p class="hint">T 글자 추가 · P 펜 · Ctrl+D 복제 · Ctrl+G 그룹 · Ctrl+Z 취소 · 화살표 이동 · Delete 삭제 · Ctrl+휠 확대</p>`;
+    if (doc.bookCover) { const v9 = ins.querySelector('.pgvid'); if (v9) v9.remove(); }
     if (doc.book && doc.book.bookMode) { const v9 = ins.querySelector('.pgvid'); if (v9) v9.remove(); const kind9 = pg.toc ? ['차례 쪽', '장·절 제목에서 저절로 만들어집니다'] : pg.blank ? ['비워 둔 쪽', '다음 장을 오른쪽(홀수) 쪽에서 시작하려고 저절로 생긴 쪽입니다'] : pg.flow ? (pg.chapOpen ? ['장 시작 쪽', '원고의 장 제목(#)에서 시작합니다'] : ['본문 쪽', '원고에서 저절로 짜인 쪽입니다']) : pg.back ? ['뒷붙이 쪽', '판권 등 책 끝에 붙는 쪽'] : ['직접 꾸미는 쪽', '표지·속표지처럼 자유롭게 꾸미는 쪽']; const h9 = ins.querySelector('h2'); if (h9) h9.insertAdjacentHTML('afterend', `<div class="bk-pginfo"><b>${kind9[0]}</b><span>${kind9[1]}</span>${(pg.flow || pg.toc) && !pg.blank ? '<button class="btn sm" id="pgBkStory">✎ 원고 열기</button>' : ''}</div>`); const sb9 = ins.querySelector('#pgBkStory'); if (sb9) sb9.addEventListener('click', ev => { ev.stopPropagation(); if (BK()) BK().openStory(); }); } /* 도서 편집: 쪽 종류 안내, 영상 설정은 숨김 */
     ins.onclick = e => { if (e.target.closest('#pgVplay')) { openVideoPlayer(true); return; } if (e.target.closest('#pgVtab')) { sideTab = 'video'; renderRail(); renderSide(); return; } const b = e.target.closest('[data-pgbg]'); if (b) { pg.bg = b.dataset.pgbg; commit(); rerender(); } };
     return;
@@ -5049,7 +5052,7 @@ function saveBlob(b, name) { const a = document.createElement('a'); a.href = URL
    ① 처음 저장할 때 저장 위치가 그 문서 종류 폴더로 미리 골라짐(다른 폴더도 고를 수 있음) ② 내려받은 PNG·JPG·PDF·영상은 「종류 폴더/내보낸 파일」에도 사본 ③ 내 드라이브 왼쪽 「종류별」로 모아 보기·열기 */
 const DOC_KINDS = [['image', '이미지·인쇄물', '🖼'], ['video', '영상', '🎬'], ['book', '도서', '📚'], ['calendar', '캘린더', '📅'], ['news', '소식지', '📰'], ['cert', '상장·증서', '🏅'], ['att', '출석부', '✅']];
 const EXPORT_DIR = '내보낸 파일';
-function docKind(d) { d = d || doc; if (!d) return 'image'; if (d.book && d.book.bookMode) return 'book'; if (d.cert) return 'cert'; if (d.att) return 'att'; if (d.news) return 'news'; const P = d.pages || []; if (['story', 'video', 'shorts'].includes(d.fmt) || (d.video && d.video.born) || P.some(p => (p.els || []).some(e => e.type === 'video'))) return 'video'; if (d.calendar && P.some(p => p.kind)) return 'calendar'; return 'image'; }
+function docKind(d) { d = d || doc; if (!d) return 'image'; if ((d.book && d.book.bookMode) || d.bookCover) return 'book'; if (d.cert) return 'cert'; if (d.att) return 'att'; if (d.news) return 'news'; const P = d.pages || []; if (['story', 'video', 'shorts'].includes(d.fmt) || (d.video && d.video.born) || P.some(p => (p.els || []).some(e => e.type === 'video'))) return 'video'; if (d.calendar && P.some(p => p.kind)) return 'calendar'; return 'image'; }
 const kindInfo = k => DOC_KINDS.find(x => x[0] === k) || DOC_KINDS[0];
 const kindPath = d => [kindInfo(docKind(d))[1]];
 const kindOfPath = p => { const k = DOC_KINDS.find(x => x[1] === (p || [])[0]); return k ? k[0] : null; };
@@ -5160,7 +5163,8 @@ function BK() { if (BKm) return BKm; if (!NC.bookMod) return null; BKm = NC.book
   get doc() { return doc; }, get cur() { return cur; }, setCur(i) { cur = clamp(i, 0, doc.pages.length - 1); }, page, uid, clone, esc, MM, FONTS, TEXT_DEF, BOOK_DEF, addAsset,
   toast: (m, bad) => toast(m, bad), commit, renderAll, renderCanvas, renderSide, goto, book, bookNum, sheetHTML, fitBoxes, isRightPage, newDoc, newPage, setStatus, endEdit, ensureLibFonts, loadScript, printIssues, openSpreads, bookletPdf, openDownload,
   imgUrl: el => { try { return viewSrc(el, 'print'); } catch (e) { return ''; } },
-  markDirty: () => markDirty(), amendCommit,
+  markDirty: () => markDirty(), amendCommit, selectIds: ids => select(ids),
+  async openPrevDoc(id, name) { const L = await prevDocList(), i = L.findIndex(x => x.docId === id); if (i >= 0) { await restorePrevDoc(i); return; } toast(`책 "${name || ''}"을 직전 문서에서 찾지 못했습니다 — 파일로 저장해 두셨다면 「내 드라이브 → 도서」에서 여세요`, true); },
   async newDocKeep() { keepCurrentDoc.kept = ''; if (doc.pages.some(p => p.els.length) && !(await keepCurrentDoc())) return false; const k = keepCurrentDoc.kept; await store.disconnect(); return k || ''; },
   setDoc(d) { doc = d; doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; },
   afterNewDoc() { hist = []; histMeta = []; hptr = -1; { const pn = $('#pname'); if (pn) pn.value = doc.name; } commit(); zoom = 0; renderAll(); updateSaveBadge(); fitCanvas(); goto(0); },

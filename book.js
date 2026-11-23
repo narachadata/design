@@ -334,7 +334,7 @@
             <div class="grid4"><label class="f"><span>본문 글꼴</span><select data-nbs="font">${fontOpts(font)}</select></label><label class="f"><span>글자 크기(pt)</span><input type="number" step="0.5" min="7" max="20" data-nbn="size" value="${size}"></label><label class="f"><span>행간(%)</span><input type="number" step="5" min="120" max="250" data-nbn="lhp" value="${Math.round(lh * 100)}"></label><label class="f"><span>단</span><select data-nbn="cols">${[1, 2, 3].map(c => `<option value="${c}" ${(NB.cols || k.cols) === c ? 'selected' : ''}>${c}단</option>`).join('')}</select></label></div>
             <h3>제본 · 앞쪽</h3>
             <div class="grid2"><label class="f"><span>제본</span><select data-nbs="bind"><option value="perfect" ${NB.bind === 'perfect' ? 'selected' : ''}>무선 제본 (책등 있는 책)</option><option value="saddle" ${NB.bind === 'saddle' ? 'selected' : ''}>중철 (스테이플 — 4의 배수 쪽)</option></select></label>
-              <div><label class="chk"><input type="checkbox" data-nbc="cover" ${NB.cover ? 'checked' : ''}> 맨 앞에 표지 쪽 (보기·집 인쇄용)</label><label class="chk"><input type="checkbox" data-nbc="sample" ${NB.sample ? 'checked' : ''}> 보기 원고 넣기 (태권도 교본 예시 — 나중에 바꾸기)</label></div></div>
+              <div><label class="chk"><input type="checkbox" data-nbc="cover" ${NB.cover ? 'checked' : ''}> 맨 앞에 표지 쪽 (보기·집 인쇄용 — 인쇄소용 표지는 만든 뒤 「📕 표지 펼침면」)</label><label class="chk"><input type="checkbox" data-nbc="sample" ${NB.sample ? 'checked' : ''}> 보기 원고 넣기 (태권도 교본 예시 — 나중에 바꾸기)</label></div></div>
             <p class="hint">만들면 <b>속표지 · 차례 · 본문(원고가 자동으로 흐름) · 판권</b> 쪽이 생기고, 왼쪽 쪽 위에는 책 제목, 오른쪽 쪽 위에는 장 제목, 바깥쪽 아래에 쪽 번호가 저절로 들어갑니다. 도련은 인쇄소 기준 사방 3mm. 지금 문서는 그대로 남습니다(저장하지 않았다면 '직전 문서'로 보관).</p>
           </div>
           <div class="nb-foot"><span>${esc(k.name)} · ${esc(T()[1])} ${NB.w}×${NB.h}mm · 본문 ${size}pt/${Math.round(lh * 100)}% · ${cols}단 · ${NB.bind === 'saddle' ? '중철' : '무선'}</span><button class="btn" data-close>취소</button><button class="btn primary" id="nbGo">📚 이대로 책 만들기</button></div></div>`;
@@ -373,7 +373,7 @@
       const W = d.w, H = d.h, ac = K.accent || '#1a1a1a';
       if (NB.cover) { const c = A.newPage(K.accent || '#1E2B5A'); c.label = '표지'; c.noMaster = true; c.cover = true;
         c.els.push(T_(title, W * 0.1, H * 0.3, W * 0.8, H * 0.2, { font: K.head, size: Math.round(W / 5.5), weight: 800, color: '#ffffff', lh: 1.2, ls: -0.02, name: '표지 제목' }), T_(NB.author || '', W * 0.1, H * 0.82, W * 0.8, 10, { font: K.head, size: 12, weight: 600, color: '#ffffff', name: '지은이' })); d.pages.push(c);
-        const cb = A.newPage(); cb.noMaster = true; cb.label = '표지 뒷면'; cb.blankSide = true; d.pages.push(cb); }
+        const cb = A.newPage(); cb.noMaster = true; cb.label = '표지 뒷면'; cb.blankSide = true; cb.coverBack = true; d.pages.push(cb); }
       const tp = A.newPage(); tp.label = '속표지'; tp.noMaster = true; tp.els.push(T_(title, W * 0.12, H * 0.32, W * 0.76, H * 0.15, { font: K.head, size: Math.round(W / 7), weight: 800, color: ac, lh: 1.25, align: 'center', name: '속표지 제목' }), T_(NB.author || '', W * 0.12, H * 0.75, W * 0.76, 10, { font: K.head, size: 11, weight: 600, color: '#444444', align: 'center', name: '지은이' })); d.pages.push(tp);
       const tb = A.newPage(); tb.noMaster = true; tb.label = '속표지 뒷면'; d.pages.push(tb);
       const tc = A.newPage(); tc.toc = true; tc.label = '차례'; d.pages.push(tc);
@@ -565,6 +565,7 @@
       await Promise.all(imgs.slice(0, 80).map(([i, el]) => new Promise(res => { const u = A.imgUrl(el); if (!u) return res(); const im = new Image(); im.onload = () => { const dpi = Math.round(im.naturalWidth / ((el.w * (el.zoom || 1)) / 25.4)); if (dpi < 150) add('bad', i, `사진 해상도가 낮습니다 (${dpi}ppi) — 인쇄하면 흐려요. 더 큰 사진이나 작게 넣기 (300ppi 권장)`); else if (dpi < 250) add('warn', i, `사진 해상도 ${dpi}ppi — 괜찮지만 300ppi면 더 선명`); res(); }; im.onerror = () => { add('bad', i, '사진을 불러오지 못했습니다 (연결 끊김)'); res(); }; im.src = u; setTimeout(res, 4000); })));
       try { A.printIssues(d.pages.map((_, i) => i)).forEach(x => add('warn', x.page - 1, x.msg.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').replace(/^\s*·\s*/, ''))); } catch (e) {}
       if (!(Number(d.bleed) > 0)) add('warn', null, '도련이 0mm입니다 — 인쇄소에 맡기면 사방 3mm 도련이 필요합니다', 'bleed');
+      { const cm = d.book.coverMade, nN = interiorN(d) + interiorN(d) % 2; if (cm && cm.pages !== nN) add('warn', null, `표지를 만든 뒤 본문 쪽 수가 바뀌었습니다 (${cm.pages} → ${nN}쪽) — 「📕 표지 펼침면」 칸의 「만든 표지 열기」에서 한 번에 맞추세요`); }
       if (!out.some(x => x.lv !== 'ok')) add('ok', null, '문제없습니다 — 인쇄소용 PDF로 내보내세요');
       out.sort((a, b) => ({ bad: 0, warn: 1, ok: 2 }[a.lv] - { bad: 0, warn: 1, ok: 2 }[b.lv]));
       return out;
@@ -573,14 +574,198 @@
     /* 인쇄소에 보낼 말 (UX 전문가 — 초보가 무엇을 알려야 하는지 몰라 전화가 오가는 일을 줄임) */
     function printMsg() {
       const d = A.doc, B = B_(), n = d.pages.length, T = TRIMS.find(t => Math.abs(t[2] - d.w) < 1.5 && Math.abs(t[3] - d.h) < 1.5), cover = d.pages.some(p => p.cover);
-      return [`안녕하세요, 책 인쇄를 부탁드립니다.`, ``, `· 제목: ${B.title || d.name}`, `· 판형: ${T && T[0] !== 'custom' ? T[1] + ' ' : ''}${Math.round(d.w)}×${Math.round(d.h)}mm (재단 크기)`, `· 쪽 수: ${n}쪽${cover ? ' (표지 2쪽 포함 — 표지를 따로 받으시면 말씀해 주세요)' : ''}`, `· 제본: ${B.bind === 'saddle' ? '중철(스테이플)' : '무선 제본'}`, `· 본문 색: ${d.pages.some(p => p.els.some(e => e.type === 'image')) ? '컬러(사진 있음)' : '흑백 1도'}`, `· 파일: 낱쪽 PDF, 도련 사방 ${Number(d.bleed) || 3}mm, 재단선 있음`, `· 부수: (    )부`, `· 종이: 본문 (    ) / 표지 (    ) — 추천해 주시면 따르겠습니다`, `· 받을 날: (    )`, ``, `PDF 파일을 함께 보냅니다. 확인 부탁드립니다.`].join('\n');
+      return [`안녕하세요, 책 인쇄를 부탁드립니다.`, ``, `· 제목: ${B.title || d.name}`, `· 판형: ${T && T[0] !== 'custom' ? T[1] + ' ' : ''}${Math.round(d.w)}×${Math.round(d.h)}mm (재단 크기)`, (d.book.coverMade ? `· 쪽 수: 본문 ${interiorN(d)}쪽 (표지는 펼침면 파일로 따로 보냅니다 — 책등 약 ${bookSpine(d).s}mm)` : `· 쪽 수: ${n}쪽${cover ? ' (표지 2쪽 포함 — 표지를 따로 받으시면 말씀해 주세요)' : ''}`), `· 제본: ${B.bind === 'saddle' ? '중철(스테이플)' : '무선 제본'}`, `· 본문 색: ${d.pages.some(p => p.els.some(e => e.type === 'image')) ? '컬러(사진 있음)' : '흑백 1도'}`, `· 파일: 낱쪽 PDF, 도련 사방 ${Number(d.bleed) || 3}mm, 재단선 있음`, `· 부수: (    )부`, `· 종이: 본문 ${d.book.cv && d.book.cv.paper && d.book.cv.paper !== 'custom' ? (PAPERS.find(p => p[0] === d.book.cv.paper) || [0, '(    )'])[1].replace(/ \(.*/, '') : '(    )'} / 표지 (    ) — 추천해 주시면 따르겠습니다`, `· 받을 날: (    )`, ``, `PDF 파일을 함께 보냅니다. 확인 부탁드립니다.`].join('\n');
     }
     const b0 = (e, k) => { const b = e.target.closest('[data-bk]'); return b && b.dataset.bk === k; };
 
     /* ---------- 왼쪽 패널 「도서 편집」 ---------- */
     const open = new Set(['story']); let pfCache = null;
+    /* ---------- 표지 펼침면 (팀장님 11/23 「표지 펼침면」 · 조판 전문가 자문) ----------
+       인쇄소에 보내는 표지는 본문과 따로 한 장: [뒷날개 | 뒤표지 | 책등 | 앞표지 | 앞날개] + 사방 도련 3mm.
+       책등 = 본문 장 수(쪽 ÷ 2) × 종이 1장 두께 + 표지·풀 0.5mm (무선) · 중철은 책등 없음. 인쇄소가 알려 준 값이 있으면 그것을 씀.
+       책등 글씨는 시계 방향 90° (위 → 아래로 읽음) — 3mm 미만 없음, 3~5mm 제목만, 5mm 이상 제목·지은이·펴낸 곳.
+       표지 문서: doc.bookCover = { tw, th, pages, paper, thick, board, flap, bind, spineFix, spineOn, title, author, pub, bookId, bookName }
+       본문 쪽 수·종이·날개를 바꾸면 doc 너비를 바꾸고 각 칸의 요소를 접는 선 기준으로 옮김(cvRefit), 책등 글씨는 다시 앉힘(cvSpineEls). */
+    const PAPERS = [['mojo80', '백색 모조 80g (교재·문집에 가장 흔함)', 0.10], ['mi80', '미색 모조 80g (눈이 편한 글 책)', 0.11], ['mojo70', '백색 모조 70g', 0.09], ['mojo100', '백색 모조 100g (도톰)', 0.12], ['mojo120', '백색 모조 120g', 0.15], ['elite70', '이라이트 70g (가볍고 부피감)', 0.10], ['elite80', '이라이트 80g', 0.11], ['snow100', '스노우 100g (사진 많은 교본)', 0.09], ['snow120', '스노우 120g', 0.11], ['snow150', '스노우 150g', 0.14], ['art100', '아트지 100g', 0.08], ['art120', '아트지 120g', 0.10], ['art150', '아트지 150g', 0.13], ['custom', '직접 입력 (인쇄소가 알려 준 두께)', 0]];
+    const CV_LAB = { fb: '뒷날개', b: '뒤표지', s: '책등', f: '앞표지', ff: '앞날개' };
+    const bookSpine = d => { const cv = Object.assign({ paper: 'mojo80', thick: 0.1, flap: 0, spineFix: 0 }, d.book.cv || {}); return cvSpec({ tw: d.w, th: d.h, pages: interiorN(d), thick: cv.thick, flap: cv.flap, bind: (d.book || {}).bind, spineFix: cv.spineFix }); };
+    const coverPagesOf = d => d.pages.filter(p => p.cover || p.coverBack || p.label === '표지 뒷면');
+    const interiorN = d => d.pages.length - coverPagesOf(d).length;
+    function cvSpec(c) {
+      const perfect = c.bind !== 'saddle', pages = Math.max(2, Math.round(Number(c.pages) || 2)), sheets = Math.ceil(pages / 2), thick = Number(c.thick) || 0.1, board = c.board == null ? 0.5 : Number(c.board) || 0;
+      const calc = perfect ? r1(sheets * thick + board) : 0, s = perfect ? (Number(c.spineFix) > 0 ? r1(Number(c.spineFix)) : calc) : 0, f = Math.max(0, Number(c.flap) || 0), tw = Number(c.tw), th = Number(c.th);
+      const x = { fb: 0, b: f, s: f + tw, f: f + tw + s, ff: f + 2 * tw + s };
+      return Object.assign({}, c, { pages, sheets, thick, board, calc, s, f, tw, th, x, W: r1(2 * f + 2 * tw + s), H: th, perfect });
+    }
+    const cvZones = n => [['fb', n.x.fb, n.f], ['b', n.x.b, n.tw], ['s', n.x.s, n.s], ['f', n.x.f, n.tw], ['ff', n.x.ff, n.f]].filter(z => z[2] > 0);
+    const lumOf = hex => { const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '')); if (!m) return 1; const v = parseInt(m[1], 16); return ((v >> 16 & 255) * 0.299 + (v >> 8 & 255) * 0.587 + (v & 255) * 0.114) / 255; };
+    const cvFg = bg => lumOf(bg) < 0.55 ? '#ffffff' : '#111111';
+    /* 책등 글씨 (돌린 글 상자: 상자 너비 = 책등 길이 방향, 높이 = 책등 두께) */
+    function cvSpineEls(d, n) {
+      const pg = d.pages[0], C = d.bookCover, old = {}; pg.els.filter(e => e.cvSpine).forEach(e => { old[e.cvSpine] = e; });
+      pg.els = pg.els.filter(e => !e.cvSpine);
+      if (C.spineOn === false || n.s < 3) return 0;
+      const fg = cvFg(pg.bg), sc = n.x.s + n.s / 2, H = n.H, tpt = Math.min(16, Math.max(6, Math.round(n.s * 0.55 / PT * 2) / 2)), font = (old.t && old.t.font) || C.font || 'Pretendard';
+      const roles = n.s < 5 ? [['t', C.title, 12, H * 0.68, tpt, 800, 'left']] : [['t', C.title, 12, H * 0.6, tpt, 800, 'left'], ['a', C.author, H * 0.6 + 2, H - 30, Math.max(6, Math.round(tpt * 0.75 * 2) / 2), 500, 'right'], ['p', C.pub, H - 27, H - 9, Math.max(6, Math.round(tpt * 0.7 * 2) / 2), 700, 'center']].filter(r => !(r[0] === 'a' && String(C.author || '').trim() === String(C.pub || '').trim()));
+      let k = 0;
+      roles.forEach(([role, text, y0, y1, size, weight, align]) => { const o = old[role] || {}; if (!String(o.text != null ? o.text : text || '').trim()) return; const len = r1(y1 - y0), cy = (y0 + y1) / 2;
+        pg.els.push(Object.assign({}, A.TEXT_DEF, { color: fg, font }, o.cvKeep ? { color: o.color, font: o.font, weight: o.weight } : {}, { id: A.uid(), text: o.text != null ? o.text : text, x: r1(sc - len / 2), y: r1(cy - n.s / 2), w: len, h: r1(n.s), rot: 90, size, weight: o.cvKeep ? o.weight : weight, align, valign: 'middle', lh: 1, ls: role === 't' ? 0.02 : 0, sizing: 'fixed', cvSpine: role, cvKeep: true, name: '책등 ' + { t: '제목', a: '지은이', p: '펴낸 곳' }[role] })); k++; });
+      return k;
+    }
+    function cvRefit(d, o, n) {
+      const pg = d.pages[0]; let hid = 0, shown = 0;
+      const zoneOf = cx => cx < o.x.b ? 'fb' : cx < o.x.s ? 'b' : cx < o.x.f ? (o.s > 0 ? 's' : 'f') : cx < o.x.ff || !o.f ? 'f' : 'ff';
+      const anchor = (s, z) => z === 'fb' ? s.x.b : z === 's' ? s.x.s + s.s / 2 : s.x[z];
+      pg.els.forEach(el => { if (el.cvSpine) return;
+        if (el.x <= 0.5 && el.x + el.w >= o.W - 0.5) { el.w = r1(el.w + n.W - o.W); return; } /* 바탕처럼 펼침면 전체를 덮는 것은 늘이기 */
+        const z = el.cvFlapHidden ? el.cvZone : zoneOf(el.x + el.w / 2);
+        el.x = r1(el.x + anchor(n, z) - anchor(o, z));
+        if ((z === 'fb' || z === 'ff') && !n.f && !el.hidden) { el.hidden = true; el.cvFlapHidden = true; el.cvZone = z; hid++; }
+        else if (n.f && el.cvFlapHidden) { el.hidden = false; delete el.cvFlapHidden; delete el.cvZone; shown++; } });
+      d.w = n.W; d.h = n.H; cvSpineEls(d, n);
+      return { hid, shown };
+    }
+    function cvApply(patch) {
+      const d = A.doc, C = d.bookCover, o = cvSpec(C); Object.assign(C, patch); const n = cvSpec(C);
+      const r = cvRefit(d, o, n); A.commit(); A.renderAll();
+      const msg = [`펼침 ${n.W}×${n.H}mm · 책등 ${n.s}mm`]; if (r.hid) msg.push(`날개 글 ${r.hid}개를 숨겼습니다 (날개를 다시 넣으면 보임)`); if (r.shown) msg.push(`숨겼던 날개 글 ${r.shown}개를 다시 보입니다`);
+      A.toast(msg.join(' · '));
+    }
+    /* 본문(책) 문서에서 → 표지 펼침면 문서 만들기 */
+    async function makeCover() {
+      const src = A.doc, B = B_(), cv = Object.assign({ paper: 'mojo80', thick: 0.1, flap: 0, spineFix: 0 }, src.book.cv || {});
+      const pages = interiorN(src), n = cvSpec({ tw: src.w, th: src.h, pages, thick: cv.thick, flap: cv.flap, bind: B.bind, spineFix: cv.spineFix });
+      if (pages % 2) { A.toast(`본문이 홀수(${pages}쪽)입니다 — 책은 짝수 쪽이라 ${pages + 1}쪽으로 셈합니다`); }
+      if (!window.confirm(`표지 펼침면을 새 문서로 만듭니다.\n\n· ${n.f ? '뒷날개 ' + n.f + ' | ' : ''}뒤표지 ${n.tw} | 책등 ${n.s} | 앞표지 ${n.tw}${n.f ? ' | 앞날개 ' + n.f : ''} (mm)\n· 펼침 크기 ${n.W}×${n.H}mm (도련 3mm 포함 ${r1(n.W + 6)}×${r1(n.H + 6)}mm)\n· 본문 ${pages}쪽 · ${(PAPERS.find(p => p[0] === cv.paper) || [0, '종이'])[1]} 1장 ${n.thick}mm\n\n지금 책은 '직전 문서'로 보관되고, 표지 화면의 「📚 본문으로 돌아가기」로 다시 엽니다.`)) return;
+      const coverPg = src.pages.find(p => p.cover), bg = coverPg ? coverPg.bg : (KINDS[B.kind] || KINDS.general).accent || '#1E2B5A';
+      const cvId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); src.book.coverMade = { pages, s: n.s, at: Date.now(), id: cvId }; A.commit();
+      if (!src.docId) src.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      const bookId = src.docId, bookName = src.name, srcAssets = src.assets || {}, srcFonts = src.fonts || [], K = KINDS[B.kind] || KINDS.general;
+      const kept = await A.newDocKeep(); if (kept === false) return;
+      const title = B.title || src.name || '책 제목', author = B.author || '', pub = '나라차태권도';
+      const d = A.newDoc(['custom', title + ' 표지', n.W, n.H]); d.name = title + ' 표지'; d.bleed = 3; d.cropMarks = true; d.fonts = A.clone(srcFonts);
+      d.bookCover = { tw: n.tw, th: n.th, pages, paper: cv.paper, thick: n.thick, board: 0.5, flap: n.f, bind: B.bind, spineFix: Number(cv.spineFix) || 0, spineOn: true, title, author, pub, font: K.head, bookId, bookName };
+      const pg = A.newPage(bg); pg.label = '표지 펼침면'; d.pages = [pg]; const fg = cvFg(bg), sub = lumOf(bg) < 0.55 ? 'rgba(255,255,255,.82)' : '#444444';
+      const T_ = (text, x, y, w, h, st) => Object.assign({}, A.TEXT_DEF, { id: A.uid(), text, x: r1(x), y: r1(y), w: r1(w), h: r1(h), sizing: 'fixed', color: fg, font: 'Pretendard' }, st);
+      /* 앞표지: 책의 표지 쪽을 그대로 옮김 (없으면 제목·지은이) */
+      if (coverPg && coverPg.els.length) { const used = new Set(); JSON.stringify(coverPg.els).replace(/"a:([^"]+)"/g, (m, k) => { used.add(k); return m; }); used.forEach(k => { if (srcAssets[k]) d.assets[k] = srcAssets[k]; });
+        coverPg.els.forEach(el => { const c = A.clone(el); c.id = A.uid(); c.x = r1(c.x + n.x.f); pg.els.push(c); }); }
+      else pg.els.push(T_(title, n.x.f + n.tw * 0.1, n.th * 0.3, n.tw * 0.8, n.th * 0.2, { font: K.head, size: Math.round(n.tw / 5.5), weight: 800, lh: 1.2, ls: -0.02, name: '표지 제목' }), T_(author, n.x.f + n.tw * 0.1, n.th * 0.82, n.tw * 0.8, 10, { font: K.head, size: 12, weight: 600, name: '지은이' }));
+      /* 뒤표지: 책 소개 · 펴낸 곳 · 비매품 (전문가: 소개 3~6줄, 비매품은 오른쪽 아래) */
+      const bx = n.x.b + 14, bw = n.tw - 28;
+      pg.els.push(T_('이 책을 소개하는 글을 3~6줄로 쓰세요.\n누가 읽는 책인지, 무엇을 배우는지, 어떤 마음으로 만들었는지 적으면 좋습니다.', bx, n.th * 0.2, bw, n.th * 0.3, { size: 10, lh: 1.75, name: '뒤표지 책 소개 (고쳐 쓰세요)', cvPh: 1 }),
+        T_(`펴낸 곳  ${pub}`, bx, n.th - 34, bw * 0.62, 14, { size: 8, lh: 1.6, color: sub, name: '뒤표지 펴낸 곳' }),
+        T_('비매품', n.x.b + n.tw - 14 - 30, n.th - 26, 30, 6, { size: 9, weight: 700, align: 'right', name: '비매품' }));
+      if (n.f) { const fx = n.x.ff + 10, fw = n.f - 18; pg.els.push(T_(`지은이 ${author}\n\n지은이를 소개하는 글을 쓰세요 — 수련 경력, 하는 일, 이 책을 쓴 까닭.`, fx, 26, fw, n.th * 0.5, { size: 8.5, lh: 1.7, name: '앞날개 지은이 소개 (고쳐 쓰세요)', cvPh: 1 }),
+        T_(`${pub}\n\n도장 소개 · 수련 시간 · 연락처를 쓰세요.`, n.x.fb + 8, 26, fw, n.th * 0.5, { size: 8.5, lh: 1.7, name: '뒷날개 도장 소개 (고쳐 쓰세요)', cvPh: 1 })); }
+      pg.els.forEach(el => { if (el.cvPh) el.cvPh = el.text; });
+      cvSpineEls(d, n);
+      A.setDoc(d); d.docId = cvId; A.afterNewDoc(); open.add('cvsize'); A.openTab('book');
+      A.toast(`표지 펼침면을 만들었습니다 — ${n.W}×${n.H}mm · 책등 ${n.s}mm${kept ? ` · 책 "${kept}"는 직전 문서로 보관` : ''}`);
+    }
+    /* 화면 전용 안내(인쇄 안 됨): 칸 이름·치수, 접는 선, 글자 안전선 */
+    function coverOverlay(k9) {
+      const d = A.doc; if (!d.bookCover) return ''; const n = cvSpec(d.bookCover), b = Number(d.bleed) || 0; let h = '';
+      cvZones(n).forEach(([k, x0, w]) => { h += `<div class="cv-zone ${k}" style="left:${x0}mm;top:0;width:${w}mm;height:${n.H}mm"><span style="top:${-b - 1.5}mm;font-size:${10.5 * k9}px">${CV_LAB[k]} ${r1(w)}</span></div>`;
+        if (k === 's') return; const L = n.perfect && n.s && k === 'f' ? 8 : 5, R = n.perfect && n.s && k === 'b' ? 8 : 5;
+        h += `<div class="cv-safe" style="left:${x0 + L}mm;top:5mm;width:${Math.max(1, w - L - R)}mm;height:${n.H - 10}mm" title="글자·로고는 이 점선 안쪽에 (재단선 5mm${n.perfect && n.s ? ' · 책등 쪽은 무선 제본 홈 자리 8mm' : ''})"></div>`; });
+      [n.f ? n.x.b : null, n.s ? n.x.s : null, n.x.f, n.f ? n.x.ff : null].filter(v => v != null).forEach(x => { h += `<i class="cv-fold" style="left:${x}mm;top:${-b}mm;height:${n.H + 2 * b}mm"></i>`; });
+      return h;
+    }
+    const coverSnapX = () => { const d = A.doc; if (!d.bookCover) return []; const n = cvSpec(d.bookCover); return cvZones(n).flatMap(([k, x0, w]) => [x0, x0 + w / 2, x0 + w]); };
+    /* 표지 점검 (전문가: 초보 실수 TOP 5) */
+    function coverCheck() {
+      const d = A.doc, C = d.bookCover, n = cvSpec(C), pg = d.pages[0], out = [], add = (lv, msg, fix, id) => out.push({ lv, msg, fix, id });
+      if (!(Number(d.bleed) > 0)) add('bad', '도련이 0mm입니다 — 표지는 사방 3mm 도련이 꼭 있어야 흰 줄이 안 생깁니다', 'bleed');
+      if (n.perfect && n.s < 3 && C.spineOn !== false) add('warn', `책등이 ${n.s}mm로 얇아 글씨를 넣지 않았습니다 (3mm 미만은 제본 오차로 잘림)`);
+      if (n.f && n.f > n.tw * 2 / 3) add('warn', `날개(${n.f}mm)가 표지 폭의 3분의 2보다 깁니다 — 잘 접히지 않아요 (보통 70~100mm)`);
+      if (n.f && n.f < 50) add('warn', `날개(${n.f}mm)가 너무 짧습니다 — 보통 70~100mm`);
+      if (!n.perfect && n.pages > 64) add('warn', `중철로 ${n.pages}쪽은 많습니다 — 보통 64쪽까지 (무선 제본을 생각해 보세요)`);
+      if (!(Number(C.spineFix) > 0) && n.perfect) add('warn', `책등 ${n.s}mm는 어림값입니다 — 인쇄소에 「본문 ${n.pages}쪽 · ${(PAPERS.find(p => p[0] === C.paper) || [0, '종이'])[1].replace(/ \(.*/, '')}」라고 알리고 책등 두께를 물어 「인쇄소가 알려 준 책등」에 넣으세요`);
+      const zs = cvZones(n);
+      pg.els.forEach(el => { if (el.hidden || el.cvSpine || (el.x <= 0.5 && el.x + el.w >= n.W - 0.5)) return; const nm = el.name || (el.text || '').slice(0, 14) || '요소';
+        if (el.cvPh && el.text === el.cvPh) { add('warn', `「${nm.replace(/ \(고쳐 쓰세요\)/, '')}」에 보기 글이 그대로 있습니다 — 눌러서 고쳐 쓰거나 지우세요`, 'sel', el.id); return; }
+        if (el.type !== 'text') return; const x0 = el.x, x1 = el.x + el.w;
+        const fold = [n.f ? n.x.b : null, n.s ? n.x.s : null, n.x.f, n.f ? n.x.ff : null].filter(v => v != null).find(f => x0 < f - 0.5 && x1 > f + 0.5);
+        if (fold != null && !el.rot) { add('bad', `「${nm}」 글이 접는 선(${r1(fold)}mm)에 걸칩니다 — 접히면 글이 꺾여요`, 'sel', el.id); return; }
+        const z = zs.find(q => (x0 + x1) / 2 >= q[1] && (x0 + x1) / 2 < q[1] + q[2]); if (!z || z[0] === 's') return;
+        const inL = x0 - z[1], inR = z[1] + z[2] - x1, need = side => (n.perfect && n.s && ((z[0] === 'f' && side === 'L') || (z[0] === 'b' && side === 'R'))) ? 8 : 5;
+        if (el.y < 5 || el.y + el.h > n.H - 5 || inL < need('L') || inR < need('R')) add('warn', `「${nm}」 글이 ${CV_LAB[z[0]]} 가장자리에 너무 가깝습니다 — 재단선에서 5mm${n.perfect && n.s && (z[0] === 'f' || z[0] === 'b') ? ', 책등 쪽은 8mm(제본 홈)' : ''} 안쪽에 두세요`, 'sel', el.id); });
+      if (!out.some(x => x.lv !== 'ok' && !/어림값/.test(x.msg))) add('ok', '표지를 인쇄소에 보낼 준비가 되었습니다');
+      out.sort((a, b) => ({ bad: 0, warn: 1, ok: 2 }[a.lv] - { bad: 0, warn: 1, ok: 2 }[b.lv]));
+      return out;
+    }
+    function coverMsg() {
+      const d = A.doc, n = cvSpec(d.bookCover), C = d.bookCover, pap = (PAPERS.find(p => p[0] === C.paper) || [0, '(    )'])[1].replace(/ \(.*/, '');
+      return ['안녕하세요, 책 표지 인쇄를 부탁드립니다.', '', `· 제목: ${C.title}`, `· 제본: ${n.perfect ? '무선 제본' : '중철'} · 판형 ${n.tw}×${n.th}mm`, `· 본문: ${pap} ${n.pages}쪽`, n.perfect ? `· 책등: ${n.s}mm${Number(C.spineFix) > 0 ? ' (알려 주신 값)' : ' (제가 어림한 값 — 맞는지 확인 부탁드립니다)'}` : null, n.f ? `· 날개: 앞뒤 각 ${n.f}mm` : '· 날개: 없음', `· 표지 파일: 펼침면 한 장 PDF ${n.W}×${n.H}mm (도련 사방 3mm 포함 ${r1(n.W + 6)}×${r1(n.H + 6)}mm), 재단선 있음`, '· 표지 종이: (    ) — 스노우 250g·아트 250g 중 추천해 주세요', '· 코팅: (무광 / 유광)', '· 부수: (    )부', '', '표지 PDF를 함께 보냅니다. 확인 부탁드립니다.'].filter(x => x != null).join('\n');
+    }
+    /* 책 모양으로 보기 (CSS 3D — 앞·책등·뒤) */
+    function cover3D() {
+      const d = A.doc, n = cvSpec(d.bookCover), pg = d.pages[0], k = 300 / n.th, kp = k / MM, sw = Math.max(1.5, n.s) * k, tw = n.tw * k, th = n.th * k;
+      const face = (x0, w) => `<div class="cv3-clip" style="width:${w * k}px;height:${th}px"><div style="position:absolute;left:${-x0 * k}px;top:0;width:${n.W * MM}px;transform:scale(${kp});transform-origin:0 0">${A.sheetHTML(pg, 'screen')}</div></div>`;
+      let dl = $('#dlgCv3'); if (dl) dl.remove(); dl = document.createElement('dialog'); dl.id = 'dlgCv3'; dl.className = 'nw-dlg';
+      dl.innerHTML = `<div class="dhead"><h2>📖 책 모양으로 보기 <small>${n.tw}×${n.th}mm · 책등 ${n.s}mm</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="width:min(720px,92vw)"><div class="cv3-stage"><div class="cv3-book" style="width:${tw}px;height:${th}px;--sw:${sw}px">
+        <div class="cv3-f" style="transform:translateZ(${sw / 2}px)">${face(n.x.f, n.tw)}</div><div class="cv3-b" style="transform:rotateY(180deg) translateZ(${sw / 2}px)">${face(n.x.b, n.tw)}</div>
+        <div class="cv3-s" style="width:${sw}px;transform:translateX(${-sw / 2}px) rotateY(-90deg)">${n.s ? face(n.x.s, n.s) : ''}</div><div class="cv3-e" style="width:${sw}px;left:${tw - sw / 2}px;transform:rotateY(90deg)"></div><div class="cv3-t" style="height:${sw}px;width:${tw}px;transform:translateY(${-sw / 2}px) rotateX(90deg)"></div></div></div>
+        <div class="row" style="justify-content:center;gap:6px;margin-top:10px"><button class="btn sm" data-v="24">앞에서</button><button class="btn sm" data-v="68">책등 쪽</button><button class="btn sm" data-v="156">뒤에서</button><input type="range" min="-30" max="200" value="24" data-r style="width:200px"></div><p class="hint" style="text-align:center">화면으로 보는 어림 모양입니다 — 끌개로 돌려 보세요. 실제 색은 종이·코팅에 따라 조금 달라집니다.</p></div>`;
+      document.body.appendChild(dl); const bk = dl.querySelector('.cv3-book'), set = v => { bk.style.transform = `rotateX(-8deg) rotateY(${v}deg)`; dl.querySelector('[data-r]').value = v; }; set(24);
+      dl.onclick = e => { if (e.target.closest('[data-close]')) dl.close(); const b = e.target.closest('[data-v]'); if (b) set(Number(b.dataset.v)); }; dl.oninput = e => { if (e.target.dataset.r != null) set(Number(e.target.value)); }; dl.showModal();
+    }
+    /* 표지 문서의 왼쪽 패널 */
+    let cvCache = null, cvHint = null; /* cvHint: 책에서 표지를 열 때 지금 본문 쪽 수를 넘겨 줌 */
+    function coverSide(body) {
+      if (!open.has('cv-seen')) { open.add('cv-seen'); open.add('cvsize'); } /* 표지 문서를 처음 열면 책등·날개 칸을 펼쳐 둠 */
+      const d = A.doc, C = d.bookCover, n = cvSpec(C), sec = (id, title, inner) => `<details class="bk-sec2" data-sec="${id}" ${open.has(id) ? 'open' : ''}><summary>${title}</summary><div class="bk-in">${inner}</div></details>`;
+      const bar = `<div class="cv-bar">${cvZones(n).map(([k, , w]) => `<span class="${k}" style="flex:${Math.max(w, n.W * 0.06)} 0 0"><b>${CV_LAB[k]}</b>${r1(w)}</span>`).join('')}</div>`;
+      const nb = cvCache ? cvCache.filter(x => x.lv === 'bad').length : 0, nw = cvCache ? cvCache.filter(x => x.lv === 'warn').length : 0;
+      const ck = cvCache ? `<div class="bk-light ${nb ? 'bad' : nw ? 'warn' : 'ok'}"><i></i><b>${nb ? `꼭 고칠 것 ${nb}개` : nw ? '인쇄는 되지만 살펴볼 것' : '인쇄소에 보낼 준비 끝'}</b><span>${nb ? `⛔ ${nb}` : ''}${nw ? ` ⚠️ ${nw}` : ''}</span></div><div class="bk-pf">${cvCache.map((x, i) => `<div class="bk-pfi ${x.lv}">${x.lv === 'ok' ? '✅' : x.lv === 'bad' ? '⛔' : '⚠️'} <span>${esc(x.msg)}</span>${x.fix === 'bleed' ? `<button class="btn sm primary" data-cvfix="${i}">3mm로</button>` : x.fix === 'sel' ? `<button class="btn sm" data-cvfix="${i}">고르기</button>` : ''}</div>`).join('')}</div>` : '';
+      const pap = PAPERS.map(p => `<option value="${p[0]}" ${C.paper === p[0] ? 'selected' : ''}>${esc(p[1])}${p[2] ? ` · ${p[2]}mm` : ''}</option>`).join('');
+      body.innerHTML = `<div class="bk-top"><b>📕 ${esc(C.title)} — 표지 펼침면</b><small>펼침 ${n.W}×${n.H}mm · 도련 3mm 포함 ${r1(n.W + 6)}×${r1(n.H + 6)}mm</small>${bar}
+          <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn primary sm" data-cv="3d">📖 책 모양으로 보기</button>${C.bookId ? `<button class="btn sm" data-cv="back">📚 본문으로 돌아가기</button>` : ''}</div></div>
+        ${cvHint && cvHint.id === d.docId && cvHint.pages !== n.pages ? `<div class="bk-light warn" style="flex-wrap:wrap"><i></i><b>본문이 지금 ${cvHint.pages}쪽입니다</b><span style="flex-basis:100%;font-weight:400;font-size:12px">표지는 ${n.pages}쪽 기준(책등 ${n.s}mm)으로 되어 있습니다.</span><button class="btn sm primary" data-cv="sync">본문 ${cvHint.pages}쪽에 맞추기 (책등 ${cvSpec(Object.assign({}, C, { pages: cvHint.pages })).s}mm)</button></div>` : ''}
+        ${sec('cvsize', '📏 책등 · 날개', `<div class="grid2"><label class="f"><span>본문 쪽 수 (표지 빼고)</span><input type="number" min="2" step="2" data-cvi="pages" value="${n.pages}"></label><label class="f"><span>제본</span><select data-cvi="bind"><option value="perfect" ${n.perfect ? 'selected' : ''}>무선 (책등 있음)</option><option value="saddle" ${!n.perfect ? 'selected' : ''}>중철 (책등 없음)</option></select></label></div>
+          ${n.perfect ? `<label class="f"><span>본문 종이</span><select data-cvi="paper">${pap}</select></label>
+          <div class="grid2"><label class="f"><span>종이 1장 두께(mm)</span><input type="number" min="0.04" max="0.4" step="0.005" data-cvi="thick" value="${n.thick}"></label><label class="f"><span>인쇄소가 알려 준 책등(mm)</span><input type="number" min="0" step="0.5" data-cvi="spineFix" value="${Number(C.spineFix) || ''}" placeholder="비우면 어림값"></label></div>
+          <p class="hint" style="margin-top:0">책등 = 본문 ${n.pages}쪽 ÷ 2 = ${n.sheets}장 × ${n.thick}mm + 표지·풀 ${n.board}mm ≈ <b>${n.calc}mm</b>${Number(C.spineFix) > 0 ? ` → 인쇄소 값 <b>${n.s}mm</b> 씀` : ''}. 종이마다 두께가 조금 달라 <b>인쇄소에 물어 확정</b>하는 것이 가장 정확합니다.</p>` : '<p class="hint" style="margin-top:0">중철은 반으로 접어 스테이플로 찍으므로 책등이 없습니다 — 뒤표지와 앞표지가 바로 붙습니다.</p>'}
+          <label class="f"><span>날개 폭(mm, 0 = 없음)</span><input type="number" min="0" max="${Math.round(n.tw * 0.8)}" step="5" data-cvi="flap" value="${n.f}"></label><div class="row" style="gap:4px;flex-wrap:wrap;margin:-2px 0 4px">${[0, 70, 80, 90, 100].map(v => `<button class="btn sm ${n.f === v ? 'primary' : ''}" data-cvflap="${v}">${v ? v + 'mm' : '날개 없음'}</button>`).join('')}</div>
+          <p class="hint" style="margin-top:0">날개는 표지를 안으로 접어 넣는 부분 — 앞날개엔 지은이 소개, 뒷날개엔 도장 소개를 씁니다. 보통 70~100mm.</p>
+          ${n.perfect ? `<label class="chk"><input type="checkbox" data-cvi="spineOn" ${C.spineOn !== false ? 'checked' : ''}> 책등에 제목·지은이·펴낸 곳 넣기 (3mm 이상 · 위에서 아래로 읽게)</label><button class="btn sm" data-cv="respine">책등 글씨 다시 맞추기</button>` : ''}
+          <p class="hint">본문 쪽 수·종이·날개를 바꾸면 펼침면 너비가 바뀌고 앞표지·날개의 글·사진은 접는 선을 따라 함께 옮겨집니다. 분홍 점선은 접는 선, 회색 점선 안쪽이 글자 안전 자리입니다(화면에만 보임).</p>`)}
+        ${sec('cvcheck', '✅ 점검 · 내보내기', `<button class="btn sm" data-cv="check">🔍 점검하기</button>${ck}
+          <div class="col" style="gap:6px;margin-top:10px"><button class="btn primary full" data-cv="pdf">🖨 인쇄소용 표지 PDF (펼침면 · 도련 3mm)</button><button class="btn full" data-cv="msg">✉ 인쇄소에 보낼 말 복사</button></div>`)}`;
+      body.onclick = async e => {
+        const sm = e.target.closest('summary'); if (sm) { const dt = sm.parentElement; setTimeout(() => { if (dt.open) open.add(dt.dataset.sec); else open.delete(dt.dataset.sec); if (dt.open && dt.dataset.sec === 'cvcheck') { cvCache = coverCheck(); A.renderSide(); } }, 0); return; }
+        const fx = e.target.closest('[data-cvfix]'); if (fx && cvCache) { const it = cvCache[Number(fx.dataset.cvfix)]; if (it.fix === 'bleed') { d.bleed = 3; A.commit(); A.renderAll(); cvCache = coverCheck(); A.renderSide(); } if (it.fix === 'sel') A.selectIds([it.id]); return; }
+        const fl = e.target.closest('[data-cvflap]'); if (fl) { cvApply({ flap: Number(fl.dataset.cvflap) }); cvCache = null; A.renderSide(); return; }
+        const b = e.target.closest('[data-cv]'); if (!b) return; const k = b.dataset.cv;
+        if (k === '3d') cover3D();
+        if (k === 'back') A.openPrevDoc(C.bookId, C.bookName);
+        if (k === 'sync' && cvHint) { cvApply({ pages: cvHint.pages }); cvHint = null; cvCache = null; A.renderSide(); }
+        if (k === 'respine') { cvSpineEls(d, cvSpec(C)); A.commit(); A.renderAll(); A.toast(`책등 ${n.s}mm에 맞춰 책등 글씨를 다시 앉혔습니다`); }
+        if (k === 'check') { cvCache = coverCheck(); open.add('cvcheck'); A.renderSide(); }
+        if (k === 'pdf') { cvCache = coverCheck(); const bad = cvCache.filter(x => x.lv === 'bad'); if (bad.length && !window.confirm(`꼭 고칠 것이 ${bad.length}개 있습니다:\n\n${bad.map(x => '· ' + x.msg).join('\n')}\n\n그래도 표지 PDF를 만들까요?`)) { open.add('cvcheck'); A.renderSide(); return; } if (!(Number(d.bleed) > 0)) d.bleed = 3; d.cropMarks = true; A.commit(); A.openDownload('pdfprint'); open.add('cvcheck'); A.renderSide(); }
+        if (k === 'msg') { const m = coverMsg(); try { await navigator.clipboard.writeText(m); A.toast('인쇄소에 보낼 말을 복사했습니다 — 문자·메일에 붙여 넣으세요'); } catch (er) { window.prompt('아래 글을 복사하세요', m); } }
+      };
+      body.onchange = e => { const t = e.target, k = t.dataset.cvi; if (!k) return; let v = t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) : t.value;
+        if (k === 'pages' && v % 2) { v += 1; A.toast(`책은 짝수 쪽이라 ${v}쪽으로 셈합니다`); }
+        const patch = { [k]: v }; if (k === 'paper') { const p = PAPERS.find(q => q[0] === v); if (p && p[2]) patch.thick = p[2]; } if (k === 'thick') patch.paper = (PAPERS.find(q => q[2] === v) || ['custom'])[0];
+        cvApply(patch); cvCache = null; A.renderSide(); };
+    }
+    /* 본문(책) 문서 패널의 「표지 펼침면」 칸 */
+    function coverSecHTML() {
+      const d = A.doc, B = B_(), cv = Object.assign({ paper: 'mojo80', thick: 0.1, flap: 0, spineFix: 0 }, d.book.cv || {}), N = interiorN(d), n = cvSpec({ tw: d.w, th: d.h, pages: N, thick: cv.thick, flap: cv.flap, bind: B.bind, spineFix: cv.spineFix }), cm = d.book.coverMade;
+      const moved = cm && cm.pages !== n.pages;
+      return `<p class="hint" style="margin-top:0">인쇄소에 보내는 표지는 본문과 따로 <b>펼침면 한 장</b>입니다 — ${n.f ? '뒷날개 · ' : ''}뒤표지 · ${n.perfect ? '책등 · ' : ''}앞표지${n.f ? ' · 앞날개' : ''}. 책등 두께는 본문 쪽 수와 종이로 저절로 셈합니다.</p>
+        <div class="grid2"><label class="f"><span>본문 종이</span><select data-bcv="paper">${PAPERS.map(p => `<option value="${p[0]}" ${cv.paper === p[0] ? 'selected' : ''}>${esc(p[1])}</option>`).join('')}</select></label><label class="f"><span>날개(mm, 0 = 없음)</span><input type="number" min="0" step="5" data-bcv="flap" value="${n.f}"></label></div>
+        ${cv.paper === 'custom' ? `<label class="f"><span>종이 1장 두께(mm)</span><input type="number" step="0.005" min="0.04" data-bcv="thick" value="${n.thick}"></label>` : ''}
+        <div class="cv-sum">본문 <b>${n.pages}쪽</b> → 책등 <b>${n.perfect ? n.s + 'mm' : '없음(중철)'}</b> · 펼침 <b>${n.W}×${n.H}mm</b></div>
+        ${moved ? `<p class="hint" style="color:#b45309">⚠️ 표지를 만든 뒤 본문이 ${cm.pages}쪽 → ${n.pages}쪽으로 바뀌었습니다 (책등 ${cm.s} → ${n.s}mm). 「📕 만든 표지 열기」를 누르면 한 번에 맞출 수 있습니다.</p>` : cm ? `<p class="hint">${new Date(cm.at).toLocaleDateString('ko-KR')}에 표지를 만들었습니다 (본문 ${cm.pages}쪽 · 책등 ${cm.s}mm)</p>` : ''}
+        ${cm && cm.id ? `<button class="btn primary full" data-bk="opencover">📕 만든 표지 열기</button><button class="btn full" data-bk="mkcover" style="margin-top:6px">표지를 처음부터 새로 만들기</button>` : `<button class="btn primary full" data-bk="mkcover">📕 표지 펼침면 만들기</button>`}`;
+    }
+
     function renderSide(body) {
       const d = A.doc;
+      if (d.bookCover) { coverSide(body); return; }
       if (!isBook()) {
         body.innerHTML = `<div class="wz-card bk-hero"><div class="bk-ic">📚</div><b style="font-size:15px">도서 편집</b><p class="hint" style="margin:6px 0 12px">인디자인·쿽익스프레스처럼 책을 만듭니다. 판형과 여백을 고르고 원고를 붙여 넣으면 <b>쪽이 저절로 늘어나며</b> 장 제목·쪽 번호·머리글·차례가 알아서 들어갑니다. 인성 교재·수련 교본·소식 책자·문집에 알맞습니다.</p><button class="btn primary full" data-bk="new">📚 새 책 만들기</button><button class="btn full" data-bk="convert" style="margin-top:6px">지금 문서를 책으로 (${Math.round(d.w)}×${Math.round(d.h)}mm 그대로)</button></div>
           <div class="hint" style="margin-top:10px;line-height:1.7"><b>이렇게 만들어요</b><br>① 새 책 만들기 — 책 종류·판형·여백·본문 글꼴<br>② 원고 — 붙여 넣기 · 워드(docx)·txt 불러오기<br>③ 스타일 — 장·절 제목·본문 모양을 한 번에<br>④ 머리글·쪽 번호 · 차례 — 저절로<br>⑤ 점검 → 인쇄소용 PDF</div>`;
@@ -629,6 +814,7 @@
         ${sec('toc', '📑 차례', `<p class="hint" style="margin-top:0">장·절 제목과 쪽 번호로 차례를 만듭니다 (점선·쪽 번호). 원고를 고쳐 다시 흘리면 차례도 함께 새로 고쳐집니다.</p>
           <div class="grid2"><label class="f"><span>차례에 넣을 제목</span><select data-bb="tocLevel">${[[1, '장만'], [2, '장 + 절'], [3, '장 + 절 + 소제목']].map(([a, t]) => `<option value="${a}" ${Number(B.tocLevel || 2) === a ? 'selected' : ''}>${t}</option>`).join('')}</select></label><label class="f"><span>차례 제목</span><input type="text" data-bb="tocTitle" value="${esc(B.tocTitle || '차례')}"></label></div>
           <button class="btn sm" data-bk="toc">${d.pages.some(p => p.toc) ? '차례 새로 고침' : '차례 쪽 넣기 (본문 앞)'}</button>`)}
+        ${sec('cover', '📕 표지 펼침면 (인쇄소용 표지)', coverSecHTML())}
         ${sec('check', '✅ 점검 · 내보내기', `<button class="btn sm" data-bk="check">🔍 점검하기</button>${pf}
           <div class="col" style="gap:6px;margin-top:10px"><button class="btn primary full" data-bk="pdf" title="낱쪽 PDF · 도련 3mm · 재단선 — 인쇄소에 보내는 파일">🖨 인쇄소용 PDF (도련 3mm·재단선)</button><button class="btn full" data-bk="spread">📖 펼침면으로 보기</button><button class="btn full" data-bk="booklet" title="집 프린터 — 양면 인쇄 후 반으로 접어 스테이플">🏠 집에서 중철 소책자 인쇄 PDF</button><button class="btn full" data-bk="copymsg" title="판형·쪽 수·제본·도련을 적은 글 — 문자·메일에 붙여 넣기">✉ 인쇄소에 보낼 말 복사</button></div>`)}`;
       body.onclick = async e => {
@@ -642,17 +828,20 @@
           pfCache = await preflight(); open.add('check'); A.renderSide(); return; }
         if (b0(e, 'copymsg')) { const msg = printMsg(); try { await navigator.clipboard.writeText(msg); A.toast('인쇄소에 보낼 말을 복사했습니다 — 문자·메일에 붙여 넣으세요'); } catch (er) { window.prompt('아래 글을 복사하세요', msg); } return; }
         const b = e.target.closest('[data-bk]'); if (!b) return; const k = b.dataset.bk;
+        if (k === 'mkcover') { if (d.book.coverMade && d.book.coverMade.id && !window.confirm('이미 만든 표지가 있습니다. 처음부터 새 표지를 만들까요? (만든 표지는 그대로 남습니다)')) return; await makeCover(); return; }
+        if (k === 'opencover') { cvHint = { id: d.book.coverMade.id, pages: interiorN(d) + interiorN(d) % 2 }; if (cvHint.pages !== d.book.coverMade.pages) { Object.assign(d.book.coverMade, { pages: cvHint.pages, s: bookSpine(d).s }); A.commit(); } /* 표지에서 「본문 ○쪽에 맞추기」를 바로 보여 줌 */ await A.openPrevDoc(d.book.coverMade.id, (B.title || d.name) + ' 표지'); return; }
         if (k === 'story') openStory(); if (k === 'import') importFile(md => { A.doc.bstory.md = md; flow(); });
         if (k === 'flow') { await flow(); } if (k === 'spread') A.openSpreads(); if (k === 'toc') addToc();
         if (k === 'fsz+' || k === 'fsz-') { const dz = k === 'fsz+' ? 0.5 : -0.5, cur = ps(); if (cur.body.size + dz < 7 || cur.body.size + dz > 20) { A.toast('본문 글자는 7~20pt 사이로 정합니다', true); return; } d.bstyles = d.bstyles || {}; Object.keys(cur).forEach(sk => { const o = d.bstyles[sk] = Object.assign({}, d.bstyles[sk] || {}); o.size = Math.max(6, Math.round((cur[sk].size + dz * cur[sk].size / cur.body.size) * 2) / 2); }); await flow({ quiet: true }); A.toast(`책 전체 글자를 ${dz > 0 ? '크게' : '작게'} — 본문 ${ps().body.size}pt · 본문 ${(d.book.lastFlow || {}).pages || 0}쪽`); A.renderSide(); return; }
         if (k === 'psreset') { if (confirm('단락 스타일을 처음 값으로 되돌릴까요?')) { d.bstyles = psDefaults(B.kind || 'general'); await flow({ quiet: true }); A.toast('기본 스타일로 되돌렸습니다'); } }
         if (k === 'check') { b.disabled = true; b.textContent = '살피는 중…'; pfCache = await preflight(); open.add('check'); A.renderSide(); }
-        if (k === 'pdf') { if (stale()) await flow({ quiet: true }); pfCache = await preflight(); const bad = pfCache.filter(x => x.lv === 'bad'); if (bad.length && !window.confirm(`꼭 고칠 것이 ${bad.length}개 있습니다:\n\n${bad.map(x => '· ' + x.msg).join('\n')}\n\n그래도 인쇄소용 PDF를 만들까요?`)) { open.add('check'); A.renderSide(); return; } if (!(Number(d.bleed) > 0)) d.bleed = 3; d.cropMarks = true; A.commit(); A.openDownload('pdfprint'); open.add('check'); A.renderSide(); }
+        if (k === 'pdf') { if (stale()) await flow({ quiet: true }); pfCache = await preflight(); const bad = pfCache.filter(x => x.lv === 'bad'); if (bad.length && !window.confirm(`꼭 고칠 것이 ${bad.length}개 있습니다:\n\n${bad.map(x => '· ' + x.msg).join('\n')}\n\n그래도 인쇄소용 PDF를 만들까요?`)) { open.add('check'); A.renderSide(); return; } if (!(Number(d.bleed) > 0)) d.bleed = 3; d.cropMarks = true; { const cp = coverPagesOf(d).filter(p => !p.dlOff); if (d.book.coverMade && cp.length && window.confirm(`표지는 펼침면 파일로 따로 보내므로 본문 PDF에서 표지 ${cp.length}쪽(맨 앞)을 뺄까요?\n(빼도 화면·집 인쇄에는 그대로 있습니다)`)) cp.forEach(p => { p.dlOff = true; }); } A.commit(); A.openDownload('pdfprint'); open.add('check'); A.renderSide(); }
         if (k === 'booklet') { if (stale()) await flow({ quiet: true }); A.bookletPdf(); }
       };
       body.onchange = e => {
         const t = e.target;
         if (t.dataset.pgm) { A.page().noMaster = t.checked; A.commit(); A.renderCanvas(); return; }
+        if (t.dataset.bcv) { const k = t.dataset.bcv, cv = d.book.cv = Object.assign({ paper: 'mojo80', thick: 0.1, flap: 0, spineFix: 0 }, d.book.cv || {}); let v = t.type === 'number' ? Number(t.value) : t.value; cv[k] = v; if (k === 'paper') { const p = PAPERS.find(q => q[0] === v); if (p && p[2]) cv.thick = p[2]; } A.commit(); open.add('cover'); A.renderSide(); return; }
         if (t.dataset.ps) { const [k, f] = t.dataset.ps.split('.'); if (!d.bstyles) d.bstyles = {}; const o = d.bstyles[k] = Object.assign({}, d.bstyles[k] || {}); let v = t.type === 'number' ? Number(t.value) : t.value; let key = f; if (f === 'lhp') { key = 'lh'; v = v / 100; } if (f === 'lsp') { key = 'ls'; v = v / 100; } if (f === 'weight') v = Number(v); o[key] = v; flowSoon(80); return; }
         if (t.dataset.bb) { const k = t.dataset.bb; let v = t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) : t.value; if (t.type === 'number' && t.value === '') return; if (k === 'tocLevel') v = Number(v);
           if (k.startsWith('mg.')) { d.book.mg = Object.assign({}, A.BOOK_DEF.mg, d.book.mg || {}); d.book.mg[k.slice(3)] = v; } else d.book[k] = v;
@@ -721,6 +910,6 @@
 [가운데] **오늘도 한 걸음, 내일도 한 걸음.**
 [작은글] 이 책의 예시 글은 「도서 편집 → 원고 편집기」에서 지우고 직접 쓴 원고로 바꾸어 쓰세요.`;
 
-    return { renderSide, openNewBook, openStory, flow, masterHTML, onFrameDbl, isBook, stale, parse, preflight, htmlToMd, sanitize, makeBook, afterCommit };
+    return { coverOverlay, coverSnapX, interiorN, renderSide, openNewBook, openStory, flow, masterHTML, onFrameDbl, isBook, stale, parse, preflight, htmlToMd, sanitize, makeBook, afterCommit };
   };
 })();
