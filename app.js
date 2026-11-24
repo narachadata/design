@@ -5595,14 +5595,23 @@ const pptFontCache = new Map();
 const nearW = (list, w) => list.slice().sort((a, b) => Math.abs(a - w) - Math.abs(b - w) || b - a)[0];
 async function pptFontCss() { if (!fontCssText) { try { fontCssText = await (await fetch('fonts/fonts.css?v=' + (window.NARACAL_VER || Date.now()))).text(); } catch (e) { fontCssText = ''; } } return fontCssText || ''; }
 /* 글꼴 이름·굵기 → 넣을 파일 주소(또는 못 넣는 까닭) */
+/* woff2만 있는 웹 글꼴 → 같은 글꼴의 TTF·woff 주소 (11/24 — 브라우저엔 woff2를 TTF로 푸는 도구가 없어서 같은 파일의 다른 형식을 씀).
+   네이버(hangeul.pstatic.net)·fontsource는 같은 자리에 .woff, 페이퍼로지·배민 꾸불림·을지로오래오래는 fonts-archive 보관소의 TTF(커밋 고정) */
+const PPT_FA = { Paperozi: ['Paperlogy', 'd73efc3cd471a7faf198f39b1783b14da13dd7c4', f => f], KkuBulLim: ['BMKkubulim', '17e4f2c31e1ced8d0f1af4d6960f5b59d1831148', () => 'BMKkubulim'], EuljiroOraeoRae: ['BMEuljiroOraeorae', 'b9f7f4621d6170043029841cd1f42464416ff04b', () => 'BMEuljiroOraeorae'] };
+function pptAltFont(fam, url) {
+  const fa = PPT_FA[fam]; if (fa) { const base = decodeURIComponent(url.split('/').pop().replace(/\.woff2$/i, '')); return { url: `https://cdn.jsdelivr.net/gh/fonts-archive/${fa[0]}@${fa[1]}/${encodeURIComponent(fa[2](base))}.ttf` }; }
+  if (/^https:\/\/(hangeul\.pstatic\.net|cdn\.jsdelivr\.net\/fontsource)\//.test(url)) return { url: url.replace(/\.woff2$/i, '.woff'), woff: true };
+  return null;
+}
 async function pptFontSrc(fam, w) {
+  if (/^Pretendard GOV$/i.test(fam)) { const k = nearW(Object.keys(PPT_PRET).map(Number), w); return { url: `https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/packages/pretendard-gov/dist/public/static/alternative/PretendardGOV-${PPT_PRET[k]}.ttf`, w: k }; }  /* 공공기관용 Pretendard GOV도 고정 굵기 TTF (11/24) */
   if (/^Pretendard$/i.test(fam)) { const k = nearW(Object.keys(PPT_PRET).map(Number), w); return { url: `https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/public/static/alternative/Pretendard-${PPT_PRET[k]}.ttf`, w: k }; }
   const info = FONTS.find(f => f.family === fam);
   if (info && info.lib) return { why: '자료실 글꼴(라이선스 확인 필요)' };
   if ((doc.fonts || []).some(f => f.family === fam)) return { why: '직접 올린 글꼴(라이선스 확인 필요)' };
   if (info && info.web) { const W = (window.NARACAL_WEBFONTS || []).find(x => x.family === fam); if (!W) return { why: '파일 주소 없음' };
     const lic = W.license || ''; if (!PPT_LIC_OK.test(lic) || PPT_LIC_NO.test(lic)) return { why: '라이선스가 글꼴 파일 바꾸기를 허락하지 않음' };
-    const fc = W.faces.find(x => Number(x.weight) === nearW(W.faces.map(x => Number(x.weight)), w)); if (!/\.woff$/i.test(fc.url)) return { why: 'woff2 형식이라 아직 못 넣음' }; return { url: fc.url, w: Number(fc.weight), woff: true }; }
+    const fc = W.faces.find(x => Number(x.weight) === nearW(W.faces.map(x => Number(x.weight)), w)); if (!/\.woff$/i.test(fc.url)) { const alt = pptAltFont(fam, fc.url); return alt ? Object.assign({ w: Number(fc.weight) }, alt) : { why: 'woff2 형식이라 아직 못 넣음' }; } return { url: fc.url, w: Number(fc.weight), woff: true }; }
   const blocks = ((await pptFontCss()).match(/@font-face\s*{[^}]*}/g) || []).filter(b => ((b.match(/font-family:\s*['"]?([^;'"]+)['"]?/) || [])[1] || '').trim() === fam);
   if (!blocks.length) return { why: info ? '파일 주소 없음' : '공방에 없는 글꼴' };
   const ws = blocks.map(b => { const m = b.match(/font-weight:\s*([^;}]+)/); return m ? Number(m[1].trim().split(/\s+/)[0]) || 400 : 400; }), k = nearW(ws, w), bl = blocks[ws.indexOf(k)], u = (bl.match(/url\(["']?([^"')]+)["']?\)/) || [])[1] || '';
