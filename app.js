@@ -2895,7 +2895,7 @@ function openManual(id) {
   const M = window.NC_MANUAL || []; if (!M.length) { $('#dlgHelp').showModal(); return; } if (id) manCur = id; if (!M.some(x => x.id === manCur)) manCur = M[0].id;
   let d = $('#dlgManual');
   if (!d) { d = document.createElement('dialog'); d.id = 'dlgManual'; d.className = 'mandlg'; d.innerHTML = `<div class="dhead"><h2>📘 매뉴얼 <small>나라차 운영 상황별 따라 하기 — 그림의 번호를 보고 따라 하세요</small></h2><button class="btn sm" data-close>닫기</button></div><div class="manbody"><nav id="manNav"></nav><div id="manMain"></div></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close();
-    d.addEventListener('click', e => { const n = e.target.closest('[data-man]'); if (n) { manCur = n.dataset.man; try { localStorage.setItem('naracal-man-last', manCur); } catch (er) {} renderManual(); $('#manMain').scrollTop = 0; return; }
+    d.addEventListener('click', e => { const sgb = e.target.closest('[data-mstage]'); if (sgb) { const h = document.getElementById('mst-' + sgb.dataset.mstage); if (h) h.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; } const n = e.target.closest('[data-man]'); if (n) { manCur = n.dataset.man; try { localStorage.setItem('naracal-man-last', manCur); } catch (er) {} renderManual(); $('#manMain').scrollTop = 0; return; }
       const g = e.target.closest('[data-mgo]'); if (g) { d.close(); manualGo(g.dataset.mgo); return; }
       const im = e.target.closest('.mimg'); if (im) { manZoom(im); return; }
       const mk = e.target.closest('[data-mkh]'); if (mk) { const box = mk.closest('.manstep'); box.querySelectorAll('.mk').forEach(x => x.classList.toggle('hot', x.dataset.mk === mk.dataset.mkh)); } });
@@ -2906,7 +2906,7 @@ function renderManual() {
   const M = window.NC_MANUAL || [], S = M.find(x => x.id === manCur) || M[0], i = M.indexOf(S), nx = M[i + 1];
   $('#manNav').innerHTML = M.map(x => `<button data-man="${x.id}" class="${x.id === S.id ? 'on' : ''}"><span class="mi">${x.icon}</span><span><b>${esc(x.title)}</b><small>${esc(x.when)}</small></span></button>`).join('');
   const circ = n => '①②③④⑤⑥⑦⑧⑨⑩'[n] || (n + 1);
-  $('#manMain').innerHTML = `<h3 class="mantitle">${S.icon} ${esc(S.title)}</h3><p class="mansum">${esc(S.sum)}</p>` + S.steps.map((st, k) => `<section class="manstep"><div class="mshead"><span class="msn">${k + 1}</span><b>${esc(st.t)}</b></div><p>${st.d}</p>${st.img ? `<div class="mimg" title="누르면 크게 보기"><img src="assets/manual/${st.img}" alt="${esc(st.t)}" loading="lazy">${(st.marks || []).map((m, j) => `<i class="mk" data-mk="${j}" style="left:${m[0]}%;top:${m[1]}%">${j + 1}</i>`).join('')}<span class="mzoom">🔍 크게</span></div>` : ''}${(st.marks || []).length ? `<ol class="mklist">${st.marks.map((m, j) => `<li data-mkh="${j}"><span>${circ(j)}</span>${esc(m[2])}</li>`).join('')}</ol>` : ''}${(st.go || []).length ? `<div class="mgo">${st.go.map(([g, t]) => `<button class="btn sm primary" data-mgo="${g}">${esc(t)} →</button>`).join('')}</div>` : ''}</section>`).join('') + (nx ? `<div class="mannext"><button class="btn" data-man="${nx.id}">다음: ${nx.icon} ${esc(nx.title)} ›</button></div>` : '');
+  $('#manMain').innerHTML = `<h3 class="mantitle">${S.icon} ${esc(S.title)}</h3><p class="mansum">${esc(S.sum)}</p>` + (() => { const sg = [...new Set(S.steps.map(x => x.stage).filter(Boolean))]; return sg.length ? `<div class="manstages">${sg.map((g, j) => `<button data-mstage="${j}">${esc(g)}</button>`).join('')}</div>` : ''; })() + S.steps.map((st, k) => `${st.stage && (k === 0 || S.steps[k - 1].stage !== st.stage) ? `<h4 class="manstage" id="mst-${[...new Set(S.steps.map(x => x.stage).filter(Boolean))].indexOf(st.stage)}">${esc(st.stage)}</h4>` : ''}<section class="manstep"><div class="mshead"><span class="msn">${k + 1}</span><b>${esc(st.t)}</b></div><p>${st.d}</p>${st.img ? `<div class="mimg" title="누르면 크게 보기"><img src="assets/manual/${st.img}" alt="${esc(st.t)}" loading="lazy">${(st.marks || []).map((m, j) => `<i class="mk" data-mk="${j}" style="left:${m[0]}%;top:${m[1]}%">${j + 1}</i>`).join('')}<span class="mzoom">🔍 크게</span></div>` : ''}${(st.marks || []).length ? `<ol class="mklist">${st.marks.map((m, j) => `<li data-mkh="${j}"><span>${circ(j)}</span>${esc(m[2])}</li>`).join('')}</ol>` : ''}${(st.go || []).length ? `<div class="mgo">${st.go.map(([g, t]) => `<button class="btn sm primary" data-mgo="${g}">${esc(t)} →</button>`).join('')}</div>` : ''}</section>`).join('') + (nx ? `<div class="mannext"><button class="btn" data-man="${nx.id}">다음: ${nx.icon} ${esc(nx.title)} ›</button></div>` : '');
 }
 function manZoom(im) { let z = $('#manZoom'); if (z) z.remove(); z = document.createElement('div'); z.id = 'manZoom'; z.innerHTML = `<div class="mzwrap">${im.innerHTML.replace('<span class="mzoom">🔍 크게</span>', '')}</div><button class="btn" data-mzc>닫기 (Esc)</button>`; $('#dlgManual').appendChild(z); const close = () => { z.remove(); document.removeEventListener('keydown', key, true); }; const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }; document.addEventListener('keydown', key, true); z.onclick = close; }
 /* 매뉴얼의 '바로 해 보기' */
@@ -5844,6 +5844,7 @@ function findClick(e) {
 function BK() { if (BKm) return BKm; if (!NC.bookMod) return null; BKm = NC.bookMod({
   get doc() { return doc; }, get cur() { return cur; }, setCur(i) { cur = clamp(i, 0, doc.pages.length - 1); }, page, uid, clone, esc, MM, FONTS, TEXT_DEF, BOOK_DEF, addAsset,
   toast: (m, bad) => toast(m, bad), commit, renderAll, renderCanvas, renderSide, goto, book, bookNum, sheetHTML, fitBoxes, isRightPage, newDoc, newPage, setStatus, endEdit, ensureLibFonts, loadScript, printIssues, openSpreads, bookletPdf, openDownload,
+  resizeDocTo: (W, H) => { const w0 = doc.w, h0 = doc.h; doc.pages.forEach(p => resizeEls(p.els.filter(e => !e.flowFrame && !e.flowImg), w0, h0, W, H, 'fit')); doc.w = W; doc.h = H; },  /* 11/25 도서 패널 판형 바꾸기 */
   imgUrl: el => { try { return viewSrc(el, 'print'); } catch (e) { return ''; } },
   markDirty: () => markDirty(), amendCommit, selectIds: ids => select(ids), openQr: (t, o) => openQr(t, o),
   async openPrevDoc(id, name) { const L = await prevDocList(), i = L.findIndex(x => x.docId === id); if (i >= 0) { await restorePrevDoc(i); return doc.docId === id; } toast(`책 "${name || ''}"을 직전 문서에서 찾지 못했습니다 — 파일로 저장해 두셨다면 「내 드라이브 → 도서」에서 여세요`, true); return false; },
@@ -7565,7 +7566,9 @@ async function openArrange() {
   const selOrd = sel.slice();  /* Shift로 하나씩 누른 순서 (아래 select가 바꾸기 전에 기억) */
   /* 읽는 순서(위→아래, 왼→오른) */
   const avgH = imgs.reduce((t, e) => t + e.h, 0) / imgs.length; imgs.sort((a, b) => { const ra = Math.round((a.y + a.h / 2) / (avgH * 0.6)), rb = Math.round((b.y + b.h / 2) / (avgH * 0.6)); return ra - rb || a.x - b.x; });
-  const ar = await Promise.all(imgs.map(imgRatio)); const orig = imgs.map(e => clone(e)); let applied = false, O = arrOpt();
+  const ar = await Promise.all(imgs.map(imgRatio)); const orig = imgs.map(e => clone(e)); let applied = false, aPtr = -2, O = arrOpt();
+  /* 11/25: 되돌리기(Ctrl+Z)는 문서를 새 개체로 바꿈 → 늘 id로 지금 개체를 찾고, 되돌린 뒤 다시 누르면 기록을 덮어쓰지 않고 새 단계로 */
+  const fresh = () => applied && hptr === aPtr;
   const m0 = (Number(doc.bleed) > 0 || doc.fmt) ? safeMM() : r1(Math.max(4, 6 * docK()));
   const U0 = unionBox(orig); /* 배치 영역: 쪽 전체(안전 여백 안) · 지금 사진들이 있는 곳 (전문가 「나중에」 → 11/24) */
   /* 빈 자리: 고른 사진 말고 쪽에 있는 글·로고·도형(쪽 전체 바탕은 빼고)을 피한 가장 큰 네모 (11/24 검토: 쪽 전체면 사진이 제목·안내를 덮음) */
@@ -7582,16 +7585,16 @@ async function openArrange() {
   const unprev = () => { document.querySelectorAll('#ovl .arrprev').forEach(n => n.remove()); };
   const preview = kind => { unprev(); const o = $('#ovl'); if (!o) return; const R0 = rectsFor(kind); const S0 = seq(); o.insertAdjacentHTML('beforeend', R0.map((q, i) => `<div class="arrprev" style="left:${r1(q.x)}mm;top:${r1(q.y)}mm;width:${r1(q.w)}mm;height:${r1(q.h)}mm"><b>${S0.indexOf(i) + 1}</b></div>`).join('')); };
   const apply = () => { unprev(); const R0 = rectsFor(O.kind);
-    imgs.forEach((el, i) => { const o = orig[i], q = R0[i]; Object.assign(el, { rot: 0 }); delete el.panX; delete el.panY; if (o.zoom) delete el.zoom;
+    imgs.forEach((el0, i) => { const el = find(el0.id); if (!el) return; const o = orig[i], q = R0[i]; Object.assign(el, { rot: 0 }); delete el.panX; delete el.panY; if (o.zoom) delete el.zoom;
       el.x = r1(q.x); el.y = r1(q.y); el.w = r1(q.w); el.h = r1(q.h); el.fit = 'cover'; el.pos = q.cover ? '50% 40%' : '50% 50%'; });
-    if (applied) amendCommit(); else commit(); applied = true; rerender(); draw(); };
+    if (fresh()) amendCommit(); else commit(); applied = true; aPtr = hptr; rerender(); draw(); };
   $('#arrPop') && $('#arrPop').remove();
   const pop = document.createElement('div'); pop.id = 'arrPop'; pop.className = 'arrpop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', '사진 쪽에 맞춰 배치');
   const mini = kind => { const W = 64, H = Math.max(28, Math.min(64, 64 * doc.h / doc.w)), sc = W / doc.w, cells = arrCells(kind, { x: m0 * sc, y: m0 * sc, w: W - m0 * sc * 2, h: H - m0 * sc * 2 }, ar, Math.max(1, (Number(O.gap) || 0) * sc));
     return `<svg viewBox="0 0 ${W} ${r1(H)}" width="${W}" height="${r1(H)}"><rect width="${W}" height="${r1(H)}" rx="3" fill="#fff" stroke="#d0d5dd"/>${cells.map(c => `<rect x="${r1(c.x)}" y="${r1(c.y)}" width="${r1(Math.max(1, c.w))}" height="${r1(Math.max(1, c.h))}" rx="1" fill="#9db4f5"/>`).join('')}</svg>`; };
   const draw = () => { const exact = ['mosaic', 'row', 'col'].includes(O.kind);
     pop.innerHTML = `<div class="arr-h"><b>사진 ${imgs.length}장 쪽에 맞춰 배치</b><button class="btn icon sm" data-ax="close" title="닫기" aria-label="닫기">✕</button></div>
-      <div class="arr-k">${ARR_KINDS.map(([k, t, d]) => `<button class="arr-c${O.kind === k && applied ? ' on' : ''}" data-ak="${k}" title="${d}"${k === 'hero' && imgs.length < 3 ? ' disabled' : ''}>${mini(k)}<span>${t}</span></button>`).join('')}</div>
+      <div class="arr-k">${ARR_KINDS.map(([k, t, d]) => `<button class="arr-c${O.kind === k && fresh() ? ' on' : ''}" data-ak="${k}" title="${d}"${k === 'hero' && imgs.length < 3 ? ' disabled' : ''}>${mini(k)}<span>${t}</span></button>`).join('')}</div>
       <div class="arr-o"><span>사진 사이</span>${[0, 3, 6].map(v => `<button class="btn sm${Number(O.gap) === v ? ' on' : ''}" data-ag="${v}">${v}mm</button>`).join('')}<input type="number" min="0" max="50" step="0.5" value="${O.gap}" data-agi aria-label="사진 사이 간격(mm)"></div>
       <div class="arr-o"><span>자르기</span><button class="btn sm${O.fit === 'cover' || exact ? ' on' : ''}" data-af="cover" title="칸에 빈틈없이 채움 (사진 가장자리가 조금 잘릴 수 있음)">칸에 꽉 채우기</button><button class="btn sm${O.fit === 'contain' && !exact ? ' on' : ''}" data-af="contain" title="사진 전체가 보이게 (칸 안에 여백이 생길 수 있음)"${exact ? ' disabled' : ''}>사진 전체 보기</button></div>
       <div class="arr-o"><span>영역</span>${FREE ? `<button class="btn sm${O.area === 'free' ? ' on' : ''}" data-aa="free" title="제목·글·로고를 피한 가장 큰 빈 자리 (${r1(FREE.w)}×${r1(FREE.h)}mm)">빈 자리</button>` : ''}<button class="btn sm${O.area !== 'here' && O.area !== 'free' ? ' on' : ''}" data-aa="page" title="안전 여백(${r1(m0)}mm) 안쪽 쪽 전체에">쪽 전체</button><button class="btn sm${O.area === 'here' ? ' on' : ''}" data-aa="here" title="지금 사진들이 차지한 자리(둘러싼 네모) 안에서만">지금 사진 자리</button></div>
@@ -7601,7 +7604,8 @@ async function openArrange() {
   draw(); document.body.appendChild(pop);
   const sc = $('#scroller').getBoundingClientRect(), insp = $('#inspector') || $('.inspector'), ir = insp && insp.offsetParent ? insp.getBoundingClientRect() : null; pop.style.left = Math.max(8, (ir && ir.width > 200 ? ir.right - 8 : innerWidth - 12) - pop.offsetWidth) + 'px'; pop.style.top = (sc.top + 8) + 'px';
   const save = () => { try { localStorage.setItem(ARR_LS, JSON.stringify(O)); } catch (e) { } };
-  const close = () => { unprev(); pop.remove(); document.removeEventListener('keydown', esc_, true); };
+  let seenPtr = hptr; const watch = setInterval(() => { if (!document.body.contains(pop)) { clearInterval(watch); return; } if (hptr !== seenPtr) { seenPtr = hptr; draw(); } }, 400);  /* 되돌리면 고른 방식 표시를 바로 지움 */
+  const close = () => { clearInterval(watch); unprev(); pop.remove(); document.removeEventListener('keydown', esc_, true); };
   pop.addEventListener('mouseover', e => { const c = e.target.closest('[data-ak]'); if (c && !c.disabled && c.dataset.ak !== pop._pv) { pop._pv = c.dataset.ak; preview(c.dataset.ak); } else if (!c && pop._pv) { pop._pv = null; unprev(); } });
   pop.addEventListener('mouseleave', () => { pop._pv = null; unprev(); });
   const esc_ = e => { if (e.key === 'Escape' && document.body.contains(pop)) { e.stopImmediatePropagation(); close(); } };
@@ -7609,12 +7613,12 @@ async function openArrange() {
   pop.onclick = e => { const t = e.target.closest('button'); if (!t || t.disabled) return;
     if (t.dataset.ax === 'close') return close();
     if (t.dataset.ak) { O.kind = t.dataset.ak; save(); apply(); return; }
-    if (t.dataset.ag != null) { O.gap = Number(t.dataset.ag); save(); if (applied) apply(); else draw(); return; }
-    if (t.dataset.af) { O.fit = t.dataset.af; save(); if (applied) apply(); else draw(); return; }
-    if (t.dataset.aa) { O.area = t.dataset.aa; save(); if (applied) apply(); else draw(); return; }
-    if (t.dataset.ae) { O.edge = t.dataset.ae; save(); if (applied) apply(); else draw(); return; }
-    if (t.dataset.ao) { O.ord = t.dataset.ao; save(); if (applied) apply(); else draw(); } };
-  pop.onchange = e => { if (e.target.matches('[data-agi]')) { O.gap = clamp(Number(e.target.value) || 0, 0, 50); save(); if (applied) apply(); else draw(); } };
+    if (t.dataset.ag != null) { O.gap = Number(t.dataset.ag); save(); if (fresh()) apply(); else draw(); return; }
+    if (t.dataset.af) { O.fit = t.dataset.af; save(); if (fresh()) apply(); else draw(); return; }
+    if (t.dataset.aa) { O.area = t.dataset.aa; save(); if (fresh()) apply(); else draw(); return; }
+    if (t.dataset.ae) { O.edge = t.dataset.ae; save(); if (fresh()) apply(); else draw(); return; }
+    if (t.dataset.ao) { O.ord = t.dataset.ao; save(); if (fresh()) apply(); else draw(); } };
+  pop.onchange = e => { if (e.target.matches('[data-agi]')) { O.gap = clamp(Number(e.target.value) || 0, 0, 50); save(); if (fresh()) apply(); else draw(); } };
   select(imgs.map(x => x.id));
 }
 function flipSel(dir) { const els = selEls().filter(x => !x.locked && x.type === 'image'); if (!els.length) { toast('뒤집기는 그림에 쓸 수 있습니다', true); return; } els.forEach(x => { if (dir === 'h') x.flip = !x.flip; else x.flipV = !x.flipV; }); commit(); rerender(); }

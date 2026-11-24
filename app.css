@@ -2152,3 +2152,16 @@ dialog.asktext{width:min(480px,92vw)}
 .dlpurp{display:grid;grid-template-columns:1fr 1fr;gap:6px}.dlpurp button{display:flex;align-items:center;gap:6px;padding:8px 9px;border:1.5px solid var(--ui-line,#e2e5eb);border-radius:10px;background:#fff;font-weight:600;font-size:12.5px;text-align:left;position:relative}.dlpurp button i{font-style:normal;font-size:17px}.dlpurp button.on{border-color:var(--ui-accent,#2f5bea);background:var(--ui-accent-soft,#e9eefc)}.dlpurp button em{position:absolute;top:-7px;right:6px;font-style:normal;font-size:9.5px;background:#1f7a45;color:#fff;border-radius:999px;padding:1px 5px}
 .dlcur{margin:6px 0 4px!important}.dlmore{margin:4px 0 8px}.dlmore .dlfmts{margin-top:6px}
 .presmood{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:6px}.presmood .pm-b{display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 3px;border:1.5px solid var(--ui-line,#e2e5eb);border-radius:8px;background:#fff;font-size:11px}.presmood .pm-b.on{border-color:var(--ui-accent,#2f5bea);background:var(--ui-accent-soft,#e9eefc)}.presmood i{display:block;width:44px;height:26px;border-radius:4px;position:relative;border:1px solid rgba(0,0,0,.1)}.presmood i b{position:absolute;left:6px;bottom:5px;width:18px;height:4px;border-radius:2px}
+
+/* 도서 패널 판형 (11/25) */
+.bk-trims{grid-template-columns:1fr 1fr;margin-bottom:6px}.bk-trims .nb-trim{padding:5px 8px}.bk-trims .nb-trim b{font-size:12px}.bk-trims .nb-trim small{font-size:10.5px}
+
+/* 원고 보기 모드: 각주 「주」 표 · 찾아보기 낱말 (기호 숨김, 11/25) */
+.be-fn[data-raw]{display:inline-block;vertical-align:super;font-size:.68em;line-height:1;padding:1px 4px;margin:0 1px;border-radius:6px;cursor:pointer;user-select:all}
+.be-ix[data-raw]{cursor:pointer;padding:0 1px}
+
+/* 매뉴얼 묶음 (11/25 포스터 5단계) */
+.manstages{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 14px}
+.manstages button{border:1px solid var(--g200,#e4e7ec);background:#fff;border-radius:999px;padding:5px 11px;font:inherit;font-size:12.5px;font-weight:600;color:var(--g700,#344054);cursor:pointer}
+.manstages button:hover{border-color:var(--ui-accent,#2F5BEA);color:var(--ui-accent,#2F5BEA)}
+.manstage{margin:22px 0 8px;padding:8px 12px;border-radius:10px;background:var(--g50,#f5f7ff);color:var(--ui-accent,#2F5BEA);font-size:15px;scroll-margin-top:8px}
