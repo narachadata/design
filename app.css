@@ -2029,3 +2029,6 @@ body.zooming #textBar,body.zooming .ovl .h,body.zooming .ovl .rotline{opacity:0}
 .ais-tools{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px}.ais-tools .btn{font-size:12px;padding:5px 8px}
 .ais-chatwrap{display:flex;flex-direction:column;height:100%}.ais-chathost{flex:1;min-height:420px;display:flex}
 .aichat.embed{grid-row:auto;grid-column:auto;border:1px solid var(--g200,#e4e7ec);border-radius:12px;flex:1;min-height:420px;height:calc(100vh - 260px);overflow:hidden}
+
+/* 윗막대 「AI 도우미」 단추 뺌 (11/24 팀장님 — AI는 모두 왼쪽 「AI 도구」 한곳) */
+#btnAI{display:none!important}
