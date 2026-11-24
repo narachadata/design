@@ -74,12 +74,29 @@
     if (!(await ingest({ images, text }))) B.toast('기다리는 AI 작업과 맞지 않는 답입니다 — 그림은 그림 작업, 글(JSON)은 글 작업에 붙여 넣으세요', true);
   }, true);
 
+  /* 11/24 ⌘V 없이 (전문가 [중] 「클립보드 자동 읽기」): 기다리는 AI 작업이 있을 때
+     · 작업 칸 「복사한 답 넣기」 단추 → 브라우저가 한 번 허용을 물음
+     · 허용해 두면 채팅 창에서 답을 복사하고 공방으로 돌아오기만 해도 저절로 (같은 내용은 두 번 읽지 않음, 안 맞는 내용은 조용히 넘김) */
+  const clipSeen = new Set();
+  async function clipTake(byUser) {
+    if (!S.jobs.some(j => j.status === 'wait')) return; if (!navigator.clipboard || !navigator.clipboard.read) { if (byUser) B.toast('이 브라우저는 클립보드를 직접 읽지 못합니다 — 답을 복사해 ⌘V(Ctrl+V)로 넣어 주세요', true); return; }
+    let items; try { items = await navigator.clipboard.read(); } catch (e) { if (byUser) B.toast('클립보드를 읽지 못했습니다 — 주소창 왼쪽 자물쇠에서 「클립보드」를 허용하거나 ⌘V(Ctrl+V)로 넣어 주세요', true); return; }
+    const images = []; let text = '', sig = '';
+    for (const it of items) { const im = it.types.find(t => /^image\//.test(t)); if (im) { const b = await it.getType(im); sig += 'i' + b.size + ':'; images.push(await fileToURL(b)); } else if (it.types.includes('text/plain')) { const t = await (await it.getType('text/plain')).text(); text += t; sig += 't' + t.length + ':' + t.slice(0, 40) + t.slice(-40); } }
+    if (!images.length && !(text && /\{/.test(text))) { if (byUser) B.toast('복사한 답이 없습니다 — 채팅에서 그림(오른쪽 단추 → 이미지 복사)이나 답 글 전체를 복사해 주세요', true); return; }
+    if (text && !images.length && S.jobs.some(j => j.status === 'wait' && j.prompt && text.includes(String(j.prompt).slice(0, 60)))) { if (byUser) B.toast('아직 공방이 복사한 지시문이 클립보드에 있어요 — 채팅의 답을 복사한 뒤 눌러 주세요', true); return; }  /* 지시문을 답으로 잘못 읽지 않게 */
+    if (!byUser && clipSeen.has(sig)) return; clipSeen.add(sig);
+    const ok = await ingest({ images, text }); if (!ok && byUser) B.toast('기다리는 AI 작업과 맞지 않는 답입니다 — 그림은 그림 작업, 글(JSON)은 글 작업의 답을 복사해 주세요', true);
+  }
+  async function clipAuto() { if (!S.jobs.some(j => j.status === 'wait') || document.visibilityState !== 'visible') return; try { const p = await navigator.permissions.query({ name: 'clipboard-read' }); if (p.state !== 'granted') return; } catch (e) { return; } clipTake(false); }
+  window.addEventListener('focus', () => setTimeout(clipAuto, 150)); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(clipAuto, 150); });
+
   /* ---------- 오른쪽 아래 작업 칸 ---------- */
   function tray() {
     let t = $('#aiTray'); if (!t) { t = document.createElement('div'); t.id = 'aiTray'; document.body.appendChild(t); t.addEventListener('click', e => { const x = e.target.closest('[data-tj]'); if (!x) return; const j = S.jobs.find(q => q.id === Number(x.dataset.tj)); if (!j) return; const a = x.dataset.ta;
-      if (a === 'x') { S.jobs = S.jobs.filter(q => q !== j); tray(); return; } if (a === 'step2') { B.sendToChat(j.prompt, 'image', { note: '받은 그림을 복사해 공방에서 ⌘V' }); j.step2 = false; tray(); return; } if (a === 'again') { B.sendToChat(j.prompt, j.kind || (j.expect === 'image' ? 'image' : 'text')); return; } B.goSide('ai'); }); }
+      if (a === 'x') { S.jobs = S.jobs.filter(q => q !== j); tray(); return; } if (a === 'clip') { clipTake(true); return; } if (a === 'step2') { B.sendToChat(j.prompt, 'image', { note: '받은 그림을 복사해 공방에서 ⌘V' }); j.step2 = false; tray(); return; } if (a === 'again') { B.sendToChat(j.prompt, j.kind || (j.expect === 'image' ? 'image' : 'text')); return; } B.goSide('ai'); }); }
     const live = S.jobs.filter(j => j.status !== 'done' || Date.now() - (j.tDone || (j.tDone = Date.now())) < 20000).slice(0, 4); t.hidden = !live.length;
-    t.innerHTML = live.map(j => { const sec = Math.round((Date.now() - j.t0) / 1000); const st = j.status === 'wait' ? (j.step2 ? `<b>① 그림을 채팅에 붙여 넣었으면</b> <button class="btn sm primary" data-tj="${j.id}" data-ta="step2">② 지시문 복사·채팅 열기</button>` : `📋 채팅 답을 기다려요 — 답을 복사해 여기서 <b>⌘V</b> <button class="btn sm" data-tj="${j.id}" data-ta="again" title="지시문을 다시 복사하고 채팅을 엽니다">다시 복사</button>`) : j.status === 'run' ? `<span class="spin"></span> 만드는 중… ${sec}초 — 편집은 계속하셔도 돼요` : j.status === 'error' ? `⚠ ${esc(j.err || '안 됨')}` : `✅ ${j.n ? j.n + '개 ' : ''}도착 — <a data-tj="${j.id}" data-ta="go">눌러서 고르기</a>`; return `<div class="aj ${j.status}"><b class="ajt">${esc(j.label)}</b><span>${st}</span><button class="ajx" data-tj="${j.id}" data-ta="x" title="닫기">×</button></div>`; }).join('');
+    t.innerHTML = live.map(j => { const sec = Math.round((Date.now() - j.t0) / 1000); const st = j.status === 'wait' ? (j.step2 ? `<b>① 그림을 채팅에 붙여 넣었으면</b> <button class="btn sm primary" data-tj="${j.id}" data-ta="step2">② 지시문 복사·채팅 열기</button>` : `📋 채팅 답을 기다려요 — 답을 복사한 뒤 <button class="btn sm primary" data-tj="${j.id}" data-ta="clip" title="복사한 답(그림·글)을 바로 넣습니다 — ⌘V도 됩니다. 한 번 허용하면 다음부터는 공방으로 돌아오기만 해도 저절로 들어갑니다">복사한 답 넣기</button> <button class="btn sm" data-tj="${j.id}" data-ta="again" title="지시문을 다시 복사하고 채팅을 엽니다">다시 복사</button>`) : j.status === 'run' ? `<span class="spin"></span> 만드는 중… ${sec}초 — 편집은 계속하셔도 돼요` : j.status === 'error' ? `⚠ ${esc(j.err || '안 됨')}` : `✅ ${j.n ? j.n + '개 ' : ''}도착 — <a data-tj="${j.id}" data-ta="go">눌러서 고르기</a>`; return `<div class="aj ${j.status}"><b class="ajt">${esc(j.label)}</b><span>${st}</span><button class="ajx" data-tj="${j.id}" data-ta="x" title="닫기">×</button></div>`; }).join('');
     clearTimeout(tray._t); if (live.some(j => j.status === 'run' || j.status === 'done')) tray._t = setTimeout(tray, j0(live) ? 1000 : 5000); /* 끝난 작업은 20초 뒤 저절로 사라짐 */
   }
 
