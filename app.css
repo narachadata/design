@@ -2106,3 +2106,8 @@ body.zooming #textBar,body.zooming .ovl .h,body.zooming .ovl .rotline{opacity:0}
 .ovl .guide.gap.meas.v{border-top-color:#E5484D;border-bottom-color:#E5484D;background:linear-gradient(#E5484D,#E5484D) center/calc(1px / var(--k)) 100% no-repeat}
 .ovl .guide.gap.meas b{background:#E5484D}
 .ovl .meas-box{position:absolute;pointer-events:none;outline:calc(1px / var(--k)) solid #E5484D;outline-offset:0}
+
+.ctx .ctx-hk{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ctx .akey{display:inline-flex;background:var(--g100,#eef0f3);border-radius:7px;padding:2px;gap:2px}
+.ctx .akey button{width:auto;padding:3px 7px;font-size:11px;font-weight:600;border-radius:5px;color:var(--g600,#475467);gap:0}
+.ctx .akey button.on{background:#fff;color:var(--ui-accent,#2F5BEA);box-shadow:var(--sh-1)}

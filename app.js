@@ -1205,10 +1205,14 @@ function selUnits() {
 }
 function moveUnit(u, nx, ny) { const dx = r1(nx - u.x), dy = r1(ny - u.y); u.els.forEach(e => { e.x = r1(e.x + dx); e.y = r1(e.y + dy); }); u.x += dx; u.y += dy; }
 $$('[data-align]').forEach(b => b.onclick = () => alignUnits(b.dataset.align));
+/* 정렬 기준 (11/24): 'range' 고른 범위(기본) · 'first' 처음 고른 것(일러스트레이터 기준 개체 — 그것은 그대로, 나머지를 맞춤) */
+const alignKeyGet = () => { try { return localStorage.getItem('naracal-alignkey') === 'first' ? 'first' : 'range'; } catch (e) { return 'range'; } };
+function alignKeySet(v) { try { localStorage.setItem('naracal-alignkey', v); } catch (e) { } toast(v === 'first' ? '정렬 기준: 처음 고른 것 — 그것에 나머지를 맞춥니다' : '정렬 기준: 고른 범위 전체'); }
 function alignUnits(a) {
   const units = selUnits(); if (!units.length) return;
   let bx = 0, by = 0, bw = doc.w, bh = doc.h;
-  if (units.length > 1) { bx = Math.min(...units.map(u => u.x)); by = Math.min(...units.map(u => u.y)); bw = Math.max(...units.map(u => u.x + u.w)) - bx; bh = Math.max(...units.map(u => u.y + u.h)) - by; }
+  if (units.length > 1) { bx = Math.min(...units.map(u => u.x)); by = Math.min(...units.map(u => u.y)); bw = Math.max(...units.map(u => u.x + u.w)) - bx; bh = Math.max(...units.map(u => u.y + u.h)) - by;
+    if (alignKeyGet() === 'first') { const k = units.find(u => u.els.some(e => e.id === sel[0])); if (k) { bx = k.x; by = k.y; bw = k.w; bh = k.h; } } }
   units.forEach(u => { let nx = u.x, ny = u.y; if (a === 'l') nx = bx; if (a === 'c') nx = bx + (bw - u.w) / 2; if (a === 'r') nx = bx + bw - u.w; if (a === 't') ny = by; if (a === 'm') ny = by + (bh - u.h) / 2; if (a === 'b') ny = by + bh - u.h; moveUnit(u, nx, ny); });
   commit(); rerender();
 }
@@ -7061,6 +7065,7 @@ function ctxDo(k) {
     flipH: () => flipSel('h'), flipV: () => flipSel('v'), fitpage: () => fitToPage(false), fillpage: () => fitToPage(true),
     asbg: () => { if (!el || el.type !== 'image') return; el.x = 0; el.y = 0; el.w = doc.w; el.h = doc.h; el.fit = 'cover'; el.rot = 0; el.locked = true; reorder('back'); toast('배경으로 만들고 잠갔습니다 (레이어에서 잠금 해제)'); },
     'wrap-none': () => setImgWrap(els.filter(canWrap), 'none'), 'wrap-square': () => setImgWrap(els.filter(canWrap), 'square'), 'wrap-tight': () => setImgWrap(els.filter(canWrap), 'tight'), 'wrap-topbottom': () => setImgWrap(els.filter(canWrap), 'topbottom'), 'wrap-behind': () => setImgWrap(els.filter(canWrap), 'behind'),
+    'akey-range': () => alignKeySet('range'), 'akey-first': () => alignKeySet('first'),
     'al-l': () => alignUnits('l'), 'al-c': () => alignUnits('c'), 'al-r': () => alignUnits('r'), 'al-t': () => alignUnits('t'), 'al-m': () => alignUnits('m'), 'al-b': () => alignUnits('b'),
     'dist-h': () => distUnits(true), 'dist-v': () => distUnits(false), 'same-w': () => sameSize('w'), 'same-h': () => sameSize('h'), 'same-wh': () => sameSize('wh'), arrange: openArrange,
     all: () => select(page().els.filter(x => !x.hidden && !x.locked).map(x => x.id)), find: openFind, rulers: toggleRulers, clrguides: () => { doc.guides = { x: [], y: [] }; commit(); renderOverlay(); toast('안내선을 모두 지웠습니다'); } })[k]();
@@ -7268,7 +7273,8 @@ function elCtx(e) {
   const tile = (k, pic, t, tip, dis) => `<button class="ct" data-ctx="${k}" title="${tip}" aria-label="${tip}"${dis ? ' disabled' : ''}><svg viewBox="0 0 40 30" width="40" height="30">${pic}</svg><span>${t}</span></button>`;
   const B = (x, y, w, h, c) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.5" fill="${c || '#8FA8F2'}"/>`, GV = x => `<line x1="${x}" y1="2" x2="${x}" y2="28" stroke="#7C3AED" stroke-width="1.2" stroke-dasharray="2 1.6"/>`, GH = y => `<line x1="2" y1="${y}" x2="38" y2="${y}" stroke="#7C3AED" stroke-width="1.2" stroke-dasharray="2 1.6"/>`;
   const GAP = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#E83E8C" stroke-width="1.2"/>`;
-  const arrRows = nU >= 2 ? [{ html: `<div class="ctx-h">정렬 · ${nU}개</div><div class="ctgrid">`
+  const AKY = alignKeyGet();
+  const arrRows = nU >= 2 ? [{ html: `<div class="ctx-h ctx-hk">정렬 · ${nU}개<span class="akey"><button class="${AKY === 'range' ? 'on' : ''}" data-ctx="akey-range" title="고른 것 전체를 둘러싼 범위에 맞춤">고른 범위</button><button class="${AKY === 'first' ? 'on' : ''}" data-ctx="akey-first" title="처음 고른 것은 그대로 두고 나머지를 그것에 맞춤 (크기 같게도 처음 고른 것 기준)">처음 고른 것</button></span></div><div class="ctgrid">`
       + tile('al-l', GV(6) + B(6, 4, 22, 6) + B(6, 12, 14, 6, '#5B7CF0') + B(6, 20, 28, 6), '왼쪽', '왼쪽 맞춤 (' + keyLabel('Alt+A') + ')')
       + tile('al-c', GV(20) + B(9, 4, 22, 6) + B(13, 12, 14, 6, '#5B7CF0') + B(6, 20, 28, 6), '가운데', '가로 가운데 맞춤 (' + keyLabel('Alt+H') + ')')
       + tile('al-r', GV(34) + B(12, 4, 22, 6) + B(20, 12, 14, 6, '#5B7CF0') + B(6, 20, 28, 6), '오른쪽', '오른쪽 맞춤 (' + keyLabel('Alt+D') + ')')
