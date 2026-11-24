@@ -7089,9 +7089,13 @@ function wrapFloats(t) {
 /* 끄는 동안에도 글이 그림을 비켜 흐름 (그림을 끌 때만, 50ms마다 바뀐 글 상자만 다시 그림) */
 const WRAP_LAST = new WeakMap();
 function wrapLive(d) {
-  if (d.wrapT === undefined) { const ids = d.els.map(e => e.id); d.wrapT = d.els.some(e => e.type === 'image' && WRAPS.includes(e.wrap)) ? page().els.filter(t => t.type === 'text' && !ids.includes(t.id) && !t.hidden && !t.locked) : null; }
-  if (!d.wrapT || !d.wrapT.length) return; const now = performance.now(); if (now - (d.wrapAt || 0) < 50) return; d.wrapAt = now;
-  d.wrapT.forEach(t => { const wf = wrapFloats(t); if (wf === (WRAP_LAST.get(t) || '')) return; WRAP_LAST.set(t, wf); rerenderEl(t); });
+  if (d.wrapT === undefined) { const ids = d.els.map(e => e.id); d.wrapT = d.els.some(e => e.type === 'image' && WRAPS.includes(e.wrap)) ? page().els.filter(t => t.type === 'text' && !ids.includes(t.id) && !t.hidden && !t.locked) : null;
+    /* 글 상자를 끌 때: 쪽에 글 배치 그림이 있으면 끄는 글 상자 안 비킴 칸만 바꿈 (상자를 통째로 다시 그리면 끄는 자리가 두 번 밀림) */
+    d.wrapSelf = page().els.some(e => e.type === 'image' && !ids.includes(e.id) && WRAPS.includes(e.wrap)) ? d.els.filter(t => t.type === 'text') : null; }
+  if (!(d.wrapT && d.wrapT.length) && !(d.wrapSelf && d.wrapSelf.length)) return; const now = performance.now(); if (now - (d.wrapAt || 0) < 50) return; d.wrapAt = now;
+  (d.wrapT || []).forEach(t => { const wf = wrapFloats(t); if (wf === (WRAP_LAST.get(t) || '')) return; WRAP_LAST.set(t, wf); rerenderEl(t); });
+  (d.wrapSelf || []).forEach(t => { const dom = $(`#canvas [data-id="${t.id}"]`); if (!dom || dom.querySelector(':scope > .txw') || dom.classList.contains('editing')) return; const wf = wrapFloats(t); if (wf === (WRAP_LAST.get(t) || '')) return; WRAP_LAST.set(t, wf);
+    dom.querySelectorAll(':scope > .wrapf').forEach(n => n.remove()); if (wf) dom.insertAdjacentHTML('afterbegin', wf); dom.classList.toggle('wrapped', !!wf); if (wf) dom.style.display = 'block'; });
 }
 /* 글 배치 고르기: 글 뒤·글 앞은 겹친 글 상자와의 앞뒤 순서만 바꿈 */
 function setImgWrap(imgs, v) {
@@ -7169,11 +7173,14 @@ async function openArrange() {
   const ar = await Promise.all(imgs.map(imgRatio)); const orig = imgs.map(e => clone(e)); let applied = false, O = arrOpt();
   const m0 = (Number(doc.bleed) > 0 || doc.fmt) ? safeMM() : r1(Math.max(4, 6 * docK()));
   const A = () => ({ x: m0, y: m0, w: doc.w - m0 * 2, h: doc.h - m0 * 2 });
-  const apply = () => { const cells = arrCells(O.kind, A(), ar, Math.max(0, Number(O.gap) || 0));
-    imgs.forEach((el, i) => { const o = orig[i], c = cells[i]; Object.assign(el, { rot: 0 }); delete el.panX; delete el.panY; if (o.zoom) delete el.zoom;
-      const exact = O.kind === 'mosaic' || O.kind === 'row' || O.kind === 'col';
-      if (exact || O.fit === 'cover') { el.x = r1(c.x); el.y = r1(c.y); el.w = r1(c.w); el.h = r1(c.h); el.fit = 'cover'; el.pos = '50% 40%'; }
-      else { const k = Math.min(c.w / ar[i], c.h), w = ar[i] * k, h = k; el.x = r1(c.x + (c.w - w) / 2); el.y = r1(c.y + (c.h - h) / 2); el.w = r1(w); el.h = r1(h); el.fit = 'cover'; el.pos = '50% 50%'; } });
+  const rectsFor = kind => { const cells = arrCells(kind, A(), ar, Math.max(0, Number(O.gap) || 0)), exact = ['mosaic', 'row', 'col'].includes(kind);
+    return cells.map((c, i) => { if (exact || O.fit === 'cover') return { x: c.x, y: c.y, w: c.w, h: c.h, cover: true }; const k = Math.min(c.w / ar[i], c.h), w = ar[i] * k, h = k; return { x: c.x + (c.w - w) / 2, y: c.y + (c.h - h) / 2, w, h }; }); };
+  /* 마우스를 올리면 쪽 위에 놓일 자리를 반투명 칸으로 미리 보여 줌 (전문가 의견 「나중에」 → 11/24 팀장님 「남은 것도」) */
+  const unprev = () => { document.querySelectorAll('#ovl .arrprev').forEach(n => n.remove()); };
+  const preview = kind => { unprev(); const o = $('#ovl'); if (!o) return; const R0 = rectsFor(kind); o.insertAdjacentHTML('beforeend', R0.map((q, i) => `<div class="arrprev" style="left:${r1(q.x)}mm;top:${r1(q.y)}mm;width:${r1(q.w)}mm;height:${r1(q.h)}mm"><b>${i + 1}</b></div>`).join('')); };
+  const apply = () => { unprev(); const R0 = rectsFor(O.kind);
+    imgs.forEach((el, i) => { const o = orig[i], q = R0[i]; Object.assign(el, { rot: 0 }); delete el.panX; delete el.panY; if (o.zoom) delete el.zoom;
+      el.x = r1(q.x); el.y = r1(q.y); el.w = r1(q.w); el.h = r1(q.h); el.fit = 'cover'; el.pos = q.cover ? '50% 40%' : '50% 50%'; });
     if (applied) amendCommit(); else commit(); applied = true; rerender(); draw(); };
   $('#arrPop') && $('#arrPop').remove();
   const pop = document.createElement('div'); pop.id = 'arrPop'; pop.className = 'arrpop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', '사진 쪽에 맞춰 배치');
@@ -7188,7 +7195,9 @@ async function openArrange() {
   draw(); document.body.appendChild(pop);
   const sc = $('#scroller').getBoundingClientRect(), insp = $('#inspector') || $('.inspector'), ir = insp && insp.offsetParent ? insp.getBoundingClientRect() : null; pop.style.left = Math.max(8, (ir && ir.width > 200 ? ir.right - 8 : innerWidth - 12) - pop.offsetWidth) + 'px'; pop.style.top = (sc.top + 8) + 'px';
   const save = () => { try { localStorage.setItem(ARR_LS, JSON.stringify(O)); } catch (e) { } };
-  const close = () => { pop.remove(); document.removeEventListener('keydown', esc_, true); };
+  const close = () => { unprev(); pop.remove(); document.removeEventListener('keydown', esc_, true); };
+  pop.addEventListener('mouseover', e => { const c = e.target.closest('[data-ak]'); if (c && !c.disabled && c.dataset.ak !== pop._pv) { pop._pv = c.dataset.ak; preview(c.dataset.ak); } else if (!c && pop._pv) { pop._pv = null; unprev(); } });
+  pop.addEventListener('mouseleave', () => { pop._pv = null; unprev(); });
   const esc_ = e => { if (e.key === 'Escape' && document.body.contains(pop)) { e.stopImmediatePropagation(); close(); } };
   document.addEventListener('keydown', esc_, true);
   pop.onclick = e => { const t = e.target.closest('button'); if (!t || t.disabled) return;

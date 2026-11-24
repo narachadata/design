@@ -2096,3 +2096,7 @@ body.zooming #textBar,body.zooming .ovl .h,body.zooming .ovl .rotline{opacity:0}
 .ctx .ctgrid .wpic{color:#5B7CF0;display:block;line-height:0}
 .pk.wraps{display:grid;grid-template-columns:repeat(3,1fr)}.pk.wraps .pk-t{white-space:nowrap;font-size:11px}
 .dvkinds .dvk-ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px}
+
+/* 사진 배치 미리보기 칸 (마우스 올림) */
+.ovl .arrprev{position:absolute;pointer-events:none;background:rgba(47,91,234,.16);border:calc(1.5px / var(--k)) dashed #2F5BEA;border-radius:calc(3px / var(--k));display:flex;align-items:center;justify-content:center;z-index:4}
+.ovl .arrprev b{background:#2F5BEA;color:#fff;font-size:calc(11px / var(--k));line-height:1;padding:calc(3px / var(--k)) calc(6px / var(--k));border-radius:calc(10px / var(--k))}
