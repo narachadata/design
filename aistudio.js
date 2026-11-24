@@ -13,14 +13,14 @@
   const STYLES = [['illust', '그림책', 'warm children\'s picture-book illustration, soft colors'], ['flat', '납작한 벡터', 'flat vector illustration, clean shapes, bold outlines'], ['photo', '사진처럼', 'realistic photograph, natural light'], ['water', '수채화', 'soft watercolor painting'], ['cute3d', '3D 귀엽게', 'cute 3D clay render, soft lighting']];
   const RATIOS = [['1:1', '▢ 정사각'], ['3:4', '▯ 세로'], ['16:9', '▭ 가로']];
   const AUDS = ['학부모', '수련생', '선생님·관장', '지역 주민'];
-  const BRAND = 'If any penguin appears it is "Racha": a cute round penguin with dark-gray head and back, white face and belly, orange beak and feet. Every person or penguin in taekwondo clothes wears a white taekwondo dobok with a taekwondo V-neck collar (wrap-over V-neck, NOT a judo cross-over lapel); colored-belt students have a collar that is red on the outer band and black on the inner band. No logos, no text, no letters, no watermark.';
+  const BRAND = 'If any penguin appears it is "Racha": a cute round penguin with dark-gray head and back, white face and belly, orange beak and feet. EVERY penguin always wears a white taekwondo dobok (never casual clothes, never a judo gi, never a colored dobok). Every person or penguin in taekwondo clothes wears a white taekwondo dobok with a taekwondo V-neck collar (wrap-over V-neck, NOT a judo cross-over lapel); colored-belt students have a collar that is red on the outer band and black on the inner band. No logos, no text, no letters, no watermark.';
   const BRAND_EDIT = 'Anyone in taekwondo clothes wears a white taekwondo dobok with a taekwondo V-neck collar (NOT a judo lapel). Do not add any new text, letters, logos or watermark.'; /* 사진 고칠 때: 원래 있던 글자는 지우지 않게 */
   const chat = () => B.chatMode();
 
   /* ---------- 지시문 ---------- */
   const P = {
     img: (t, st, ratio, grid) => `${grid ? 'A 2x2 grid image with 4 different variations of the same request, one in each quadrant, separated by clear white gutters. Nothing crosses the quadrant borders. ' : ''}${t}. Style: ${st}. Aspect ratio ${ratio}${grid ? ' for each quadrant' : ''}. ${BRAND}`,
-    sticker: (t, grid) => `${grid ? 'A 2x2 grid sheet of 4 separate die-cut stickers' : 'One die-cut sticker'}: ${t}. ${grid ? 'Each sticker centered in its own quadrant with wide empty margins; nothing crosses the quadrant borders. ' : ''}Flat vector, bold outlines, thick white die-cut border. Pure white #FFFFFF background. ${BRAND}`,
+    sticker: (t, grid) => `${grid ? 'A 2x2 grid sheet of 4 separate die-cut stickers' : 'One die-cut sticker'}: ${t}. ${grid ? 'Each sticker centered in its own quadrant with wide empty margins; nothing crosses the quadrant borders. ' : ''}Flat vector, bold outlines, thick white die-cut border. Solid flat pure magenta #FF00FF background (chroma key) filling everything outside the stickers — no shadows, no gradients, no magenta inside the stickers. ${BRAND}`,  /* 흰 칼선 테두리가 흰 배경과 함께 지워지지 않게 배경은 자홍색 (11/24 검토) — removeWhite는 귀퉁이 색을 지우므로 그대로 동작 */
     pptbg: (t) => `Presentation slide background, 16:9 (1920x1080). Theme: ${t}. Abstract, soft shapes, subtle taekwondo motif (belt curve or dojang floor) only at the edges. Keep the left 60% plain and calm so title text can be placed on it. No text, no letters, no logos, no people.`,
     icons: (t) => `"${t}"에 어울리는 단순한 아이콘 8개를 SVG로 만드세요. 각 아이콘: viewBox "0 0 64 64", 선 위주(stroke-width 4, round cap/join), 색은 "currentColor"와 강조색 #E0564B만, 글자·script·외부 링크·image 금지.\n설명 없이 아래 형식의 \`\`\`json 블록 하나로만 답하세요:\n{"nc":"icons","icons":[{"name":"한글 이름","svg":"<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 64 64\\">…</svg>"}]}`,
     deck: (t, aud, n) => `태권도장 발표자료 개요를 만드세요. 주제: ${t}. 듣는 사람: ${aud}. ${n}장.\n규칙: 제목 18자 이내, bullets 최대 4개·각 26자 이내, 첫 장 type은 cover, 끝 장은 closing. 중간에 agenda를 한 번 넣고, 내용에 맞게 section·content·two·numbers·timeline·quote·cards3·statement·photo를 섞으세요(같은 type이 세 번 넘게 이어지지 않게). 실제 날짜·이름을 모르면 ○○로 비워 두세요.\ntype: cover|agenda|section|content|two|numbers|timeline|quote|gallery|cards3(세 가지 카드)|statement(한 문장 크게)|photo(큰 사진+짧은 설명)|closing\n설명 없이 \`\`\`json 블록 하나로만:\n{"nc":"deck","title":"","subtitle":"","slides":[{"type":"","title":"","bullets":[],"left":[],"right":[],"numbers":[{"v":"","l":""}],"steps":[{"when":"","what":""}],"quote":{"text":"","by":""},"cards":[{"ic":"이모지 하나","h":"","t":""}],"notes":"발표자 메모 2문장"}]}`,
@@ -94,7 +94,7 @@
   /* ---------- 오른쪽 아래 작업 칸 ---------- */
   function tray() {
     let t = $('#aiTray'); if (!t) { t = document.createElement('div'); t.id = 'aiTray'; document.body.appendChild(t); t.addEventListener('click', e => { const x = e.target.closest('[data-tj]'); if (!x) return; const j = S.jobs.find(q => q.id === Number(x.dataset.tj)); if (!j) return; const a = x.dataset.ta;
-      if (a === 'x') { S.jobs = S.jobs.filter(q => q !== j); tray(); return; } if (a === 'clip') { clipTake(true); return; } if (a === 'step2') { B.sendToChat(j.prompt, 'image', { note: '받은 그림을 복사해 공방에서 ⌘V' }); j.step2 = false; tray(); return; } if (a === 'again') { B.sendToChat(j.prompt, j.kind || (j.expect === 'image' ? 'image' : 'text')); return; } B.goSide('ai'); }); }
+      if (a === 'x') { S.jobs = S.jobs.filter(q => q !== j); tray(); return; } if (a === 'clip') { clipTake(true); return; } if (a === 'step2') { B.sendToChat(j.prompt, 'image', { note: '받은 그림을 복사해 공방에서 ⌘V' }); j.step2 = false; tray(); return; } if (a === 'again') { B.sendToChat(j.prompt, j.kind || (j.expect === 'image' ? 'image' : 'text')); return; } B.goSide('ai'); setTimeout(() => { const tg = document.querySelector('#sidebody #aisRes > *'); if (tg) { tg.scrollIntoView({ behavior: 'smooth', block: 'start' }); tg.animate && tg.animate([{ boxShadow: '0 0 0 3px rgba(47,91,234,.5)' }, { boxShadow: '0 0 0 0 rgba(47,91,234,0)' }], { duration: 1400 }); } }, 120); }); }  /* 「눌러서 고르기」 → 결과(후보·개요)로 스크롤 (11/24 검토) */
     const live = S.jobs.filter(j => j.status !== 'done' || Date.now() - (j.tDone || (j.tDone = Date.now())) < 20000).slice(0, 4); t.hidden = !live.length;
     t.innerHTML = live.map(j => { const sec = Math.round((Date.now() - j.t0) / 1000); const st = j.status === 'wait' ? (j.step2 ? `<b>① 그림을 채팅에 붙여 넣었으면</b> <button class="btn sm primary" data-tj="${j.id}" data-ta="step2">② 지시문 복사·채팅 열기</button>` : `📋 채팅 답을 기다려요 — 답을 복사한 뒤 <button class="btn sm primary" data-tj="${j.id}" data-ta="clip" title="복사한 답(그림·글)을 바로 넣습니다 — ⌘V도 됩니다. 한 번 허용하면 다음부터는 공방으로 돌아오기만 해도 저절로 들어갑니다">복사한 답 넣기</button> <button class="btn sm" data-tj="${j.id}" data-ta="again" title="지시문을 다시 복사하고 채팅을 엽니다">다시 복사</button>`) : j.status === 'run' ? `<span class="spin"></span> 만드는 중… ${sec}초 — 편집은 계속하셔도 돼요` : j.status === 'error' ? `⚠ ${esc(j.err || '안 됨')}` : `✅ ${j.n ? j.n + '개 ' : ''}도착 — <a data-tj="${j.id}" data-ta="go">눌러서 고르기</a>`; return `<div class="aj ${j.status}"><b class="ajt">${esc(j.label)}</b><span>${st}</span><button class="ajx" data-tj="${j.id}" data-ta="x" title="닫기">×</button></div>`; }).join('');
     clearTimeout(tray._t); if (live.some(j => j.status === 'run' || j.status === 'done')) tray._t = setTimeout(tray, j0(live) ? 1000 : 5000); /* 끝난 작업은 20초 뒤 저절로 사라짐 */
@@ -119,7 +119,7 @@
   }
 
   /* ---------- 발표자료: 개요 → 테마 → 쪽 ---------- */
-  const MASCOTS = ['asset:mascot-03', 'asset:mascot-05', 'asset:mascot-04', 'asset:mascot-07', 'asset:mascot-08', 'asset:mascot-09', 'asset:mascot-01', 'asset:mascot-11'];
+  const MASCOTS = ['assets/racha/racha-guard.webp', 'asset:mascot-05', 'assets/racha/racha-highkick.webp', 'assets/racha/racha-sidekick.webp'];  /* 라차 공식 원본(1400px) — TV·4K에서도 선명 (11/24) */
   function buildDeck(o, theme) {
     const SL = NC.tpl.presSlides, TH = NC.tpl.presThemes[theme] || NC.tpl.presThemes.navy, uid = B.uid, h = NC.tpl.presH(uid); let sec = 0, mi = 0; const img = () => MASCOTS[(mi++) % MASCOTS.length];
     const pages = (o.slides || []).map((s, i) => { const ty = s.type === 'two' ? 'twocol' : SL[s.type] ? s.type : 'content', b = (s.bullets || []).filter(Boolean); let c;
@@ -160,12 +160,12 @@
       ${it === 'racha' ? `<p class="hint">${esc(I[3])}</p>` : `<textarea id="aisQ" rows="3" placeholder="${esc(I[3])}">${esc(S.prompt)}</textarea>`}
       ${opts}<button class="btn primary full ais-go" data-aact="go">${goLabel}</button>
       ${chat() ? `<p class="hint ais-tip">채팅에 붙여 넣고 답이 오면, 그림·글을 복사해 <b>공방 아무 데서나 ⌘V</b>${['img', 'sticker'].includes(it) ? ' — 그림은 한 장에 4가지로 받아 저절로 4장으로 나눠요' : ''}.</p>` : ''}
-      ${res}
+      <div id="aisRes">${res}</div>
       ${boxHTML()}
       </div>`;
     body.onclick = async e => { const g = k => e.target.closest(k);
       const tb = g('[data-aitab]'); if (tb) { S.tab = tb.dataset.aitab; renderPanel(body); return; } if (g('[data-aact="racha"]')) { B.openRachaMaker(); return; }
-      const ch = g('[data-ain]'); if (ch) { saveQ(); S.intent = ch.dataset.ain; renderPanel(body); return; }
+      const ch = g('[data-ain]'); if (ch) { saveQ(); S.prompts = Object.assign({}, S.prompts, { [S.intent]: S.prompt }); S.intent = ch.dataset.ain; S.prompt = (S.prompts || {})[S.intent] || ''; renderPanel(body); return; }  /* 만들 것마다 요청 글을 따로 기억 (11/24 검토: 그림에서 쓴 글이 스티커·발표자료로 따라옴) */
       const s1 = g('[data-ast]'); if (s1) { saveQ(); S.style = s1.dataset.ast; renderPanel(body); return; } const s2 = g('[data-ara]'); if (s2) { saveQ(); S.ratio = s2.dataset.ara; renderPanel(body); return; }
       const s3 = g('[data-aau]'); if (s3) { saveQ(); S.deck.aud = s3.dataset.aau; renderPanel(body); return; } const s4 = g('[data-anu]'); if (s4) { saveQ(); S.deck.n = Number(s4.dataset.anu); renderPanel(body); return; }
       const s5 = g('[data-ath]'); if (s5) { S.deck.theme = s5.dataset.ath; renderPanel(body); return; }

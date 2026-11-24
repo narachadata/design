@@ -10,7 +10,7 @@
     S: (kind, x, y, w, h, st) => Object.assign({ id: uid(), type: 'shape', kind, x, y, w, h, rot: 0, fill: '#FFE89A', stroke: '', strokeW: 0, radius: 0, opacity: 1, name: '' }, st),
     P: (bg, els, label) => ({ id: uid(), bg, els, label }),
   });
-  const A = { logo: 'asset:logo-wordmark', group: 'asset:cover-group', m1: 'asset:mascot-01', m3: 'asset:mascot-03', m4: 'asset:mascot-04', m5: 'asset:mascot-05', m7: 'asset:mascot-07', m8: 'asset:mascot-08', m9: 'asset:mascot-09', m11: 'asset:mascot-11', pride: 'asset:illu-01-pride', respect: 'asset:illu-05-respect', friends: 'asset:illu-03-consideration', resp: 'asset:illu-04-responsibility', coop: 'asset:illu-12-cooperation', honesty: 'asset:illu-10-honesty' };
+  const A = { logo: 'asset:logo-wordmark', group: 'asset:cover-group', m1: 'assets/racha/racha-highkick.webp', m3: 'assets/racha/racha-guard.webp', m4: 'assets/racha/racha-guard.webp', m5: 'asset:mascot-05', m7: 'assets/racha/racha-guard.webp', m8: 'assets/racha/racha-guard.webp', m9: 'assets/racha/racha-highkick.webp', m11: 'assets/racha/racha-sidekick.webp', pride: 'asset:illu-01-pride', respect: 'asset:illu-05-respect', friends: 'asset:illu-03-consideration', resp: 'asset:illu-04-responsibility', coop: 'asset:illu-12-cooperation', honesty: 'asset:illu-10-honesty' };
   /* 테마: cbg 표지·구역 바탕 / ctx 그 글자 / bbg 본문 바탕 / btx 본문 글자 / ac 강조 / onAc 강조 위 글자 / card 카드 / sub 보조 글자 */
   const TH = {
     navy: { cbg: '#1E2B5A', ctx: '#FFFFFF', bbg: '#FFFFFF', btx: '#1E2B5A', ac: '#FFC83D', onAc: '#1E2B5A', card: '#EEF2FA', sub: '#5B6478', fontT: 'Black Han Sans', fontQ: 'Gowun Batang' },

@@ -26,6 +26,12 @@ NC.elems = (function () {
   add('illust', 'il-swoosh', '로고 심벌', 20, 18, (uid) => { const { I } = H(uid); return [I(D.swoosh, 0, 0, 20, 18, { name: '로고' })]; }, '로고');
   add('illust', 'il-target', '과녁 아이콘', 20, 20, (uid) => { const { I } = H(uid); return [I(D.target, 0, 0, 20, 20, { name: '아이콘' })]; }, '아이콘 과녁');
 
+  /* 라차 공식 일러스트 (11/24 팀장님 「우리 도장 캐릭터 '라차' 일러스트 파일」 — AI 원본 4장을 1400px 투명 그림으로) */
+  [['logo', '라차 · NARACHA 로고', 1225, 1400], ['sidekick', '라차 · 옆차기', 1400, 1225], ['guard', '라차 · 겨루기 준비', 1022, 1400], ['highkick', '라차 · 높이 차기', 1216, 1400]].forEach(([k, n, pw, ph]) => { const w = pw >= ph ? 60 : Math.round(60 * pw / ph * 10) / 10, h = pw >= ph ? Math.round(60 * ph / pw * 10) / 10 : 60; add('naracha', 'racha-' + k, n + ' (원본)', w, h, (uid) => { const { I } = H(uid); return [I(`assets/racha/racha-${k}.webp`, 0, 0, w, h, { name: n })]; }, '라차 펭귄 마스코트 캐릭터 공식 원본 고화질 태권도 도복 ' + n); });
+
+  /* 나라차 원본 로고·장식 (11/24 팀장님 「패턴디자인」 일러스트 원본) */
+  [['assets/logo/naracha-square.webp', '사각 로고 (원본)', 50, 60.5, '사각 로고 액자 NARACHA'], ['assets/logo/demo-team-square.webp', '시범단 로고 · 사각 (원본)', 37, 60.7, '시범단 로고 사각 액자'], ['assets/logo/demo-team-hex.webp', '시범단 로고 · 육각 (원본)', 52, 60, '시범단 로고 육각 엠블럼'], ['assets/patterns/naracha-watermark.svg', '은은한 상징 (워터마크)', 60, 48, '워터마크 배경 상징 연한 레터지'], ['assets/patterns/naracha-line.webp', '라인 패턴 띠 (NARACHA Taekwondo)', 196, 4.25, '라인 패턴 띠 머리 바닥 레터지 구분선 테두리']].forEach(([f, n, w, h, kw]) => add('naracha', 'nlogo-' + f.split('/').pop().split('.')[0], n, w, h, (uid) => { const { I } = H(uid); return [I(f, 0, 0, w, h, { name: n })]; }, '나라차 로고 브랜드 ' + kw));
+
   /* 도형: 종류 × 스타일 */
   const KINDS = [['rect', '사각형'], ['pill', '알약'], ['ellipse', '원'], ['tri', '삼각형'], ['diamond', '마름모'], ['hexagon', '육각형'], ['polygon', '오각형'], ['star', '별'], ['burst', '폭발'], ['heart', '하트'], ['cross', '십자'], ['ring', '고리'], ['bubble', '말풍선'], ['arrow', '화살표'], ['tab', '탭']];
   const STYLES = [['fill', '채움', { fill: NAVY }], ['outline', '윤곽', { fill: '', stroke: NAVY, strokeW: 0.8 }], ['yel', '노랑', { fill: YEL }], ['red', '빨강', { fill: RED }], ['grad', '그라데이션', { fillType: 'gradient', g1: '#2f5bea', g2: '#e0564b', gAngle: 45 }], ['soft', '연한 색', { fill: SKY }]];

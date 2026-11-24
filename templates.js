@@ -9,7 +9,7 @@ NC.tpl = (function () {
     S: (kind, x, y, w, h, st) => Object.assign({ id: uid(), type: 'shape', kind, x, y, w, h, rot: 0, fill: YEL, stroke: '', strokeW: 0, radius: 0, opacity: 1, name: '' }, st),
     P: (bg, els, label) => ({ id: uid(), bg, els, label }),
   });
-  const D = { logo: 'asset:logo-wordmark', swoosh: 'asset:swoosh', group: 'asset:cover-group', m1: 'asset:mascot-01', m3: 'asset:mascot-03', m4: 'asset:mascot-04', m5: 'asset:mascot-05', m7: 'asset:mascot-07', m8: 'asset:mascot-08', m9: 'asset:mascot-09', m11: 'asset:mascot-11', pride: 'asset:illu-01-pride', morality: 'asset:illu-02-morality', friends: 'asset:illu-03-consideration', resp: 'asset:illu-04-responsibility', respect: 'asset:illu-05-respect', humility: 'asset:illu-06-humility', forgive: 'asset:illu-07-forgiveness', justice: 'asset:illu-09-justice', honesty: 'asset:illu-10-honesty', fairness: 'asset:illu-11-fairness', coop: 'asset:illu-12-cooperation', back: 'asset:backcover-logo', target: 'asset:target-icon' };
+  const D = { logo: 'asset:logo-wordmark', swoosh: 'asset:swoosh', group: 'asset:cover-group', m1: 'assets/racha/racha-highkick.webp', m3: 'assets/racha/racha-guard.webp', m4: 'assets/racha/racha-guard.webp', m5: 'asset:mascot-05', m7: 'assets/racha/racha-guard.webp', m8: 'assets/racha/racha-guard.webp', m9: 'assets/racha/racha-highkick.webp', m11: 'assets/racha/racha-sidekick.webp', pride: 'asset:illu-01-pride', morality: 'asset:illu-02-morality', friends: 'asset:illu-03-consideration', resp: 'asset:illu-04-responsibility', respect: 'asset:illu-05-respect', humility: 'asset:illu-06-humility', forgive: 'asset:illu-07-forgiveness', justice: 'asset:illu-09-justice', honesty: 'asset:illu-10-honesty', fairness: 'asset:illu-11-fairness', coop: 'asset:illu-12-cooperation', back: 'asset:backcover-logo', target: 'asset:target-icon' };
   const PHONE = '010-0000-0000', ADDR = '○○시 ○○구 ○○로 00, 2층';
   const foot = (T, y, w, color) => T(`나라차태권도  ·  ${ADDR}  ·  ${PHONE}`, 0, y, w, 7, { size: 9.5, color: color || '#444', align: 'center', weight: 500, name: '하단 정보' });
 
@@ -261,6 +261,19 @@ NC.tpl = (function () {
       S('rect', 0, 283, 210, 14, { fill: NAVY }),
       T(`${ADDR}  ·  ${PHONE}`, 12, 287, 186, 6, { size: 9, color: WHITE, align: 'center' }),
     ], '가정통신문')]; } },
+    /* 알림 레터지 (11/24 팀장님 원본 「알림레터지A4」 — 위·아래 라인 패턴 띠, 로고, 가운데 은은한 상징) */
+    { id: 'notice-letterhead', cat: 'notice', name: '알림 레터지 · 가정통신문', w: 210, h: 297, build(uid) { const { T, I, P } = H(uid); return [P(WHITE, [
+      I('assets/patterns/naracha-line.webp', 7, 6.5, 196, 4.25, { name: '라인 패턴 띠 (위)' }),
+      I('asset:brand-horizontal', 70, 17, 70, 22, { name: '로고' }),
+      I('assets/patterns/naracha-watermark.svg', 52, 112, 106, 80, { name: '은은한 상징' }),
+      T('가정통신문', 18, 50, 174, 12, { size: 20, weight: 700, align: 'center', color: NAVY, font: 'Noto Serif KR', ls: 0.2, name: '제목' }),
+      T('2027년 3월 수련 안내', 18, 63, 174, 8, { size: 12, align: 'center', color: '#5a6275', name: '부제' }),
+      T(`학부모님께,\n\n늘 나라차태권도를 믿고 아이를 보내 주셔서 감사합니다. 새 학기를 맞아 수련 일정과 도장 운영을 안내해 드립니다.\n\n1. 승급심사: 3월 29일(월) ~ 30일(화)\n2. 차량 운행: 등원 14:00 / 하원 18:30 · 20:30\n3. 준비물: 도복·띠, 개인 물병\n\n궁금하신 점은 언제든지 도장으로 연락 주세요.`, 22, 80, 166, 120, { size: 11.5, lh: 1.8, name: '본문' }),
+      T('2027년  3월  2일', 18, 236, 174, 8, { size: 12, align: 'center' }),
+      T('나라차태권도  관장  ○ ○ ○', 18, 246, 174, 10, { size: 14, weight: 700, align: 'center', color: NAVY, font: 'Noto Serif KR' }),
+      T(`${ADDR}  ·  ${PHONE}`, 18, 278, 174, 6, { size: 9, color: '#5a6275', align: 'center', name: '주소·전화' }),
+      I('assets/patterns/naracha-line.webp', 7, 286.3, 196, 4.25, { name: '라인 패턴 띠 (아래)' }),
+    ], '알림 레터지')]; } },
     { id: 'schedule', cat: 'notice', name: '수련 시간표', w: 210, h: 297, build(uid) { const { T, I, S, P } = H(uid); const els = [
       S('rect', 0, 0, 210, 34, { fill: WHITE }), S('rect', 0, 34, 210, 2.5, { fill: NAVY }), I(D.logo, 14, 8, 64, 16, { name: '로고' }),
       T('2027 수련 시간표', 90, 10, 106, 14, { size: 20, weight: 700, color: NAVY, align: 'right' }),

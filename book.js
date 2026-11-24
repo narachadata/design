@@ -635,12 +635,12 @@
         if (a === 'done') { done(); return; }
         if (a === 'fn' || a === 'ix') { /* 각주 · 찾아보기 */
           if (mode !== 'view') { const ta = dl.querySelector('#stText'), a0 = ta.selectionStart, b0 = ta.selectionEnd;
-            if (a === 'fn') { const v = window.prompt('각주에 쓸 글 (그 쪽 아래에 작은 글로 들어갑니다)'); if (!v || !v.trim()) return; ta.focus(); ta.setSelectionRange(b0, b0); document.execCommand('insertText', false, `[^${v.trim().replace(/[[\]]/g, '')}]`); }
+            if (a === 'fn') { askText('¹ 각주 넣기', '각주에 쓸 글 — 그 쪽 아래에 작은 글로 들어갑니다', '예: 국기원 「태권도 교본」(2020), 45쪽.').then(v => { if (!v || !v.trim()) return; ta.focus(); ta.setSelectionRange(b0, b0); document.execCommand('insertText', false, `[^${v.trim().replace(/[[\]]/g, '')}]`); }); }
             else { const w = ta.value.slice(a0, b0).trim(); if (!w || /[\n{}]/.test(w)) { A.toast('찾아보기에 넣을 낱말을 먼저 끌어서 고르세요'); return; } ta.focus(); ta.setSelectionRange(a0, b0); document.execCommand('insertText', false, `{{${w}}}`); } return; }
           const t = tEl(focusI); if (!t) { A.toast('글 단락을 먼저 눌러 주세요'); return; }
           const sel = window.getSelection(), inT = sel.rangeCount && t.contains(sel.getRangeAt(0).startContainer), saved = inT ? sel.getRangeAt(0).cloneRange() : null;
           if (a === 'ix') { const w = saved ? saved.toString().trim() : ''; if (!w || /[\n{}]/.test(w)) { A.toast('찾아보기에 넣을 낱말을 먼저 끌어서 고르세요 (예: 앞차기)'); return; } snap(); t.focus(); sel.removeAllRanges(); sel.addRange(saved); document.execCommand('insertText', false, `{{${w}}}`); }
-          else { const v = window.prompt('각주에 쓸 글 (그 쪽 아래에 작은 글로 들어갑니다)\n예: 국기원 「태권도 교본」(2020), 45쪽.'); if (!v || !v.trim()) { t.focus(); return; } snap(); t.focus(); if (saved) { saved.collapse(false); sel.removeAllRanges(); sel.addRange(saved); } else setCaret(t, t.textContent.length); document.execCommand('insertText', false, `[^${v.trim().replace(/[[\]]/g, '')}]`); }
+          else { askText('¹ 각주 넣기', '각주에 쓸 글 — 그 쪽 아래에 작은 글로 들어갑니다', '예: 국기원 「태권도 교본」(2020), 45쪽.').then(v => { if (!v || !v.trim()) { t.focus(); return; } snap(); t.focus(); if (saved) { saved.collapse(false); sel.removeAllRanges(); sel.addRange(saved); } else setCaret(t, t.textContent.length); document.execCommand('insertText', false, `[^${v.trim().replace(/[[\]]/g, '')}]`); }); }
           const off = caretOffset(t); blocks[focusI].t = htmlToInline(t); changed(true); render(focusI, off); A.toast(a === 'fn' ? '각주를 넣었어요 — 쪽 아래에 번호와 함께 나옵니다' : '찾아보기에 넣었어요 — 책 끝 「찾아보기」 쪽에 쪽 번호와 함께 나옵니다'); return; }
         if (['mgR', 'mgD', 'mgX'].includes(a)) { const b = blocks[bi]; if (!b || b.st !== 'table') return; const T = tdSel && tdSel.i === bi ? tdSel : null; if (!T) { A.toast('먼저 합칠 칸을 한 번 눌러 주세요'); return; }
           const n = Math.max(1, ...b.rows.map(r => r.length)); b.rows.forEach(r => { while (r.length < n) r.push(''); }); let r = Math.min(T.r, b.rows.length - 1), c = Math.min(T.c, n - 1);
@@ -724,6 +724,8 @@
     }
 
     /* 인쇄소에 보낼 말 (UX 전문가 — 초보가 무엇을 알려야 하는지 몰라 전화가 오가는 일을 줄임) */
+    /* 글 한 줄 묻기 — 브라우저 기본 prompt 대신 공방 창 (11/24 검토) */
+    function askText(title, label, ph, val) { return new Promise(res => { const d = document.createElement('dialog'); d.className = 'asktext'; d.innerHTML = `<div class="dhead"><h2>${title}</h2></div><div class="dbody"><label class="f"><span>${label}</span><textarea rows="2" placeholder="${(ph || '').replace(/"/g, '&quot;')}"></textarea></label><div class="row" style="justify-content:flex-end;gap:6px;margin-top:8px"><button class="btn" data-a="no">취소</button><button class="btn primary" data-a="ok">넣기</button></div></div>`; document.body.appendChild(d); const ta = d.querySelector('textarea'); ta.value = val || ''; let done = false; const fin = v => { if (done) return; done = true; d.close(); d.remove(); res(v); }; d.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) fin(b.dataset.a === 'ok' ? ta.value : null); }); d.addEventListener('cancel', e => { e.preventDefault(); fin(null); }); ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); fin(ta.value); } }); d.showModal(); ta.focus(); }); }
     function printMsg() {
       const d = A.doc, B = B_(), n = d.pages.length, T = TRIMS.find(t => Math.abs(t[2] - d.w) < 1.5 && Math.abs(t[3] - d.h) < 1.5), cover = d.pages.some(p => p.cover);
       return [`안녕하세요, 책 인쇄를 부탁드립니다.`, ``, `· 제목: ${B.title || d.name}`, `· 판형: ${T && T[0] !== 'custom' ? T[1] + ' ' : ''}${Math.round(d.w)}×${Math.round(d.h)}mm (재단 크기)`, (d.book.coverMade ? `· 쪽 수: 본문 ${interiorN(d)}쪽 (표지는 펼침면 파일로 따로 보냅니다 — 책등 약 ${bookSpine(d).s}mm)` : `· 쪽 수: ${n}쪽${cover ? ' (표지 2쪽 포함 — 표지를 따로 받으시면 말씀해 주세요)' : ''}`), `· 제본: ${B.bind === 'saddle' ? '중철(스테이플)' : '무선 제본'}`, `· 본문 색: ${d.pages.some(p => p.els.some(e => e.type === 'image')) ? '컬러(사진 있음)' : '흑백 1도'}`, `· 파일: 낱쪽 PDF, 도련 사방 ${Number(d.bleed) || 3}mm, 재단선 있음`, `· 부수: (    )부`, `· 종이: 본문 ${d.book.cv && d.book.cv.paper && d.book.cv.paper !== 'custom' ? (PAPERS.find(p => p[0] === d.book.cv.paper) || [0, '(    )'])[1].replace(/ \(.*/, '') : '(    )'} / 표지 (    ) — 추천해 주시면 따르겠습니다`, `· 받을 날: (    )`, ``, `PDF 파일을 함께 보냅니다. 확인 부탁드립니다.`].join('\n');
@@ -1143,6 +1145,6 @@
 [가운데] **오늘도 한 걸음, 내일도 한 걸음.**
 [작은글] 이 책의 예시 글은 「도서 편집 → 원고 편집기」에서 지우고 직접 쓴 원고로 바꾸어 쓰세요.`;
 
-    return { coverOverlay, coverSnapX, interiorN, renderSide, openNewBook, openStory, flow, masterHTML, onFrameDbl, isBook, stale, parse, preflight, htmlToMd, sanitize, makeBook, afterCommit };
+    return { printMsg, coverOverlay, coverSnapX, interiorN, renderSide, openNewBook, openStory, flow, masterHTML, onFrameDbl, isBook, stale, parse, preflight, htmlToMd, sanitize, makeBook, afterCommit };
   };
 })();

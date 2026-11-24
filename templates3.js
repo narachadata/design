@@ -34,7 +34,7 @@ const fitT = (txt, bh, lh) => { const sz = Math.max(8, Math.round(bh / (String(t
   const AGE_FONT = { '유아': ['Dongle', 'Gaegu'], '초등': ['Jua', 'Noto Sans KR'], '청소년': ['Black Han Sans', 'Pretendard'], '성인': ['Pretendard', 'Pretendard'], '학부모': ['Gowun Batang', 'Noto Sans KR'], '전체': [null, 'Noto Sans KR'] };
   /* ---- 직종별 기본 정보·아이콘 ---- */
   const BIZ = {
-    '태권도장': { name: '나라차태권도', icon: '🥋', illu: 'asset:illu-01-pride', group: 'asset:cover-group', mascot: 'asset:mascot-01' },
+    '태권도장': { name: '나라차태권도', icon: '🥋', illu: 'asset:illu-01-pride', group: 'asset:cover-group', mascot: 'assets/racha/racha-highkick.webp' },
     '학원': { name: '○○학원', icon: '📚' }, '유치원·어린이집': { name: '○○유치원', icon: '🧸' }, '교회·단체': { name: '○○교회', icon: '⛪' },
     '카페·식당': { name: '카페 ○○', icon: '☕' }, '미용실·뷰티': { name: '○○헤어', icon: '💇‍♀️' }, '헬스·필라테스': { name: '○○피트니스', icon: '🏋️' },
     '병원·약국': { name: '○○의원', icon: '🩺' }, '부동산': { name: '○○공인중개사', icon: '🏠' }, '꽃집·소상공인': { name: '○○플라워', icon: '💐' }, '학교·기관': { name: '○○초등학교', icon: '🏫' },
