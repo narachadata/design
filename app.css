@@ -1994,3 +1994,19 @@ dialog .dhead{padding:16px 22px;border-bottom-color:var(--g200)}dialog .dhead h2
 /* 고른 항목 색 통일: 옅은 강조 바탕 + 강조 글자 (설정 왼쪽 메뉴 등 꽉 찬 파랑이던 곳) */
 #setNav button.on{background:var(--ui-accent-soft);color:var(--ui-accent);box-shadow:inset 3px 0 0 var(--ui-accent)}
 #setNav button{transition:background-color var(--d1),color var(--d1)}
+/* ===== 고급스럽게 2차 (11/24) ===== */
+/* 대화창 닫기: 어디서나 둥근 × 하나 (글자 「닫기」는 읽어 주기용으로 남김) */
+dialog .dhead > .btn[data-close]{font-size:0;width:32px;height:32px;padding:0;justify-content:center;border:0;background:transparent;box-shadow:none;border-radius:50%;color:var(--g500)}
+dialog .dhead > .btn[data-close]::before{content:'';width:16px;height:16px;background:currentColor;-webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'><path d='M6 6l12 12M18 6L6 18'/></svg>") center/contain no-repeat;mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'><path d='M6 6l12 12M18 6L6 18'/></svg>") center/contain no-repeat}
+dialog .dhead > .btn[data-close]:hover{background:var(--g100);color:var(--g900)}
+.dlpanel .x{width:32px;height:32px;border-radius:50%;font-size:20px;line-height:1;color:var(--g500);transition:background-color var(--d1)}.dlpanel .x:hover{background:var(--g100);color:var(--g900)}
+/* 윗막대: 파란 채움은 「다운로드」 하나 — 새 디자인은 옅은 강조 */
+#btnNew{background:var(--ui-accent-soft);border-color:transparent;color:var(--ui-accent);box-shadow:none}#btnNew:hover{background:#E2E9FD}
+/* 페이지 창 단추 줄: 「+ 새 페이지」만 보조 단추, 나머지는 투명 — 삭제는 올렸을 때만 빨강 */
+.pgbar .btn:not(#pgAdd){border-color:transparent;background:transparent;box-shadow:none}
+.pgbar .btn:not(#pgAdd):hover{background:var(--g100)}
+.pgbar .btn#pgDel{color:var(--g700)}.pgbar .btn#pgDel:hover{background:#FEECEC;color:var(--ui-danger)}
+/* 설정 선 아이콘 크기 */
+#setNav .snav .sti .ic{width:17px;height:17px}.setrow .sic{background:var(--g50);color:var(--brand)}.setrow .sic .ic{width:17px;height:17px}
+/* 속성 창: 이름이 두 줄로 갈라지지 않게 */
+.inspector .f > span,.inspector label > span:first-child{white-space:nowrap}

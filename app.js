@@ -820,7 +820,7 @@ function dragMove(e) {
       const wp = (bx, by, bw, bh) => { const cx = bx + bw / 2, cy = by + bh / 2, lx = ux * bw - bw / 2, ly = uy * bh - bh / 2; return [cx + lx * Math.cos(a) - ly * Math.sin(a), cy + lx * Math.sin(a) + ly * Math.cos(a)]; };
       const [ax0, ay0] = wp(o.x, o.y, o.w, o.h), [ax1, ay1] = wp(x, y, w, h); x += ax0 - ax1; y += ay0 - ay1; }
     el.x = r1(x); el.y = r1(y); el.w = r1(w); el.h = r1(h);
-    if (el.type === 'text' && (d === 'n' || d === 's') && el.sizing !== 'fixed') { el.sizing = 'fixed'; if (!drag.fixNote) { drag.fixNote = true; toast('높이를 고정했습니다 — 글이 넘치면 빨간 + 표시 (속성 "글 상자"에서 자동 높이로 되돌리기, 끌기점 두 번 누르면 글에 맞춤)'); } }
+    if (el.type === 'text') { if (d === 'n' || d === 's') el.fixedByUser = true; if (d.includes('e') || d.includes('w')) el.wByUser = true; } if (el.type === 'text' && (d === 'n' || d === 's') && el.sizing !== 'fixed') { el.sizing = 'fixed'; if (!drag.fixNote) { drag.fixNote = true; toast('높이를 고정했습니다 — 글이 넘치면 빨간 + 표시 (속성 "글 상자"에서 자동 높이로 되돌리기, 끌기점 두 번 누르면 글에 맞춤)'); } }
     if (el.type === 'text' && el.sizing === 'autow' && (d === 'e' || d === 'w')) el.sizing = '';
     if (el.type === 'text' && d.length === 2) scaleTextBy(el, o, el.w / o.w); /* 모서리 끌기 = 글자 크기도 함께 (캔바·미리캔버스와 같음) */
     if (el.type === 'path' && o.pts) { const sx = el.w / o.w, sy = el.h / o.h; el.pts = o.pts.map(pt => [r1(pt[0] * sx), r1(pt[1] * sy)]); renderCanvas(); } else if (el.type === 'text') { renderCanvas(); } else liveUpdate([el]);
@@ -996,10 +996,16 @@ function sizeSel(f) {
    템플릿·책 표지처럼 처음부터 크게 만든 자동 높이 상자: 누를 때 내용 높이로 줄이고, 가운데·아래 정렬이면 글자가 제자리에 있게 y도 옮김.
    높이를 끌어 바꾼 상자(고정)·책 본문 흐름 상자·휘어진·세로 글·글 바탕색이 있는 상자는 그대로 */
 function snugText(el) {
-  if (!el || el.type !== 'text' || el.sizing === 'fixed' || el.flowFrame || isWarp(el) || el.vertical || el.locked || el.bg || Number(el.cols) > 1) return false;
+  /* 11/24 2차: 책·템플릿이 처음부터 「고정 크기」로 만든 상자도 맞춤(사용자가 손잡이로 바꾼 상자만 그대로). 폭도 글자만큼 — 한 줄이면 「자동 너비」가 되어 쓰는 만큼 늘어남 */
+  if (!el || el.type !== 'text' || el.flowFrame || isWarp(el) || el.vertical || el.locked || el.bg || Number(el.cols) > 1 || el.fitText || Number(el.maxLines) > 0 || el.fixedByUser) return false;
   const d = $(`#canvas [data-id="${el.id}"]`); if (!d) return false;
-  const ky = el.sy && Number(el.sy) !== 100 ? Number(el.sy) / 100 : 1, { ch } = textContentH(d), nh = r1(Math.max(2, ch * ky)); if (nh >= el.h - 0.5) return false;
-  const dy = el.valign === 'middle' ? (el.h - nh) / 2 : el.valign === 'bottom' ? el.h - nh : 0; el.y = r1(el.y + dy); el.h = nh; return true;
+  const kx = el.sx && Number(el.sx) !== 100 ? Number(el.sx) / 100 : 1, ky = el.sy && Number(el.sy) !== 100 ? Number(el.sy) / 100 : 1; let changed = false;
+  let offL = null, offT = null; if (!Number(el.rot)) { try { const rg = document.createRange(); rg.selectNodeContents(d); const rr = rg.getBoundingClientRect(), br = d.getBoundingClientRect(), pm = kScale() * MM, pad = Number(el.pad) || 0; if (rr.width > 0) { offL = Math.max(0, (rr.left - br.left) / pm - pad); offT = Math.max(0, (rr.top - br.top) / pm - pad); } } catch (e) {} }
+  if (!el.wByUser && el.align !== 'justify' && el.sizing !== 'autow') { const w0 = d.style.width, h0 = d.style.minHeight; d.style.width = 'max-content'; const nat = r1(d.offsetWidth / MM * kx + 0.3); d.style.width = w0; d.style.minHeight = h0;
+    if (nat > 1 && nat < el.w - 1) { const dx = offL != null ? offL : el.align === 'center' ? (el.w - nat) / 2 : el.align === 'right' ? el.w - nat : 0; el.x = r1(el.x + dx); el.w = nat; el.sizing = 'autow'; d.style.left = el.x + 'mm'; d.style.width = el.w + 'mm'; changed = true; } }
+  const { ch } = textContentH(d), nh = r1(Math.max(2, ch * ky));
+  if (nh < el.h - 0.5) { const dy = offT != null ? Math.min(offT, el.h - nh) : el.valign === 'middle' ? (el.h - nh) / 2 : el.valign === 'bottom' ? el.h - nh : 0; el.y = r1(el.y + dy); el.h = nh; if (el.sizing === 'fixed') delete el.sizing; d.style.height = ''; d.style.top = el.y + 'mm'; d.style.minHeight = nh + 'mm'; changed = true; }
+  return changed;
 }
 // 글 상자 높이 맞추기: 위쪽 정렬이면 내용 높이로(늘고 줄어듦), 중앙·아래 정렬이면 내용보다 작을 때만 늘림
 function fitTextH(d, el, growOnly) { if (el.sizing === 'fixed') return null; const mh = d.style.minHeight; d.style.minHeight = '0'; const ch = r1(d.offsetHeight / MM * (el.sy && Number(el.sy) !== 100 ? Number(el.sy) / 100 : 1)); d.style.minHeight = mh; const top = !el.valign || el.valign === 'top'; if (top && !growOnly ? Math.abs(ch - el.h) > 0.05 : ch > el.h + 0.05) return Math.max(2, ch); return null; }
@@ -2805,10 +2811,13 @@ function openSettings(tab) {
 }
 const SET_TABS = [['view', '🖥', '화면 · 편집'], ['video', '🎬', '영상'], ['save', '💾', '저장 · 이 PC'], ['dojang', '🥋', '도장 · 브랜드'], ['print', '🖨', '출력 · AI'], ['clean', '🧹', '지우기 · 정리'], ['about', 'ⓘ', '정보 · 도움']];
 /* 설정 줄마다 그림(팀장님 11/23 「설정도 사용자 경험 고려해 고도화」 · UX 전문가 검토: 그림·지금 상태·찾기·마지막 칸 기억·줄 전체 누르기·처음대로 모으기) */
+/* 설정 아이콘: 이모지 대신 프로그램의 선 아이콘 (11/24 고급스럽게 2차 — 이모지는 PC마다 모양이 달라 어수선) */
+const SET_TAB_SVG = { view: 'i-fit', video: 'i-video', save: 'i-save', dojang: 'i-award', print: 'i-print', clean: 'i-clean', about: 'i-help' };
+const SET_SVG = { guides: 'i-fit', rulers: 'i-ruler', snap: 'i-magnet', panels: 'i-spread', keys: 'i-text', pgm: 'i-tv', skim: 'i-eye', tlonly: 'i-video', vshare: 'i-upload', tlh: 'i-down', sync: 'i-cloud', versions: 'i-clock', local: 'i-pc', dojang: 'i-award', brandreset: 'i-theme', rules: 'i-cal', calendar: 'i-cal', print: 'i-print', ai: 'i-ai', recent: 'i-clean', blocks: 'i-elems', blocksdel: 'i-del', manual: 'i-book', help: 'i-help', vkeys: 'i-video', reload: 'i-refresh', resetall: 'i-undo', pc: 'i-pc' };
 const SET_IC = { guides: '📐', rulers: '📏', snap: '🧲', panels: '↔️', keys: '⌨️', pgm: '🖥', skim: '👆', tlonly: '🎬', vshare: '📤', tlh: '↕️', sync: '☁️', versions: '🕘', local: '💻', dojang: '🥋', brandreset: '🎨', rules: '📅', calendar: '🗓', print: '🖨', ai: '🤖', recent: '🧹', blocks: '🧩', blocksdel: '🗑', manual: '📘', help: '❓', vkeys: '🎞', reload: '🔄', resetall: '↩️', pc: '🏷' };
 const setOk = (on, t1, t0) => `<em class="sst ${on ? 'ok' : 'no'}">${on ? '● ' + t1 : '○ ' + t0}</em>`;
 async function setTabHTML(k) {
-  const ic = id => `<i class="sic">${SET_IC[id] || '•'}</i>`;
+  const ic = id => SET_SVG[id] ? `<i class="sic"><svg class="ic"><use href="#${SET_SVG[id]}"/></svg></i>` : `<i class="sic">${SET_IC[id] || '•'}</i>`;
   const sw = (id, on, t, d) => `<label class="setrow">${ic(id)}<span><b>${t}</b>${d ? `<small>${d}</small>` : ''}</span><input type="checkbox" class="sw" data-set="${id}" ${on ? 'checked' : ''}></label>`;
   const btn = (act, t, d, label, st, danger) => `<div class="setrow act${danger ? ' danger' : ''}" title="누르면 ${esc(label || '열기')}">${ic(act)}<span><b>${t}</b>${d ? `<small>${d}</small>` : ''}</span>${st || ''}<button class="btn sm${danger ? ' danger' : ''}" data-sa="${act}">${label || '열기'} ›</button></div>`;
   let h = '';
@@ -2828,7 +2837,7 @@ async function renderSettings() {
   const nav = $('#setNav'), main = $('#setMain'); if (!nav) return;
   if (!nav.querySelector('#setQ')) nav.innerHTML = `<input type="search" id="setQ" placeholder="🔍 설정 찾기" title="예: 프린터, 자석, 동기화, 단축키" autocomplete="off"><div class="snav" role="tablist"></div>`;
   const q = setQ.trim().toLowerCase(), tl = nav.querySelector('.snav');
-  tl.innerHTML = SET_TABS.map(([k, i, t]) => `<button data-st="${k}" role="tab" aria-selected="${!q && setTab === k}" class="${!q && setTab === k ? 'on' : ''}" title="${t}"><span class="sti">${i}</span><span class="stx">${t}</span></button>`).join('');
+  tl.innerHTML = SET_TABS.map(([k, i, t]) => `<button data-st="${k}" role="tab" aria-selected="${!q && setTab === k}" class="${!q && setTab === k ? 'on' : ''}" title="${t}"><span class="sti">${SET_TAB_SVG[k] ? `<svg class="ic"><use href="#${SET_TAB_SVG[k]}"/></svg>` : i}</span><span class="stx">${t}</span></button>`).join('');
   if (!q) { main.innerHTML = await setTabHTML(setTab); return; }
   /* 찾기: 모든 칸에서 이름·설명이 맞는 줄만 */
   let out = ''; for (const [k, i, t] of SET_TABS) { const box = document.createElement('div'); box.innerHTML = await setTabHTML(k); const rows = [...box.querySelectorAll('.setrow')].filter(r => r.textContent.toLowerCase().includes(q)); if (rows.length) out += `<h4 class="sqh"><button class="btn sm" data-st="${k}">${i} ${t} ›</button></h4>` + rows.map(r => r.outerHTML).join(''); }
