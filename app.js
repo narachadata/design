@@ -610,7 +610,8 @@ function renderThumbs() {
 /* 너비만 바뀌었을 때: 다시 그리지 않고 미리보기 배율만 맞춤 (끌어서 너비 조절·창 크기 바꾸기) */
 function rescaleThumbs() { const box = $('#thumbs'); if (!box || !doc) return; const tb0 = box.querySelector('.thumb .tbox'), wpx = (tb0 && tb0.clientWidth) || (box.clientWidth - 14) || 200, k = wpx / (doc.w * MM), hh = doc.h * MM * k + 'px'; box.querySelectorAll('.thumb .tbox').forEach(b => { b.style.height = hh; const sh = b.querySelector('.sheet'); if (sh) sh.style.transform = `scale(${k})`; }); }
 function renderAll() { updDocSize(); renderCanvas(); renderSide(); renderInspector(); if (tlOn()) { if (!tl.playing) tlHidePrev(); renderTimeline(); } }
-function rerender(opts) { opts = opts || {}; renderCanvas(); if (!opts.noPanel) renderInspector(); clearTimeout(thumbTimer); thumbTimer = setTimeout(() => { if (sideTab === 'pages') renderThumbs(); else if (sideTab === 'layers') renderSide(); if (tlOn()) { if (!tl.playing) tlHidePrev(); renderTimeline(); } }, 150); }
+function syncImgPrev() { const pi = $('#imgPrevImg'), e1 = selEls()[0]; if (pi && e1 && e1.type === 'image') { pi.style.filter = FX.imageFilter(e1).replace(/^filter:|;$/g, '') || 'none'; pi.style.transform = e1.flip ? 'scaleX(-1)' : 'none'; } }
+function rerender(opts) { opts = opts || {}; renderCanvas(); syncImgPrev(); if (!opts.noPanel) renderInspector(); clearTimeout(thumbTimer); thumbTimer = setTimeout(() => { if (sideTab === 'pages') renderThumbs(); else if (sideTab === 'layers') renderSide(); if (tlOn()) { if (!tl.playing) tlHidePrev(); renderTimeline(); } }, 150); }
 function goto(i) { endEdit(); cur = clamp(i, 0, doc.pages.length - 1); sel = []; selDay = null; cellSel = null; renderAll(); }
 function select(ids) { endEdit(); sel = ids.filter(id => find(id)); if (sel.length) { tl.selIt = null; tl.selAu = false; tl.selScene = false; } selDay = null; if (cellSel && !sel.includes(cellSel.id)) cellSel = null; renderOverlay(); renderInspector(); if (sideTab === 'layers' || (sideTab === 'video' && ['text', 'motion', 'trans'].includes(vTab))) renderSide(); updateToolbarState(); }
 let groupTipShown = false;
@@ -3733,7 +3734,7 @@ function renderInspector() {
     ${el.role ? `<p class="hint">역할: ${el.role}${el.month ? ' · ' + el.month + '월' : ''} (AI 문구·테마 적용 대상)</p>` : ''}` + geo;
   } else if (el.type === 'image') {
     const f = el.fx || {};
-    h += `<h3>그림</h3><div class="imgprev">${src(el.src) ? `<img src="${src(el.src)}" alt="">` : '<span class="hint">그림 없음</span>'}</div>
+    h += `<h3>그림</h3><div class="imgprev">${src(el.src) ? `<img id="imgPrevImg" src="${src(el.src)}" alt="" style="${FX.imageFilter(el)}transform:${el.flip ? 'scaleX(-1)' : 'none'}">` : '<span class="hint">그림 없음</span>'}</div>
     <div class="row"><label class="btn sm">바꾸기(파일)<input type="file" accept="image/*" id="imgReplace" hidden></label><button class="btn sm" id="imgLib">사진 보관함</button><button class="btn sm ai" id="imgAI" title="흰 배경 지우기·비슷하게 새로 그리기·말로 바꾸기">✨ 사진 AI</button></div>
     <div class="row" style="margin-top:6px"><button class="btn sm primary" id="imgEdit" ${src(el.src) ? '' : 'disabled'}>편집기 (배경 지우기·브러시·자르기)</button>${el.srcOrig ? '<button class="btn sm" id="imgOrig">원본으로</button>' : ''}</div>
     <h3>필터 <small>포토샵 조정</small></h3><div class="pk fthumbs">${(() => { const u = src(el.src); return FX.IMG_PRESETS.map(([id, n, fx]) => { const on = JSON.stringify(el.fx || {}) === JSON.stringify(fx) || (id === 'none' && !Object.keys(el.fx || {}).length); return `<button type="button" class="pk-b${on ? ' on' : ''}" data-imgpreset="${id}" title="${n}"><span class="pk-ft">${u ? `<img src="${esc(u)}" alt="" style="${FX.imageFilter({ fx })}">` : ''}</span><span class="pk-t">${n}</span></button>`; }).join(''); })()}</div>
@@ -3944,7 +3945,7 @@ $('#inspector').addEventListener('input', e => {
   if (el.type === 'text' && k === 'size' && (!el.valign || el.valign === 'top') && !(el.warp && el.warp !== 'none')) el.h = 1;  /* 그릴 때 내용 높이로 다시 늘어남 */
   if (el.type === 'cal' && ['month', 'year', 's.weekStart', 's.rows'].includes(k)) { const grid = Object.keys(el.cells || {}).filter(x => !x.startsWith('d')); if ((el.merges && el.merges.length) || el.rowH || grid.length) { delete el.merges; delete el.rowH; grid.forEach(x => delete el.cells[x]); cellSel = null; toast('칸 배치가 바뀌어 합친 칸·행 높이·빈 칸 글자를 초기화했습니다 (날짜 칸 색·글자는 날짜를 따라갑니다)'); } }
   if (el.type === 'text') lastTextStyle = { font: el.font, size: el.size, weight: el.weight, color: el.color };
-  renderCanvas();
+  renderCanvas(); syncImgPrev();
 });
 // 슬라이더·숫자 칸·다이얼·패드가 같은 값을 보여 주게 맞춤
 function syncCtl(t) {
@@ -3954,7 +3955,7 @@ function syncCtl(t) {
   const pad = box.querySelector('.xypad'); if (pad) { const [kx, ky] = pad.dataset.xy.split(','), r = Number(pad.dataset.r); const vx = Number(box.querySelector(`input[data-k="${kx}"]`).value), vy = Number(box.querySelector(`input[data-k="${ky}"]`).value); const dot = pad.querySelector('i'); dot.style.left = Math.max(0, Math.min(100, 50 + vx / r * 50)) + '%'; dot.style.top = Math.max(0, Math.min(100, 50 + vy / r * 50)) + '%'; }
 }
 // 다이얼·패드 끌기, 빠른 버튼, 이름 두 번 눌러 기본값
-function ctlSet(k, v) { const el = selEls()[0]; if (!el) return; setK(el, k, v); const inp = $(`#inspector input.num[data-k="${k}"]`); if (inp) { inp.value = Math.round(v * 1000) / 1000; syncCtl(inp); } renderCanvas(); }
+function ctlSet(k, v) { const el = selEls()[0]; if (!el) return; setK(el, k, v); const inp = $(`#inspector input.num[data-k="${k}"]`); if (inp) { inp.value = Math.round(v * 1000) / 1000; syncCtl(inp); } renderCanvas(); syncImgPrev(); }
 $('#inspector').addEventListener('pointerdown', e => {
   const dial = e.target.closest('.dial'), pad = e.target.closest('.xypad'); if (!dial && !pad) return; e.preventDefault();
   const tgt = dial || pad; try { tgt.setPointerCapture(e.pointerId); } catch (err) {} tgt.classList.add('drag');
