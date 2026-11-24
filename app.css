@@ -2130,3 +2130,6 @@ body.zooming #textBar,body.zooming .ovl .h,body.zooming .ovl .rotline{opacity:0}
 .attfr{margin:6px 0 4px;padding:8px 10px;border:1px dashed #cfd4dd;border-radius:10px;display:flex;flex-direction:column;gap:5px}.attfr.on{border:1.5px solid #2f5bea;background:#eef3ff}.attfr small{font-size:11.5px;color:#4a5368}
 .acctno{margin:6px 0 0;padding:7px 10px;border-radius:8px;background:#fdecec;border:1px solid #f3b4b4;font-size:12.5px;color:#7a1f1f;line-height:1.5}
 .acctsync p{margin:4px 0;font-size:12.5px;line-height:1.55}.acctmail-in{color:#1f7a45}
+.stage .pagenav #pnFit.pn-fit{width:auto;padding:0 9px 0 7px;gap:3px;display:inline-flex;align-items:center}.stage .pagenav #pnFit .pn-lb{font-size:12px;font-weight:600}.stage .pagenav #pnFit:not(.on){color:var(--ui-accent,#2f5bea)}
+.stage.compact .pagenav #pnFit .pn-lb,.pagenav.tiny #pnFit .pn-lb{display:none}
+.stage .pagenav #pnFit.pn-fit.on{color:var(--ui-ink2,#3f4756);background:none}

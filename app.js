@@ -502,7 +502,7 @@ function fitCanvas() {
   const c = $('#canvas'); c.style.transform = `scale(${k})`; c.dataset.k = k; const gh = $('#ghost'); if (gh) gh.style.transform = `scale(${k})`;
   const wrap = $('#canvasWrap'); wrap.style.width = (doc.w * MM * k) + 'px'; wrap.style.height = (doc.h * MM * k) + 'px';
   const o = $('#ovl'); o.style.transform = `scale(${k})`; o.style.setProperty('--k', k); o.style.width = (doc.w * MM) + 'px'; o.style.height = (doc.h * MM) + 'px';
-  const z = $('#zoomPct'); if (z) z.textContent = Math.round(k * 100) + '%';
+  const z = $('#zoomPct'); if (z) z.textContent = Math.round(k * 100) + '%'; { const pf = $('#pnFit'); if (pf) { pf.classList.toggle('on', !zoom); pf.setAttribute('aria-pressed', String(!zoom)); pf.title = (zoom ? `지금 ${Math.round(k * 100)}% — 누르면 ` : '') + '화면에 딱 맞게 보기 — 편집 화면 크기에 맞춰 쪽 전체가 보이게 (⌘0 · Ctrl+0)'; } }
   try { if (showRulers()) requestAnimationFrame(drawRulers); } catch (e) {}
 }
 const SAFE = 3;
@@ -1134,10 +1134,13 @@ $('#scroller').addEventListener('pointerdown', e => { if (e.button !== 0 || spac
 document.addEventListener('pointermove', e => { if (!panDrag) return; const sc = $('#scroller'); sc.scrollLeft = panDrag.sl - (e.clientX - panDrag.x); sc.scrollTop = panDrag.st - (e.clientY - panDrag.y); });
 document.addEventListener('pointerup', () => { if (panDrag) { panDrag = null; $('#stage').classList.remove('grabbing'); } });
 // Ctrl+0 화면에 맞춤 · Ctrl+1 실제 크기(100%) · Ctrl+= 확대 · Ctrl+- 축소
-document.addEventListener('keydown', e => { if (!(e.ctrlKey || e.metaKey) || e.altKey || (e.target.matches && e.target.matches('input,textarea,select')) || document.querySelector('dialog[open]')) return; if (tlOn() && /^[=+\-]$/.test(e.key)) return; const k = e.key; if (k === '0') { e.preventDefault(); zoom = 0; fitCanvas(); } else if (k === '1') { e.preventDefault(); zoomAt(1); } else if (k === '=' || k === '+') { e.preventDefault(); zoomAt((zoom || kScale()) * 1.25); } else if (k === '-') { e.preventDefault(); zoomAt((zoom || kScale()) / 1.25); } }, true);
+document.addEventListener('keydown', e => { if (!(e.ctrlKey || e.metaKey) || e.altKey || (e.target.matches && e.target.matches('input,textarea,select')) || document.querySelector('dialog[open]')) return; if (tlOn() && /^[=+\-]$/.test(e.key)) return; const k = e.key; if (k === '0') { e.preventDefault(); zoomToFit(); } else if (k === '1') { e.preventDefault(); zoomAt(1); } else if (k === '=' || k === '+') { e.preventDefault(); zoomAt((zoom || kScale()) * 1.25); } else if (k === '-') { e.preventDefault(); zoomAt((zoom || kScale()) / 1.25); } }, true);
 $('#zoomIn').onclick = () => zoomAt((zoom || kScale()) * 1.2);
 $('#zoomOut').onclick = () => zoomAt((zoom || kScale()) / 1.2);
-$('#zoomFit').onclick = () => { zoom = 0; fitCanvas(); };
+/* 화면에 딱 맞게 (위 막대 %·아래 막대 ⛶맞춤·⌘0 — 11/24 팀장님 「네비게이션에 FIT하게 볼 수 있는 단추」): 배율을 맞춤으로 되돌리고 스크롤도 처음 자리로 */
+function zoomToFit() { zoom = 0; fitCanvas(); const sc = $('#scroller'); if (sc) { sc.scrollLeft = 0; sc.scrollTop = 0; } }
+$('#zoomFit').onclick = zoomToFit;
+{ const pf = $('#pnFit'); if (pf) pf.onclick = () => { const was = zoom; zoomToFit(); if (was) toast('화면에 딱 맞게 보기'); }; }
 $('#pnTl').onclick = () => tlShow(!tlOn());
 $('#pnSpread').onclick = () => { try { localStorage.setItem('naracal-view', viewSpread() ? 'single' : 'spread'); } catch (e) {} zoom = 0; renderCanvas(); toast(viewSpread() ? '📖 펼침면 — 옆 쪽을 누르면 그 쪽' : '한 쪽 보기'); };
 $('#pnPv').onclick = () => { pvMode = !pvMode; $('#stage').classList.toggle('pvmode', pvMode); renderCanvas(); toast(pvMode ? '👁 미리 보기 (다시 누르면 돌아옴)' : '편집 보기'); }; PAGER_GO.main = i => goto(i);
@@ -8309,6 +8312,7 @@ function setFold(side, on, quiet) {
   const wrap0 = $('#canvasWrap'), r0 = wrap0 && !quiet ? wrap0.getBoundingClientRect() : null;
   const b = document.body.classList, sides = side === 'both' ? ['l', 'r'] : [side]; sides.forEach(k => b.toggle('fold-' + k, on == null ? !b.contains('fold-' + k) : !!on));
   const f = foldState(); try { localStorage.setItem('naracal-fold', JSON.stringify(f)); } catch (e) {}
+  if (!quiet) { zoom = 0; const sc = $('#scroller'); if (sc) { sc.scrollLeft = 0; sc.scrollTop = 0; } }  /* 편집 화면만 켜고 끌 때 늘 새 넓이에 딱 맞게 (11/24 팀장님) — 확대해 둔 배율은 풂 */
   document.querySelectorAll('.rsz-fold').forEach(x => { const l = x.dataset.fold === 'l', folded = l ? f.l : f.r; x.textContent = (l ? !folded : folded) ? '‹' : '›'; x.title = (folded ? (l ? '왼쪽 창 펼치기' : '오른쪽 속성 창 펼치기') : (l ? '왼쪽 창 접기' : '오른쪽 속성 창 접기')) + ' (양쪽 함께: ⌘\\ · Ctrl+\\)'; });
   const pf = document.getElementById('pnFocus'); if (pf) { pf.classList.toggle('on', f.l && f.r); pf.setAttribute('aria-pressed', String(f.l && f.r)); }
   if (r0 && wrap0.animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) { fitCanvas(); const r1 = wrap0.getBoundingClientRect(); if (r1.width > 0) wrap0.animate([{ transformOrigin: '0 0', transform: `translate(${r0.left - r1.left}px,${r0.top - r1.top}px) scale(${r0.width / r1.width})` }, { transformOrigin: '0 0', transform: 'none' }], { duration: 240, easing: 'cubic-bezier(.2,0,0,1)' }); requestAnimationFrame(() => rescaleThumbs()); }
@@ -8317,7 +8321,7 @@ function setFold(side, on, quiet) {
 }
 (function () {
   [['rszL', 'l'], ['rszR', 'r']].forEach(([id, k]) => { const h = document.getElementById(id); if (!h) return; const b = document.createElement('button'); b.type = 'button'; b.className = 'rsz-fold'; b.dataset.fold = k; b.addEventListener('pointerdown', e => e.stopPropagation()); b.addEventListener('dblclick', e => e.stopPropagation()); b.onclick = e => { e.stopPropagation(); setFold(k); }; h.appendChild(b); });
-  const pv = document.getElementById('pnPv'); if (pv) { const b = document.createElement('button'); b.className = 'btn icon'; b.id = 'pnFocus'; b.title = '편집 화면만 — 왼쪽·오른쪽 창을 함께 접기/펼치기 (⌘\\ · Ctrl+\\)'; b.setAttribute('aria-pressed', 'false'); b.innerHTML = '<svg class="ic" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>'; b.onclick = () => { const f = foldState(); setFold('both', !(f.l && f.r)); }; pv.after(b); }
+  const pv = document.getElementById('pnPv'); if (pv) { const b = document.createElement('button'); b.className = 'btn icon'; b.id = 'pnFocus'; b.title = '편집 화면만 — 왼쪽·오른쪽 창을 함께 접기/펼치기 (⌘\\ · Ctrl+\\)'; b.setAttribute('aria-pressed', 'false'); b.innerHTML = '<svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7.5 5v14M16.5 5v14" stroke-dasharray="2 2"/><path d="M10.5 12h3"/></svg>';  /* 양옆 창(점선)을 접고 가운데만 — 맞춤(⛶)과 다른 그림 */ b.onclick = () => { const f = foldState(); setFold('both', !(f.l && f.r)); }; pv.after(b); }
   document.addEventListener('keydown', e => { if (!(e.metaKey || e.ctrlKey) || e.altKey || !(e.code === 'Backslash' || e.code === 'IntlYen' || e.key === '\\' || e.key === '₩')) return; /* 한글 자판은 ₩로 들어오기도 함 */ const t = e.target; if (t && t.closest && t.closest('input,textarea,[contenteditable="true"]')) return; e.preventDefault(); const f = foldState(); setFold('both', !(f.l && f.r)); });
   let st = { l: false, r: false }; try { st = Object.assign(st, JSON.parse(localStorage.getItem('naracal-fold') || '{}')); } catch (e) {}
   document.body.classList.toggle('fold-l', !!st.l); document.body.classList.toggle('fold-r', !!st.r); setFold('l', !!st.l, true);
