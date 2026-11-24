@@ -162,9 +162,20 @@ NC.store = (function () {
   async function connectFolder() {
     if (!state.dirSupported) throw new Error('이 브라우저는 폴더 연결을 지원하지 않습니다 (Chrome, Edge 권장).');
     const h = await window.showDirectoryPicker({ id: 'naracha-sync', mode: 'readwrite' });
+    return useFolder(h);
+  }
+  async function useFolder(h) {
     state.dir = h; state.dirName = h.name; state.setMod = 0; state.setBase = {}; try { localStorage.removeItem(BASE_KEY); } catch (e) {} // 다른 폴더: 기준 새로
     await idbSet('syncDir', h);
     return h;
+  }
+  /* 고른 폴더가 다른 PC에서 쓰던 공방 폴더인지 (같은 구글 계정 확인용): 설정 파일의 저장한 PC·때, 맨 위 문서·폴더 수, 안에 나라차디자인공방 폴더가 있는지 */
+  async function folderInfo() {
+    const out = { name: state.dirName, set: null, docs: 0, folders: 0, child: null };
+    if (!state.dir) return out;
+    try { for await (const [n, h] of state.dir.entries()) { if (h.kind === 'file' && /\.design\.json$/i.test(n)) out.docs++; else if (h.kind === 'directory' && !n.startsWith('.')) { out.folders++; if (n === '나라차디자인공방') out.child = h; } } } catch (e) {}
+    try { const f = await (await state.dir.getFileHandle(SET_FILE)).getFile(); const j = JSON.parse(await f.text()); out.set = { by: (j && j.savedBy) || '', at: (j && j.updatedAt) || f.lastModified }; } catch (e) {}
+    return out;
   }
   async function reconnectFolder() {
     try {
@@ -329,5 +340,5 @@ NC.store = (function () {
 
   return { ensureDir, writeBlobAt, listFiles, snapshot, listSnapshots, readSnapshot, state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
     writeCopy, pcName, setPcName, adopt, descends, pcId: () => pc().id,
-    connectFolder, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, findDocById, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
+    connectFolder, useFolder, folderInfo, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, findDocById, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
 })();

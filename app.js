@@ -1278,7 +1278,7 @@ function newsEngine() {
   newsReady = new Promise((res, rej) => {
     const f = document.createElement('iframe'); f.id = 'newsFrame'; f.className = 'newsframe'; f.title = '소식지 내용 편집'; f.src = NC.news.ENGINE;
     const to = setTimeout(() => rej(new Error('소식지 엔진을 열지 못했습니다 (인터넷 연결을 확인하세요)')), 40000);
-    f.onload = () => { clearTimeout(to); try { const w = f.contentWindow; if (typeof w.buildPages !== 'function') throw new Error('소식지 엔진이 아닙니다'); newsSkin(w); newsWin = w; res(w); if (sideTab === 'news') renderSide(); if (newsMode) renderInspector(); } catch (e) { rej(e); } };
+    f.onload = () => { clearTimeout(to); try { const w = f.contentWindow; if (typeof w.buildPages !== 'function') throw new Error('소식지 엔진이 아닙니다'); newsSkin(w); newsAutoKey(w); newsWin = w; res(w); if (sideTab === 'news') renderSide(); if (newsMode) renderInspector(); } catch (e) { rej(e); } };
     $('#stage').appendChild(f);
   });
   newsReady.catch(e => { newsReady = null; const f = $('#newsFrame'); if (f) f.remove(); toast(e.message, true); });
@@ -1357,7 +1357,7 @@ function renderNewsSide(body) {
     <button class="nw-it" data-go="secBasic"><span class="nw-ic"><svg class="ic"><use href="#i-settings"/></svg></span><span class="nw-t">기본 설정<small>호 · 비율 · 템플릿 · 표지 문구</small></span></button>
     ${NEWS_NAV.map(([id, t]) => `<div class="nw-it pg${on(id) ? '' : ' off'}" data-go="${id}"><label class="nw-sw" title="이 쪽 넣기/빼기"><input type="checkbox" data-pg="${id}" ${on(id) ? 'checked' : ''}><i></i></label><span class="nw-t">${t}</span></div>`).join('')}
     <button class="nw-it" data-go="secArchive"><span class="nw-ic"><svg class="ic"><use href="#i-folder"/></svg></span><span class="nw-t">지난 호 보관함<small>보관 · 클라우드 · 다른 PC에서 이어서</small></span></button>
-    <button class="nw-it" data-go="settingsCard"><span class="nw-ic"><svg class="ic"><use href="#i-link"/></svg></span><span class="nw-t">데이터 연결<small>나라차 프로그램 접속키</small></span></button>
+    <button class="nw-it" data-go="settingsCard"><span class="nw-ic"><svg class="ic"><use href="#i-link"/></svg></span><span class="nw-t">데이터 연결<small>관리프로그램 키를 저절로 씀</small></span></button>
   </div>
   <p class="hint">[11/3 관장님 결정] 소식지 <b>내용</b>(일정 · 명단 · 사진 · 덕목)은 이 공방의 <b>내용 채우기</b>에서 고칩니다. 화면 안에 들어 있는 것이 소식지 프로그램 그 자체라 고친 내용은 소식지에 그대로 저장됩니다. → <b>공방 디자인으로 가져오기</b>로 모든 쪽을 가져와 다듬으세요. <b>공방에서 다듬은 글꼴·색·위치는 소식지 프로그램으로 돌아가지 않습니다</b>(한쪽 방향).</p>
   <button class="btn sm full" id="nwOpenProg">소식지 프로그램 따로 열기 ↗</button>
@@ -4112,6 +4112,51 @@ async function openSaveDialog() {
   await renderSaveDialog();
   if (!d.open) d.showModal();
 }
+/* 처음 연결 안내 (팀장님 11/24 「처음 여는 PC에서 어떤 구글 계정으로 연결해야 할지 가이드」)
+   공방 자료는 구글 드라이브 폴더 하나에 모임 → PC마다 같은 계정이어야 함. 브라우저는 계정 이메일을 알 수 없으므로
+   ① 어느 계정인지 정하는 법 ② 이 PC의 드라이브 앱 계정 확인하는 법 ③ 폴더를 고르면 다른 PC에서 쓰던 폴더인지 공방이 확인(connectFolderChecked) */
+function openAcctGuide(first) {
+  try { localStorage.setItem('naracal-acct-guide', String(Date.now())); } catch (e) {}
+  let d = $('#dlgAcct'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgAcct'; d.className = 'acctdlg'; document.body.appendChild(d); }
+  const mac = /Mac/i.test(navigator.platform || navigator.userAgent);
+  const how = mac
+    ? `<b>Mac</b>: 화면 맨 위 메뉴 막대의 <b>구글 드라이브 아이콘</b>(삼각형 모양)을 누르면 오른쪽 위 동그란 계정 사진 옆에 이메일이 보입니다. Finder 왼쪽 <b>위치</b>의 「Google Drive」에 마우스를 올려도 보입니다.`
+    : `<b>Windows</b>: 작업 표시줄 오른쪽 <b>^</b> 안의 <b>구글 드라이브 아이콘</b>을 누르면 위쪽 계정 사진 옆에 이메일이 보입니다. 파일 탐색기의 <code>G:</code> 드라이브(Google Drive)가 그 계정의 드라이브입니다.`;
+  d.innerHTML = `<div class="dhead"><h2>👤 어떤 구글 계정으로 연결할까요? <small>처음 한 번 · 모든 PC가 같은 자료를 쓰려면</small></h2><button class="btn sm" data-close>닫기</button></div>
+  <div class="dbody">
+    <div class="acctpic"><div class="ap-pc"><i>💻</i><b>도장 PC</b></div><span class="ap-ln"></span><div class="ap-cl"><svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><path d="M9 22h17a7 7 0 0 0 .8-13.95A9 9 0 0 0 9.6 7.2 7.5 7.5 0 0 0 9 22z" fill="#2f5bea"/><circle cx="17" cy="14.5" r="3.4" fill="#fff"/><path d="M11.6 21.5a5.6 5.6 0 0 1 10.8 0z" fill="#fff"/></svg><b>같은 구글 계정 하나</b><small>내 드라이브 › 나라차디자인공방<br>문서 · 설정 · 자료실 · AI 결과함</small></div><span class="ap-ln"></span><div class="ap-pc"><i>🏠</i><b>집 PC · 노트북</b></div></div>
+    <p class="acctwarn">⚠️ PC마다 <b>다른 계정</b>으로 연결하면 자료가 두 곳에 따로 쌓입니다 — 모든 PC가 <b>같은 계정</b>이어야 합니다.</p>
+    <ol class="svsteps">
+      <li><span>1</span><div><b>어느 계정인지 정하기</b><small>다른 PC에서 이미 공방을 쓰고 있다면 → <b>그 PC의 구글 드라이브 앱에 로그인한 계정</b>입니다(아래 2번 방법으로 그 PC에서 확인).<br>처음 쓰는 거라면 → <b>도장 공용 구글 계정</b>(관리프로그램 구글 시트가 있는 계정)으로 정하면 자료가 한곳에 모입니다.</small></div></li>
+      <li><span>2</span><div><b>이 PC가 그 계정인지 확인</b><small>${how}<br>다른 계정이면 드라이브 아이콘 → ⚙ 설정 → <b>환경설정 → 계정 추가</b>(또는 연결 해제 후 다시 로그인)로 맞는 계정에 로그인하세요. 드라이브 앱이 없으면 「Google Drive 데스크톱」을 설치합니다.</small></div></li>
+      <li><span>3</span><div><b>저장 폴더 고르기</b><small><b>내 드라이브 → 나라차디자인공방</b> 폴더를 고릅니다. 공방이 폴더 안을 보고 「✅ ○○ PC에서 쓰던 폴더입니다」 또는 「비어 있는 폴더입니다」를 알려 줍니다 — 다른 PC에서 쓰고 있는데 비어 있다고 나오면 계정이 다른 것입니다.</small><button class="btn primary" data-ac="dir">☁️ 저장 폴더 고르기</button></div></li>
+    </ol>
+    <details class="bk-more"><summary>ⓘ 크롬(브라우저) 계정·관리프로그램 접속키는?</summary><div>저장에는 크롬 로그인 계정이 쓰이지 않습니다(구글 드라이브 앱의 계정만). 다만 크롬 오른쪽 위 프로필도 같은 계정이면 Gemini 채팅·구글 드라이브 웹이 같은 계정으로 열려 편합니다.<br>관리프로그램 접속키는 이 브라우저에서 관리프로그램에 한 번 로그인하면 공방·소식지가 그 키를 <b>저절로</b> 씁니다(따로 넣지 않아도 됨).</div></details>
+    <div class="acctfoot">${first ? '<span class="hint" style="margin:0">언제든 ⚙ 설정 → 저장 설정에서 다시 볼 수 있어요</span>' : ''}<button class="btn" data-close>${first ? '나중에' : '닫기'}</button></div>
+  </div>`;
+  d.querySelectorAll('[data-close]').forEach(b => b.onclick = () => d.close());
+  d.querySelector('[data-ac="dir"]').onclick = async () => { try { const ok = await connectFolderChecked(); if (ok) d.close(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } };
+  if (!d.open) d.showModal();
+}
+/* 폴더를 고르고 → 안을 보고(다른 PC에서 쓰던 폴더인지) → 맞으면 연결 마무리. 연결했으면 true */
+async function connectFolderChecked() {
+  await store.connectFolder();
+  let c = await store.folderInfo();
+  const has = x => !!(x.set || x.docs);
+  if (!has(c) && c.child) {
+    if (await confirmBtns(`고른 「${c.name}」 폴더 안에 「나라차디자인공방」 폴더가 있습니다.\n\n확인: 「나라차디자인공방」으로 연결 (권장)\n취소: 고른 「${c.name}」 그대로`)) { await store.useFolder(c.child); c = await store.folderInfo(); }
+  }
+  if (!has(c)) {
+    const ok = await confirmBtns(`「${c.name}」 폴더에는 아직 공방 자료가 없습니다.\n\n• 공방을 처음 쓰는 거라면 이 폴더로 시작하면 됩니다.\n• 다른 PC에서 이미 쓰고 있다면 이 PC의 구글 드라이브 앱이 다른 계정일 수 있어요 — 「연결하지 않기」를 누르면 계정 확인 안내를 보여 드립니다.\n\n확인: 이 폴더로 새로 시작\n취소: 연결하지 않기 (계정 먼저 확인)`);
+    if (!ok) { await store.disconnectFolder(); updateSaveBadge(); toast('연결하지 않았습니다 — 구글 드라이브 앱의 계정을 확인한 뒤 다시 고르세요'); if (!$('#dlgAcct[open]')) openAcctGuide(); return false; }
+  }
+  await afterFolderReady(); updateSaveBadge();
+  const when = t => { try { return new Date(t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
+  if (c.set && c.set.by && c.set.by !== store.pcName()) toast(`✅ 「${c.set.by}」에서 쓰던 폴더입니다 (${when(c.set.at)} 저장) — 같은 구글 계정이 맞습니다`);
+  else if (has(c)) toast(`✅ 공방 자료가 있는 폴더입니다 (문서 ${c.docs}개${c.folders ? ` · 폴더 ${c.folders}개` : ''}) — 문서와 설정이 이 폴더로 같아집니다`);
+  else toast('새 저장 폴더로 시작합니다 — 다른 PC도 같은 구글 계정으로 이 폴더를 고르세요');
+  return true;
+}
 async function renderSaveDialog() {
   /* 저장 설정 (팀장님 11/23 「내가 설정했는데 어떻게 되었는지, 고칠 수 있는지 모르겠다 — 처음 설정·나중 설정을 쉽게」)
      ① 지금 저장 상태 그림(이 브라우저 → 구글 드라이브 폴더 → 지금 문서) ② 다음에 할 일 한 가지(처음 설정 3단계) ③ 내 저장 설정 — 줄마다 지금 값 + 바꾸기 */
@@ -4129,7 +4174,7 @@ async function renderSaveDialog() {
   if (!st.dirSupported && !ready) todo = `<div class="svtodo warn"><b>⚠️ 이 브라우저는 폴더 연결을 못 합니다</b><p>Chrome이나 Edge에서 열면 구글 드라이브 폴더에 저장할 수 있어요. 지금은 「사본 내려받기」로 보관하세요.</p></div>`;
   else if (st.dir && !ready) todo = `<div class="svtodo"><b>🔑 한 번만 허락해 주세요</b><p>전에 연결한 폴더 <b>${esc(st.dirName || '')}</b>를 이 창에서 다시 쓰려면 브라우저 허락이 필요합니다.</p><button class="btn primary" data-sv="redir">폴더 다시 허락하기</button></div>`;
   else if (!ready) todo = `<div class="svtodo"><b>🚀 처음 설정 — 3단계면 끝</b><ol class="svsteps">
-      <li><span>1</span><div><b>구글 드라이브 앱 설치</b><small>각 PC에 「Google Drive 데스크톱」을 설치하고 같은 구글 계정으로 로그인 (이미 했으면 넘어가기)</small></div></li>
+      <li><span>1</span><div><b>구글 드라이브 앱 설치</b><small>각 PC에 「Google Drive 데스크톱」을 설치하고 <b>모든 PC에서 같은 구글 계정</b>으로 로그인 (이미 했으면 넘어가기)</small><button class="btn sm" data-sv="acct">👤 어떤 계정으로? 확인하는 법</button></div></li>
       <li><span>2</span><div><b>저장 폴더 고르기</b><small>아래 단추 → <b>내 드라이브 → 나라차디자인공방</b> 폴더 고르기 (없으면 그 창에서 「새 폴더」). Windows는 <code>G:\\내 드라이브</code>, Mac은 Finder 왼쪽 <code>Google Drive</code></small><button class="btn primary" data-sv="dir">☁️ 저장 폴더 고르기</button></div></li>
       <li><span>3</span><div><b>이 PC 이름 정하기</b><small>아래 「내 저장 설정」의 이 PC 이름 (예: 도장 PC, 집 맥북) — 두 PC에서 함께 쓸 때 어느 PC인지 알려 줌</small></div></li></ol>
       <p class="hint" style="margin:6px 0 0">연결하면 문서와 설정(글꼴·요소·API 키 등)이 이 폴더를 통해 다른 PC와 같아집니다. 안 해도 이 브라우저에는 저장됩니다.</p></div>`;
@@ -4150,7 +4195,8 @@ async function renderSaveDialog() {
   $('#saveBody').innerHTML = `<h3 class="svh">📍 지금 저장 상태</h3>` + flow + todo + mine + `<details class="bk-more svlive"><summary>🔗 실시간 같이 편집 — 지금 ${(() => { try { return NC.live.cfg().on ? '<b style="color:#1f7a45">켜짐</b>' : '꺼짐'; } catch (e) { return '꺼짐'; } })()} <small>두 PC에서 같은 문서를 동시에 — 고급, 안 써도 저장에는 문제없음</small></summary><div>${NC.live.settingsHTML()}</div></details>` + `<details class="bk-more"><summary>ⓘ 문서 파일에는 무엇이 들어가나요?</summary><div>올린 이미지와 AI 이미지가 문서 파일에 함께 들어갑니다. 내장 글꼴과 2026 삽화는 프로그램에 있으므로 파일이 가벼워집니다. 두 PC에서 같은 문서를 동시에 고쳐 내용이 갈라지면 어느 쪽으로 계속할지 묻고, 다른 쪽은 "충돌 사본" 파일로 보관해 지워지는 내용이 없습니다.</div></details>`;
   const run = async fn => { try { await fn(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } };
   const act = {
-    dir: async () => { await store.connectFolder(); await afterFolderReady(); updateSaveBadge(); toast('저장 폴더를 연결했습니다 — 문서와 설정이 이 폴더로 같아집니다'); renderSaveDialog(); },
+    dir: async () => { const ok = await connectFolderChecked(); if (ok) renderSaveDialog(); },
+    acct: async () => { openAcctGuide(); },
     redir: async () => { if (await store.requestFolderPermission()) { await afterFolderReady({ loadCurrent: true }); updateSaveBadge(); renderSaveDialog(); } },
     intodir: async () => { d.close(); await saveNow(); },
     discdir: async () => { if (!window.confirm('이 PC에서 저장 폴더 연결을 끊을까요? (폴더 안 파일은 그대로 남고, 언제든 다시 연결할 수 있습니다)')) return; await store.disconnectFolder(); await store.disconnect(); updateSaveBadge(); setStatus('브라우저에만 저장됩니다'); renderSaveDialog(); },
@@ -6195,10 +6241,29 @@ const MEAS_SEP = String.fromCharCode(1);
 /* 서버에서 바로 받기 (2026-11-18): 관리프로그램은 서버에서 받은 측정 자료를 브라우저(naracha-meas)에 적지 않아 공방이 못 읽던 문제 →
    관리프로그램과 같은 구글 서버(앱스 스크립트)에서 측정(store=meas)·명단(store=att)을 '읽기만'. 접속 키는 관리프로그램이 이 브라우저에 둔 naracha_access_key */
 const MEAS_SERVER = 'https://script.google.com/macros/s/AKfycbysx2hkGfv3onXQHutPA6boYIZ74R4MNY_Jrc5cwgVebI9L1FRmj0YLT9YpYrS0tKVg7A/exec';
+/* 접속키 한곳 (팀장님 11/24 「접속키 넣지 않고도 데이터를」): 관리프로그램(naracha_access_key)이나 소식지(naracha-newsletter의 key)가
+   이 브라우저에 둔 키를 저절로 씀 — 같은 주소(narachadata.github.io)라 같은 저장소. 서버(구글 시트)는 키가 있어야 명단·사진을 내어 주므로 키 자체를 없애지는 않음 */
+function ncAccessKey() {
+  try { const k = (localStorage.getItem('naracha_access_key') || '').trim(); if (k) return k; } catch (e) {}
+  try { const s = JSON.parse(localStorage.getItem('naracha-newsletter') || 'null'); if (s && s.key) return String(s.key).trim(); } catch (e) {}
+  return '';
+}
+/* 소식지 엔진: 저장된 키가 없고 관리프로그램 키가 있으면 넣고 바로 불러오기(엔진 파일은 그대로 — 엔진의 입력칸·doPull을 씀, 다음부터는 엔진이 저절로) */
+function newsAutoKey(w) {
+  try {
+    if (!w || !w.S || w.S.key || typeof w.doPull !== 'function') return false;
+    const k = ncAccessKey(), inp = w.document.getElementById('inKey'); if (!k || !inp) return false;
+    inp.value = k;
+    try { w.dataReady = new Promise(r => { w._dataReadyRes = r; }); } catch (e) {}  /* 키가 없어 이미 '준비됨'으로 끝난 신호를 새로 — 데이터를 받은 뒤 그리도록 */
+    if (w.showSettings) w.showSettings(false);
+    w.setStatus && w.setStatus('관리프로그램 접속키로 저절로 불러오는 중…');
+    w.doPull(); return true;
+  } catch (e) { console.warn(e); return false; }
+}
 let measSrv = null; /* { meas, att, at, err } */
 function measJoin(resp) { const rows = resp && !Array.isArray(resp) && Array.isArray(resp.rows) ? resp.rows : resp; if (rows && rows.error === 'AUTH') throw new Error('AUTH'); if (!Array.isArray(rows)) throw new Error('BAD'); if (rows.length < 2) return null; let j = ''; for (let i = 0; i < rows.length; i++) if (rows[i][0] === 'JSON') { for (let k = i + 1; k < rows.length; k++) j += rows[k][0] != null ? String(rows[k][0]) : ''; break; } return JSON.parse(j); }
 async function measFetch() {
-  let key = ''; try { key = localStorage.getItem('naracha_access_key') || ''; } catch (e) {}
+  const key = ncAccessKey();
   if (!key) return (measSrv = { err: 'nokey' });
   const get = st => fetch(`${MEAS_SERVER}?key=${encodeURIComponent(key)}&store=${st}&v=2&t=${Date.now()}`).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(measJoin);
   try { const [meas, att, work] = await Promise.all([get('meas'), get('att').catch(() => null), get('work').catch(() => null)]); return (measSrv = { meas: meas && meas.measV ? meas : null, att: att && att.attV ? att : null, work: work && work.workV ? work : null, at: Date.now() }); }
@@ -6264,7 +6329,7 @@ async function openGradeImport() {
   let d = $('#dlgGradeImp'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgGradeImp'; d.className = 'wide'; document.body.appendChild(d); }
   d.innerHTML = '<div class="dhead"><h2>📥 심사 회차에서 급증 만들기</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody"><p class="hint"><span class="spin"></span> 관리프로그램 심사관리 자료를 받는 중…</p></div>'; d.querySelector('[data-close]').onclick = () => d.close(); if (!d.open) d.showModal();
   await measFetch(); const a = measAtt(), L = a && a.roster && a.roster.list;
-  if (!Array.isArray(L) || !L.length) { d.querySelector('.dbody').innerHTML = `<p><b>관리프로그램 명단을 읽지 못했습니다.</b></p><p class="hint">${measSrv && measSrv.err === 'nokey' ? '이 브라우저에서 관리프로그램을 한 번 열어 로그인해 주세요(접속 키가 필요합니다).' : '인터넷 연결을 확인하고 다시 시도해 주세요.'}</p>`; return; }
+  if (!Array.isArray(L) || !L.length) { d.querySelector('.dbody').innerHTML = `<p><b>관리프로그램 명단을 읽지 못했습니다.</b></p><p class="hint">${measSrv && measSrv.err === 'nokey' ? '이 브라우저에서 관리프로그램을 한 번 열어 로그인해 주세요. 그 뒤로는 공방이 그 접속키를 저절로 씁니다(따로 넣지 않아도 됨).' : '인터넷 연결을 확인하고 다시 시도해 주세요.'}</p>`; return; }
   const RD = gradeRounds();
   if (!RD.length) { d.querySelector('.dbody').innerHTML = '<p><b>급증을 만들 유품(단)자가 없습니다.</b></p><p class="hint">관리프로그램 출석현황에서 <b>심사확정</b>을 체크하거나, 심사관리에서 합격(완료) 처리하면 여기에 회차별로 나옵니다. 지금 재원생 가운데 「N품(단) K급」 승급 대상만 나옵니다.</p>'; return; }
   const today = new Date().toISOString().slice(0, 7);
@@ -6304,7 +6369,7 @@ async function openMeasImport(again) {
   /* 열 때마다 서버에서 최신 측정·명단을 받음 (관리프로그램에서 입력·저장한 값이 바로 들어옴) */
   if (!again || !measSrv) { box('<span class="spin"></span> 관리프로그램 서버에서 최신 측정 자료를 받는 중…'); await measFetch(); }
   const all = measSessions();
-  const srvNote = measSrv && measSrv.meas ? '' : measSrv && measSrv.err === 'nokey' ? '이 PC 브라우저에서는 관리프로그램에 로그인(접속 키 입력)한 적이 없어 서버에서 받을 수 없습니다. 같은 브라우저(크롬·엣지)에서 <a href="https://narachadata.github.io/naracha/" target="_blank" rel="noopener"><b>관리프로그램</b></a>에 한 번 로그인하면, 그 뒤로는 관리프로그램을 열지 않아도 여기서 바로 받습니다.' : measSrv && measSrv.err === 'auth' ? '관리프로그램 접속 키가 맞지 않아 서버에서 받지 못했습니다. 관리프로그램에 다시 로그인해 주세요.' : measSrv && !measSrv.err ? '관리프로그램 서버에 측정 자료(회차)가 아직 없습니다. 관리프로그램 측정 화면에서 회차를 입력·저장하면 여기서 바로 받습니다.' : '인터넷 연결을 확인한 뒤 다시 시도해 주세요.';
+  const srvNote = measSrv && measSrv.meas ? '' : measSrv && measSrv.err === 'nokey' ? '이 PC 브라우저에서는 관리프로그램이나 소식지에 접속키를 넣은 적이 없어 서버에서 받을 수 없습니다. 같은 브라우저(크롬·엣지)에서 <a href="https://narachadata.github.io/naracha/" target="_blank" rel="noopener"><b>관리프로그램</b></a>에 한 번 로그인하면, 그 뒤로는 공방이 그 키를 저절로 써서 여기서 바로 받습니다(소식지도 같은 키).' : measSrv && measSrv.err === 'auth' ? '관리프로그램 접속 키가 맞지 않아 서버에서 받지 못했습니다. 관리프로그램에 다시 로그인해 주세요.' : measSrv && !measSrv.err ? '관리프로그램 서버에 측정 자료(회차)가 아직 없습니다. 관리프로그램 측정 화면에서 회차를 입력·저장하면 여기서 바로 받습니다.' : '인터넷 연결을 확인한 뒤 다시 시도해 주세요.';
   if (!all || !all.length) { const head = measSrv && measSrv.err === 'nokey' ? '이 브라우저에서는 관리프로그램에 로그인한 적이 없습니다.' : measSrv && measSrv.err === 'auth' ? '관리프로그램 접속 키가 맞지 않습니다.' : measSrv && measSrv.err ? '관리프로그램 서버에 연결하지 못했습니다.' : '관리프로그램 측정 자료가 아직 없습니다.'; box(`<b>${head}</b>`, (srvNote || '관리프로그램 측정 화면에서 회차를 입력·저장하면 여기서 바로 받습니다. 공방은 그 자료를 읽기만 하고 고치지 않습니다.') + '<br><button class="btn sm" id="measRetry" style="margin-top:10px">다시 시도</button>'); { const rb = d.querySelector('#measRetry'); if (rb) rb.onclick = () => openMeasImport(false); } return; }
   const enrolled = measEnrolledFn(), live = !!enrolled;
   /* 관장님 지시: 지금 휴관·퇴관생은 반드시 제외 — 명단·장부를 못 읽으면 필터 없이 계산하지 않고 멈춤 */
@@ -6544,7 +6609,7 @@ async function attSaveLayout() {
 /* ---- 자료 받기 (읽기만) ---- */
 let attSrv = null; /* { att, at, err } */
 async function attFetch() {
-  let key = ''; try { key = localStorage.getItem('naracha_access_key') || ''; } catch (e) {}
+  const key = ncAccessKey();
   if (!key) return (attSrv = { err: 'nokey' });
   try { const r = await fetch(`${MEAS_SERVER}?key=${encodeURIComponent(key)}&store=att&v=2&t=${Date.now()}`); if (!r.ok) throw new Error('HTTP ' + r.status); const a = measJoin(await r.json()); attSrv = { att: a && a.attV ? a : null, at: Date.now() }; if (attSrv.att) measSrv = Object.assign(measSrv || {}, { att: attSrv.att }); return attSrv; }
   catch (e) { return (attSrv = { err: e.message === 'AUTH' ? 'auth' : 'net' }); }
@@ -6562,7 +6627,7 @@ async function attPhotos(names, server) {
   if (!attPhotoMap) { attPhotoMap = {}; try { const raw = await attIdbPhoto(); const v = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : null; if (v && v.map) attPhotoMap = Object.assign({}, v.map); } catch (e) {}
     if (!Object.keys(attPhotoMap).length) { try { const v = JSON.parse(localStorage.getItem('naracha-photo') || 'null'); if (v && v.map) attPhotoMap = Object.assign({}, v.map); } catch (e) {} } }
   const miss = (names || []).filter(n => !(attPhotoMap[n] && attPhotoMap[n].d) && !(attPhotoMap[n] && attPhotoMap[n].d === '' && attPhotoMap[n].t));
-  if (server && miss.length && !attPhotoSrv) { let key = ''; try { key = localStorage.getItem('naracha_access_key') || ''; } catch (e) {}
+  if (server && miss.length && !attPhotoSrv) { const key = ncAccessKey();
     if (key) { attPhotoSrv = true; try { setStatus('관리프로그램 서버에서 사진을 받는 중…'); const r = await fetch(`${MEAS_SERVER}?key=${encodeURIComponent(key)}&store=photo&v=2&t=${Date.now()}`); if (r.ok) { const v = measJoin(await r.json()); if (v && v.map) Object.entries(v.map).forEach(([n, o]) => { if (o && (!attPhotoMap[n] || (o.t || 0) > (attPhotoMap[n].t || 0))) attPhotoMap[n] = o; }); } } catch (e) {} finally { setStatus(''); } } }
   return attPhotoMap;
 }
@@ -8110,8 +8175,10 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
   if (!loaded) { try { const saved0 = await store.idbGet('doc'), saved = await tabPick(saved0); if (saved) { await loadDoc(saved); loaded = true; setStatus(saved !== saved0 ? '이 탭에서 쓰던 문서를 불러왔습니다' : '브라우저 저장본을 불러왔습니다'); } } catch (e) {} }
   if (!loaded) { doc = newDoc(); doc.calendar.year = 2027; doc.name = '2027 인성 캘린더'; virtueTextFix(doc.calendar, 2027); virtueArtFix(doc.calendar, null, 2027); doc.pages = CAL.buildPages(doc, uid, { year: 2027, kind: 'full' }); ensureAllHolidays(); $('#pname').value = doc.name; hist = [snapshot()]; histMeta = [{ cur: 0, sel: [] }]; hptr = 0; renderAll(); setStatus('2027년 캘린더 초안을 만들었습니다. 공휴일은 자동으로 들어갔습니다.'); freshDraft = true; }
   // 동기화 폴더(구글 드라이브): 허락돼 있으면 바로 맞추고, 아니면 한 번 눌러 허락받기
+  const nlm0 = /[?&]nlimport=/.test(location.search);
   try {
     const pf = await store.reconnectFolder();
+    if (pf === 'none' && store.state.dirSupported && !nlm0 && (!/[?&]qa\b/.test(location.search) || /[?&]acct\b/.test(location.search))) { let seen = ''; try { seen = localStorage.getItem('naracal-acct-guide') || ''; } catch (e) {} if (!seen) setTimeout(() => openAcctGuide(true), 900); }
     if (pf === 'granted') await afterFolderReady();
     else if (pf === 'prompt') {
       $('#status').innerHTML = `<button class="btn sm primary" id="reconnDir">동기화 폴더 "${esc(store.state.dirName)}" 연결 (눌러서 허락)</button>`;
