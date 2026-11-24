@@ -235,6 +235,25 @@ NC.elems = (function () {
   add('frame', 'fr-medal', '메달 사진 프레임', 44, 64, (uid) => { const { S, I } = H(uid); return [S('rect', 12, 0, 8, 24, { fill: RED, rot: 14 }), S('rect', 24, 0, 8, 24, { fill: NAVY, rot: -14 }), S('burst', 0, 18, 44, 44, { fill: '#E8B93C', points: 28, inner: 0.9 }), I(D.group, 4.5, 22.5, 35, 35, { fit: 'cover', clip: 'circle', name: '사진 (바꿔 넣기)' })]; }, '프레임 메달 사진 우승 축하');
   add('frame', 'fr-phone', '휴대폰 화면 틀', 34, 64, (uid) => { const { S, I } = H(uid); return [S('rect', 0, 0, 34, 64, { fill: '#111', radius: 5 }), I(D.group, 2, 3.5, 30, 57, { fit: 'cover', radius: 3.5, name: '화면 (바꿔 넣기)' }), S('pill', 12, 1.2, 10, 1.6, { fill: '#333' })]; }, '프레임 휴대폰 화면 SNS 앱 모바일');
 
+  /* ===== 11/24 남은 [중] 요소 ===== */
+  add('tkd', 'tk-hogu', '호구 (몸통 보호대)', 40, 46, (uid) => { const { I } = H(uid); return [I(svgURI(80, 92, `<path d="M14 10c8-6 44-6 52 0l4 50c0 18-14 28-30 28S10 78 10 60z" fill="#2367C9"/><path d="M14 10c8-6 44-6 52 0" fill="none" stroke="#174A92" stroke-width="4"/><path d="M40 14v70" stroke="#fff" stroke-width="2" opacity=".35"/><circle cx="40" cy="46" r="11" fill="#fff" opacity=".9"/><path d="M40 37a9 9 0 0 1 0 18a4.5 4.5 0 0 1 0-9a4.5 4.5 0 0 0 0-9z" fill="#CD2E3A"/><path d="M40 37a9 9 0 0 0 0 18a4.5 4.5 0 0 0 0-9a4.5 4.5 0 0 1 0-9z" fill="#0047A0"/><path d="M8 22l-6 4M72 22l6 4" stroke="#1E2B5A" stroke-width="3" stroke-linecap="round"/>`), 0, 0, 40, 46, { name: '호구' })]; }, '태권도 호구 몸통 보호대 겨루기 용품');
+  add('deco', 'dc-halftone', '하프톤 점', 80, 50, (uid) => { const { I } = H(uid); let b = ''; for (let y = 0; y < 10; y++) for (let x = 0; x < 16; x++) { const r = 0.4 + (x / 15) * 2.1; b += `<circle cx="${(x * 5 + 2.5).toFixed(1)}" cy="${(y * 5 + 2.5).toFixed(1)}" r="${r.toFixed(2)}" fill="#1E2B5A"/>`; } return [I(svgURI(80, 50, b), 0, 0, 80, 50, { name: '하프톤 점', opacity: 0.85 })]; }, '장식 하프톤 점 망점 그라데이션 배경 팝아트');
+  const VIR = [['자기존중', '#E0564B'], ['주도성', '#F28C28'], ['용기', '#E8B93C'], ['열정', '#D23A32'], ['예의', '#2E9E4F'], ['감사', '#EC6F94'], ['인내', '#2367C9'], ['극기', '#1E2B5A'], ['정의', '#7B4BC0'], ['정직', '#2F8D9E'], ['봉사', '#7A4A23'], ['사랑', '#E0564B']];
+  add('badge', 'bd-virtues', '인성 덕목 배지 12', 120, 64, (uid) => { const { S, T } = H(uid); const els = []; VIR.forEach(([n, c], i) => { const x = (i % 6) * 20, y = Math.floor(i / 6) * 33; els.push(S('ellipse', x + 1, y, 18, 18, { fill: c, name: n }), T(String(i + 1), x + 1, y + 4.2, 18, 9, { font: 'Montserrat', size: 16, weight: 800, color: WHITE, align: 'center', lh: 1 }), T(n, x - 2, y + 20, 24, 7, { size: 9, weight: 700, color: NAVY, align: 'center' })); }); return els; }, '배지 인성 덕목 12달 캘린더 극기 아이콘 세트');
+  add('table', 'tb-gauge', '반원 게이지', 60, 38, (uid) => { const { I, T } = H(uid); const p = 0.85, a = Math.PI * (1 - p), ex = (50 + 40 * Math.cos(a)).toFixed(1), ey = (50 - 40 * Math.sin(a)).toFixed(1); return [I(svgURI(100, 56, `<path d="M10 50A40 40 0 0 1 90 50" fill="none" stroke="#E4E7EC" stroke-width="12" stroke-linecap="round"/><path d="M10 50A40 40 0 0 1 ${ex} ${ey}" fill="none" stroke="#2F5BEA" stroke-width="12" stroke-linecap="round"/>`), 0, 0, 60, 33.6, { name: '게이지' }), T('85%', 0, 17, 60, 12, { font: 'Montserrat', size: 22, weight: 800, color: NAVY, align: 'center', lh: 1 }), T('이번 달 출석률', 0, 31, 60, 6, { size: 9, color: '#555', align: 'center' })]; }, '표 차트 게이지 반원 출석률 퍼센트 달성');
+  add('table', 'tb-bracket', '대진표 (8강)', 140, 80, (uid) => { const { S, T } = H(uid); const els = [], L = '#9AA3B2';
+    const box = (x, y, w, t, hi) => els.push(S('rect', x, y - 4, w, 8, { fill: hi ? '#FFC83D' : WHITE, stroke: hi ? '#FFC83D' : L, strokeW: 0.4, radius: 1.5 }), T(t, x, y - 2.4, w, 5, { size: hi ? 9 : 8, weight: hi ? 800 : 400, color: hi ? NAVY : INK, align: 'center' }));
+    const h = (x1, x2, y) => els.push(S('rect', Math.min(x1, x2), y - 0.2, Math.abs(x2 - x1), 0.4, { fill: L })), v = (x, y1, y2) => els.push(S('rect', x - 0.2, y1, 0.4, y2 - y1, { fill: L }));
+    const PY = [8, 26, 54, 72], SY = [17, 63], FY = 40;
+    [[0, 26, 30, 34, 54, 57, 1], [114, 114, 110, 106, 86, 83, -1]].forEach(([px, pe, m1, sx0, se, m2, dir], side) => {
+      PY.forEach((y, k) => { box(px, y, 26, '선수 ' + (side * 4 + k + 1)); h(pe, m1, y); });
+      SY.forEach((y, k) => { v(m1, PY[k * 2], PY[k * 2 + 1]); h(m1, sx0, y); box(dir > 0 ? sx0 : 86, y, 20, '승자'); h(dir > 0 ? sx0 + 20 : 86, m2, y); });
+      v(m2, SY[0], SY[1]); h(m2, dir > 0 ? 60 : 80, FY); });
+    box(60, FY, 20, '우승', true); return els; }, '표 대진표 토너먼트 8강 대회 겨루기');
+  const BLOBS = ['M52 6c22 2 42 18 40 42S70 92 46 90 4 72 6 46 30 4 52 6z', 'M30 10c18-10 50-6 60 16s0 50-20 58-52 6-62-18S12 20 30 10z', 'M50 4c16 0 26 14 38 22s10 30-2 44-34 26-52 16S2 60 8 40 34 4 50 4z'];
+  BLOBS.forEach((d, i) => add('shape', 'sh-blob-' + (i + 1), '자유곡선 덩어리 ' + (i + 1), 40, 40, (uid) => { const { I } = H(uid); return [I(svgURI(100, 100, `<path d="${d}" fill="${['#EEF2FE', '#FFF3D6', '#FDE7EA'][i]}"/>`), 0, 0, 40, 40, { name: '자유곡선 덩어리' })]; }, '도형 자유곡선 유기적 덩어리 블롭 배경'));
+  add('shape', 'ln-belts', '띠 색 줄 (9색)', 60, 34, (uid) => { const { S } = H(uid); const els = []; BC.forEach(([n, c, e], i) => { els.push(S('pill', 0, i * 3.8, 60, 2.6, { fill: c, stroke: e, strokeW: 0.25, name: n + '띠 줄' })); }); els.push(S('rect', 50, 8 * 3.8 + 0.4, 1.2, 1.8, { fill: '#E8B93C' }), S('rect', 53, 8 * 3.8 + 0.4, 1.2, 1.8, { fill: '#E8B93C' })); return els; }, '선 띠 색 줄 9색 흰띠 검은띠 단');
+
   /* ===== 1단 합치기·이름 (전문가: 15칸 → 12칸) ===== */
   const MASCOT = { '01': '라차 · 앞차기', '03': '라차 · 준비 자세', '04': '라차 · 겨루기 자세', '05': '라차 · 인사', '07': '라차 · 지르기', '08': '라차 · 주춤서기', '09': '라차 · 높이 차기', '11': '라차 · 옆차기' };
   items.forEach(it => {
@@ -268,12 +287,12 @@ NC.elems = (function () {
     'tb-schedule': 'time', 'tb-bus': 'time', 'tb-class': 'time', 'tb-check': 'check', 'tb-numbered': 'check', 'tb-gear': 'check', 'tb-': 'table',
     'dc-dots': 'pattern', 'dc-stripes': 'pattern', 'dc-grid': 'pattern', 'dc-circleset': 'pattern', 'dc-focus': 'pattern', 'dc-stars': 'scatter', 'dc-confetti': 'scatter', 'dc-band': 'band', 'dc-brush': 'band', 'dc-bunting': 'band', 'dc-corner': 'border', 'dc-cert': 'border',
     'tk-belt': 'belt', 'tk-dan': 'belt', 'tk-poom': 'belt', 'tk-trophy': 'award', 'tk-medal': 'award', 'tk-board': 'gear', 'tk-poomsae': 'gear',
-    'tk-taegeuk': 'gear', 'tk-mitt': 'gear', 'tk-court': 'gear', 'bd-flag1': 'award', 'bd-stars3': 'emph', 'bd-coupon': 'label', 'bk-virtue': 'info', 'bk-star': 'intro', 'bk-result': 'intro', 'bk-closed': 'info', 'tb-sticker': 'check', 'tb-poomsae': 'time', 'dc-sakura': 'scatter', 'dc-leaves': 'scatter', 'dc-snow': 'scatter', 'dc-beltband': 'band', 'fr-medal': 'one', 'fr-phone': 'one',
+    'tk-taegeuk': 'gear', 'tk-mitt': 'gear', 'tk-court': 'gear', 'bd-flag1': 'award', 'bd-stars3': 'emph', 'bd-coupon': 'label', 'bk-virtue': 'info', 'bk-star': 'intro', 'bk-result': 'intro', 'bk-closed': 'info', 'tb-sticker': 'check', 'tb-poomsae': 'time', 'dc-sakura': 'scatter', 'dc-leaves': 'scatter', 'dc-snow': 'scatter', 'dc-beltband': 'band', 'fr-medal': 'one', 'fr-phone': 'one', 'tk-hogu': 'gear', 'dc-halftone': 'pattern', 'bd-virtues': 'award', 'tb-gauge': 'chart', 'tb-bracket': 'table',
   };
   const HEARTS = '❤️💛💙💚🧡💜';
   items.forEach(it => {
     if (it.g) return;
-    if (it.cat === 'shape') { const m = it.id.match(/^sh-([a-z]+)-([a-z]+)$/); if (m) { it.g = SHG[m[1]] || 'basic'; it.sty = m[2]; } return; }
+    if (it.cat === 'shape') { const m = it.id.match(/^sh-([a-z]+)-([a-z]+)$/); if (m) { it.g = SHG[m[1]] || 'basic'; it.sty = m[2]; } else if (/^sh-blob/.test(it.id)) it.g = 'accent'; else if (/^ln-/.test(it.id)) it.g = 'line'; return; }
     if (it.cat === 'icon') { if (/^ic-/.test(it.id)) it.g = 'svg'; else if (/^em-/.test(it.id)) { it.g = it.id.replace(/^em-(.*)-\d+$/, '$1'); if (it.g === '마음·날씨' && HEARTS.includes(it.name)) it.g = 'heart'; } else it.g = 'num'; return; }
     if (it.cat === 'illust') { it.g = /^kg-/.test(it.id) ? 'vchar' : /^hi-/.test(it.id) ? 'vscene' : /^(ms-|vr-)/.test(it.id) ? 'racha' : it.id === 'il-cover-group' ? 'group' : 'old'; return; }
     const key = Object.keys(G).filter(k => it.id.startsWith(k)).sort((a, b) => b.length - a.length)[0]; if (key) it.g = G[key];
