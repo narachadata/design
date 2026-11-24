@@ -7171,16 +7171,19 @@ const ARR_KINDS = [['grid', '격자', '장 수와 쪽 모양에 맞춰 줄·칸�
 async function openArrange() {
   const imgs = selEls().filter(x => x.type === 'image' && !x.locked); if (imgs.length < 2) { toast('사진을 2장 이상 고르세요', true); return; }
   const others = selEls().length - imgs.length;
+  const selOrd = sel.slice();  /* Shift로 하나씩 누른 순서 (아래 select가 바꾸기 전에 기억) */
   /* 읽는 순서(위→아래, 왼→오른) */
   const avgH = imgs.reduce((t, e) => t + e.h, 0) / imgs.length; imgs.sort((a, b) => { const ra = Math.round((a.y + a.h / 2) / (avgH * 0.6)), rb = Math.round((b.y + b.h / 2) / (avgH * 0.6)); return ra - rb || a.x - b.x; });
   const ar = await Promise.all(imgs.map(imgRatio)); const orig = imgs.map(e => clone(e)); let applied = false, O = arrOpt();
   const m0 = (Number(doc.bleed) > 0 || doc.fmt) ? safeMM() : r1(Math.max(4, 6 * docK()));
-  const A = () => ({ x: m0, y: m0, w: doc.w - m0 * 2, h: doc.h - m0 * 2 });
-  const rectsFor = kind => { const cells = arrCells(kind, A(), ar, Math.max(0, Number(O.gap) || 0)), exact = ['mosaic', 'row', 'col'].includes(kind);
+  const U0 = unionBox(orig); /* 배치 영역: 쪽 전체(안전 여백 안) · 지금 사진들이 있는 곳 (전문가 「나중에」 → 11/24) */
+  const A = () => O.area === 'here' ? { x: U0.x, y: U0.y, w: U0.w, h: U0.h } : { x: m0, y: m0, w: doc.w - m0 * 2, h: doc.h - m0 * 2 };
+  const seq = () => { const ix = imgs.map((_, i) => i); if (O.ord !== 'sel') return ix; const p0 = id => { const k = selOrd.indexOf(id); return k < 0 ? 1e9 : k; }; return ix.sort((a, b) => p0(imgs[a].id) - p0(imgs[b].id)); };
+  const rectsFor = kind => { const S0 = seq(), cells0 = arrCells(kind, A(), S0.map(i => ar[i]), Math.max(0, Number(O.gap) || 0)), exact = ['mosaic', 'row', 'col'].includes(kind), cells = []; S0.forEach((i, k) => { cells[i] = cells0[k]; });
     return cells.map((c, i) => { if (exact || O.fit === 'cover') return { x: c.x, y: c.y, w: c.w, h: c.h, cover: true }; const k = Math.min(c.w / ar[i], c.h), w = ar[i] * k, h = k; return { x: c.x + (c.w - w) / 2, y: c.y + (c.h - h) / 2, w, h }; }); };
   /* 마우스를 올리면 쪽 위에 놓일 자리를 반투명 칸으로 미리 보여 줌 (전문가 의견 「나중에」 → 11/24 팀장님 「남은 것도」) */
   const unprev = () => { document.querySelectorAll('#ovl .arrprev').forEach(n => n.remove()); };
-  const preview = kind => { unprev(); const o = $('#ovl'); if (!o) return; const R0 = rectsFor(kind); o.insertAdjacentHTML('beforeend', R0.map((q, i) => `<div class="arrprev" style="left:${r1(q.x)}mm;top:${r1(q.y)}mm;width:${r1(q.w)}mm;height:${r1(q.h)}mm"><b>${i + 1}</b></div>`).join('')); };
+  const preview = kind => { unprev(); const o = $('#ovl'); if (!o) return; const R0 = rectsFor(kind); const S0 = seq(); o.insertAdjacentHTML('beforeend', R0.map((q, i) => `<div class="arrprev" style="left:${r1(q.x)}mm;top:${r1(q.y)}mm;width:${r1(q.w)}mm;height:${r1(q.h)}mm"><b>${S0.indexOf(i) + 1}</b></div>`).join('')); };
   const apply = () => { unprev(); const R0 = rectsFor(O.kind);
     imgs.forEach((el, i) => { const o = orig[i], q = R0[i]; Object.assign(el, { rot: 0 }); delete el.panX; delete el.panY; if (o.zoom) delete el.zoom;
       el.x = r1(q.x); el.y = r1(q.y); el.w = r1(q.w); el.h = r1(q.h); el.fit = 'cover'; el.pos = q.cover ? '50% 40%' : '50% 50%'; });
@@ -7194,7 +7197,9 @@ async function openArrange() {
       <div class="arr-k">${ARR_KINDS.map(([k, t, d]) => `<button class="arr-c${O.kind === k && applied ? ' on' : ''}" data-ak="${k}" title="${d}"${k === 'hero' && imgs.length < 3 ? ' disabled' : ''}>${mini(k)}<span>${t}</span></button>`).join('')}</div>
       <div class="arr-o"><span>사진 사이</span>${[0, 3, 6].map(v => `<button class="btn sm${Number(O.gap) === v ? ' on' : ''}" data-ag="${v}">${v}mm</button>`).join('')}<input type="number" min="0" max="50" step="0.5" value="${O.gap}" data-agi aria-label="사진 사이 간격(mm)"></div>
       <div class="arr-o"><span>자르기</span><button class="btn sm${O.fit === 'cover' || exact ? ' on' : ''}" data-af="cover" title="칸에 빈틈없이 채움 (사진 가장자리가 조금 잘릴 수 있음)">칸에 꽉 채우기</button><button class="btn sm${O.fit === 'contain' && !exact ? ' on' : ''}" data-af="contain" title="사진 전체가 보이게 (칸 안에 여백이 생길 수 있음)"${exact ? ' disabled' : ''}>사진 전체 보기</button></div>
-      <p class="arr-n">안전 여백(${r1(m0)}mm) 안쪽에 배치 · 읽는 순서(위→아래, 왼→오른)대로${others ? ` · 글·도형 ${others}개는 그대로 둠` : ''}<br>여러 번 바꿔 봐도 Ctrl+Z 한 번이면 처음 자리로</p>`; };
+      <div class="arr-o"><span>영역</span><button class="btn sm${O.area !== 'here' ? ' on' : ''}" data-aa="page" title="안전 여백(${r1(m0)}mm) 안쪽 쪽 전체에">쪽 전체</button><button class="btn sm${O.area === 'here' ? ' on' : ''}" data-aa="here" title="지금 사진들이 차지한 자리(둘러싼 네모) 안에서만">지금 사진 자리</button></div>
+      <div class="arr-o"><span>순서</span><button class="btn sm${O.ord !== 'sel' ? ' on' : ''}" data-ao="read" title="놓인 자리대로 위→아래, 왼→오른">읽는 순서</button><button class="btn sm${O.ord === 'sel' ? ' on' : ''}" data-ao="sel" title="Shift를 누른 채 하나씩 누른 순서대로 (끌어서 둘러싸 고르면 읽는 순서와 비슷)">누른 순서</button></div>
+      <p class="arr-n">방식 그림에 마우스를 올리면 놓일 자리가 번호로 보여요${others ? ` · 글·도형 ${others}개는 그대로 둠` : ''}<br>여러 번 바꿔 봐도 Ctrl+Z 한 번이면 처음 자리로</p>`; };
   draw(); document.body.appendChild(pop);
   const sc = $('#scroller').getBoundingClientRect(), insp = $('#inspector') || $('.inspector'), ir = insp && insp.offsetParent ? insp.getBoundingClientRect() : null; pop.style.left = Math.max(8, (ir && ir.width > 200 ? ir.right - 8 : innerWidth - 12) - pop.offsetWidth) + 'px'; pop.style.top = (sc.top + 8) + 'px';
   const save = () => { try { localStorage.setItem(ARR_LS, JSON.stringify(O)); } catch (e) { } };
@@ -7207,7 +7212,9 @@ async function openArrange() {
     if (t.dataset.ax === 'close') return close();
     if (t.dataset.ak) { O.kind = t.dataset.ak; save(); apply(); return; }
     if (t.dataset.ag != null) { O.gap = Number(t.dataset.ag); save(); if (applied) apply(); else draw(); return; }
-    if (t.dataset.af) { O.fit = t.dataset.af; save(); if (applied) apply(); else draw(); } };
+    if (t.dataset.af) { O.fit = t.dataset.af; save(); if (applied) apply(); else draw(); return; }
+    if (t.dataset.aa) { O.area = t.dataset.aa; save(); if (applied) apply(); else draw(); return; }
+    if (t.dataset.ao) { O.ord = t.dataset.ao; save(); if (applied) apply(); else draw(); } };
   pop.onchange = e => { if (e.target.matches('[data-agi]')) { O.gap = clamp(Number(e.target.value) || 0, 0, 50); save(); if (applied) apply(); else draw(); } };
   select(imgs.map(x => x.id));
 }
