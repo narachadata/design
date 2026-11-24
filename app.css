@@ -2095,3 +2095,4 @@ body.zooming #textBar,body.zooming .ovl .h,body.zooming .ovl .rotline{opacity:0}
 .ctx .ctgrid .ct.on{background:var(--ui-accent-soft,#eef2ff);border-color:var(--ui-accent,#2F5BEA);color:var(--ui-accent,#2F5BEA)}
 .ctx .ctgrid .wpic{color:#5B7CF0;display:block;line-height:0}
 .pk.wraps{display:grid;grid-template-columns:repeat(3,1fr)}.pk.wraps .pk-t{white-space:nowrap;font-size:11px}
+.dvkinds .dvk-ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px}

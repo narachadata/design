@@ -812,7 +812,7 @@ function dragMove(e) {
     if (!e.altKey || drag.dup) { const bx = Math.min(...drag.orig.map(o => o.x)) , by = Math.min(...drag.orig.map(o => o.y)); const bw = Math.max(...drag.els.map(el => drag.orig.find(q => q.id === el.id).x + el.w)) - bx, bh = Math.max(...drag.els.map(el => drag.orig.find(q => q.id === el.id).y + el.h)) - by; const sn = snap(bx + dx, by + dy, bw, bh, drag.els.map(el => el.id), e); dx = sn.x - bx; dy = sn.y - by; guides = sn.guides; }
     if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
     drag.els.forEach(el => { const o = drag.orig.find(q => q.id === el.id); el.x = r1(o.x + dx); el.y = r1(o.y + dy); });
-    dragShift(drag); dragOverlay(guides); ghostSoon();
+    dragShift(drag); dragOverlay(guides); ghostSoon(); wrapLive(drag);
     { const f = $('#facing'); if (f) { $('#stage').classList.add('xdrag'); f.classList.toggle('drop-on', !!facingAt(e)); } } /* 펼침면: 끄는 동안 쪽 밖도 보이게 · 옆 쪽 위면 표시 */
   } else if (drag.kind === 'resize') {
     const el = drag.el, o = drag.o, rad = -(o.rot || 0) * Math.PI / 180;
@@ -4257,7 +4257,7 @@ async function renderDrive() {
   const ready = await store.folderReady();
   { const h2 = $('#dlgDrive h2'); if (h2) h2.textContent = drv.view === 'home' ? '홈' : '내 드라이브'; }
   $('#dvNav').innerHTML = [['home', '홈', '<path d="M4 11 12 4l8 7M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>'], ['drive', '내 드라이브', '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'], ['recent', '최근 디자인', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'], ['trash', '휴지통', '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'], ['local', '이 브라우저에만', '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>']]
-    .map(([k, t, ic]) => `<button data-dvnav="${k}" class="${drv.view === k ? 'on' : ''}"><svg viewBox="0 0 24 24">${ic}</svg>${t}</button>`).join('') + `<div class="dvkinds"><small>종류별</small>${DOC_KINDS.map(([k, t, ic]) => `<button data-dvkind="${k}" class="${drv.view === 'kind' && drv.kind === k ? 'on' : ''}"><span class="dvk-ic">${ic}</span>${esc(t)}</button>`).join('')}</div>` + `<hr><button data-dvnav="sync"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5l2-2v6h-6l2.3-2.3A5.5 5.5 0 0 0 6.5 12M20 12a8 8 0 0 1-14 5l-2 2v-6h6l-2.3 2.3A5.5 5.5 0 0 0 17.5 12"/></svg>저장·동기화 설정</button>`;
+    .map(([k, t, ic]) => `<button data-dvnav="${k}" class="${drv.view === k ? 'on' : ''}"><svg viewBox="0 0 24 24">${ic}</svg>${t}</button>`).join('') + `<div class="dvkinds"><small>종류별</small>${DOC_KINDS.map(([k, t, ic]) => `<button data-dvkind="${k}" class="${drv.view === 'kind' && drv.kind === k ? 'on' : ''}"><span class="dvk-ic">${DOC_KIND_SVG[k] ? `<svg viewBox="0 0 24 24">${DOC_KIND_SVG[k]}</svg>` : ic}</span>${esc(t)}</button>`).join('')}</div>` + `<hr><button data-dvnav="sync"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5l2-2v6h-6l2.3-2.3A5.5 5.5 0 0 0 6.5 12M20 12a8 8 0 0 1-14 5l-2 2v-6h6l-2.3 2.3A5.5 5.5 0 0 0 17.5 12"/></svg>저장·동기화 설정</button>`;
   const main = $('#dvMain');
   const homeTop = () => { const HK = ['print', 'sns', 'pres', 'video', 'sign', 'cal', 'news', 'doc'].map(k => ND_GROUPS.find(g => g[0] === k)).filter(Boolean);
     return `<div class="dvhome"><div class="dvh-back"><div><small>지금 작업 중</small><b>${esc(doc.name || '이름 없는 디자인')}</b><small>${doc.pages.length}쪽 · ${esc(fmtLabel(FORMATS.find(x => x[0] === doc.fmt) || ['', '', '', doc.w, doc.h, isPxDoc() ? 'px' : 'mm']))}</small></div><button class="btn primary" data-dvhome="back">작업으로 돌아가기</button></div>
@@ -5479,6 +5479,8 @@ function saveBlob(b, name) { const a = document.createElement('a'); a.href = URL
 /* ---- 종류별 폴더 (팀장님 11/21 「이미지·동영상·도서처럼 형식이 다른 파일은 미리 나눈 종류 폴더에 저절로, 열기·저장도 종류별로」) ----
    저장 위치는 구글 드라이브 데스크톱 앱의 '내 드라이브' 안 동기화 폴더(브라우저 폴더 연결). 그 안에 종류 폴더: 이미지·인쇄물 / 영상 / 도서 / 캘린더 / 소식지 / 상장·증서 / 출석부
    ① 처음 저장할 때 저장 위치가 그 문서 종류 폴더로 미리 골라짐(다른 폴더도 고를 수 있음) ② 내려받은 PNG·JPG·PDF·영상은 「종류 폴더/내보낸 파일」에도 사본 ③ 내 드라이브 왼쪽 「종류별」로 모아 보기·열기 */
+/* 내 드라이브 「종류별」 선 아이콘 (11/24 — 이모지 대신) */
+const DOC_KIND_SVG = { image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>', video: '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/>', book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 5.5v16"/>', calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>', news: '<path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5"/>', cert: '<circle cx="12" cy="9" r="5"/><path d="m9 13.5-2 7.5 5-3 5 3-2-7.5"/>', att: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 12 3 3 5-6"/>' };
 const DOC_KINDS = [['image', '이미지·인쇄물', '🖼'], ['video', '영상', '🎬'], ['book', '도서', '📚'], ['calendar', '캘린더', '📅'], ['news', '소식지', '📰'], ['cert', '상장·증서', '🏅'], ['att', '출석부', '✅']];
 const EXPORT_DIR = '내보낸 파일';
 function docKind(d) { d = d || doc; if (!d) return 'image'; if ((d.book && d.book.bookMode) || d.bookCover) return 'book'; if (d.cert) return 'cert'; if (d.att) return 'att'; if (d.news) return 'news'; const P = d.pages || []; if (['story', 'video', 'shorts'].includes(d.fmt) || (d.video && d.video.born) || P.some(p => (p.els || []).some(e => e.type === 'video'))) return 'video'; if (d.calendar && P.some(p => p.kind)) return 'calendar'; return 'image'; }
@@ -7083,6 +7085,13 @@ function wrapFloats(t) {
     st = side === 'left' ? `float:left;clear:left;width:${r(x2)}mm;height:${r(ih)}mm` : `float:right;clear:right;width:${r(cw - x1)}mm;height:${r(ih)}mm`;
     out += F(`float:${side};clear:${side};width:0;height:${r(Math.max(0, iy - bot[side]))}mm`) + F(st); bot[side] = iy + ih; });
   return out;
+}
+/* 끄는 동안에도 글이 그림을 비켜 흐름 (그림을 끌 때만, 50ms마다 바뀐 글 상자만 다시 그림) */
+const WRAP_LAST = new WeakMap();
+function wrapLive(d) {
+  if (d.wrapT === undefined) { const ids = d.els.map(e => e.id); d.wrapT = d.els.some(e => e.type === 'image' && WRAPS.includes(e.wrap)) ? page().els.filter(t => t.type === 'text' && !ids.includes(t.id) && !t.hidden && !t.locked) : null; }
+  if (!d.wrapT || !d.wrapT.length) return; const now = performance.now(); if (now - (d.wrapAt || 0) < 50) return; d.wrapAt = now;
+  d.wrapT.forEach(t => { const wf = wrapFloats(t); if (wf === (WRAP_LAST.get(t) || '')) return; WRAP_LAST.set(t, wf); rerenderEl(t); });
 }
 /* 글 배치 고르기: 글 뒤·글 앞은 겹친 글 상자와의 앞뒤 순서만 바꿈 */
 function setImgWrap(imgs, v) {
