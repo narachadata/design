@@ -910,13 +910,14 @@ document.addEventListener('pointerup', e => {
 });
 const penStyle = { stroke: '#1E2B5A', strokeW: 0.8 };
 function liveUpdate(els) { ghostSoon(); const c = $('#canvas'); els.forEach(el => { const dom = c.querySelector(`[data-id="${el.id}"]`); if (!dom) return; dom.style.left = el.x + 'mm'; dom.style.top = el.y + 'mm'; dom.style.width = el.w + 'mm'; dom.style[el.type === 'text' && !isWarp(el) ? 'minHeight' : 'height'] = el.h + 'mm'; dom.style.transform = `rotate(${el.rot || 0}deg)`; }); }
+function smartOn() { try { return localStorage.getItem('naracal-smart') !== '0'; } catch (e) { return true; } }
 function snapCands(selfIds) {
   const T = Math.max(0.1, 6 / (kScale() * MM));
   const px = [0, doc.w / 2, doc.w], py = [0, doc.h / 2, doc.h];
   if (showGuides() && (Number(doc.bleed) > 0 || doc.fmt)) { const m = safeMM(); px.push(m, doc.w - m); py.push(m, doc.h - m); }
   if (doc.guides && showGuides()) { px.push(...(doc.guides.x || [])); py.push(...(doc.guides.y || [])); }
   if (doc.bookCover && BK()) px.push(...BK().coverSnapX());
-  const others = page().els.filter(el => !selfIds.includes(el.id) && !el.hidden).map(el => elBox(el));
+  const others = smartOn() ? page().els.filter(el => !selfIds.includes(el.id) && !el.hidden).map(el => elBox(el)) : [];  /* 설정에서 끄면 다른 개체 기준·같은 간격 없음 */
   /* 후보: [값, 종류, 대상 상자] */
   const cx = [], cy = []; px.forEach(v => cx.push([v, 'page'])); py.forEach(v => cy.push([v, 'page']));
   others.forEach(b => { [b.x, b.x + b.w / 2, b.x + b.w].forEach((v, k) => cx.push([v, 'obj', b, k === 1])); [b.y, b.y + b.h / 2, b.y + b.h].forEach((v, k) => cy.push([v, 'obj', b, k === 1])); });
@@ -2916,7 +2917,7 @@ const SET_TABS = [['view', '🖥', '화면 · 편집'], ['video', '🎬', '영�
 /* 설정 줄마다 그림(팀장님 11/23 「설정도 사용자 경험 고려해 고도화」 · UX 전문가 검토: 그림·지금 상태·찾기·마지막 칸 기억·줄 전체 누르기·처음대로 모으기) */
 /* 설정 아이콘: 이모지 대신 프로그램의 선 아이콘 (11/24 고급스럽게 2차 — 이모지는 PC마다 모양이 달라 어수선) */
 const SET_TAB_SVG = { view: 'i-fit', video: 'i-video', save: 'i-save', dojang: 'i-award', print: 'i-print', clean: 'i-clean', about: 'i-help' };
-const SET_SVG = { guides: 'i-fit', rulers: 'i-ruler', snap: 'i-magnet', panels: 'i-spread', keys: 'i-text', pgm: 'i-tv', skim: 'i-eye', tlonly: 'i-video', vshare: 'i-upload', tlh: 'i-down', sync: 'i-cloud', versions: 'i-clock', local: 'i-pc', dojang: 'i-award', brandreset: 'i-theme', rules: 'i-cal', calendar: 'i-cal', print: 'i-print', ai: 'i-ai', recent: 'i-clean', blocks: 'i-elems', blocksdel: 'i-del', manual: 'i-book', help: 'i-help', vkeys: 'i-video', reload: 'i-refresh', resetall: 'i-undo', pc: 'i-pc' };
+const SET_SVG = { guides: 'i-fit', rulers: 'i-ruler', smart: 'i-dist', snap: 'i-magnet', panels: 'i-spread', keys: 'i-text', pgm: 'i-tv', skim: 'i-eye', tlonly: 'i-video', vshare: 'i-upload', tlh: 'i-down', sync: 'i-cloud', versions: 'i-clock', local: 'i-pc', dojang: 'i-award', brandreset: 'i-theme', rules: 'i-cal', calendar: 'i-cal', print: 'i-print', ai: 'i-ai', recent: 'i-clean', blocks: 'i-elems', blocksdel: 'i-del', manual: 'i-book', help: 'i-help', vkeys: 'i-video', reload: 'i-refresh', resetall: 'i-undo', pc: 'i-pc' };
 const SET_IC = { guides: '📐', rulers: '📏', snap: '🧲', panels: '↔️', keys: '⌨️', pgm: '🖥', skim: '👆', tlonly: '🎬', vshare: '📤', tlh: '↕️', sync: '☁️', versions: '🕘', local: '💻', dojang: '🥋', brandreset: '🎨', rules: '📅', calendar: '🗓', print: '🖨', ai: '🤖', recent: '🧹', blocks: '🧩', blocksdel: '🗑', manual: '📘', help: '❓', vkeys: '🎞', reload: '🔄', resetall: '↩️', pc: '🏷' };
 const setOk = (on, t1, t0) => `<em class="sst ${on ? 'ok' : 'no'}">${on ? '● ' + t1 : '○ ' + t0}</em>`;
 async function setTabHTML(k) {
@@ -2924,7 +2925,7 @@ async function setTabHTML(k) {
   const sw = (id, on, t, d) => `<label class="setrow">${ic(id)}<span><b>${t}</b>${d ? `<small>${d}</small>` : ''}</span><input type="checkbox" class="sw" data-set="${id}" ${on ? 'checked' : ''}></label>`;
   const btn = (act, t, d, label, st, danger) => `<div class="setrow act${danger ? ' danger' : ''}" title="누르면 ${esc(label || '열기')}">${ic(act)}<span><b>${t}</b>${d ? `<small>${d}</small>` : ''}</span>${st || ''}<button class="btn sm${danger ? ' danger' : ''}" data-sa="${act}">${label || '열기'} ›</button></div>`;
   let h = '';
-  if (k === 'view') h = `<h3>화면 · 편집</h3>${sw('guides', showGuides(), '인쇄 안내선', '도련(빨강)·안전 여백(파랑)·리플렛 접는 선·스토리 가림 영역')}${sw('rulers', showRulers(), '눈금자', '위·왼쪽 눈금자 — 눈금자에서 끌어 안내선 만들기')}${sw('snap', tlSnapOn, '타임라인 자석(스냅)', '끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙음 (단축키 N)')}${btn('panels', '패널 너비 처음대로', '왼쪽 패널·오른쪽 속성 패널을 끌어 바꾼 너비를 기본으로', '처음대로')}${btn('keys', '디자인 단축키', '복사·붙여넣기·정렬·묶기 등')}${btn('resetall', '화면 설정 모두 처음대로', '안내선·눈금자·패널 너비·타임라인 높이를 처음 상태로 (문서는 그대로)', '처음대로')}`;
+  if (k === 'view') h = `<h3>화면 · 편집</h3>${sw('guides', showGuides(), '인쇄 안내선', '도련(빨강)·안전 여백(파랑)·리플렛 접는 선·스토리 가림 영역')}${sw('rulers', showRulers(), '눈금자', '위·왼쪽 눈금자 — 눈금자에서 끌어 안내선 만들기')}${sw('smart', smartOn(), '다른 개체에 맞춤 (스마트 가이드)', '끌 때 다른 개체의 가장자리·가운데·같은 간격에 붙고 보라 선·mm 표시 — 끄면 쪽 기준(분홍)만. 잠깐 끄려면 ⌘/Ctrl을 누른 채 끌기')}${sw('snap', tlSnapOn, '타임라인 자석(스냅)', '끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙음 (단축키 N)')}${btn('panels', '패널 너비 처음대로', '왼쪽 패널·오른쪽 속성 패널을 끌어 바꾼 너비를 기본으로', '처음대로')}${btn('keys', '디자인 단축키', '복사·붙여넣기·정렬·묶기 등')}${btn('resetall', '화면 설정 모두 처음대로', '안내선·눈금자·패널 너비·타임라인 높이를 처음 상태로 (문서는 그대로)', '처음대로')}`;
   else if (k === 'video') h = `<h3>영상</h3>${sw('pgm', pgmPref, '나란히 보기 (결과 화면)', '타임라인을 열면 왼쪽 편집·오른쪽 결과 화면으로 나눠 봄')}${sw('skim', tlSkimOn, '훑어보기', '타임라인 위에서 마우스를 움직이면 그 자리 화면을 미리 봄 (단축키 S)')}${sw('tlonly', tlOnlyVideo, '영상 메뉴에서만 타임라인', '끄면 다른 메뉴에서도 타임라인이 열려 있음')}${sw('vshare', (() => { try { return localStorage.getItem('naracal-video-share') === '1'; } catch (e) { return false; } })(), '영상 저장 때 결과물 폴더에도', '동기화 폴더의 결과물 폴더에 MP4를 함께 저장 (다른 PC·TV에서 바로)')}${btn('tlh', '타임라인 높이 처음대로', '끌어 바꾼 타임라인 높이를 기본으로', '처음대로')}${btn('vkeys', '영상 편집 단축키', '파이널컷 방식 J·K·L·B·Q·W·I·O 등 (타임라인에서 ?)')}`;
   else if (k === 'save') { const ready = await store.folderReady().catch(() => false); let est = ''; try { const e = await navigator.storage.estimate(); est = `${(e.usage / 1048576).toFixed(0)}MB 사용 / 약 ${(e.quota / 1073741824).toFixed(0)}GB 가능`; } catch (e) {}
     h = `<h3>저장 · 이 PC</h3><div class="svmini" data-sa="sync" title="누르면 저장 설정"><span class="ok">💻 브라우저 ✔</span><i>→</i><span class="${ready ? 'ok' : 'no'}">☁️ 드라이브 ${ready ? '✔' : '○'}</span><i>→</i><span class="${store.state.handle ? 'ok' : 'no'}">📄 지금 문서 ${store.state.handle ? '✔' : '○'}</span><b>${ready ? '바꾸기 ›' : '처음 설정 ›'}</b></div><div class="setrow"><i class="sic">🏷</i><span><b>이 PC 이름</b><small>충돌 안내·버전 기록·실시간에 표시 (예: 도장 PC, 집 맥북)</small></span><input type="text" id="setPc" value="${esc(store.pcName())}" maxlength="20" style="width:150px"></div>${btn('sync', '저장 설정 (폴더·지금 문서·종류 폴더)', ready ? `연결됨 — ${esc(store.state.dirName || '동기화 폴더')} (두 PC에서 같은 문서·설정)` : '연결 안 됨 — 구글 드라이브 폴더를 연결하면 두 PC에서 같이 씀', '', setOk(ready, '연결됨', '연결 안 됨'))}${btn('versions', '버전 기록', '자동으로 남긴 예전 판을 보고 되살리기')}${btn('local', '이 브라우저에만 있는 문서', '파일로 저장 안 한 직전 문서·다른 탭 문서')}<div class="setrow"><span><b>브라우저 저장 공간</b><small>${est || '알 수 없음'} — 사진·동영상 원본은 이 PC 파일 그대로 (저장 공간을 쓰지 않음)</small></span></div>`; }
@@ -2949,6 +2950,7 @@ async function renderSettings() {
 function settingsChange(e) { const t = e.target, k = t.dataset && t.dataset.set; if (t.id === 'setPc') { store.setPcName(t.value); t.value = store.pcName(); toast('이 PC 이름을 저장했습니다'); return; } if (!k) return; const on = t.checked;
   if (k === 'guides') { try { localStorage.setItem('naracal-guides', on ? '1' : '0'); } catch (er) {} renderOverlay(); }
   else if (k === 'rulers') { if (showRulers() !== on) toggleRulers(); }
+  else if (k === 'smart') { try { localStorage.setItem('naracal-smart', on ? '1' : '0'); } catch (er) {} toast(on ? '다른 개체에 맞춤을 켰습니다' : '다른 개체에 맞춤을 껐습니다 — 쪽 기준 안내선만'); }
   else if (k === 'snap') { if (tlSnapOn !== on) tlToggleSnap(); }
   else if (k === 'pgm') pgmToggle(on);
   else if (k === 'skim') { if (tlSkimOn !== on) tlToggleSkim(); }
