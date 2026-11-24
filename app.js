@@ -553,6 +553,8 @@ function bookNoteHTML(els) { /* 도서 편집: 화면에만 보이는 안내 (�
   if (f) h += `<button class="bk-chip" data-bkstory="1" style="left:${f.x}mm;top:${f.y}mm;font-size:${11.5 * k9}px" title="본문 글은 원고에서 고치면 쪽이 저절로 다시 짜입니다">✎ ${f.flowFrame === 'toc' ? '차례는 장·절 제목에서 저절로 만들어집니다' : '본문은 원고에서 고칩니다'} · <b>원고 열기</b></button>`;
   return h; }
 /* 끄는 동안 가벼운 겹침 그리기 (팀장님 11/24 「요소를 끌면 조금 거칠게 이동」) — 선택 상자 자리와 맞춤선만 바꾸고, 놓을 때 전체를 다시 그림 */
+/* 끄는 동안은 그림만 옮김(CSS translate — 배치 다시 안 함, 회전 transform과 따로), 놓을 때 다시 그리며 left/top으로 (11/24 「끌기가 거칠게」 2차) */
+function dragShift(d) { const c = $('#canvas'); d.els.forEach(el => { const o = d.orig.find(q => q.id === el.id), dom = c.querySelector(`[data-id="${el.id}"]`); if (!o || !dom) return; if (!dom._dragOn) { dom._dragOn = true; dom.style.willChange = 'translate'; } dom.style.translate = `${r1(el.x - o.x)}mm ${r1(el.y - o.y)}mm`; }); }
 function dragOverlay(guides) {
   const o = $('#ovl'), els = selEls(), boxes = o ? [...o.children].filter(x => x.classList.contains('sel') && !x.classList.contains('group')) : [];
   if (!o || boxes.length !== els.length) { renderOverlay(guides); return; }
@@ -804,7 +806,7 @@ function dragMove(e) {
     if (!e.altKey || drag.dup) { const bx = Math.min(...drag.orig.map(o => o.x)) , by = Math.min(...drag.orig.map(o => o.y)); const bw = Math.max(...drag.els.map(el => drag.orig.find(q => q.id === el.id).x + el.w)) - bx, bh = Math.max(...drag.els.map(el => drag.orig.find(q => q.id === el.id).y + el.h)) - by; const sn = snap(bx + dx, by + dy, bw, bh, drag.els.map(el => el.id)); dx = sn.x - bx; dy = sn.y - by; guides = sn.guides; }
     if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
     drag.els.forEach(el => { const o = drag.orig.find(q => q.id === el.id); el.x = r1(o.x + dx); el.y = r1(o.y + dy); });
-    liveUpdate(drag.els); dragOverlay(guides);
+    dragShift(drag); dragOverlay(guides); ghostSoon();
     { const f = $('#facing'); if (f) { $('#stage').classList.add('xdrag'); f.classList.toggle('drop-on', !!facingAt(e)); } } /* 펼침면: 끄는 동안 쪽 밖도 보이게 · 옆 쪽 위면 표시 */
   } else if (drag.kind === 'resize') {
     const el = drag.el, o = drag.o, rad = -(o.rot || 0) * Math.PI / 180;
