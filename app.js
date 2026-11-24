@@ -3779,11 +3779,12 @@ function renderInspector() {
   if (els.length > 1) {
     const grouped = els.some(e => e.group); const texts = els.filter(e => e.type === 'text');
     ins.innerHTML = `<h2>${els.length}개 선택${grouped ? ' <small>그룹</small>' : ''}</h2><div class="row"><button class="btn sm" id="mGroup">${grouped ? '그룹 해제' : '그룹으로 묶기'}</button><button class="btn sm" id="mLock">모두 잠금</button><button class="btn sm" id="mUnlock">잠금 해제</button></div>
+    ${els.filter(x => x.type === 'image' && !x.locked).length >= 2 ? `<div class="row" style="margin-top:6px"><button class="btn sm primary" id="mArrange" title="사진을 쪽 안에 크기까지 맞춰 배치 — 격자·모자이크·한 줄·강조형 (오른쪽 단추 메뉴에도 있음)">사진 쪽에 맞춰 배치…</button></div>` : ''}
     <h3>묶음 위치·크기 <small>mm</small></h3><div class="grid4">${(() => { const U9 = unionBox(els), bx = U9.x, by = U9.y, bw = U9.w, bh = U9.h; return F('X', 'grp.x', r1(bx), { type: 'number', step: 0.5 }) + F('Y', 'grp.y', r1(by), { type: 'number', step: 0.5 }) + F('너비', 'grp.w', r1(bw), { type: 'number', step: 0.5 }) + F('높이', 'grp.h', r1(bh), { type: 'number', step: 0.5 }); })()}</div>
     ${F('투명도', 'multi.opacity', els[0].opacity == null ? 1 : els[0].opacity, { type: 'slider', min: 0, max: 1, step: 0.01, pct: true, def: 1 })}
     ${texts.length ? `<h3>글자 ${texts.length}개 한꺼번에</h3><div class="row"><label class="f" style="flex:1;margin:0"><span>글꼴</span>${fontPicker('font', texts[0].font)}</label></div><div class="grid2">${F('크기(pt)', 'multi.size', texts.every(t => t.size === texts[0].size) ? texts[0].size : '', { type: 'number', step: 0.5 })}${texts.every(t => t.size === texts[0].size) ? '' : '<p class="hint" style="margin:-4px 0 6px">크기가 서로 다릅니다 — 숫자를 넣으면 모두 그 크기로(부분 서식도 같은 비율)</p>'}${F('색', 'multi.color', texts[0].color, { type: 'color' })}</div>` : ''}
     <p class="hint">도구 막대의 정렬·간격 균등 버튼으로 맞추고, 끌어서 함께 옮깁니다.</p>`;
-    ins.onclick = e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.fp) { openFontPop(b); return; } if (b.id === 'mGroup') toggleGroup(); if (b.id === 'mLock') { els.forEach(x => x.locked = true); commit(); renderOverlay(); } if (b.id === 'mUnlock') { els.forEach(x => x.locked = false); commit(); renderOverlay(); } };
+    ins.onclick = e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.fp) { openFontPop(b); return; } if (b.id === 'mGroup') toggleGroup(); if (b.id === 'mArrange') { openArrange(); return; } if (b.id === 'mLock') { els.forEach(x => x.locked = true); commit(); renderOverlay(); } if (b.id === 'mUnlock') { els.forEach(x => x.locked = false); commit(); renderOverlay(); } };
     return;
   }
   const el = els[0];
