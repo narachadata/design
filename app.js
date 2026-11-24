@@ -7624,7 +7624,7 @@ async function runRacha() {
 (function tbMode() {
   const tb = $('.stage .toolbar'), bo = $('#tbOrient'), bf = $('#tbFold'); if (!tb || !bo || !bf) return;
   let st = { v: false, fold: false }; try { Object.assign(st, JSON.parse(localStorage.getItem('naracal-tbmode') || '{}')); } catch (e) {}
-  const apply = () => { tbMaxH = 0; tb.classList.toggle('tb-v', !!st.v); tb.classList.toggle('tb-fold', !!st.fold); bo.title = st.v ? '도구 막대를 가로로 (위쪽)' : '도구 막대를 세로로 (왼쪽)'; bf.title = st.fold ? '도구 막대 펴기' : '도구 막대 접기'; try { localStorage.setItem('naracal-tbmode', JSON.stringify(st)); } catch (e) {} if (typeof fitCanvas === 'function' && doc) requestAnimationFrame(() => { fitCanvas(); }); };
+  const apply = () => { tbMaxH = 0; tb.classList.toggle('tb-v', !!st.v); tb.classList.toggle('tb-fold', !!st.fold); if (typeof fitToolbarSoon === 'function') fitToolbarSoon(); bo.title = st.v ? '도구 막대를 가로로 (위쪽)' : '도구 막대를 세로로 (왼쪽)'; bf.title = st.fold ? '도구 막대 펴기' : '도구 막대 접기'; try { localStorage.setItem('naracal-tbmode', JSON.stringify(st)); } catch (e) {} if (typeof fitCanvas === 'function' && doc) requestAnimationFrame(() => { fitCanvas(); }); };
   bo.onclick = () => { st.v = !st.v; st.fold = false; apply(); bo.blur(); };
   bf.onclick = () => { st.fold = !st.fold; apply(); bf.blur(); };  /* 누른 뒤 파란 테두리가 남지 않게 */
   apply();
@@ -7655,6 +7655,28 @@ if (NC.aichat) NC.aichat.init({
 });
 if (/[?&]qa\b/.test(location.search)) window.NCQA = { bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
 
+/* ---- 도구 막대 한 줄 (팀장님 11/24 「도구 막대 한 줄도 정리」) ----
+   넘치면 덜 쓰는 묶음(정렬 → 순서 → 펜·그룹)부터 「⋯」 펼침 창으로 옮김(단추를 그대로 옮겨 동작 같음), 자리가 나면 제자리로. 세로 도구 막대는 그대로 */
+const TB_MOVE = ['정렬', '순서', 'pen'];
+var tbFitRaf = 0; /* var: 도구 막대 설정(tbMode)이 이 줄보다 먼저 부름 */
+function fitToolbar() {
+  const tb = $('#stage .toolbar'), st = $('#stage'); if (!tb || !st) return;
+  let more = tb.querySelector('.tb-more-g'), pop = $('#tbMorePop');
+  if (!more) { more = document.createElement('div'); more.className = 'tgroup tb-more-g'; more.innerHTML = '<button class="btn icon" id="tbMoreBtn" title="더 보기 — 정렬·순서·펜" aria-haspopup="true"><svg class="ic" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>'; tb.appendChild(more);
+    pop = document.createElement('div'); pop.id = 'tbMorePop'; pop.hidden = true; document.body.appendChild(pop);
+    more.querySelector('button').onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; if (!pop.hidden) { const r = more.getBoundingClientRect(); pop.style.top = (r.bottom + 8) + 'px'; pop.style.left = Math.max(8, Math.min(innerWidth - pop.offsetWidth - 8, r.right - pop.offsetWidth)) + 'px'; } };
+    document.addEventListener('pointerdown', e => { if (!pop.hidden && !pop.contains(e.target) && !more.contains(e.target)) pop.hidden = true; }, true);
+    pop.addEventListener('click', e => { if (e.target.closest('button') && !e.target.closest('select')) setTimeout(() => { pop.hidden = true; }, 0); }); }
+  [...tb.querySelectorAll(':scope > .tgroup')].forEach((g, i) => { if (g.dataset.ord == null) g.dataset.ord = i; });
+  [...pop.children].forEach(g => tb.appendChild(g)); [...tb.querySelectorAll(':scope > .tgroup:not(.tb-more-g)')].sort((a, b) => a.dataset.ord - b.dataset.ord).forEach(g => tb.insertBefore(g, more));
+  more.hidden = true; pop.hidden = true; if (tb.classList.contains('tb-v') || tb.classList.contains('tb-fold')) return;
+  const maxW = st.clientWidth - 32, key = g => g.title || (g.querySelector('[data-tool="pen"]') ? 'pen' : '');
+  const movable = TB_MOVE.map(k => [...tb.querySelectorAll(':scope > .tgroup')].find(g => key(g) === k)).filter(Boolean);
+  if (tb.scrollWidth <= maxW && tb.offsetHeight < 60) return;
+  more.hidden = false; for (const g of movable) { if (tb.scrollWidth <= maxW && tb.offsetHeight < 60) break; pop.appendChild(g); }
+}
+function fitToolbarSoon() { if (tbFitRaf) return; tbFitRaf = requestAnimationFrame(() => { tbFitRaf = 0; fitToolbar(); }); }
+setTimeout(() => { const tb = $('#stage .toolbar'); if (!tb) return; fitToolbar(); if (window.ResizeObserver) new ResizeObserver(fitToolbarSoon).observe($('#stage')); const q = $('#qbar'); if (q && window.MutationObserver) new MutationObserver(fitToolbarSoon).observe(q, { childList: true, attributes: true, attributeFilter: ['hidden'] }); }, 0);
 /* ---- 왼쪽·오른쪽 창 접기 (팀장님 11/24 「줄이고 늘리기는 되는데 아예 접고 편집 화면만 볼 수도 있게」) ----
    ① 크기 조절 막대 가운데 ‹ › 단추 ② 왼쪽 메뉴에서 지금 고른 메뉴를 한 번 더 누르면 왼쪽 창 접기(다른 메뉴를 누르면 펼침)
    ③ 아래 쪽 넘김 막대 「⛶ 편집 화면만」·⌘\(Ctrl+\) = 양쪽 함께 접기/펼치기. 이 PC에 기억 */

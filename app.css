@@ -2013,3 +2013,11 @@ dialog .dhead > .btn[data-close]:hover{background:var(--g100);color:var(--g900)}
 /* 확대 몸짓 중: 글자 도구 막대·손잡이 잠깐 숨김, 책자 단추 아이콘 */
 body.zooming #textBar,body.zooming .ovl .h,body.zooming .ovl .rotline{opacity:0}
 .pgbar .btn .ic{width:15px;height:15px}dialog .dhead h2 .ic{width:18px;height:18px;vertical-align:-3px;margin-right:4px}
+
+/* 도구 막대 한 줄 + ⋯ 펼침 창 (11/24) */
+.stage .toolbar:not(.tb-v){flex-wrap:nowrap}
+#tbMorePop{position:fixed;z-index:80;display:flex;flex-direction:column;gap:6px;padding:8px;background:#fff;border-radius:var(--r-lg,12px);box-shadow:var(--sh-3);animation:popIn var(--d2,160ms) var(--ease-out,ease-out)}
+#tbMorePop .tgroup{display:flex;flex-wrap:wrap;gap:2px;border:0!important;padding:0;margin:0}
+#tbMorePop .tgroup + .tgroup{border-top:1px solid var(--g200,#e4e7ec)!important;padding-top:6px}
+.stage .toolbar:not(.tb-v){overflow-x:auto;overflow-y:hidden;scrollbar-width:none}.stage .toolbar:not(.tb-v)::-webkit-scrollbar{display:none}
+.stage .toolbar .tb-more-g{position:sticky;right:-6px;background:#fff;padding-left:4px;margin-left:auto;box-shadow:-10px 0 10px -6px #fff}
