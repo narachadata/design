@@ -2122,3 +2122,8 @@ body.zooming #textBar,body.zooming .ovl .h,body.zooming .ovl .rotline{opacity:0}
 .acctdlg .svsteps small code{font-size:11.5px}
 .acctfoot{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:12px}
 @media (max-width:640px){.acctpic{flex-direction:column}.acctpic .ap-pc{flex:none;width:100%}.acctpic .ap-ln{width:2px;height:12px;flex:none}}
+.acctbox{display:flex;gap:10px;align-items:flex-start;border:1.5px dashed #c9d6fb;border-radius:12px;padding:10px 12px;margin:0 0 10px;background:#fff}
+.acctbox>i{font-style:normal;font-size:22px;line-height:1}.acctbox>div:first-of-type{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.acctbox small{font-size:11.5px;color:#4a5368;line-height:1.5}.acctbox .acctmail{font-size:16px;font-weight:800;color:#1b2130;overflow-wrap:anywhere}
+.acctbox.ok{border-style:solid;border-color:#9fd8b4;background:#f3fbf6}.acctbox.ask{border-color:#2f5bea;box-shadow:0 0 0 3px rgba(47,91,234,.14)}
+.acctin{display:flex;gap:6px}.acctin input{flex:1;min-width:0}.acctbtns{display:flex;flex-direction:column;gap:5px;flex:none}

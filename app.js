@@ -4115,6 +4115,29 @@ async function openSaveDialog() {
 /* 처음 연결 안내 (팀장님 11/24 「처음 여는 PC에서 어떤 구글 계정으로 연결해야 할지 가이드」)
    공방 자료는 구글 드라이브 폴더 하나에 모임 → PC마다 같은 계정이어야 함. 브라우저는 계정 이메일을 알 수 없으므로
    ① 어느 계정인지 정하는 법 ② 이 PC의 드라이브 앱 계정 확인하는 법 ③ 폴더를 고르면 다른 PC에서 쓰던 폴더인지 공방이 확인(connectFolderChecked) */
+/* 공방 구글 계정 (팀장님 11/24 「내가 어떤 구글로 세팅했는지 안 보여 — 다른 컴은 어떤 계정으로 로그인돼 있는지도 알려 줘야」)
+   브라우저는 드라이브 앱 계정을 읽을 수 없으므로 한 번 적어 둠 → 동기화 폴더 설정(SYNC_KEYS 'naracal-acct')으로 모든 PC에 같아짐.
+   아직 폴더를 연결하지 않은 새 PC에는 「다른 PC에 알려 주기」 링크(#acct= — 주소 뒤 # 부분이라 서버로 가지 않음)로 넘김 */
+function acctGet() { try { const o = JSON.parse(localStorage.getItem('naracal-acct') || 'null'); return o && o.email ? o : null; } catch (e) { return null; } }
+function acctSet(email, by) { email = String(email || '').trim(); try { if (!email) localStorage.removeItem('naracal-acct'); else localStorage.setItem('naracal-acct', JSON.stringify({ email, by: by || store.pcName() || '', at: Date.now() })); } catch (e) {} if (store.state.dir) store.pushSettings().catch(() => {}); }
+const acctOk = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
+function acctLink() { const a = acctGet(); if (!a) return ''; const b = btoa(unescape(encodeURIComponent(JSON.stringify({ e: a.email, b: a.by || '' })))).replace(/=+$/, ''); return location.origin + location.pathname + '#acct=' + b; }
+function acctFromHash() { const m = /#acct=([A-Za-z0-9+/_-]+)/.exec(location.hash || ''); if (!m) return false; try { const o = JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/'))))); if (o && acctOk(o.e)) { try { localStorage.setItem('naracal-acct', JSON.stringify({ email: o.e, by: o.b || '', at: Date.now(), via: 'link' })); } catch (e) {} } } catch (e) {} try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} return true; }
+async function acctCopyLink() { const u = acctLink(); if (!u) { toast('먼저 구글 계정을 적어 주세요', true); return; } try { await navigator.clipboard.writeText(u); toast('링크를 복사했습니다 — 새 PC에서 카톡·메일로 받아 열면 이 계정이 안내에 보입니다'); } catch (e) { window.prompt('이 링크를 새 PC에서 여세요', u); } }
+/* 계정 칸 (안내 창·저장 설정 공통) */
+function acctBox(ctx) {
+  const a = acctGet(), ready = !!store.state.dir;
+  if (a) return `<div class="acctbox ok"><i>👤</i><div><small>${a.via === 'link' ? '다른 PC에서 알려 준' : '우리 공방'} 구글 계정${a.by ? ` · 「${esc(a.by)}」${a.via === 'link' ? '에서 쓰는 계정' : '에서 적음'}` : ''}</small><b class="acctmail">${esc(a.email)}</b><small>모든 PC의 구글 드라이브 앱이 <b>이 계정</b>으로 로그인되어 있어야 합니다.</small></div><div class="acctbtns"><button class="btn sm" data-acct="edit">고치기</button>${ready ? '<button class="btn sm" data-acct="link">🔗 다른 PC에 알려 주기</button>' : ''}</div></div>`;
+  return `<div class="acctbox"><i>👤</i><div><small>우리 공방 구글 계정 ${ready ? '— 이 PC가 연결한 드라이브 앱 계정을 적어 두세요' : '— 다른 PC에서 쓰는 계정을 알면 적어 두세요'}</small><div class="acctin"><input type="email" id="acctIn${ctx}" placeholder="예: dojang@gmail.com" autocomplete="off"><button class="btn sm primary" data-acct="save">적어 두기</button></div><small>${ready ? '적어 두면 다른 PC의 공방 안내에도 「이 계정으로 연결하세요」라고 보입니다(구글 드라이브 폴더 설정으로 같아짐).' : '모르면: 이미 쓰는 PC에서 공방 → ⚙ 설정 → 저장 설정을 열면 계정이 보이고, 「🔗 다른 PC에 알려 주기」 링크를 이 PC에서 열면 여기에 저절로 들어옵니다.'}</small></div></div>`;
+}
+function acctBind(root, ctx, after) {
+  root.querySelectorAll('[data-acct]').forEach(b => b.onclick = async () => {
+    const k = b.dataset.acct;
+    if (k === 'save') { const v = (root.querySelector('#acctIn' + ctx) || {}).value; if (!acctOk(v)) { toast('구글 계정 이메일을 넣어 주세요 (예: dojang@gmail.com)', true); return; } acctSet(v); toast('구글 계정을 적어 두었습니다 — 다른 PC 안내에도 보입니다'); after(); }
+    else if (k === 'edit') { const a = acctGet(); const v = window.prompt('우리 공방 구글 계정 (비우면 지움)', a ? a.email : ''); if (v == null) return; if (v.trim() && !acctOk(v)) { toast('이메일 모양이 아닙니다', true); return; } acctSet(v); after(); }
+    else if (k === 'link') await acctCopyLink();
+  });
+}
 function openAcctGuide(first) {
   try { localStorage.setItem('naracal-acct-guide', String(Date.now())); } catch (e) {}
   let d = $('#dlgAcct'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgAcct'; d.className = 'acctdlg'; document.body.appendChild(d); }
@@ -4126,8 +4149,9 @@ function openAcctGuide(first) {
   <div class="dbody">
     <div class="acctpic"><div class="ap-pc"><i>💻</i><b>도장 PC</b></div><span class="ap-ln"></span><div class="ap-cl"><svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><path d="M9 22h17a7 7 0 0 0 .8-13.95A9 9 0 0 0 9.6 7.2 7.5 7.5 0 0 0 9 22z" fill="#2f5bea"/><circle cx="17" cy="14.5" r="3.4" fill="#fff"/><path d="M11.6 21.5a5.6 5.6 0 0 1 10.8 0z" fill="#fff"/></svg><b>같은 구글 계정 하나</b><small>내 드라이브 › 나라차디자인공방<br>문서 · 설정 · 자료실 · AI 결과함</small></div><span class="ap-ln"></span><div class="ap-pc"><i>🏠</i><b>집 PC · 노트북</b></div></div>
     <p class="acctwarn">⚠️ PC마다 <b>다른 계정</b>으로 연결하면 자료가 두 곳에 따로 쌓입니다 — 모든 PC가 <b>같은 계정</b>이어야 합니다.</p>
+    <div id="acctSlotG">${acctBox('G')}</div>
     <ol class="svsteps">
-      <li><span>1</span><div><b>어느 계정인지 정하기</b><small>다른 PC에서 이미 공방을 쓰고 있다면 → <b>그 PC의 구글 드라이브 앱에 로그인한 계정</b>입니다(아래 2번 방법으로 그 PC에서 확인).<br>처음 쓰는 거라면 → <b>도장 공용 구글 계정</b>(관리프로그램 구글 시트가 있는 계정)으로 정하면 자료가 한곳에 모입니다.</small></div></li>
+      <li><span>1</span><div><b>어느 계정인지 정하기</b><small>${acctGet() ? `위의 <b>${esc(acctGet().email)}</b>입니다. ` : ''}다른 PC에서 이미 공방을 쓰고 있다면 → <b>그 PC의 구글 드라이브 앱에 로그인한 계정</b>입니다(아래 2번 방법으로 그 PC에서 확인).<br>처음 쓰는 거라면 → <b>도장 공용 구글 계정</b>(관리프로그램 구글 시트가 있는 계정)으로 정하면 자료가 한곳에 모입니다.</small></div></li>
       <li><span>2</span><div><b>이 PC가 그 계정인지 확인</b><small>${how}<br>다른 계정이면 드라이브 아이콘 → ⚙ 설정 → <b>환경설정 → 계정 추가</b>(또는 연결 해제 후 다시 로그인)로 맞는 계정에 로그인하세요. 드라이브 앱이 없으면 「Google Drive 데스크톱」을 설치합니다.</small></div></li>
       <li><span>3</span><div><b>저장 폴더 고르기</b><small><b>내 드라이브 → 나라차디자인공방</b> 폴더를 고릅니다. 공방이 폴더 안을 보고 「✅ ○○ PC에서 쓰던 폴더입니다」 또는 「비어 있는 폴더입니다」를 알려 줍니다 — 다른 PC에서 쓰고 있는데 비어 있다고 나오면 계정이 다른 것입니다.</small><button class="btn primary" data-ac="dir">☁️ 저장 폴더 고르기</button></div></li>
     </ol>
@@ -4135,6 +4159,7 @@ function openAcctGuide(first) {
     <div class="acctfoot">${first ? '<span class="hint" style="margin:0">언제든 ⚙ 설정 → 저장 설정에서 다시 볼 수 있어요</span>' : ''}<button class="btn" data-close>${first ? '나중에' : '닫기'}</button></div>
   </div>`;
   d.querySelectorAll('[data-close]').forEach(b => b.onclick = () => d.close());
+  const reAcct = () => { const sl = d.querySelector('#acctSlotG'); if (sl) { sl.innerHTML = acctBox('G'); acctBind(sl, 'G', reAcct); } }; reAcct();
   d.querySelector('[data-ac="dir"]').onclick = async () => { try { const ok = await connectFolderChecked(); if (ok) d.close(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } };
   if (!d.open) d.showModal();
 }
@@ -4152,9 +4177,11 @@ async function connectFolderChecked() {
   }
   await afterFolderReady(); updateSaveBadge();
   const when = t => { try { return new Date(t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
-  if (c.set && c.set.by && c.set.by !== store.pcName()) toast(`✅ 「${c.set.by}」에서 쓰던 폴더입니다 (${when(c.set.at)} 저장) — 같은 구글 계정이 맞습니다`);
+  const ac = acctGet(), acs = ac ? ` · 계정 ${ac.email}` : '';
+  if (c.set && c.set.by && c.set.by !== store.pcName()) toast(`✅ 「${c.set.by}」에서 쓰던 폴더입니다 (${when(c.set.at)} 저장${acs}) — 같은 구글 계정이 맞습니다`);
   else if (has(c)) toast(`✅ 공방 자료가 있는 폴더입니다 (문서 ${c.docs}개${c.folders ? ` · 폴더 ${c.folders}개` : ''}) — 문서와 설정이 이 폴더로 같아집니다`);
   else toast('새 저장 폴더로 시작합니다 — 다른 PC도 같은 구글 계정으로 이 폴더를 고르세요');
+  if (!ac) setTimeout(() => { openSaveDialog().then(() => { const i = $('#acctInS'); if (i) { i.focus(); i.closest('.acctbox').classList.add('ask'); } }).catch(() => {}); }, 400);  /* 계정을 아직 안 적었으면 저장 설정의 계정 칸을 열어 둠 */
   return true;
 }
 async function renderSaveDialog() {
@@ -4168,7 +4195,7 @@ async function renderSaveDialog() {
   const fileOK = !!st.handle && (!ready || curIn), oc = b => b ? 'ok' : 'no';
   const flow = `<div class="svflow">
     <div class="svstep ok"><i>💻</i><b>이 브라우저</b><small>늘 자동으로 임시 보관</small><em>✔ 켜짐</em></div><span class="svarr">→</span>
-    <div class="svstep ${oc(ready)}"><i>☁️</i><b>구글 드라이브 폴더</b><small>${ready ? esc(st.dirName || '동기화 폴더') : st.dir ? '연결했지만 이 창에서 허락이 필요' : '아직 연결 안 함'}</small><em>${ready ? '✔ 연결됨' : '○ 아직'}</em></div><span class="svarr">→</span>
+    <div class="svstep ${oc(ready)}"><i>☁️</i><b>구글 드라이브 폴더</b><small>${ready ? esc(st.dirName || '동기화 폴더') : st.dir ? '연결했지만 이 창에서 허락이 필요' : '아직 연결 안 함'}${acctGet() ? `<br>👤 ${esc(acctGet().email)}` : ''}</small><em>${ready ? '✔ 연결됨' : '○ 아직'}</em></div><span class="svarr">→</span>
     <div class="svstep ${oc(fileOK)}"><i>📄</i><b>지금 문서</b><small>${st.handle ? esc(String(st.fileName || '').replace(/\.design\.json$/i, '')) + (ready ? (curIn ? ' · 폴더 안' : ' · 폴더 밖') : '') : '파일로는 아직 안 저장'}</small><em>${fileOK ? '✔ 파일에 자동 저장' : '○ 브라우저에만'}</em></div></div>`;
   let todo;
   if (!st.dirSupported && !ready) todo = `<div class="svtodo warn"><b>⚠️ 이 브라우저는 폴더 연결을 못 합니다</b><p>Chrome이나 Edge에서 열면 구글 드라이브 폴더에 저장할 수 있어요. 지금은 「사본 내려받기」로 보관하세요.</p></div>`;
@@ -4182,7 +4209,7 @@ async function renderSaveDialog() {
   else todo = `<div class="svtodo done"><b>✅ 저장 설정이 모두 되어 있습니다</b><p>고칠 때는 아래 「내 저장 설정」에서 바꾸세요. 문서는 고칠 때마다 저절로 폴더에 저장됩니다.</p></div>`;
   const row = (ic, t, val, ctl) => `<div class="svrow"><i>${ic}</i><span><b>${t}</b><small>${val}</small></span><div class="svctl">${ctl}</div></div>`;
   const swc = (id, on) => `<input type="checkbox" class="sw" id="${id}" ${on ? 'checked' : ''}>`;
-  const mine = `<h3 class="svh">⚙ 내 저장 설정 <small>지금 값 · 바꾸기</small></h3><div class="svlist">
+  const mine = `<h3 class="svh">👤 우리 공방 구글 계정 <small>모든 PC가 같은 계정</small></h3><div id="acctSlotS">${acctBox('S')}</div><h3 class="svh">⚙ 내 저장 설정 <small>지금 값 · 바꾸기</small></h3><div class="svlist">
     ${row('☁️', '저장 폴더 (구글 드라이브)', ready ? `<code>${esc(st.dirName || '')}</code> — 두 PC가 이 폴더로 같아짐` : st.dir ? `${esc(st.dirName || '')} (허락 필요)` : '연결 안 함 — 이 브라우저에만 저장', ready ? `<button class="btn sm" data-sv="dir">바꾸기</button><button class="btn sm danger" data-sv="discdir">연결 끊기</button>` : st.dir ? `<button class="btn sm primary" data-sv="redir">허락</button>` : `<button class="btn sm primary" data-sv="dir" ${st.dirSupported ? '' : 'disabled'}>연결</button>`)}
     ${row('🏷', '이 PC 이름', '두 PC에서 함께 쓸 때·버전 기록에 표시', `<input type="text" id="svPcName" value="${esc(store.pcName())}" maxlength="20" placeholder="예: 도장 PC">`)}
     ${row('📄', '지금 문서', st.handle ? `${esc(String(st.fileName || ''))}${ready ? (curIn ? ' — 폴더 안 (자동 저장)' : ' — 폴더 밖 파일') : ' — 파일에 자동 저장'}` : '파일 없이 브라우저에만', `<button class="btn sm" data-sv="now" ${st.handle ? '' : 'disabled'}>지금 저장</button>${ready ? (curIn ? '' : '<button class="btn sm primary" data-sv="intodir">폴더에 저장</button>') : `<button class="btn sm" data-sv="connect" ${st.supported ? '' : 'disabled'}>${st.handle ? '다른 파일로' : '파일 하나 연결'}</button>`}${st.handle && !ready ? '<button class="btn sm danger" data-sv="disc">연결 해제</button>' : ''}`)}
@@ -4209,6 +4236,7 @@ async function renderSaveDialog() {
   $('#saveBody').onclick = async e => { const b = e.target.closest('[data-sv]'); if (b && act[b.dataset.sv]) { await run(act[b.dataset.sv]); return; }
     const li = e.target.closest('[data-doc]'); if (li) { const x = docs[Number(li.dataset.doc)]; if (st.handle && x.name === st.fileName && curIn) { d.close(); return; } try { await openFolderDoc(x.handle); d.close(); } catch (err) { toast('열 수 없습니다: ' + err.message, true); } } };
   { const k1 = $('#svKind'), k2 = $('#svExp'); if (k1) k1.onchange = () => { setPref('naracal-kind-folders', k1.checked); toast(k1.checked ? '저장할 때 종류 폴더를 미리 골라 둡니다' : '저장할 때 마지막에 쓴 폴더를 골라 둡니다'); renderSaveDialog(); }; if (k2) k2.onchange = () => { setPref('naracal-export-copy', k2.checked); toast(k2.checked ? '내려받은 파일도 내 드라이브 종류 폴더에 저장합니다' : '내려받은 파일은 다운로드 폴더에만 저장합니다'); renderSaveDialog(); }; }
+  { const sl = $('#acctSlotS'); if (sl) acctBind(sl, 'S', () => renderSaveDialog()); }
   const pn = $('#svPcName'); if (pn) pn.onchange = () => { store.setPcName(pn.value); pn.value = store.pcName(); toast('이 PC 이름을 저장했습니다'); };
   NC.live.bindSettings(d, () => { if (d.open) renderSaveDialog(); });
 }
@@ -5541,12 +5569,16 @@ function pptRuns(e) {
     const block = /^(DIV|P|LI|H[1-6])$/.test(tag); if (block) brk(); n.childNodes.forEach(c => walk(c, o)); if (block) brk(); };
   root.childNodes.forEach(c => walk(c, base)); if (runs.length) runs[runs.length - 1].options.breakLine = false; return runs.length ? runs : [{ text: '', options: base }];
 }
-function pptTextOpts(e) { const PT = 72 / 25.4, o = { x: e.x / 25.4, y: e.y / 25.4, w: Math.max(0.1, e.w / 25.4), h: Math.max(0.1, e.h / 25.4), align: ['left', 'center', 'right', 'justify'].includes(e.align) ? e.align : 'left', valign: e.valign === 'middle' ? 'middle' : e.valign === 'bottom' ? 'bottom' : 'top', margin: Math.max(0, (Number(e.pad) || 0) * PT), lineSpacingMultiple: Number(e.lh) || 1.3, wrap: true, fit: 'none', objectName: e.name || '글' };
+function pptTextOpts(e) { const PT = 72 / 25.4, o = { x: e.x / 25.4, y: e.y / 25.4, w: Math.max(0.1, e.w / 25.4), h: Math.max(0.1, e.h / 25.4), align: ['left', 'center', 'right', 'justify'].includes(e.align) ? e.align : 'left', valign: e.valign === 'middle' ? 'middle' : e.valign === 'bottom' ? 'bottom' : 'top', margin: Math.max(0, (Number(e.pad) || 0) * PT), lineSpacing: Math.round((Number(e.lh) || 1.3) * (Number(e.size) || 14) * 10) / 10, wrap: true, fit: 'none', objectName: e.name || '글' };
   if (e.rot) o.rotate = Number(e.rot); if (e.ls) o.charSpacing = Math.round(Number(e.ls) * (Number(e.size) || 14) * 10) / 10; if (e.opacity != null && e.opacity < 1) o.transparency = Math.round((1 - e.opacity) * 100);
   const bg = hex6(e.bg); if (bg) o.fill = { color: bg }; if (Number(e.strokeW) > 0) o.outline = { size: Math.max(0.25, e.strokeW * PT), color: hex6(e.strokeC) || 'FFFFFF' };
   if (e.shadow) { const dx = Number(e.shX) || 0, dy = Number(e.shY) || 0; o.shadow = { type: 'outer', color: hex6(e.shC) || '000000', opacity: Math.min(1, Number(e.shA) || 0.25), blur: Math.max(0, (Number(e.shB) || 0) * PT), offset: Math.hypot(dx, dy) * PT, angle: Math.round(((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360) }; }
   return o; }
 /* 공방 글꼴은 대부분 웹 글꼴이라 다른 PC의 PowerPoint에 없음 → 기본은 어느 PC(Windows·Mac Office)에나 있는 맑은 고딕(명조 계열은 바탕)으로 */
+/* 줄 간격은 정확한 pt로(11/24 실제 PowerPoint 점검): 배수(115%)로 주면 PowerPoint가 글꼴 기본 줄 높이(맑은 고딕 1.33배)에 또 곱해 줄 사이가 30% 벌어지고 글이 상자를 넘침.
+   CSS line-height처럼 「줄 간격 × 그 줄에서 가장 큰 글자」로, 한 줄(문단)마다. 한국어 표시(ko-KR) — en-US면 글자마다 맞춤법 빨간 줄 */
+function pptLineSp(runs, lh) { let line = []; const flush = () => { const mx = Math.max(...line.map(r => Number(r.options.fontSize) || 14)); line.forEach(r => { r.options.lineSpacing = Math.round(lh * mx * 10) / 10; }); line = []; };
+  runs.forEach(r => { r.options.lang = 'ko-KR'; line.push(r); if (r.options.breakLine) flush(); }); if (line.length) flush(); }
 const PPT_SERIF = /Myeongjo|Batang|MaruBuri|Serif|명조|바탕|Song|Gowun Batang|Hahmlet|Cinzel|Playfair/i;
 async function exportPPTX(pages, say, base, asImg, keepFonts) {
   await loadScript('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', () => window.PptxGenJS, 'sha384-Cck14aA9cifjYolcnjebXRfWGkz5ltHMBiG4px/j8GS+xQcb7OhNQWZYyWjQ+UwQ');
@@ -5556,7 +5588,7 @@ async function exportPPTX(pages, say, base, asImg, keepFonts) {
     nKeep += asImg ? 0 : pg.els.filter(e => e.type === 'text' && !elHidden(e) && String(e.text || '').trim() && !set.has(e)).length;
     const c = await renderPageCanvas(tx.length ? Object.assign({}, pg, { els: pg.els.filter(e => !set.has(e)) }) : pg, dpi, 'thumb', '#ffffff'); const data = c.toDataURL('image/jpeg', 0.92); c.width = c.height = 0;
     const s = pptx.addSlide(); s.addImage({ data, x: 0, y: 0, w: iw, h: ih, altText: '바탕(도형·그림)' });
-    for (const e of tx) { const runs = pptRuns(e); runs.forEach(r => { if (!keepFonts) r.options.fontFace = PPT_SERIF.test(r.options.fontFace || '') ? 'Batang' : 'Malgun Gothic'; fonts.add(r.options.fontFace); }); s.addText(runs, pptTextOpts(e)); nText++; }
+    for (const e of tx) { const runs = pptRuns(e); pptLineSp(runs, Number(e.lh) || 1.3); runs.forEach(r => { if (!keepFonts) r.options.fontFace = PPT_SERIF.test(r.options.fontFace || '') ? 'Batang' : 'Malgun Gothic'; fonts.add(r.options.fontFace); }); s.addText(runs, pptTextOpts(e)); nText++; }
     if (pg.notes) s.addNotes(String(pg.notes)); }
   say('파일 만드는 중…'); const blob = await pptx.write({ outputType: 'blob' }); saveBlob(blob, `${base}.pptx`);
   toast(asImg ? `PowerPoint 파일로 저장했습니다 — ${pages.length}쪽 (쪽마다 그림 한 장)` : `PowerPoint 파일로 저장했습니다 — ${pages.length}쪽 · 고칠 수 있는 글 상자 ${nText}개${nKeep ? ` (특수 효과 글자 ${nKeep}개는 그림으로)` : ''} ${keepFonts ? ` · 글꼴(${[...fonts].slice(0, 4).join(', ')}${fonts.size > 4 ? ' …' : ''})이 그 PC에 없으면 다른 글꼴로 보여요` : ' · 글꼴은 맑은 고딕·바탕'}`);
@@ -8175,10 +8207,11 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
   if (!loaded) { try { const saved0 = await store.idbGet('doc'), saved = await tabPick(saved0); if (saved) { await loadDoc(saved); loaded = true; setStatus(saved !== saved0 ? '이 탭에서 쓰던 문서를 불러왔습니다' : '브라우저 저장본을 불러왔습니다'); } } catch (e) {} }
   if (!loaded) { doc = newDoc(); doc.calendar.year = 2027; doc.name = '2027 인성 캘린더'; virtueTextFix(doc.calendar, 2027); virtueArtFix(doc.calendar, null, 2027); doc.pages = CAL.buildPages(doc, uid, { year: 2027, kind: 'full' }); ensureAllHolidays(); $('#pname').value = doc.name; hist = [snapshot()]; histMeta = [{ cur: 0, sel: [] }]; hptr = 0; renderAll(); setStatus('2027년 캘린더 초안을 만들었습니다. 공휴일은 자동으로 들어갔습니다.'); freshDraft = true; }
   // 동기화 폴더(구글 드라이브): 허락돼 있으면 바로 맞추고, 아니면 한 번 눌러 허락받기
-  const nlm0 = /[?&]nlimport=/.test(location.search);
+  const nlm0 = /[?&]nlimport=/.test(location.search), acctHash = acctFromHash();
   try {
     const pf = await store.reconnectFolder();
-    if (pf === 'none' && store.state.dirSupported && !nlm0 && (!/[?&]qa\b/.test(location.search) || /[?&]acct\b/.test(location.search))) { let seen = ''; try { seen = localStorage.getItem('naracal-acct-guide') || ''; } catch (e) {} if (!seen) setTimeout(() => openAcctGuide(true), 900); }
+    if (pf === 'none' && store.state.dirSupported && !nlm0 && (!/[?&]qa\b/.test(location.search) || /[?&]acct\b/.test(location.search))) { let seen = ''; try { seen = localStorage.getItem('naracal-acct-guide') || ''; } catch (e) {} if (!seen || acctHash) setTimeout(() => openAcctGuide(true), 900); }
+    else if (acctHash) setTimeout(() => openAcctGuide(false), 900);
     if (pf === 'granted') await afterFolderReady();
     else if (pf === 'prompt') {
       $('#status').innerHTML = `<button class="btn sm primary" id="reconnDir">동기화 폴더 "${esc(store.state.dirName)}" 연결 (눌러서 허락)</button>`;
