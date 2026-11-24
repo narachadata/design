@@ -4554,7 +4554,8 @@ function openRules() {
 
 /* ---- AI 도우미 ---- */
 let aiCtx = { tab: 'image', monthIdx: 0 };
-$('#btnAI').onclick = () => { if (NC.aichat) NC.aichat.toggle(); else openAI('image'); }; /* 11/19 팀장님: AI 도우미 = 오른쪽 채팅창(aichat.js) */
+$('#btnAI').onclick = () => openAIPanel(); /* 11/24: AI는 모두 왼쪽 「AI 도구」 한곳에 (만들기 · AI와 대화 · 스튜디오 · 설정) */
+function openAIPanel(tab) { if (NC.aiStudio && tab) NC.aiStudio.state.tab = tab; if (document.body.classList.contains('fold-l')) setFold('l', false, true); sideTab = 'ai'; renderRail(); renderSide(); } /* 11/19 팀장님: AI 도우미 = 오른쪽 채팅창(aichat.js) */
 /* 인성 문구 제안(AI) 탭은 뺌 (팀장님 11/24 「이제 필요없지 않아?」) — 캘린더 문구는 나라차 → 캘린더의 「인성 문구 넣기」가 인성덕목 2년 계획(메인 프로그램·소식지·학부모앱과 같은 글)으로 넣음. AI가 지은 문구는 계획과 달라져 점검 경고가 뜨므로, 예전 입구는 그 자리로 보냄 */
 function goVirtueCal() { const ov = $('#dlgAI'); if (ov && ov.open) ov.close(); naraGo('calendar'); toast('인성 문구는 나라차 → 캘린더의 「인성 문구 넣기」로 넣습니다 (메인 프로그램·소식지와 같은 글)'); }
 function openAI(tab) { if (tab === 'content') { goVirtueCal(); return; } aiCtx.tab = tab; const el = selEls()[0]; if (el && el.month) aiCtx.monthIdx = el.month - 1; const toKeys = !chatMode() && !AI.cfg.anthropicKey && !AI.cfg.geminiKey && tab !== 'keys'; if (toKeys) aiCtx.tab = 'keys'; renderAI(); $('#dlgAI').showModal(); if (toKeys) toast('API 키로 쓰기로 되어 있는데 키가 없어 「AI 설정」을 먼저 열었습니다 — 키를 넣거나 「내 채팅 요금제로」를 고르세요'); }
@@ -7643,7 +7644,7 @@ function aiReplaceImage(id, u, box) { let el = null; for (const p of doc.pages) 
   if (box && box.from) { const f = box.from; el.w = r1(f.w * (1 + box.l + box.r)); el.h = r1(f.h * (1 + box.t + box.b)); el.x = r1(f.x - f.w * box.l); el.y = r1(f.y - f.h * box.t); } commit(); renderAll(); return true; }
 function aiAppendPages(pgs) { if (Math.abs(doc.w / doc.h - 16 / 9) > 0.02 && !window.confirm('지금 문서가 16:9가 아니어서 쪽 모양이 어긋날 수 있어요. 그래도 뒤에 붙일까요? (새 발표자료로 만들기를 권해요)')) return; fillDojang(pgs); const at = cur + 1; doc.pages.splice(at, 0, ...pgs); commit(); renderAll(); goto(at); toast(`발표 쪽 ${pgs.length}장을 지금 쪽 뒤에 붙였습니다`); }
 if (NC.aiStudio) NC.aiStudio.init({ chatMode, chatName: k => CHAT_SITES[k === 'image' ? AI.cfg.chatImage : AI.cfg.chatText][0], sendToChat, copyImg, toast: (m, b) => toast(m, b), goSide: k => { sideTab = k; if (document.body.classList.contains('fold-l')) setFold('l', false, true); renderRail(); renderSide(); }, sideIs: k => sideTab === k, renderSide, insertImage: aiInsertImage, replaceImg: aiReplaceImage, openPagesAsNewDoc: aiPagesAsNewDoc, appendPages: aiAppendPages, uid, commit, rerender, addAsset, src: r => src(r), openRachaMaker, openAI, aichatShow: () => { if (NC.aichat) NC.aichat.show(true); }, imgEditorSel: () => { const el = selEls()[0]; if (el && el.type === 'image' && src(el.src)) openImgEditor(el); else toast('먼저 이미지 요소를 선택하세요', true); } });
-if (NC.aichat) NC.aichat.init({
+if (NC.aichat) NC.aichat.init({ openAIPanel, chatMode,
   get doc() { return doc; }, get cur() { return cur; }, get sel() { return sel.slice(); }, get hptr() { return hptr; },
   pgOff, commit, undo, renderAll, goto, select, uid, TEXT_DEF, docK, isPx: isPxDoc, sizeLabel: () => { updDocSize(); const t = ($('#docSize') || {}).textContent; return t && /px/.test(t) ? `${t} (${docSizeLabel(' × ')})` : t || docSizeLabel(' × '); }, toast, openAI, tplItems, openTplPreview,
   fonts: () => allFonts().map(f => f.family), dojang: getDojang,

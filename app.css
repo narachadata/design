@@ -2021,3 +2021,11 @@ body.zooming #textBar,body.zooming .ovl .h,body.zooming .ovl .rotline{opacity:0}
 #tbMorePop .tgroup + .tgroup{border-top:1px solid var(--g200,#e4e7ec)!important;padding-top:6px}
 .stage .toolbar:not(.tb-v){overflow-x:auto;overflow-y:hidden;scrollbar-width:none}.stage .toolbar:not(.tb-v)::-webkit-scrollbar{display:none}
 .stage .toolbar .tb-more-g{position:sticky;right:-6px;background:#fff;padding-left:4px;margin-left:auto;box-shadow:-10px 0 10px -6px #fff}
+
+/* AI 한곳 (11/24): 왼쪽 AI 도구 패널 위 탭 + 도구 줄, 대화창은 탭 안에 */
+.ais-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--g100,#eef0f3);padding:3px;border-radius:10px;margin-bottom:8px}
+.ais-tabs button{border:0;background:transparent;padding:7px 6px;border-radius:8px;font:inherit;font-size:13px;font-weight:700;color:var(--g700,#344054);cursor:pointer;transition:background-color var(--d1,100ms),box-shadow var(--d1,100ms)}
+.ais-tabs button.on{background:#fff;color:var(--ui-accent);box-shadow:var(--sh-1)}
+.ais-tools{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px}.ais-tools .btn{font-size:12px;padding:5px 8px}
+.ais-chatwrap{display:flex;flex-direction:column;height:100%}.ais-chathost{flex:1;min-height:420px;display:flex}
+.aichat.embed{grid-row:auto;grid-column:auto;border:1px solid var(--g200,#e4e7ec);border-radius:12px;flex:1;min-height:420px;height:calc(100vh - 260px);overflow:hidden}

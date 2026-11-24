@@ -407,7 +407,7 @@ ${manualText()}`;
       const pv = t.closest('[data-prov]'); if (pv) { S.prov = pv.dataset.prov; save(); renderSet(); renderHead(); return; }
       if (t.closest('#achNew')) { if (busy) return; newChat(); S.log = []; save(); renderLog(); return; }
       if (t.closest('#achCfg')) { openSet(); return; }
-      if (t.closest('#achClose')) { show(false); return; }
+      if (t.closest('#achClose')) { if (B && B.openAIPanel) B.openAIPanel('make'); else show(false); return; }
       if (t.closest('#achSend')) { if (busy) { if (aborter) aborter.abort(); return; } const x = $('#achText'); const v = x.value; x.value = ''; send(v); return; }
       if (t.closest('#achKeySave')) { const v = $('#achKey').value.trim(); if (S.prov === 'gemini') cfg().geminiKey = v; else cfg().anthropicKey = v; const m = $('#achModel'); if (m) { if (S.prov === 'gemini') S.geminiModel = m.value.trim(); else S.claudeModel = m.value; } window.AI.saveCfg(); save(); renderSet(); renderHead(); B.toast('AI 설정을 저장했습니다'); openSet(false); return; }
       if (t.closest('#achKeyDel')) { if (S.prov === 'gemini') cfg().geminiKey = ''; else cfg().anthropicKey = ''; window.AI.saveCfg(); renderSet(); renderHead(); B.toast('이 PC에서 키를 지웠습니다'); return; }
@@ -418,7 +418,10 @@ ${manualText()}`;
     renderHead(); renderLog();
   }
   function renderHead() { const p = $('#achProv'); if (!p) return; const m = S.prov === 'gemini' ? (S.geminiModel || 'Gemini') : ((CLAUDE_MODELS.find(x => x[0] === S.claudeModel) || [0, S.claudeModel])[1].split(' (')[0]); p.textContent = m + (keyOf(S.prov) ? '' : ' · 키 없음'); }
+  /* 11/24 팀장님 「AI 도구와 AI 도우미를 한곳에」: 대화창은 왼쪽 AI 도구 패널의 「💬 AI와 대화」 탭 안에 — mount(자리)로 넣음, show(true)는 그 탭을 엶 */
+  function mount(host) { build(); const a = $('#aiChat'); if (!a || !host) return; host.appendChild(a); a.hidden = false; a.classList.add('embed'); const app = document.querySelector('.app'); if (app) app.classList.remove('ai-on'); renderHead(); renderLog(); if (!keyOf(S.prov) && !(B && B.chatMode && B.chatMode())) openSet(true); setTimeout(() => { const x = $('#achText'); if (x) x.focus(); }, 30); }
   function show(on) {
+    if (on !== false && B && B.openAIPanel) { B.openAIPanel('chat'); return; }
     build(); const a = $('#aiChat'), app = document.querySelector('.app');
     if (on === undefined) on = a.hidden;
     a.hidden = !on; app.classList.toggle('ai-on', on);
@@ -426,5 +429,5 @@ ${manualText()}`;
     if (on) { renderHead(); renderLog(); if (!keyOf(S.prov)) openSet(true); setTimeout(() => { const x = $('#achText'); if (x) x.focus(); }, 30); }
     try { localStorage.setItem(LS + '-open', on ? '1' : ''); } catch (e) {}
   }
-  NC.aichat = { init(b) { B = b; if ((() => { try { return localStorage.getItem(LS + '-open') === '1'; } catch (e) { return false; } })()) show(true); }, show, toggle: () => show(), send, get state() { return S; }, get api() { return api; }, _runTool: (n, a) => runTool(n, a, { edits: 0, images: [], note() {}, say() {} }), system };
+  NC.aichat = { init(b) { B = b; }, mount, show, toggle: () => show(), send, get state() { return S; }, get api() { return api; }, _runTool: (n, a) => runTool(n, a, { edits: 0, images: [], note() {}, say() {} }), system };
 })();

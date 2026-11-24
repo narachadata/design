@@ -125,6 +125,8 @@
 
   /* ---------- 왼쪽 「AI 도구」 한 화면 ---------- */
   function renderPanel(body) {
+    const tabs = `<div class="ais-tabs" role="tablist"><button role="tab" data-aitab="make" class="${S.tab !== 'chat' ? 'on' : ''}" aria-selected="${S.tab !== 'chat'}">✨ 만들기</button><button role="tab" data-aitab="chat" class="${S.tab === 'chat' ? 'on' : ''}" aria-selected="${S.tab === 'chat'}">💬 AI와 대화</button></div><div class="ais-tools"><button class="btn sm" data-aact="studio">🎨 그림 스튜디오</button><button class="btn sm" data-aact="racha">🐧 라차 동작</button><button class="btn sm" data-aact="imged">🖌 이미지 편집기</button><button class="btn sm" data-aact="keys">⚙ AI 설정</button></div>`;
+    if (S.tab === 'chat') { body.innerHTML = `<div class="ais ais-chatwrap">${tabs}<div class="ais-chathost" id="aisChatHost"></div></div>`; body.onclick = e => { const t = e.target.closest('[data-aitab]'); if (t) { S.tab = t.dataset.aitab; renderPanel(body); return; } const a = e.target.closest('[data-aact]'); if (!a) return; const k = a.dataset.aact; if (k === 'studio') B.openAI('image'); if (k === 'keys') B.openAI('keys'); if (k === 'racha') B.openRachaMaker(); if (k === 'imged') B.imgEditorSel(); }; body.oninput = null; body.onchange = null; if (NC.aichat && NC.aichat.mount) NC.aichat.mount(body.querySelector('#aisChatHost')); return; }
     const it = S.intent, I = INTENTS.find(x => x[0] === it), mode = chat() ? `💬 채팅 요금제(${esc(B.chatName('image'))}·${esc(B.chatName('text'))})` : '🔑 API 키';
     const chips = INTENTS.map(([k, ic, t]) => `<button class="ais-chip${k === it ? ' on' : ''}" data-ain="${k}"><span>${ic}</span>${t}</button>`).join('');
     const opts = it === 'img' ? `<div class="ais-lb">그림체</div><div class="ais-row">${STYLES.map(([k, t]) => `<button class="ais-s${S.style === k ? ' on' : ''}" data-ast="${k}">${t}</button>`).join('')}</div><div class="ais-lb">모양</div><div class="ais-row">${RATIOS.map(([k, t]) => `<button class="ais-s${S.ratio === k ? ' on' : ''}" data-ara="${k}">${t}</button>`).join('')}</div>`
@@ -136,15 +138,16 @@
         <div class="ais-lb">테마</div><div class="ais-th">${Object.keys(TH).map(k => `<button class="ais-tc${S.deck.theme === k ? ' on' : ''}" data-ath="${k}" title="${esc(TN[k] || k)}"><i style="background:${TH[k].cbg}"></i><i style="background:${TH[k].ac}"></i><i style="background:${TH[k].bbg}"></i><span>${esc(TN[k] || k)}</span></button>`).join('')}</div>
         <div class="ais-row" style="margin-top:8px"><button class="btn primary sm" data-aact="decknew">새 발표자료로 만들기</button><button class="btn sm" data-aact="deckadd">지금 문서 뒤에 붙이기</button><button class="btn sm" data-aact="deckclr">지우기</button></div><p class="hint">만든 뒤 글·그림은 쪽에서 바로 고치고, 「🎞 PPT 배경」으로 배경 그림을 더할 수 있어요. 다운로드 → PowerPoint로 내보내기.</p></div>` : `<p class="hint">주제를 쓰고 「개요 만들기」 → 쪽 목록을 보고 테마를 고르면 같은 모양의 발표자료가 바로 만들어집니다. 템플릿 → 📊 프레젠테이션에서 직접 골라도 돼요.</p><button class="btn sm" data-aact="deckself">✍ AI 없이 개요 직접 쓰기</button>`; }
     else if (S.cards.length && S.cardFor === (it === 'img' ? 'img' : it)) { const tg = S.cards.some(c => c.target && c.intent === S.cardFor); res = `<div class="ais-lb">결과 <small>${tg ? '「눌러서 바꾸기」 = 고른 사진이 바뀜 (원본은 남음)' : '누르면 넣기' + (it === 'pptbg' ? ' (지금 쪽 배경으로)' : '')}</small></div><div class="ais-cards">${S.cards.map((c, i) => c.intent === S.cardFor ? `<button class="ais-card${c.intent === 'pptbg' ? ' wide' : ''}" data-acard="${i}" title="${c.target ? '누르면 고른 사진이 바뀜' : '누르면 넣기'}"><img src="${c.src}" alt="">${c.target ? '<i class="ais-rep">눌러서 바꾸기</i>' : ''}</button>` : '').join('')}</div>${it !== 'pptbg' && it !== 'icon' && !tg ? '<p class="hint">길게 누르거나 Shift+누르기 = 지금 쪽 배경으로</p>' : ''}`; }
-    body.innerHTML = `<div class="ais"><div class="ais-h"><b>✨ 무엇을 만들까요?</b><small>${mode}</small></div>
+    body.innerHTML = `<div class="ais">${tabs}<div class="ais-h"><b>✨ 무엇을 만들까요?</b><small>${mode}</small></div>
       <div class="ais-chips">${chips}</div>
       ${it === 'racha' ? `<p class="hint">${esc(I[3])}</p>` : `<textarea id="aisQ" rows="3" placeholder="${esc(I[3])}">${esc(S.prompt)}</textarea>`}
       ${opts}<button class="btn primary full ais-go" data-aact="go">${goLabel}</button>
       ${chat() ? `<p class="hint ais-tip">채팅에 붙여 넣고 답이 오면, 그림·글을 복사해 <b>공방 아무 데서나 ⌘V</b>${['img', 'sticker'].includes(it) ? ' — 그림은 한 장에 4가지로 받아 저절로 4장으로 나눠요' : ''}.</p>` : ''}
       ${res}
       ${boxHTML()}
-      <details class="ais-more"><summary>더보기 — 그림 스튜디오 · AI와 대화 · AI 설정</summary><div class="ais-row"><button class="btn sm" data-aact="studio">🎨 그림 스튜디오</button><button class="btn sm" data-aact="chat">💬 AI와 대화</button><button class="btn sm" data-aact="keys">⚙ AI 설정</button><button class="btn sm" data-aact="imged">🖌 이미지 편집기</button></div></details></div>`;
+      </div>`;
     body.onclick = async e => { const g = k => e.target.closest(k);
+      const tb = g('[data-aitab]'); if (tb) { S.tab = tb.dataset.aitab; renderPanel(body); return; } if (g('[data-aact="racha"]')) { B.openRachaMaker(); return; }
       const ch = g('[data-ain]'); if (ch) { saveQ(); S.intent = ch.dataset.ain; renderPanel(body); return; }
       const s1 = g('[data-ast]'); if (s1) { saveQ(); S.style = s1.dataset.ast; renderPanel(body); return; } const s2 = g('[data-ara]'); if (s2) { saveQ(); S.ratio = s2.dataset.ara; renderPanel(body); return; }
       const s3 = g('[data-aau]'); if (s3) { saveQ(); S.deck.aud = s3.dataset.aau; renderPanel(body); return; } const s4 = g('[data-anu]'); if (s4) { saveQ(); S.deck.n = Number(s4.dataset.anu); renderPanel(body); return; }
