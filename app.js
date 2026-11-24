@@ -4146,16 +4146,19 @@ function openAcctGuide(first) {
   const how = mac
     ? `<b>Mac</b>: 화면 맨 위 메뉴 막대의 <b>구글 드라이브 아이콘</b>(삼각형 모양)을 누르면 오른쪽 위 동그란 계정 사진 옆에 이메일이 보입니다. Finder 왼쪽 <b>위치</b>의 「Google Drive」에 마우스를 올려도 보입니다.`
     : `<b>Windows</b>: 작업 표시줄 오른쪽 <b>^</b> 안의 <b>구글 드라이브 아이콘</b>을 누르면 위쪽 계정 사진 옆에 이메일이 보입니다. 파일 탐색기의 <code>G:</code> 드라이브(Google Drive)가 그 계정의 드라이브입니다.`;
-  d.innerHTML = `<div class="dhead"><h2>👤 어떤 구글 계정으로 연결할까요? <small>처음 한 번 · 모든 PC가 같은 자료를 쓰려면</small></h2><button class="btn sm" data-close>닫기</button></div>
+  d.innerHTML = `<div class="dhead"><h2>👤 이 PC에서 공방 시작하기 <small>구글 계정 · 저장 폴더 연결 — 4단계</small></h2><button class="btn sm" data-close>닫기</button></div>
   <div class="dbody">
     <div class="acctpic"><div class="ap-pc"><i>💻</i><b>도장 PC</b></div><span class="ap-ln"></span><div class="ap-cl"><svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><path d="M9 22h17a7 7 0 0 0 .8-13.95A9 9 0 0 0 9.6 7.2 7.5 7.5 0 0 0 9 22z" fill="#2f5bea"/><circle cx="17" cy="14.5" r="3.4" fill="#fff"/><path d="M11.6 21.5a5.6 5.6 0 0 1 10.8 0z" fill="#fff"/></svg><b>같은 구글 계정 하나</b><small>내 드라이브 › 나라차디자인공방<br>문서 · 설정 · 자료실 · AI 결과함</small></div><span class="ap-ln"></span><div class="ap-pc"><i>🏠</i><b>집 PC · 노트북</b></div></div>
     <p class="acctwarn">⚠️ PC마다 <b>다른 계정</b>으로 연결하면 자료가 두 곳에 따로 쌓입니다 — 모든 PC가 <b>같은 계정</b>이어야 합니다.</p>
     <div id="acctSlotG">${acctBox('G')}</div>
     <ol class="svsteps">
-      <li><span>1</span><div><b>어느 계정인지 정하기</b><small>${acctGet() ? `위의 <b>${esc(acctGet().email)}</b>입니다. ` : ''}다른 PC에서 이미 공방을 쓰고 있다면 → <b>그 PC의 구글 드라이브 앱에 로그인한 계정</b>입니다(아래 2번 방법으로 그 PC에서 확인).<br>처음 쓰는 거라면 → <b>도장 공용 구글 계정</b>(관리프로그램 구글 시트가 있는 계정)으로 정하면 자료가 한곳에 모입니다.</small></div></li>
-      <li><span>2</span><div><b>이 PC가 그 계정인지 확인</b><small>${how}<br>다른 계정이면 드라이브 아이콘 → ⚙ 설정 → <b>환경설정 → 계정 추가</b>(또는 연결 해제 후 다시 로그인)로 맞는 계정에 로그인하세요. 드라이브 앱이 없으면 「Google Drive 데스크톱」을 설치합니다.</small></div></li>
-      <li><span>3</span><div><b>저장 폴더 고르기</b><small><b>내 드라이브 → 나라차디자인공방</b> 폴더를 고릅니다. 공방이 폴더 안을 보고 「✅ ○○ PC에서 쓰던 폴더입니다」 또는 「비어 있는 폴더입니다」를 알려 줍니다 — 다른 PC에서 쓰고 있는데 비어 있다고 나오면 계정이 다른 것입니다.</small><button class="btn primary" data-ac="dir">☁️ 저장 폴더 고르기</button></div></li>
+      <li><span>1</span><div><b>이 PC에 「Google Drive 데스크톱」 설치</b><small>구글에서 「Google Drive 데스크톱 다운로드」를 찾아 설치합니다. 이미 있으면 넘어가세요.</small></div></li>
+      <li><span>2</span><div><b>${acctGet() ? `<span class="acctmail-in">${esc(acctGet().email)}</span>` : '쓰던 PC와 같은 계정'}으로 로그인</b><small>설치하면 로그인 창이 뜹니다. ${acctGet() ? '위 계정' : '다른 PC의 드라이브 앱에 로그인한 계정(그 PC 공방 → ⚙ 설정 → 저장 설정 맨 위에 보임)'}으로 로그인하세요.<br>이미 다른 계정으로 로그인돼 있으면: ${how}</small></div></li>
+      <li><span>3</span><div><b>잠시 기다리기 — 폴더가 보일 때까지</b><small>${mac ? 'Finder 왼쪽 <b>Google Drive → 내 드라이브</b>' : '파일 탐색기 <b>Google Drive (G:) → 내 드라이브</b>'} 안에 <b>「나라차디자인공방」</b> 폴더가 보이면 준비 끝입니다(처음엔 몇 분 걸릴 수 있어요).</small><p class="acctno">🚫 <b>새 폴더를 만들지 마세요!</b> 다른 PC에서 쓰던 폴더가 저절로 내려옵니다. 같은 이름으로 새로 만들면 <b>빈 폴더</b>가 하나 더 생겨 자료가 갈라집니다.</p></div></li>
+      <li><span>4</span><div><b>공방에서 그 폴더 고르기</b><small>아래 단추 → <b>내 드라이브 → 나라차디자인공방</b> → 「열기(선택)」. 공방이 폴더 안을 보고 <b>「✅ 도장 PC에서 쓰던 폴더입니다」</b>라고 알려 주고, 가장 최근 문서를 엽니다. 「비어 있는 폴더」라고 나오면 계정이나 폴더가 다른 것입니다 — 「연결하지 않기」를 누르고 2·3번을 다시 보세요.</small><button class="btn primary" data-ac="dir">☁️ 저장 폴더 고르기</button></div></li>
     </ol>
+    <details class="bk-more" open><summary>🔄 연결하면 무엇이 같아지나요?</summary><div class="acctsync"><p>✅ <b>같아지는 것</b> — 폴더 안 모든 문서(종류 폴더 포함) · 설정(글꼴·AI 키·도장 정보·요소 빼기·최근 색) · 나라차 자료실(디자인자료) · AI 결과함 · 버전 기록. 한 PC에서 고치면 구글 드라이브가 올린 뒤 다른 PC에 내려옵니다(보통 몇 초~1분).</p><p>⚠️ <b>같아지지 않는 것</b> — 폴더에 저장하지 않고 <b>그 PC 브라우저에만</b> 있던 문서. 쓰던 PC에서 공방 → ⚙ 설정 → 저장 설정의 「지금 문서를 폴더에 저장」이나 「이 브라우저에만 있는 문서」로 먼저 폴더에 넣어 두세요.</p><p>💡 두 PC에서 <b>같은 문서를 동시에</b> 고치면 공방이 어느 쪽으로 할지 묻고, 다른 쪽은 「충돌 사본」으로 남겨 지워지지 않습니다.</p></div></details>
+    <details class="bk-more"><summary>ⓘ 어느 PC에서도 처음 쓰는 거라면?</summary><div>도장 공용 구글 계정(관리프로그램 구글 시트가 있는 계정)으로 드라이브 앱에 로그인한 뒤, 4번에서 폴더를 고르는 창의 <b>내 드라이브</b>에서 「새 폴더」로 <b>나라차디자인공방</b>을 <b>한 번만</b> 만들고 고르세요. 그다음 위 👤 칸에 그 계정을 적어 두면 다른 PC 안내에 보입니다.</div></details>
     <details class="bk-more"><summary>ⓘ 크롬(브라우저) 계정·관리프로그램 접속키는?</summary><div>저장에는 크롬 로그인 계정이 쓰이지 않습니다(구글 드라이브 앱의 계정만). 다만 크롬 오른쪽 위 프로필도 같은 계정이면 Gemini 채팅·구글 드라이브 웹이 같은 계정으로 열려 편합니다.<br>관리프로그램 접속키는 이 브라우저에서 관리프로그램에 한 번 로그인하면 공방·소식지가 그 키를 <b>저절로</b> 씁니다(따로 넣지 않아도 됨).</div></details>
     <div class="acctfoot">${first ? '<span class="hint" style="margin:0">언제든 ⚙ 설정 → 저장 설정에서 다시 볼 수 있어요</span>' : ''}<button class="btn" data-close>${first ? '나중에' : '닫기'}</button></div>
   </div>`;
@@ -4173,7 +4176,7 @@ async function connectFolderChecked() {
     if (await confirmBtns(`고른 「${c.name}」 폴더 안에 「나라차디자인공방」 폴더가 있습니다.\n\n확인: 「나라차디자인공방」으로 연결 (권장)\n취소: 고른 「${c.name}」 그대로`)) { await store.useFolder(c.child); c = await store.folderInfo(); }
   }
   if (!has(c)) {
-    const ok = await confirmBtns(`「${c.name}」 폴더에는 아직 공방 자료가 없습니다.\n\n• 공방을 처음 쓰는 거라면 이 폴더로 시작하면 됩니다.\n• 다른 PC에서 이미 쓰고 있다면 이 PC의 구글 드라이브 앱이 다른 계정일 수 있어요 — 「연결하지 않기」를 누르면 계정 확인 안내를 보여 드립니다.\n\n확인: 이 폴더로 새로 시작\n취소: 연결하지 않기 (계정 먼저 확인)`);
+    const ok = await confirmBtns(`「${c.name}」 폴더에는 아직 공방 자료가 없습니다.\n\n• 공방을 처음 쓰는 거라면 이 폴더로 시작하면 됩니다.\n• 다른 PC에서 이미 쓰고 있다면 ① 이 PC의 구글 드라이브 앱이 다른 계정이거나 ② 같은 이름의 새 폴더를 만든 것일 수 있어요(새로 만든 빈 폴더는 지우고, 저절로 내려온 원래 폴더를 고르세요) — 「연결하지 않기」를 누르면 안내를 보여 드립니다.\n\n확인: 이 폴더로 새로 시작\n취소: 연결하지 않기 (계정 먼저 확인)`);
     if (!ok) { await store.disconnectFolder(); updateSaveBadge(); toast('연결하지 않았습니다 — 구글 드라이브 앱의 계정을 확인한 뒤 다시 고르세요'); if (!$('#dlgAcct[open]')) openAcctGuide(); return false; }
   }
   await afterFolderReady(); updateSaveBadge();
@@ -4203,7 +4206,7 @@ async function renderSaveDialog() {
   else if (st.dir && !ready) todo = `<div class="svtodo"><b>🔑 한 번만 허락해 주세요</b><p>전에 연결한 폴더 <b>${esc(st.dirName || '')}</b>를 이 창에서 다시 쓰려면 브라우저 허락이 필요합니다.</p><button class="btn primary" data-sv="redir">폴더 다시 허락하기</button></div>`;
   else if (!ready) todo = `<div class="svtodo"><b>🚀 처음 설정 — 3단계면 끝</b><ol class="svsteps">
       <li><span>1</span><div><b>구글 드라이브 앱 설치</b><small>각 PC에 「Google Drive 데스크톱」을 설치하고 <b>모든 PC에서 같은 구글 계정</b>으로 로그인 (이미 했으면 넘어가기)</small><button class="btn sm" data-sv="acct">👤 어떤 계정으로? 확인하는 법</button></div></li>
-      <li><span>2</span><div><b>저장 폴더 고르기</b><small>아래 단추 → <b>내 드라이브 → 나라차디자인공방</b> 폴더 고르기 (없으면 그 창에서 「새 폴더」). Windows는 <code>G:\\내 드라이브</code>, Mac은 Finder 왼쪽 <code>Google Drive</code></small><button class="btn primary" data-sv="dir">☁️ 저장 폴더 고르기</button></div></li>
+      <li><span>2</span><div><b>저장 폴더 고르기</b><small>아래 단추 → <b>내 드라이브 → 나라차디자인공방</b> 폴더 고르기. <b>다른 PC에서 쓰던 폴더가 저절로 내려오니 새로 만들지 마세요</b> (어느 PC에서도 처음일 때만 그 창에서 「새 폴더」). Windows는 <code>G:\\내 드라이브</code>, Mac은 Finder 왼쪽 <code>Google Drive</code></small><button class="btn primary" data-sv="dir">☁️ 저장 폴더 고르기</button></div></li>
       <li><span>3</span><div><b>이 PC 이름 정하기</b><small>아래 「내 저장 설정」의 이 PC 이름 (예: 도장 PC, 집 맥북) — 두 PC에서 함께 쓸 때 어느 PC인지 알려 줌</small></div></li></ol>
       <p class="hint" style="margin:6px 0 0">연결하면 문서와 설정(글꼴·요소·API 키 등)이 이 폴더를 통해 다른 PC와 같아집니다. 안 해도 이 브라우저에는 저장됩니다.</p></div>`;
   else if (!curIn) todo = `<div class="svtodo"><b>📥 지금 문서를 폴더에 넣기</b><p>폴더는 연결됐지만 지금 문서는 ${st.handle ? '폴더 밖 파일' : '아직 브라우저에만'} 있습니다. 폴더에 저장하면 다른 PC에서도 열 수 있어요.</p><button class="btn primary" data-sv="intodir">지금 문서를 폴더에 저장</button></div>`;
@@ -5332,11 +5335,11 @@ function renderDownload() {
   ${img ? `<label class="f" style="margin-bottom:2px"><span>크기</span></label>${proxyPick('#dlScale', S.scale, [[1, '📱', '1배', '1배 — 화면·SNS용 (96dpi)'], [2, '💻', '2배', '2배 — 선명하게 (192dpi)'], [3.125, '🖨', '300dpi', '인쇄용 300dpi'], [3.646, '🖨✨', '350dpi', '고급 인쇄 350dpi']], 'txt')}<select id="dlScale" hidden>${[[1, '1배'], [2, '2배'], [3.125, '300dpi'], [3.646, '350dpi']].map(([v, t]) => `<option value="${v}" ${S.scale === v ? 'selected' : ''}>${t}</option>`).join('')}</select>` : ''}
   <label class="f" style="margin-bottom:2px"><span>페이지</span></label>${proxyPick('#dlPages', S.pages, [['all', '📚', '모든 쪽', doc.pages.some(p => p.dlOff) && doc.pages.some(p => !p.dlOff) ? `모든 쪽 (숨긴 ${doc.pages.filter(p => p.dlOff).length}쪽 빼고)` : `모든 쪽 (1~${doc.pages.length})`], ['cur', '📄', '지금 쪽', `지금 쪽 (${cur + 1})`], ['range', '✍', '골라서', '쪽 번호 직접 쓰기 (예: 1-3, 5)']].concat(img && sel.length ? [['sel', '▣', '고른 것만', `선택한 요소만 (${sel.length}개)`]] : []), 'txt')}<label class="f" hidden><select id="dlPages"><option value="all" ${S.pages === 'all' ? 'selected' : ''}>${doc.pages.some(p => p.dlOff) && doc.pages.some(p => !p.dlOff) ? `모든 페이지 (숨긴 ${doc.pages.filter(p => p.dlOff).length}쪽 빼고 ${doc.pages.filter(p => !p.dlOff).length}쪽)` : `모든 페이지 (1~${doc.pages.length})`}</option><option value="cur" ${S.pages === 'cur' ? 'selected' : ''}>현재 페이지 (${cur + 1})</option><option value="range" ${S.pages === 'range' ? 'selected' : ''}>직접 입력</option>${img && sel.length ? `<option value="sel" ${S.pages === 'sel' ? 'selected' : ''}>선택한 요소만 (${sel.length}개)</option>` : ''}</select></label>
   ${S.pages === 'range' ? `<label class="f"><input id="dlRange" placeholder="예: 1-3, 5" value="${esc(S.range)}"></label>` : ''}
-  ${S.fmt === 'pptx' ? `<label class="f"><span>글꼴</span></label><div class="seg dlpf"><button type="button" data-pptf="safe" class="${S.pptFont !== 'keep' ? 'on' : ''}">🖥 어느 PC에서나 같게<small>맑은 고딕·바탕으로</small></button><button type="button" data-pptf="keep" class="${S.pptFont === 'keep' ? 'on' : ''}">🔤 공방 글꼴 이름 그대로<small>그 글꼴을 깐 PC에서만 똑같이</small></button></div>` : ''}
+  ${S.fmt === 'pptx' ? `<label class="f"><span>글꼴</span></label><div class="seg dlpf"><button type="button" data-pptf="embed" class="${(S.pptFont || 'embed') === 'embed' ? 'on' : ''}">📦 공방 글꼴 넣기<small>어느 PC에서나 같게</small></button><button type="button" data-pptf="safe" class="${S.pptFont === 'safe' ? 'on' : ''}">🖥 맑은 고딕·바탕<small>가장 작은 파일</small></button><button type="button" data-pptf="keep" class="${S.pptFont === 'keep' ? 'on' : ''}">🔤 이름만<small>깐 PC에서만</small></button></div>` : ''}
   ${S.fmt === 'png' ? `<label class="chk"><input type="checkbox" id="dlTransp" ${S.transp ? 'checked' : ''}> <span class="pk-chk">▦</span> 투명 배경 <small class="hint" style="margin:0">로고·스티커용</small></label>` : ''}
   ${img && n > 1 ? `<label class="chk"><input type="checkbox" id="dlMerge" ${S.merge ? 'checked' : ''}> <span class="pk-chk">🧷</span> 한 장으로 이어 붙이기 <small class="hint" style="margin:0">세로로</small></label>` : ''}
   ${img && Number(doc.bleed) > 0 ? `<label class="chk"><input type="checkbox" id="dlImgBleed" ${S.imgBleed ? 'checked' : ''}> <span class="pk-chk">✂</span> 도련 ${doc.bleed}mm 포함 <small class="hint" style="margin:0">명함·스티커를 인쇄소에 그림으로 보낼 때</small></label>` : ''}
-  <div class="dlinfo"><b>다운로드 정보</b><ul><li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${docSizeLabel(' × ')}${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${(px(doc.h + 2 * bleed) * (img && S.merge && n > 1 ? n : 1)).toLocaleString()} px · ${Math.round(dpi)}dpi${(img ? Math.round(dpi) < Math.round(96 * S.scale) - 1 : DL_PDF[S.fmt] && Math.round(dpi) < DL_PDF[S.fmt].dpi - 1) ? (Math.max(doc.w, doc.h) >= 1500 ? ' <small>(현수막처럼 큰 인쇄물은 멀리서 보므로 60~100dpi면 충분)</small>' : ' <b>(크기가 커서 브라우저 한계에 맞춰 낮춤)</b>') : ''}</li>${(() => { const pc = px(doc.w + 2 * bleed) * px(doc.h + 2 * bleed) * n, f = img ? S.fmt : 'jpg', q = img ? 0.92 : DL_PDF[S.fmt].q, mb = dlEstMB(pc, f, q); return `<li>파일 크기 최대 약 ${mb < 1 ? '1MB' : mb < 10 ? mb.toFixed(1) + 'MB' : Math.round(mb) + 'MB'} <small>(사진이 적은 디자인은 훨씬 작아짐)</small>${mb > 300 ? ' <b>— 아주 클 수 있으니 인쇄소 웹하드로 보내거나 쪽을 나눠 받으세요</b>' : ''}</li>`; })()}${!img && DL_PDF[S.fmt] && PDF_TENTH(doc.w + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0)), doc.h + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0))) ? '<li><b>5.08m가 넘어 PDF를 1/10 크기로 만듭니다</b> — 인쇄소에 "1000% 확대 출력" 요청 (화질은 그대로)</li>' : ''}` : /^pptx/.test(S.fmt) ? `<li>PowerPoint 쪽 ${n}장 · 쪽마다 ${S.fmt === 'pptx' ? '바탕(도형·그림)은 그림 한 장 + <b>글은 고칠 수 있는 글 상자</b>' : '그림 한 장(글은 못 고침)'} · 발표자 메모 포함</li>` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
+  <div class="dlinfo"><b>다운로드 정보</b><ul><li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${docSizeLabel(' × ')}${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${(px(doc.h + 2 * bleed) * (img && S.merge && n > 1 ? n : 1)).toLocaleString()} px · ${Math.round(dpi)}dpi${(img ? Math.round(dpi) < Math.round(96 * S.scale) - 1 : DL_PDF[S.fmt] && Math.round(dpi) < DL_PDF[S.fmt].dpi - 1) ? (Math.max(doc.w, doc.h) >= 1500 ? ' <small>(현수막처럼 큰 인쇄물은 멀리서 보므로 60~100dpi면 충분)</small>' : ' <b>(크기가 커서 브라우저 한계에 맞춰 낮춤)</b>') : ''}</li>${(() => { const pc = px(doc.w + 2 * bleed) * px(doc.h + 2 * bleed) * n, f = img ? S.fmt : 'jpg', q = img ? 0.92 : DL_PDF[S.fmt].q, mb = dlEstMB(pc, f, q); return `<li>파일 크기 최대 약 ${mb < 1 ? '1MB' : mb < 10 ? mb.toFixed(1) + 'MB' : Math.round(mb) + 'MB'} <small>(사진이 적은 디자인은 훨씬 작아짐)</small>${mb > 300 ? ' <b>— 아주 클 수 있으니 인쇄소 웹하드로 보내거나 쪽을 나눠 받으세요</b>' : ''}</li>`; })()}${!img && DL_PDF[S.fmt] && PDF_TENTH(doc.w + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0)), doc.h + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0))) ? '<li><b>5.08m가 넘어 PDF를 1/10 크기로 만듭니다</b> — 인쇄소에 "1000% 확대 출력" 요청 (화질은 그대로)</li>' : ''}` : /^pptx/.test(S.fmt) ? `<li>PowerPoint 쪽 ${n}장 · 쪽마다 ${S.fmt === 'pptx' ? '바탕(도형·그림)은 그림 한 장 + <b>글은 고칠 수 있는 글 상자</b>' : '그림 한 장(글은 못 고침)'} · 발표자 메모 포함</li>${S.fmt === 'pptx' && (S.pptFont || 'embed') === 'embed' ? (() => { const F = pptUsedFonts(dlPages()), lib = F.filter(f => { const i = FONTS.find(x => x.family === f); return (i && i.lib) || (doc.fonts || []).some(x => x.family === f); }); return `<li>📦 글꼴 ${F.length}개(${esc(F.slice(0, 4).join(', '))}${F.length > 4 ? ' …' : ''})를 파일에 넣습니다 — 한글 글꼴은 하나에 1~12MB라 파일이 그만큼 커집니다${lib.length ? ` · <b>${esc(lib.join(', '))}</b>은 자료실·직접 올린 글꼴이라 넣지 않고 맑은 고딕으로` : ''} <small>(라이선스·형식 때문에 못 넣는 글꼴은 받은 뒤 알려 드려요)</small></li>`; })() : ''}` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
   ${S.fmt === 'pdfprint' ? `<p class="hint" style="margin:6px 0 0">${bleed ? `도련 ${bleed}mm 포함 작업 사이즈${doc.cropMarks ? ` + 재단선(도련 바깥 5mm) — 파일 한 장은 ${r1(doc.w + 2 * bleed + 10)}×${r1(doc.h + 2 * bleed + 10)}mm` : ''}.` : ((FORMATS.find(x => x[0] === doc.fmt) || [])[2] === 'sign' ? '도련 없음(0mm) — 현수막·간판은 보통 도련 없이 작업 사이즈 그대로 맡깁니다.' : `도련 없음(0mm) — 바탕색·그림이 종이 끝까지 닿으면 도련이 필요합니다(아래 인쇄 점검이 알려 드림, 이 문서는 ${bleedFor(FORMATS.find(x => x[0] === doc.fmt)) || 3}mm 권장).`)} 대부분의 인쇄소는 재단선 없는 작업 사이즈 파일을 받습니다.<br>이 PDF는 sRGB 그림(${Math.round(dpi || 300)}dpi)으로 된 파일입니다. 인쇄소에 "sRGB 기준 CMYK 변환"을 요청하고, 밝은 파랑·초록은 탁해질 수 있으니 시안(교정쇄)으로 확인하세요. 명함처럼 작은 검정 글자가 많으면 "PDF (벡터)"가 더 선명합니다(검정 단색 처리 가능).</p><details class="fx dlshop"><summary>📋 인쇄소에 보낼 말</summary><textarea id="dlShopTxt" rows="6" readonly>${esc(shopTxt)}</textarea><button type="button" class="btn sm" data-dl="shopcopy">복사하기</button></details>` : ''}${S.fmt === 'pdfweb' ? '<p class="hint" style="margin:6px 0 0">확대하거나 인쇄하면 글자가 덜 선명할 수 있습니다. 인쇄·보관용은 "PDF (고화질)"을 쓰세요.</p>' : ''}</div>
   <div id="dlWarn"></div><div class="dlprog" id="dlProg"></div>
   <button class="btn primary full" id="dlGo"><svg class="ic" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>${S.fmt === 'pdfvector' ? '인쇄 창 열기' : '다운로드'}</button>`;
@@ -5486,7 +5489,7 @@ async function runDownload() {
   try {
     say('모듈 불러오는 중…');
     try { await ensureLibFonts(pages.map(i => doc.pages[i])); await document.fonts.ready; } catch (e) {}
-    if (S.fmt === 'pptx' || S.fmt === 'pptximg') { await exportPPTX(pages, say, base, S.fmt === 'pptximg', S.pptFont === 'keep'); say('완료'); go.disabled = false; return; }
+    if (S.fmt === 'pptx' || S.fmt === 'pptximg') { await exportPPTX(pages, say, base, S.fmt === 'pptximg', S.pptFont === 'keep' ? true : S.pptFont === 'safe' ? false : 'embed'); say('완료'); go.disabled = false; return; }
     const img = S.fmt === 'jpg' || S.fmt === 'png';
     if (img) {
       const bl = S.imgBleed && Number(doc.bleed) > 0 ? Number(doc.bleed) : 0, mode = bl ? 'print' : 'thumb';
@@ -5559,14 +5562,14 @@ async function setDpi(blob, dpi, type) {
 const pptEditable = e => e.type === 'text' && !elHidden(e) && String(e.text || '').trim() && (e.fillType || 'solid') === 'solid' && (!e.warp || e.warp === 'none') && !e.vertical && !(Number(e.d3) > 0) && !e.glow && (!e.blend || e.blend === 'normal') && !/\{(쪽|전체쪽|디데이:|남은날:)/.test(e.text || '');
 const hex6 = c => { c = String(c || '').trim(); let m = c.match(/^#([0-9a-f]{3})$/i); if (m) return m[1].split('').map(x => x + x).join('').toUpperCase(); m = c.match(/^#([0-9a-f]{6})/i); if (m) return m[1].toUpperCase(); m = c.match(/rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/i); if (m) return [m[1], m[2], m[3]].map(v => Number(v).toString(16).padStart(2, '0')).join('').toUpperCase(); return null; };
 function pptRuns(e) {
-  const up = t => e.upper ? t.toUpperCase() : t, base = { fontFace: e.font || 'Pretendard', fontSize: Number(e.size) || 14, bold: (Number(e.weight) || 400) >= 600, italic: !!e.italic, color: hex6(e.color) || '1A1A1A' };
+  const up = t => e.upper ? t.toUpperCase() : t, base = { fontFace: e.font || 'Pretendard', fontSize: Number(e.size) || 14, bold: (Number(e.weight) || 400) >= 600, _w: Number(e.weight) || 400, italic: !!e.italic, color: hex6(e.color) || '1A1A1A' };
   if (e.underline) base.underline = { style: 'sng' }; if (e.strike) base.strike = 'sngStrike';
   if (!(e.html && e.htmlFor === e.text)) return String(e.text).split('\n').map((t, i, a) => ({ text: up(t), options: Object.assign({}, base, { breakLine: i < a.length - 1 }) }));
   const root = document.createElement('div'); root.innerHTML = e.html; const runs = [], brk = () => { if (runs.length && !runs[runs.length - 1].options.breakLine) runs[runs.length - 1].options.breakLine = true; };
   const walk = (n, st) => { if (n.nodeType === 3) { if (n.nodeValue) runs.push({ text: up(n.nodeValue), options: Object.assign({}, st) }); return; } if (n.nodeType !== 1) return; const tag = n.tagName;
     if (tag === 'BR') { if (runs.length && !runs[runs.length - 1].options.breakLine) brk(); else runs.push({ text: '', options: Object.assign({}, st, { breakLine: true }) }); return; }
-    const o = Object.assign({}, st), cs = n.style; if (tag === 'B' || tag === 'STRONG') o.bold = true; if (tag === 'I' || tag === 'EM') o.italic = true; if (tag === 'U') o.underline = { style: 'sng' }; if (tag === 'S' || tag === 'STRIKE' || tag === 'DEL') o.strike = 'sngStrike';
-    if (cs) { if (cs.fontWeight) o.bold = cs.fontWeight === 'bold' || Number(cs.fontWeight) >= 600; if (cs.fontStyle === 'italic') o.italic = true; const col = hex6(cs.color); if (col) o.color = col; if (/pt$/.test(cs.fontSize)) o.fontSize = parseFloat(cs.fontSize); if (cs.fontFamily) o.fontFace = cs.fontFamily.split(',')[0].replace(/["']/g, '').trim(); if (/underline/.test(cs.textDecoration || '')) o.underline = { style: 'sng' }; }
+    const o = Object.assign({}, st), cs = n.style; if (tag === 'B' || tag === 'STRONG') { o.bold = true; o._w = Math.max(700, o._w || 0); } if (tag === 'I' || tag === 'EM') o.italic = true; if (tag === 'U') o.underline = { style: 'sng' }; if (tag === 'S' || tag === 'STRIKE' || tag === 'DEL') o.strike = 'sngStrike';
+    if (cs) { if (cs.fontWeight) { o.bold = cs.fontWeight === 'bold' || Number(cs.fontWeight) >= 600; o._w = cs.fontWeight === 'bold' ? 700 : cs.fontWeight === 'normal' ? 400 : Number(cs.fontWeight) || o._w; } if (cs.fontStyle === 'italic') o.italic = true; const col = hex6(cs.color); if (col) o.color = col; if (/pt$/.test(cs.fontSize)) o.fontSize = parseFloat(cs.fontSize); if (cs.fontFamily) o.fontFace = cs.fontFamily.split(',')[0].replace(/["']/g, '').trim(); if (/underline/.test(cs.textDecoration || '')) o.underline = { style: 'sng' }; }
     const block = /^(DIV|P|LI|H[1-6])$/.test(tag); if (block) brk(); n.childNodes.forEach(c => walk(c, o)); if (block) brk(); };
   root.childNodes.forEach(c => walk(c, base)); if (runs.length) runs[runs.length - 1].options.breakLine = false; return runs.length ? runs : [{ text: '', options: base }];
 }
@@ -5581,7 +5584,86 @@ function pptTextOpts(e) { const PT = 72 / 25.4, o = { x: e.x / 25.4, y: e.y / 25
 function pptLineSp(runs, lh) { let line = []; const flush = () => { const mx = Math.max(...line.map(r => Number(r.options.fontSize) || 14)); line.forEach(r => { r.options.lineSpacing = Math.round(lh * mx * 10) / 10; }); line = []; };
   runs.forEach(r => { r.options.lang = 'ko-KR'; line.push(r); if (r.options.breakLine) flush(); }); if (line.length) flush(); }
 const PPT_SERIF = /Myeongjo|Batang|MaruBuri|Serif|명조|바탕|Song|Gowun Batang|Hahmlet|Cinzel|Playfair/i;
+/* ---- PowerPoint에 글꼴 넣기 (팀장님 11/24 「글꼴까지 포함되어 저장은 안 되고 있는데 개선이 될까?」) ----
+   PowerPoint의 넣은 글꼴 = ppt/fonts/*.fntdata(EOT: 작은 머리 + TTF 그대로) + presentation.xml <p:embeddedFontLst> + 관계·형식 등록.
+   넣는 글꼴: 공방 fonts/ 무료(OFL) TTF · Pretendard(정적 TTF, jsdelivr) · 웹 글꼴 중 라이선스가 수정·재배포까지 허락하고 woff인 것.
+   빼는 글꼴: 자료실·직접 올린 글꼴(라이선스 확인 불가) · fsType이 넣기 제한(2)·보기/인쇄만(4 — 다른 PC에서 읽기 전용이 됨) · 가변 글꼴(PowerPoint가 가장 가는 굵기로 보임) · CFF(OTF) · woff2.
+   빠진 글꼴의 글은 맑은 고딕·바탕으로 바꿔 어느 PC에서나 같게. */
+const PPT_PRET = { 100: 'Thin', 200: 'ExtraLight', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'SemiBold', 700: 'Bold', 800: 'ExtraBold', 900: 'Black' };
+const PPT_LIC_OK = /Open Font License|OFL|수정·재배포 가능|자유롭게 수정·재배포|수정·변경 가능/, PPT_LIC_NO = /수정[^,]{0,6}금지|포맷 변형 금지|개작 금지|편집 금지/;
+const pptFontCache = new Map();
+const nearW = (list, w) => list.slice().sort((a, b) => Math.abs(a - w) - Math.abs(b - w) || b - a)[0];
+async function pptFontCss() { if (!fontCssText) { try { fontCssText = await (await fetch('fonts/fonts.css?v=' + (window.NARACAL_VER || Date.now()))).text(); } catch (e) { fontCssText = ''; } } return fontCssText || ''; }
+/* 글꼴 이름·굵기 → 넣을 파일 주소(또는 못 넣는 까닭) */
+async function pptFontSrc(fam, w) {
+  if (/^Pretendard$/i.test(fam)) { const k = nearW(Object.keys(PPT_PRET).map(Number), w); return { url: `https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/public/static/alternative/Pretendard-${PPT_PRET[k]}.ttf`, w: k }; }
+  const info = FONTS.find(f => f.family === fam);
+  if (info && info.lib) return { why: '자료실 글꼴(라이선스 확인 필요)' };
+  if ((doc.fonts || []).some(f => f.family === fam)) return { why: '직접 올린 글꼴(라이선스 확인 필요)' };
+  if (info && info.web) { const W = (window.NARACAL_WEBFONTS || []).find(x => x.family === fam); if (!W) return { why: '파일 주소 없음' };
+    const lic = W.license || ''; if (!PPT_LIC_OK.test(lic) || PPT_LIC_NO.test(lic)) return { why: '라이선스가 글꼴 파일 바꾸기를 허락하지 않음' };
+    const fc = W.faces.find(x => Number(x.weight) === nearW(W.faces.map(x => Number(x.weight)), w)); if (!/\.woff$/i.test(fc.url)) return { why: 'woff2 형식이라 아직 못 넣음' }; return { url: fc.url, w: Number(fc.weight), woff: true }; }
+  const blocks = ((await pptFontCss()).match(/@font-face\s*{[^}]*}/g) || []).filter(b => ((b.match(/font-family:\s*['"]?([^;'"]+)['"]?/) || [])[1] || '').trim() === fam);
+  if (!blocks.length) return { why: info ? '파일 주소 없음' : '공방에 없는 글꼴' };
+  const ws = blocks.map(b => { const m = b.match(/font-weight:\s*([^;}]+)/); return m ? Number(m[1].trim().split(/\s+/)[0]) || 400 : 400; }), k = nearW(ws, w), bl = blocks[ws.indexOf(k)], u = (bl.match(/url\(["']?([^"')]+)["']?\)/) || [])[1] || '';
+  if (!/\.ttf$/i.test(u)) return { why: '가변 글꼴(woff2)이라 못 넣음' }; return { url: 'fonts/' + u, w: k };
+}
+/* woff → TTF (표마다 zlib 풀기 — 브라우저 DecompressionStream) */
+async function woffToSfnt(buf) { const d = new DataView(buf); if (d.getUint32(0) !== 0x774F4646) return buf; const n = d.getUint16(12), tabs = [];
+  for (let i = 0; i < n; i++) { const o = 44 + 20 * i; tabs.push({ tag: d.getUint32(o), off: d.getUint32(o + 4), cl: d.getUint32(o + 8), ol: d.getUint32(o + 12), ck: d.getUint32(o + 16) }); }
+  for (const t of tabs) { const raw = new Uint8Array(buf, t.off, t.cl); t.data = t.cl < t.ol ? new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer()) : raw.slice(); }
+  let size = 12 + 16 * n; tabs.forEach(t => { size += (t.ol + 3) & ~3; }); const out = new Uint8Array(size), v = new DataView(out.buffer); let es = 1, lg = 0; while (es * 2 <= n) { es *= 2; lg++; }
+  v.setUint32(0, d.getUint32(4)); v.setUint16(4, n); v.setUint16(6, es * 16); v.setUint16(8, lg); v.setUint16(10, n * 16 - es * 16); let at = 12 + 16 * n;
+  tabs.forEach((t, i) => { const o = 12 + 16 * i; v.setUint32(o, t.tag); v.setUint32(o + 4, t.ck); v.setUint32(o + 8, at); v.setUint32(o + 12, t.ol); out.set(t.data.subarray(0, t.ol), at); at += (t.ol + 3) & ~3; });
+  return out.buffer; }
+/* TTF 읽기: 표 위치·이름(1 가족, 2 모양)·fsType·가변 여부 */
+function sfntInfo(buf) { const d = new DataView(buf), n = d.getUint16(4), T = {};
+  for (let i = 0; i < n; i++) { const o = 12 + 16 * i; T[String.fromCharCode(d.getUint8(o), d.getUint8(o + 1), d.getUint8(o + 2), d.getUint8(o + 3))] = d.getUint32(o + 8); }
+  const nm = {}; if (T.name != null) { const no = T.name, cnt = d.getUint16(no + 2), so = no + d.getUint16(no + 4), pick = {};
+    for (let i = 0; i < cnt; i++) { const r = no + 6 + 12 * i, pid = d.getUint16(r), lid = d.getUint16(r + 4), id = d.getUint16(r + 6), ln = d.getUint16(r + 8), of = d.getUint16(r + 10); if (pid !== 3 && pid !== 1) continue;
+      const score = pid === 3 && lid === 0x409 ? 3 : pid === 3 ? 2 : 1; if ((pick[id] || 0) >= score) continue; pick[id] = score; let s = '';
+      if (pid === 3) for (let k = 0; k < ln; k += 2) s += String.fromCharCode(d.getUint16(so + of + k)); else for (let k = 0; k < ln; k++) s += String.fromCharCode(d.getUint8(so + of + k)); nm[id] = s; } }
+  const os = T['OS/2']; return { sig: d.getUint32(0), T, nm, fsType: os != null ? d.getUint16(os + 8) : 0, os }; }
+/* TTF → EOT(fntdata). 모든 값 리틀 엔디언, 이름은 UTF-16LE (W3C EOT 2.1) */
+function sfntToEot(buf, I) { const d = new DataView(buf), os = I.os, head = I.T.head, str = s => { const a = new Uint8Array(s.length * 2); for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a[2 * i] = c & 255; a[2 * i + 1] = c >> 8; } return a; };
+  const names = [I.nm[1] || '', I.nm[2] || 'Regular', I.nm[5] || '', I.nm[4] || I.nm[1] || ''].map(str), hdr = 82, total = hdr + names.reduce((a, b) => a + 4 + b.length, 0) + 2 + buf.byteLength;
+  const out = new Uint8Array(total), v = new DataView(out.buffer); v.setUint32(0, total, true); v.setUint32(4, buf.byteLength, true); v.setUint32(8, 0x00020001, true); v.setUint32(12, 0, true);
+  for (let i = 0; i < 10; i++) out[16 + i] = d.getUint8(os + 32 + i); out[26] = 1; out[27] = d.getUint16(os + 62) & 1; v.setUint32(28, d.getUint16(os + 4), true); v.setUint16(32, d.getUint16(os + 8), true); v.setUint16(34, 0x504C, true);
+  for (let i = 0; i < 4; i++) v.setUint32(36 + 4 * i, d.getUint32(os + 42 + 4 * i), true); const ver = d.getUint16(os); for (let i = 0; i < 2; i++) v.setUint32(52 + 4 * i, ver >= 1 ? d.getUint32(os + 78 + 4 * i) : 0, true);
+  v.setUint32(60, head != null ? d.getUint32(head + 8) : 0, true); /* 64~79 예비 0, 80 Padding1 0 */ let at = hdr;
+  names.forEach(a => { v.setUint16(at, a.length, true); out.set(a, at + 2); at += 2 + a.length; v.setUint16(at, 0, true); at += 2; }); v.setUint16(at, 0, true); at += 2; /* RootStringSize 0 (EOT 2.1) */
+  out.set(new Uint8Array(buf), at); return out; }
+/* 글꼴 한 면 받기(+검사). 결과: { name, style, bold, italic, eot, kor, panose, mb } 또는 { why } */
+async function pptFontFace(fam, w) {
+  const key = fam + '|' + w; if (pptFontCache.has(key)) return pptFontCache.get(key);
+  const job = (async () => { const src = await pptFontSrc(fam, w); if (!src.url) return { why: src.why };
+    let buf; try { const r = await fetch(src.url); if (!r.ok) throw new Error(r.status); buf = await r.arrayBuffer(); if (src.woff) buf = await woffToSfnt(buf); } catch (e) { return { why: '글꼴 파일을 받지 못함' }; }
+    const I = sfntInfo(buf); if (I.sig === 0x4F54544F || I.T.glyf == null) return { why: 'CFF(OTF) 글꼴이라 PowerPoint에 못 넣음' }; if (I.T.fvar != null) return { why: '가변 글꼴이라 못 넣음' };
+    if (I.fsType & 2) return { why: '글꼴 파일이 넣기를 막아 둠' }; if ((I.fsType & 0xE) === 4) return { why: '보기·인쇄만 허락된 글꼴(다른 PC에서 읽기 전용이 됨)' };
+    const d = new DataView(buf), style = I.nm[2] || 'Regular', cp1 = d.getUint16(I.os) >= 1 ? d.getUint32(I.os + 78) : 0;
+    return { name: I.nm[1] || fam, style, bold: /bold/i.test(style), italic: /italic|oblique/i.test(style), eot: sfntToEot(buf, I), kor: !!(cp1 & (1 << 19)) || /[가-힣]/.test(I.nm[1] || ''), panose: [...new Uint8Array(buf, I.os + 32, 10)].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase(), mb: buf.byteLength / 1048576 }; })();
+  pptFontCache.set(key, job); const r = await job; if (r.why) pptFontCache.delete(key); return r; }
+/* 만든 pptx(zip)에 글꼴 넣기 */
+async function pptEmbed(blob, faces) {
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', () => window.JSZip, 'sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG');
+  const zip = await JSZip.loadAsync(blob), fams = new Map(); faces.forEach(f => { if (!fams.has(f.name)) fams.set(f.name, {}); const g = fams.get(f.name), slot = f.bold && f.italic ? 'boldItalic' : f.bold ? 'bold' : f.italic ? 'italic' : 'regular'; if (!g[slot]) g[slot] = f; });
+  let ct = await zip.file('[Content_Types].xml').async('string'); if (!/Extension="fntdata"/.test(ct)) ct = ct.replace(/<Types([^>]*)>/, '<Types$1><Default Extension="fntdata" ContentType="application/x-fontdata"/>'); zip.file('[Content_Types].xml', ct);
+  let rels = await zip.file('ppt/_rels/presentation.xml.rels').async('string'), pres = await zip.file('ppt/presentation.xml').async('string'), n = 0, lst = '';
+  const esx = t => String(t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  fams.forEach((g, name) => { const any = g.regular || g.bold || g.italic || g.boldItalic; let ids = '';
+    ['regular', 'bold', 'italic', 'boldItalic'].forEach(slot => { const f = g[slot]; if (!f) return; n++; const id = 'rIdNcFont' + n; zip.file(`ppt/fonts/font${n}.fntdata`, f.eot, { binary: true }); rels = rels.replace('</Relationships>', `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/font" Target="fonts/font${n}.fntdata"/></Relationships>`); ids += `<p:${slot} r:id="${id}"/>`; });
+    lst += `<p:embeddedFont><p:font typeface="${esx(name)}" panose="${any.panose}" charset="${any.kor ? -127 : 0}"/>${ids}</p:embeddedFont>`; });
+  if (!/xmlns:r=/.test(pres)) pres = pres.replace('<p:presentation ', '<p:presentation xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
+  pres = pres.replace(/\s+saveSubsetFonts="[^"]*"/, '').replace(/\s+embedTrueTypeFonts="[^"]*"/, '').replace('<p:presentation ', '<p:presentation embedTrueTypeFonts="1" '); /* 글꼴 전체를 넣으므로 「일부만 넣음(saveSubsetFonts)」 표시는 뺌 — 남아 있으면 다른 PC에서 고치기가 막힘 */ const el = `<p:embeddedFontLst>${lst}</p:embeddedFontLst>`;
+  pres = /<p:defaultTextStyle/.test(pres) ? pres.replace('<p:defaultTextStyle', el + '<p:defaultTextStyle') : pres.replace(/(<p:notesSz[^>]*\/>)/, '$1' + el);
+  zip.file('ppt/_rels/presentation.xml.rels', rels); zip.file('ppt/presentation.xml', pres);
+  return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 }, mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }); }
+/* 다운로드 창 안내용: 이 쪽들의 고칠 수 있는 글에 쓰인 글꼴 이름 */
+function pptUsedFonts(pages) { const s = new Set(); pages.forEach(i => (doc.pages[i].els || []).filter(pptEditable).forEach(e => pptRuns(e).forEach(r => s.add(r.options.fontFace)))); return [...s]; }
 async function exportPPTX(pages, say, base, asImg, keepFonts) {
+  const embed = keepFonts === 'embed'; keepFonts = !!keepFonts; const faceOf = new Map(), embFaces = [], skipped = new Map();
+  if (embed && !asImg) { const need = new Map(); pages.forEach(i => (doc.pages[i].els || []).filter(pptEditable).forEach(e => pptRuns(e).forEach(r => { const fam = r.options.fontFace, w = Number(r.options._w) || (r.options.bold ? 700 : 400); need.set(fam + '|' + w, [fam, w]); })));
+    let k = 0; for (const [key, [fam, w]] of need) { say(`글꼴 넣을 준비… ${++k}/${need.size} (${fam})`); const f = await pptFontFace(fam, w); if (f.why) skipped.set(fam, f.why); else { faceOf.set(key, f); if (!embFaces.includes(f)) embFaces.push(f); } } }
   await loadScript('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', () => window.PptxGenJS, 'sha384-Cck14aA9cifjYolcnjebXRfWGkz5ltHMBiG4px/j8GS+xQcb7OhNQWZYyWjQ+UwQ');
   const pptx = new window.PptxGenJS(), iw = doc.w / 25.4, ih = doc.h / 25.4; pptx.defineLayout({ name: 'NC', width: iw, height: ih }); pptx.layout = 'NC'; pptx.title = doc.name || '발표자료'; pptx.author = '나라차 디자인 공방';
   const dpi = Math.min(220, Math.max(96, 1920 / iw)); /* 가로 1920px 안팎 */ let nText = 0, nKeep = 0; const fonts = new Set();
@@ -5589,9 +5671,10 @@ async function exportPPTX(pages, say, base, asImg, keepFonts) {
     nKeep += asImg ? 0 : pg.els.filter(e => e.type === 'text' && !elHidden(e) && String(e.text || '').trim() && !set.has(e)).length;
     const c = await renderPageCanvas(tx.length ? Object.assign({}, pg, { els: pg.els.filter(e => !set.has(e)) }) : pg, dpi, 'thumb', '#ffffff'); const data = c.toDataURL('image/jpeg', 0.92); c.width = c.height = 0;
     const s = pptx.addSlide(); s.addImage({ data, x: 0, y: 0, w: iw, h: ih, altText: '바탕(도형·그림)' });
-    for (const e of tx) { const runs = pptRuns(e); pptLineSp(runs, Number(e.lh) || 1.3); runs.forEach(r => { if (!keepFonts) r.options.fontFace = PPT_SERIF.test(r.options.fontFace || '') ? 'Batang' : 'Malgun Gothic'; fonts.add(r.options.fontFace); }); s.addText(runs, pptTextOpts(e)); nText++; }
+    for (const e of tx) { const runs = pptRuns(e); pptLineSp(runs, Number(e.lh) || 1.3); runs.forEach(r => { if (embed) { const f = faceOf.get(r.options.fontFace + '|' + (Number(r.options._w) || (r.options.bold ? 700 : 400))); if (f) { r.options.fontFace = f.name; r.options.bold = f.bold || (!!r.options.bold && !/thin|light|medium|semibold|extrabold|black|heavy/i.test(f.name)); } else r.options.fontFace = PPT_SERIF.test(r.options.fontFace || '') ? 'Batang' : 'Malgun Gothic'; } else if (!keepFonts) r.options.fontFace = PPT_SERIF.test(r.options.fontFace || '') ? 'Batang' : 'Malgun Gothic'; fonts.add(r.options.fontFace); }); s.addText(runs, pptTextOpts(e)); nText++; }
     if (pg.notes) s.addNotes(String(pg.notes)); }
-  say('파일 만드는 중…'); const blob = await pptx.write({ outputType: 'blob' }); saveBlob(blob, `${base}.pptx`);
+  say('파일 만드는 중…'); let blob = await pptx.write({ outputType: 'blob' }); if (embFaces.length) { say(`글꼴 ${embFaces.length}개 넣는 중…`); blob = await pptEmbed(blob, embFaces); } saveBlob(blob, `${base}.pptx`);
+  if (embed && !asImg) { const sk = [...skipped].map(([f, w]) => `${f} — ${w}`); toast(`PowerPoint 파일로 저장했습니다 — ${pages.length}쪽 · 글 상자 ${nText}개 · 📦 글꼴 ${embFaces.length ? [...new Set(embFaces.map(f => f.name))].join(', ') + ` 넣음` : '넣은 것 없음'} · 파일 ${(blob.size / 1048576).toFixed(1)}MB${sk.length ? ` · 못 넣은 글꼴(맑은 고딕·바탕으로): ${sk.join(' / ')}` : ''}`); return; }
   toast(asImg ? `PowerPoint 파일로 저장했습니다 — ${pages.length}쪽 (쪽마다 그림 한 장)` : `PowerPoint 파일로 저장했습니다 — ${pages.length}쪽 · 고칠 수 있는 글 상자 ${nText}개${nKeep ? ` (특수 효과 글자 ${nKeep}개는 그림으로)` : ''} ${keepFonts ? ` · 글꼴(${[...fonts].slice(0, 4).join(', ')}${fonts.size > 4 ? ' …' : ''})이 그 PC에 없으면 다른 글꼴로 보여요` : ' · 글꼴은 맑은 고딕·바탕'}`);
 }
 function saveBlob(b, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); exportCopy(b, name); }
