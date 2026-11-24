@@ -2010,3 +2010,6 @@ dialog .dhead > .btn[data-close]:hover{background:var(--g100);color:var(--g900)}
 #setNav .snav .sti .ic{width:17px;height:17px}.setrow .sic{background:var(--g50);color:var(--brand)}.setrow .sic .ic{width:17px;height:17px}
 /* 속성 창: 이름이 두 줄로 갈라지지 않게 */
 .inspector .f > span,.inspector label > span:first-child{white-space:nowrap}
+/* 확대 몸짓 중: 글자 도구 막대·손잡이 잠깐 숨김, 책자 단추 아이콘 */
+body.zooming #textBar,body.zooming .ovl .h,body.zooming .ovl .rotline{opacity:0}
+.pgbar .btn .ic{width:15px;height:15px}dialog .dhead h2 .ic{width:18px;height:18px;vertical-align:-3px;margin-right:4px}

@@ -823,7 +823,7 @@ function dragMove(e) {
     if (el.type === 'text') { if (d === 'n' || d === 's') el.fixedByUser = true; if (d.includes('e') || d.includes('w')) el.wByUser = true; } if (el.type === 'text' && (d === 'n' || d === 's') && el.sizing !== 'fixed') { el.sizing = 'fixed'; if (!drag.fixNote) { drag.fixNote = true; toast('높이를 고정했습니다 — 글이 넘치면 빨간 + 표시 (속성 "글 상자"에서 자동 높이로 되돌리기, 끌기점 두 번 누르면 글에 맞춤)'); } }
     if (el.type === 'text' && el.sizing === 'autow' && (d === 'e' || d === 'w')) el.sizing = '';
     if (el.type === 'text' && d.length === 2) scaleTextBy(el, o, el.w / o.w); /* 모서리 끌기 = 글자 크기도 함께 (캔바·미리캔버스와 같음) */
-    if (el.type === 'path' && o.pts) { const sx = el.w / o.w, sy = el.h / o.h; el.pts = o.pts.map(pt => [r1(pt[0] * sx), r1(pt[1] * sy)]); renderCanvas(); } else if (el.type === 'text') { renderCanvas(); } else liveUpdate([el]);
+    if (el.type === 'path' && o.pts) { const sx = el.w / o.w, sy = el.h / o.h; el.pts = o.pts.map(pt => [r1(pt[0] * sx), r1(pt[1] * sy)]); renderCanvas(); } else if (el.type === 'text') { rerenderEl(el); } else liveUpdate([el]);
     renderOverlay(); dragTip(e, dimText(el.w, el.h) + (el.type === 'text' && d.length === 2 ? ` · ${el.size}pt` : ''));
   } else if (drag.kind === 'rot') {
     const el = drag.el; let a = Math.atan2(p.y - drag.cy, p.x - drag.cx) * 180 / Math.PI + 90; if (e.shiftKey) a = Math.round(a / 15) * 15; else { const m = Math.round(a / 45) * 45; if (Math.abs(a - m) < 3) a = m; } /* 0·45·90° 자석 */ el.rot = Math.round(((a % 360) + 360) % 360); liveUpdate([el]); renderOverlay(); dragTip(e, `${el.rot}°`);
@@ -995,6 +995,14 @@ function sizeSel(f) {
 /* 글 상자를 누르면 영역을 글자만큼으로 (팀장님 11/24 「글자를 클릭하면 영역이 크게 잡힘 — 글자가 들어간 만큼만, 끌기점으로 크기 변경」)
    템플릿·책 표지처럼 처음부터 크게 만든 자동 높이 상자: 누를 때 내용 높이로 줄이고, 가운데·아래 정렬이면 글자가 제자리에 있게 y도 옮김.
    높이를 끌어 바꾼 상자(고정)·책 본문 흐름 상자·휘어진·세로 글·글 바탕색이 있는 상자는 그대로 */
+/* 요소 하나만 다시 그리기 (팀장님 11/24 「글자 끌기점으로 크기를 바꿀 때 번쩍거림」 — 끌 때마다 쪽 전체(그림까지)를 다시 만들던 것) */
+function rerenderEl(el) {
+  const c = $('#canvas'), old = c && c.querySelector(`[data-id="${el.id}"]`);
+  if (!old || /\{(쪽|전체쪽|디데이:|남은날:)/.test(el.text || '')) { renderCanvas(); return; } /* 쪽 번호·D-day 자리는 쪽 전체 바꿈이 필요 */
+  const tmp = document.createElement('div'); tmp.innerHTML = elHTML(el, 'edit'); const nu = tmp.firstElementChild; if (!nu) { renderCanvas(); return; }
+  if (old.classList.contains('editing')) return; old.replaceWith(nu);
+  if (el.type === 'text' && !isWarp(el)) { let d = nu; if (el.sizing === 'autow') autoWidth(d, el); if (el.fitText && el.sizing === 'fixed') d = autoFitText(d, el) || d; const hh = fitTextH(d, el, true); if (hh != null) { el.h = hh; d.style.minHeight = hh + 'mm'; } }
+}
 function snugText(el) {
   /* 11/24 2차: 책·템플릿이 처음부터 「고정 크기」로 만든 상자도 맞춤(사용자가 손잡이로 바꾼 상자만 그대로). 폭도 글자만큼 — 한 줄이면 「자동 너비」가 되어 쓰는 만큼 늘어남 */
   if (!el || el.type !== 'text' || el.flowFrame || isWarp(el) || el.vertical || el.locked || el.bg || Number(el.cols) > 1 || el.fitText || Number(el.maxLines) > 0 || el.fixedByUser) return false;
@@ -1023,9 +1031,14 @@ function zoomAt(nk, cx, cy) {
 }
 $('#scroller').addEventListener('scroll', () => { placeTextBar(); if (cellSel) showCellBar(); });
 /* 확대·축소를 부드럽게 (팀장님 11/24 「확대·축소가 거칠게 보임」): 한 번에 10%씩 뛰던 것 → 휠·트랙패드가 움직인 만큼(마우스 휠 한 칸 ≈ 12%), 여러 신호는 한 화면에 한 번만 그림 */
-let zoomAcc = 1, zoomPt = null, zoomRaf = 0;
-$('#scroller').addEventListener('wheel', e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); const dy = clamp(e.deltaY * (e.deltaMode === 1 ? 33 : 1), -60, 60); zoomAcc *= Math.exp(-dy * 0.0022); zoomPt = [e.clientX, e.clientY];
-  if (!zoomRaf) zoomRaf = requestAnimationFrame(() => { zoomRaf = 0; const a = zoomAcc; zoomAcc = 1; if (Math.abs(a - 1) > 0.001) zoomAt((zoom || kScale()) * a, zoomPt[0], zoomPt[1]); }); }, { passive: false });
+let zoomRaf = 0, zg = null; /* zg: 확대 몸짓 중 {k0 시작 배율, s 미리보기 배율, cx, cy, t} — 2차(11/24 전문가): 몸짓 동안 transform 미리보기, 끝날 때 한 번 반영 */
+function zoomGestureEnd() { if (!zg) return; const g = zg, w = $('#canvasWrap'); zg = null; if (zoomRaf) { cancelAnimationFrame(zoomRaf); zoomRaf = 0; } w.style.transform = ''; w.style.transformOrigin = ''; w.style.willChange = ''; document.body.classList.remove('zooming'); if (Math.abs(g.s - 1) > 0.002) zoomAt(g.k0 * g.s, g.cx, g.cy); }
+$('#scroller').addEventListener('wheel', e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); const dy = clamp(e.deltaY * (e.deltaMode === 1 ? 33 : 1), -60, 60), w = $('#canvasWrap');
+  if (!zg) { const r = w.getBoundingClientRect(); zg = { k0: zoom || kScale(), s: 1, cx: e.clientX, cy: e.clientY }; w.style.transformOrigin = `${e.clientX - r.left}px ${e.clientY - r.top}px`; w.style.willChange = 'transform'; document.body.classList.add('zooming'); }
+  zg.s = clamp(zg.s * Math.exp(-dy * 0.0022), 0.1 / zg.k0, 8 / zg.k0);
+  if (!zoomRaf) zoomRaf = requestAnimationFrame(() => { zoomRaf = 0; if (zg) { w.style.transform = `scale(${zg.s})`; const zp = $('#zoomPct'); if (zp) zp.textContent = Math.round(zg.k0 * zg.s * 100) + '%'; } });
+  clearTimeout(zg.t); zg.t = setTimeout(zoomGestureEnd, 140); }, { passive: false });
+document.addEventListener('pointerdown', () => { if (zg) zoomGestureEnd(); }, true);
 // Space를 누른 채 끌면 화면 이동 (손 도구)
 let spaceDown = false, panDrag = null;
 document.addEventListener('keydown', e => { if (e.code === 'Space' && !editing && !$('#cellEd') && !(e.target.matches && e.target.matches('input,textarea,select,button,a,summary,[role=button],[role=tab],[contenteditable="true"]')) && !popupOpen()) { if (!spaceDown) { spaceDown = true; $('#stage').classList.add('panning'); } e.preventDefault(); } });
@@ -2802,7 +2815,7 @@ function manualGo(g) { const rail = k => { const b = $(`#rail [data-tab="${k}"]`
 let setTab = (() => { try { return localStorage.getItem('naracal-settab') || 'view'; } catch (e) { return 'view'; } })(); /* 마지막으로 본 설정 칸 기억 */
 function openSettings(tab) {
   if (tab) setTab = tab; let d = $('#dlgSettings');
-  if (!d) { d = document.createElement('dialog'); d.id = 'dlgSettings'; d.className = 'wide setdlg'; d.innerHTML = `<div class="dhead"><h2>⚙ 설정</h2><button class="btn sm" data-close>닫기</button></div><div class="setbody"><nav id="setNav"></nav><div id="setMain"></div></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close();
+  if (!d) { d = document.createElement('dialog'); d.id = 'dlgSettings'; d.className = 'wide setdlg'; d.innerHTML = `<div class="dhead"><h2>설정</h2><button class="btn sm" data-close>닫기</button></div><div class="setbody"><nav id="setNav"></nav><div id="setMain"></div></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close();
     d.addEventListener('click', settingsClick); d.addEventListener('change', settingsChange);
     d.addEventListener('input', e => { if (e.target.id === 'setQ') { setQ = e.target.value; renderSettings(); } });
     d.addEventListener('keydown', e => { if (e.target.id === 'setQ' && e.key === 'Escape' && setQ) { e.preventDefault(); setQ = ''; e.target.value = ''; renderSettings(); return; } /* 찾기 칸 Esc는 찾기만 지움 */
@@ -2922,7 +2935,7 @@ function renderSide0() {
   $('#sideTitle').textContent = (RAIL.find(r => r[0] === sideTab) || NARA.find(r => r[0] === sideTab) || [])[1] || (SUB_TABS[sideTab] || [])[1] || '';
   body.onclick = null; body.oninput = null; body.onchange = null;
   if (sideTab === 'pages') {
-    body.innerHTML = `<div class="row pgbar" style="margin-bottom:8px"><button class="btn sm" id="pgAdd">+ 새 페이지</button><button class="btn sm" id="pgDup">복제</button><button class="btn sm icon" id="pgUp" title="위로">↑</button><button class="btn sm icon" id="pgDown" title="아래로">↓</button><button class="btn sm danger" id="pgDel">삭제</button><button class="btn sm" id="pgGrid" title="모든 쪽을 한눈에 (여러 쪽 고르기·끌어서 순서 바꾸기)">모아 보기</button><button class="btn sm" data-book title="쪽 번호·머리글·여백·펼침면·목차·소책자 인쇄 (인디자인처럼)">📖 책자</button></div><div class="hint" id="pgSelInfo" style="margin:-2px 0 6px;min-height:0"></div><div id="thumbs"></div>`;
+    body.innerHTML = `<div class="row pgbar" style="margin-bottom:8px"><button class="btn sm" id="pgAdd">+ 새 페이지</button><button class="btn sm" id="pgDup">복제</button><button class="btn sm icon" id="pgUp" title="위로">↑</button><button class="btn sm icon" id="pgDown" title="아래로">↓</button><button class="btn sm danger" id="pgDel">삭제</button><button class="btn sm" id="pgGrid" title="모든 쪽을 한눈에 (여러 쪽 고르기·끌어서 순서 바꾸기)">모아 보기</button><button class="btn sm" data-book title="쪽 번호·머리글·여백·펼침면·목차·소책자 인쇄 (인디자인처럼)"><svg class="ic"><use href="#i-book"/></svg>책자</button></div><div class="hint" id="pgSelInfo" style="margin:-2px 0 6px;min-height:0"></div><div id="thumbs"></div>`;
     renderThumbs();
     $('#thumbs').onclick = e => { const b = e.target.closest('.thumb'); if (!b) return; pgClick(Number(b.dataset.i), e); };
     $('#thumbs').ondblclick = e => { const b = e.target.closest('.thumb'); if (b) pageCmd('rename'); };
@@ -5531,7 +5544,7 @@ function openBook() {
   let d = $('#dlgBook'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgBook'; d.className = 'wide'; document.body.appendChild(d); }
   const B = book(), n = doc.pages.length, pad = (4 - n % 4) % 4;
   const N = (k, t, v, o) => `<label class="f"><span>${t}</span><input type="number" data-bk="${k}" value="${v}" step="${(o && o.step) || 1}" min="${(o && o.min) || 0}"></label>`;
-  d.innerHTML = `<div class="dhead"><h2>📖 책자 만들기 <small>인디자인·쿽 방식</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody bookdlg">
+  d.innerHTML = `<div class="dhead"><h2><svg class="ic"><use href="#i-book"/></svg>책자 만들기 <small>인디자인·쿽 방식</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody bookdlg">
     <p class="hint" style="margin-top:0">원고를 쪽에 저절로 흘리고 장 제목·머리글·차례까지 만드는 책은 세로 메뉴 <b>도서 편집</b>에서 만듭니다. <button class="btn sm" id="bkToBook">📚 도서 편집 열기</button></p>
     <div class="bk-sec"><h3>1. 쪽 번호 · 머리글 · 바닥글 <small>모든 쪽에 공통 (마스터 페이지)</small></h3>
       <label class="chk"><input type="checkbox" data-bk="on" ${B.on ? 'checked' : ''}> 쪽 번호·머리글·바닥글 넣기</label>
@@ -7647,11 +7660,13 @@ if (/[?&]qa\b/.test(location.search)) window.NCQA = { bk: () => BK(), imp: () =>
    ③ 아래 쪽 넘김 막대 「⛶ 편집 화면만」·⌘\(Ctrl+\) = 양쪽 함께 접기/펼치기. 이 PC에 기억 */
 function foldState() { const b = document.body.classList; return { l: b.contains('fold-l'), r: b.contains('fold-r') }; }
 function setFold(side, on, quiet) {
+  const wrap0 = $('#canvasWrap'), r0 = wrap0 && !quiet ? wrap0.getBoundingClientRect() : null;
   const b = document.body.classList, sides = side === 'both' ? ['l', 'r'] : [side]; sides.forEach(k => b.toggle('fold-' + k, on == null ? !b.contains('fold-' + k) : !!on));
   const f = foldState(); try { localStorage.setItem('naracal-fold', JSON.stringify(f)); } catch (e) {}
   document.querySelectorAll('.rsz-fold').forEach(x => { const l = x.dataset.fold === 'l', folded = l ? f.l : f.r; x.textContent = (l ? !folded : folded) ? '‹' : '›'; x.title = (folded ? (l ? '왼쪽 창 펼치기' : '오른쪽 속성 창 펼치기') : (l ? '왼쪽 창 접기' : '오른쪽 속성 창 접기')) + ' (양쪽 함께: ⌘\\ · Ctrl+\\)'; });
   const pf = document.getElementById('pnFocus'); if (pf) { pf.classList.toggle('on', f.l && f.r); pf.setAttribute('aria-pressed', String(f.l && f.r)); }
-  requestAnimationFrame(() => { fitCanvas(); rescaleThumbs(); });
+  if (r0 && wrap0.animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) { fitCanvas(); const r1 = wrap0.getBoundingClientRect(); if (r1.width > 0) wrap0.animate([{ transformOrigin: '0 0', transform: `translate(${r0.left - r1.left}px,${r0.top - r1.top}px) scale(${r0.width / r1.width})` }, { transformOrigin: '0 0', transform: 'none' }], { duration: 240, easing: 'cubic-bezier(.2,0,0,1)' }); requestAnimationFrame(() => rescaleThumbs()); }
+  else requestAnimationFrame(() => { fitCanvas(); rescaleThumbs(); });
   if (!quiet) toast(f.l && f.r ? '⛶ 편집 화면만 — 다시 펼치려면 ⌘\\(Ctrl+\\) · 양옆 ‹ › 단추 · 아래 ⛶' : f.l ? '왼쪽 창을 접었습니다 — 왼쪽 메뉴를 누르거나 ›로 펼치기' : f.r ? '오른쪽 속성 창을 접었습니다 — ‹로 펼치기' : '양쪽 창을 펼쳤습니다');
 }
 (function () {
