@@ -3817,7 +3817,7 @@ function renderInspector() {
     ${el.kind === 'rect' ? F('모서리', 'radius', el.radius, { type: 'slider', min: 0, max: Math.max(5, Math.round(Math.min(el.w, el.h) / 2)), step: 0.5, unit: 'mm', def: 0 }) : ''}
     ${el.kind === 'line' ? `<div class="pk-lb">화살표</div><div class="pk sm">${[[0, 0, '화살표 없음'], [0, 1, '끝에 화살표'], [1, 0, '시작에 화살표'], [1, 1, '양쪽 화살표']].map(([a0, e0, t]) => { const on = !!el.arrowStart === !!a0 && !!el.arrowEnd === !!e0; return `<button type="button" class="pk-b${on ? ' on' : ''}" data-arw="${a0}${e0}" title="${t}" aria-pressed="${on}"><span class="pk-ic">${VIC.arrow(a0, e0)}</span></button>`; }).join('')}</div>` : `<h3>채우기</h3>${fillBlock}${(el.fillType || 'solid') === 'solid' ? `${F('채우기 색', 'fill', el.fill || '#000000', { type: 'color' })}${sw('fill', el.fill)}<button class="btn sm" data-set="fill:">채우기 없음</button>` : ''}`}
     <h3>선</h3>${F('두께', 'strokeW', el.strokeW || 0, { type: 'slider', min: 0, max: 8, step: 0.1, unit: 'mm', def: 0 })}<div class="grid2">${F('선 색', 'stroke', el.stroke || (el.kind === 'line' ? el.fill : '#000000'), { type: 'color' })}</div><div class="pk-lb">선 무늬</div>${vpick('dash', el.dash || '', [['', VIC.dash(''), '', '실선'], ['3 2', VIC.dash('3 2'), '', '긴 점선'], ['1.5 1.5', VIC.dash('1.5 1.5'), '', '점선'], ['0.1 2', VIC.dash('0.1 2'), '', '점점선 (둥근 끝이면 동그란 점)'], ['6 2 1.5 2', VIC.dash('6 2 1.5 2'), '', '쇄선']], 'sm')}<div class="pk-lb">선 끝</div>${vpick('cap', el.cap || 'butt', [['butt', VIC.cap('butt'), '', '각지게 — 선이 끝점에서 딱 끝남'], ['round', VIC.cap('round'), '', '둥글게'], ['square', VIC.cap('square'), '', '네모 — 끝점보다 조금 더 나감']], 'sm')}${el.kind !== 'line' ? '<button class="btn sm" data-set="stroke:">선 없음</button>' : ''}
-    ${shadowBlock()}` + geo;
+    ${shadowBlock()}${canWrap(el) ? `<h3>글 배치 <small>글 상자와 겹칠 때</small></h3>${vpick('wrap', el.wrap || 'none', WRAP_OPTS.map(([k, t, tip]) => [k, wrapPic(k), t, k === 'tight' ? (el.kind === 'ellipse' ? '빽빽하게 — 원 모양을 따라 글이 둥글게 비킴' : '빽빽하게 — 이 도형은 상자 둘레로 비킴 (원·타원은 둥글게)') : tip]), 'sm wraps')}${WRAPS.includes(el.wrap) ? F('글과 간격', 'wrapGap', el.wrapGap == null ? 2 : el.wrapGap, { type: 'slider', min: 0, max: 10, step: 0.5, unit: 'mm', def: 2 }) : ''}` : ''}` + geo;
   } else if (el.type === 'video') {
     const full = Number(el.dur || el.tout || 0), m = (doc.media || {})[String(el.src).slice(2)];
     h += `<h3>동영상</h3><p class="hint" style="margin-top:0">${esc(m ? m.name : el.name || '')} · 원본 ${full.toFixed(1)}초 · <b>이 PC에만 있는 원본</b>(문서에는 이름만 저장)</p>
@@ -3902,7 +3902,7 @@ function renderInspector() {
     if (b.dataset.toggle) { el.locked = !el.locked; commit(); renderOverlay(); renderInspector(); return; }
     if (b.dataset.calln) { const [a, c] = b.dataset.calln.split(',').map(Number); selEls().filter(x => x.type === 'cal').forEach(x => { x.s = Object.assign({}, x.s || {}, { lineW: a, outerW: c }); }); commit(); rerender(); return; } /* 달력 선 굵기 한 번에 */
     if (b.dataset.arw) { const [a0, e0] = b.dataset.arw; selEls().filter(x => x.type === 'shape').forEach(x => { x.arrowStart = a0 === '1'; x.arrowEnd = e0 === '1'; }); commit(); rerender(); return; }
-    if (b.dataset.setv != null) { const i = b.dataset.setv.indexOf(':'), k = b.dataset.setv.slice(0, i); let v; try { v = JSON.parse(b.dataset.setv.slice(i + 1)); } catch (er) { v = b.dataset.setv.slice(i + 1); } if (k === 'wrap') { setImgWrap(selEls().filter(x => x.type === 'image' && !x.locked), v); return; } selEls().filter(x => x.type === el.type).forEach(x => setK(x, k, v)); commit(); rerender(); return; } /* 그림 고르기 단추 — 같은 종류를 여럿 골랐으면 모두 */
+    if (b.dataset.setv != null) { const i = b.dataset.setv.indexOf(':'), k = b.dataset.setv.slice(0, i); let v; try { v = JSON.parse(b.dataset.setv.slice(i + 1)); } catch (er) { v = b.dataset.setv.slice(i + 1); } if (k === 'wrap') { setImgWrap(selEls().filter(x => canWrap(x) && !x.locked), v); return; } selEls().filter(x => x.type === el.type).forEach(x => setK(x, k, v)); commit(); rerender(); return; } /* 그림 고르기 단추 — 같은 종류를 여럿 골랐으면 모두 */
     if (b.dataset.set != null) { const i = b.dataset.set.indexOf(':'); const k = b.dataset.set.slice(0, i), v = b.dataset.set.slice(i + 1); if (k === 'chartColors') el.colors = v.split(',').map(s => s.trim()); else setK(el, k, v); commit(); rerender(); return; }
     if (b.dataset.preset) { const p = FX.TEXT_PRESETS.find(x => x.id === b.dataset.preset); Object.assign(el, p.st); if (p.id === 'plain') { el.warp = 'none'; el.vertical = false; } commit(); rerender(); return; }
     if (b.dataset.imgpreset) { const p = FX.IMG_PRESETS.find(x => x[0] === b.dataset.imgpreset); el.fx = Object.assign({}, p[2]); commit(); rerender(); return; }
@@ -7032,7 +7032,7 @@ function ctxDo(k) {
     lock: () => { const on = !els.every(x => x.locked); els.forEach(x => x.locked = on); commit(); renderOverlay(); renderInspector(); if (sideTab === 'layers') renderSide(); toast(on ? '잠갔습니다 (Ctrl+L로 풀기)' : '잠금을 풀었습니다'); },
     flipH: () => flipSel('h'), flipV: () => flipSel('v'), fitpage: () => fitToPage(false), fillpage: () => fitToPage(true),
     asbg: () => { if (!el || el.type !== 'image') return; el.x = 0; el.y = 0; el.w = doc.w; el.h = doc.h; el.fit = 'cover'; el.rot = 0; el.locked = true; reorder('back'); toast('배경으로 만들고 잠갔습니다 (레이어에서 잠금 해제)'); },
-    'wrap-none': () => setImgWrap(els.filter(x => x.type === 'image'), 'none'), 'wrap-square': () => setImgWrap(els.filter(x => x.type === 'image'), 'square'), 'wrap-tight': () => setImgWrap(els.filter(x => x.type === 'image'), 'tight'), 'wrap-topbottom': () => setImgWrap(els.filter(x => x.type === 'image'), 'topbottom'), 'wrap-behind': () => setImgWrap(els.filter(x => x.type === 'image'), 'behind'),
+    'wrap-none': () => setImgWrap(els.filter(canWrap), 'none'), 'wrap-square': () => setImgWrap(els.filter(canWrap), 'square'), 'wrap-tight': () => setImgWrap(els.filter(canWrap), 'tight'), 'wrap-topbottom': () => setImgWrap(els.filter(canWrap), 'topbottom'), 'wrap-behind': () => setImgWrap(els.filter(canWrap), 'behind'),
     'al-l': () => alignUnits('l'), 'al-c': () => alignUnits('c'), 'al-r': () => alignUnits('r'), 'al-t': () => alignUnits('t'), 'al-m': () => alignUnits('m'), 'al-b': () => alignUnits('b'),
     'dist-h': () => distUnits(true), 'dist-v': () => distUnits(false), 'same-w': () => sameSize('w'), 'same-h': () => sameSize('h'), 'same-wh': () => sameSize('wh'), arrange: openArrange,
     all: () => select(page().els.filter(x => !x.hidden && !x.locked).map(x => x.id)), find: openFind, rulers: toggleRulers, clrguides: () => { doc.guides = { x: [], y: [] }; commit(); renderOverlay(); toast('안내선을 모두 지웠습니다'); } })[k]();
@@ -7057,17 +7057,19 @@ function natAR(el) { const u = src(el.src); if (!u) return null; if (NAT_AR.has(
       for (let k = 0; k < PROF_N; k++) { let mn = 1, mx = -1; for (let y = Math.floor(k * H / PROF_N); y < Math.max(Math.floor(k * H / PROF_N) + 1, Math.floor((k + 1) * H / PROF_N)); y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 80) { mn = Math.min(mn, x / W); mx = Math.max(mx, (x + 1) / W); } rows.push(mx < 0 ? null : [mn, mx]); }
       PROF.set(u, rows); } catch (e) { PROF.set(u, null); }  /* 다른 곳 그림이라 읽을 수 없으면 정사각형처럼 */ clearTimeout(natArT); natArT = setTimeout(() => { try { renderCanvas(); } catch (e) { } }, 60); }; i.src = u; return null; }
 const WRAPS = ['square', 'tight', 'topbottom'];
+const canWrap = e => e && (e.type === 'image' || (e.type === 'shape' && e.kind !== 'line'));  /* 11/24 도형에도 글 배치 (워드처럼) */
+const ELL_PROF = Array.from({ length: 40 }, (_, k) => { const y = (k + 0.5) / 40 - 0.5, hw = Math.sqrt(Math.max(0, 0.25 - y * y)); return hw > 0.01 ? [0.5 - hw, 0.5 + hw] : null; });
 function wrapFloats(t) {
   if (!doc || !doc.pages || t.rot || t.sizing === 'autow' || t.vertical || t.flowFrame || (t.sx && Number(t.sx) !== 100) || (t.sy && Number(t.sy) !== 100) || Number(t.skew)) return '';
   const pg = doc.pages.find(q => q.els.includes(t)); if (!pg) return '';
-  const imgs = pg.els.filter(i => i.type === 'image' && !i.hidden && WRAPS.includes(i.wrap)); if (!imgs.length) return '';
+  const imgs = pg.els.filter(i => canWrap(i) && !i.hidden && WRAPS.includes(i.wrap)); if (!imgs.length) return '';
   const pad = Number(t.pad) || 0, cx0 = t.x + pad, cy0 = t.y + pad, cw = t.w - pad * 2, chMax = t.h - pad * 2;
   const L = imgs.map(i => ({ i, b: elBox(i) })).filter(({ b }) => b.x < t.x + t.w && b.x + b.w > t.x && b.y < t.y + t.h && b.y + b.h > t.y).sort((a, b) => a.b.y - b.b.y);
   if (!L.length) return '';
   const bot = { left: 0, right: 0 }, F = (st) => `<div class="wrapf" contenteditable="false" aria-hidden="true" style="${st}"></div>`; let out = '';
   L.forEach(({ i, b }) => { const m = i.wrapGap == null ? 2 : Number(i.wrapGap);
     let bx = b.x, by = b.y, bw = b.w, bh = b.h;
-    if (i.wrap === 'tight' && (i.fit || 'contain') === 'contain' && !i.rot) { const ar = natAR(i); if (ar) { const k = Math.min(bw / ar, bh); const w2 = ar * k, h2 = k; bx += (bw - w2) / 2; by += (bh - h2) / 2; bw = w2; bh = h2; } }
+    if (i.type === 'image' && i.wrap === 'tight' && (i.fit || 'contain') === 'contain' && !i.rot) { const ar = natAR(i); if (ar) { const k = Math.min(bw / ar, bh); const w2 = ar * k, h2 = k; bx += (bw - w2) / 2; by += (bh - h2) / 2; bw = w2; bh = h2; } }
     let ix = bx - m - cx0, iy = by - m - cy0, iw = bw + m * 2, ih = bh + m * 2;
     if (iy < 0) { ih += iy; iy = 0; } ih = Math.min(ih, chMax - iy); if (ih <= 0.5) return;
     const x1 = Math.max(0, ix), x2 = Math.min(cw, ix + iw); if (x2 - x1 <= 0.5) return;
@@ -7075,7 +7077,7 @@ function wrapFloats(t) {
     if (i.wrap === 'topbottom') { const top = Math.max(bot.left, bot.right); out += F(`float:left;clear:both;width:0;height:${r(Math.max(0, iy - top))}mm`) + F(`float:left;clear:left;width:${r(cw)}mm;height:${r(ih)}mm`); bot.left = bot.right = iy + ih; return; }
     const side = (cw - x2) >= x1 ? 'left' : 'right';  /* 넓은 쪽으로 글이 흐름 */
     let st;
-    const prof = i.wrap === 'tight' && (i.fit || 'contain') === 'contain' && !i.rot && natAR(i) ? imgProfile(i) : null;  /* 꽉 채움·회전 그림은 정사각형처럼 */
+    const prof = i.wrap !== 'tight' || i.rot ? null : i.type === 'shape' ? (i.kind === 'ellipse' ? ELL_PROF : null) : ((i.fit || 'contain') === 'contain' && natAR(i) ? imgProfile(i) : null);  /* 꽉 채움·회전 그림은 정사각형처럼 */
     if (prof) { /* 빽빽하게: 그림 모양(투명 아닌 곳)을 줄마다 재어 다각형으로 비킴 — 위아래도 간격만큼 */
       const gap = i.wrapGap == null ? 2 : Number(i.wrapGap), dx = bx - cx0, dy = by - cy0, N = prof.length, rowH = bh / N, dil = Math.ceil(gap / Math.max(0.01, rowH));
       const band = k => { let mn = Infinity, mx = -Infinity; for (let q = Math.max(0, k - dil); q <= Math.min(N - 1, k + dil); q++) if (prof[q]) { mn = Math.min(mn, prof[q][0]); mx = Math.max(mx, prof[q][1]); } return mx < 0 ? null : [dx + mn * bw - gap, dx + mx * bw + gap]; };
@@ -7094,9 +7096,9 @@ function wrapFloats(t) {
 /* 끄는 동안에도 글이 그림을 비켜 흐름 (그림을 끌 때만, 50ms마다 바뀐 글 상자만 다시 그림) */
 const WRAP_LAST = new WeakMap();
 function wrapLive(d) {
-  if (d.wrapT === undefined) { const ids = d.els.map(e => e.id); d.wrapT = d.els.some(e => e.type === 'image' && WRAPS.includes(e.wrap)) ? page().els.filter(t => t.type === 'text' && !ids.includes(t.id) && !t.hidden && !t.locked) : null;
+  if (d.wrapT === undefined) { const ids = d.els.map(e => e.id); d.wrapT = d.els.some(e => canWrap(e) && WRAPS.includes(e.wrap)) ? page().els.filter(t => t.type === 'text' && !ids.includes(t.id) && !t.hidden && !t.locked) : null;
     /* 글 상자를 끌 때: 쪽에 글 배치 그림이 있으면 끄는 글 상자 안 비킴 칸만 바꿈 (상자를 통째로 다시 그리면 끄는 자리가 두 번 밀림) */
-    d.wrapSelf = page().els.some(e => e.type === 'image' && !ids.includes(e.id) && WRAPS.includes(e.wrap)) ? d.els.filter(t => t.type === 'text') : null; }
+    d.wrapSelf = page().els.some(e => canWrap(e) && !ids.includes(e.id) && WRAPS.includes(e.wrap)) ? d.els.filter(t => t.type === 'text') : null; }
   if (!(d.wrapT && d.wrapT.length) && !(d.wrapSelf && d.wrapSelf.length)) return; const now = performance.now(); if (now - (d.wrapAt || 0) < 50) return; d.wrapAt = now;
   (d.wrapT || []).forEach(t => { const wf = wrapFloats(t); if (wf === (WRAP_LAST.get(t) || '')) return; WRAP_LAST.set(t, wf); rerenderEl(t); });
   (d.wrapSelf || []).forEach(t => { const dom = $(`#canvas [data-id="${t.id}"]`); if (!dom || dom.querySelector(':scope > .txw') || dom.classList.contains('editing')) return; const wf = wrapFloats(t); if (wf === (WRAP_LAST.get(t) || '')) return; WRAP_LAST.set(t, wf);
@@ -7254,7 +7256,7 @@ function elCtx(e) {
       + tile('al-l', PG(4, 10), '왼쪽', '쪽 왼쪽에 (' + keyLabel('Alt+A') + ')') + tile('al-c', PG(14, 10), '가운데', '쪽 가로 가운데에 (' + keyLabel('Alt+H') + ')') + tile('al-r', PG(24, 10), '오른쪽', '쪽 오른쪽에 (' + keyLabel('Alt+D') + ')')
       + tile('al-t', PG(14, 4), '위', '쪽 위에 (' + keyLabel('Alt+W') + ')') + tile('al-m', PG(14, 10), '중간', '쪽 세로 가운데에 (' + keyLabel('Alt+V') + ')') + tile('al-b', PG(14, 16), '아래', '쪽 아래에 (' + keyLabel('Alt+S') + ')')
       + `</div>` }, '-'] : [];
-  const wrapRow = img && !locked ? [{ html: `<div class="ctx-h">글 배치</div><div class="ctgrid wr">${WRAP_OPTS.map(([k, t, tip]) => `<button class="ct${(els[0].wrap || 'none') === k ? ' on' : ''}" data-ctx="wrap-${k}" title="${tip}" aria-label="${tip}"><span class="wpic">${wrapPic(k)}</span><span>${t}</span></button>`).join('')}</div>` }, '-'] : [];
+  const wrapRow = els.length === 1 && canWrap(els[0]) && !locked ? [{ html: `<div class="ctx-h">글 배치</div><div class="ctgrid wr">${WRAP_OPTS.map(([k, t, tip]) => `<button class="ct${(els[0].wrap || 'none') === k ? ' on' : ''}" data-ctx="wrap-${k}" title="${tip}" aria-label="${tip}"><span class="wpic">${wrapPic(k)}</span><span>${t}</span></button>`).join('')}</div>` }, '-'] : [];
   openCtx(e, [...arrRows, ...pageRow, ...wrapRow, ['copy', '복사', 'Ctrl+C'], ['cut', '잘라내기', 'Ctrl+X'], ['paste', '붙여넣기', 'Ctrl+V', !clip], ['dup', '복제', 'Ctrl+D'], ['del', '삭제', 'Delete'], '-', ['cstyle', '스타일 복사', 'Ctrl+Alt+C'], ['pstyle', '스타일 붙여넣기', 'Ctrl+Alt+V', !styleClip], '-',
     ['front', '맨 앞으로', 'Ctrl+Shift+]'], ['up', '앞으로', 'Ctrl+]'], ['down', '뒤로', 'Ctrl+['], ['back', '맨 뒤로', 'Ctrl+Shift+['], '-',
     ...(selUnitCount() >= 2 ? [['group', '그룹으로 묶기', 'Ctrl+G']] : []), ...(els.some(x => x.group) ? [['ungroup', '그룹 해제', 'Ctrl+Shift+G']] : []), ['lock', locked ? '잠금 풀기' : '잠그기', 'Ctrl+L'],
