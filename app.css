@@ -48,7 +48,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .sidetabs button:hover{color:var(--ui-fg);background:var(--ui-field)}
 .sidetabs button[aria-selected=true]{color:var(--ui-accent);border-bottom-color:var(--ui-accent)}
 .sidetabs .ic{width:20px;height:20px}
-.sidebody{overflow-y:auto;padding:12px;flex:1}
+.sidebody{overflow-y:auto;padding:12px;flex:1;scrollbar-gutter:stable} /* 스크롤 막대가 생기고 없어질 때 너비가 바뀌어 칩이 다시 줄 바꿈되던 것(11/24) */
 .sidebody h3,.inspector h3{font-size:12px;color:var(--ui-fg2);letter-spacing:.04em;margin:16px 0 8px;font-weight:700;text-transform:uppercase}
 .sidebody h3:first-child{margin-top:2px}
 /* 패널 너비 조절 손잡이: 늘 보이는 회색 손잡이(점 3개) + 올리면 파란 띠 — 바로 옆 눈금자(안내선 끌기, 분홍)와 구분 */
@@ -1910,3 +1910,25 @@ body.fold-l #rszL,body.fold-r #rszR{cursor:pointer}body.fold-l #rszL::before,bod
 body.fold-l #rszL .rsz-fold,body.fold-r #rszR .rsz-fold{margin-top:-20px;width:18px;height:48px;line-height:44px;border-color:var(--ui-accent,#2f6fe4);color:var(--ui-accent,#2f6fe4)}
 .stage .pagenav #pnFocus.on{background:var(--ui-accent-soft,#e8f0ff);color:var(--ui-accent,#2f6fe4)}
 body.fold-r #rszR .rsz-fold{left:auto;right:1px;transform:none}
+/* 요소 패널 머리 고정 + 2단계 밑줄 탭 (11/24) — 1단계 = 채운 알약, 2단계 = 작은 밑줄 탭 한 줄(가로로 넘김) */
+.elhead{position:sticky;top:-12px;z-index:5;background:var(--ui-panel,#fff);margin:-12px -12px 8px;padding:12px 12px 0;box-shadow:0 1px 0 var(--ui-line,#e5e7eb)}
+.elhead .tcats{margin-bottom:6px}
+.esubs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin:0 -12px;padding:0 10px;border-top:1px solid var(--ui-line,#eef0f4)}.esubs::-webkit-scrollbar{display:none}
+.esubs button{flex:none;border:0;background:none;padding:7px 7px 6px;font:inherit;font-size:12px;color:var(--ui-muted,#667085);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.esubs button small{font-size:10px;margin-left:3px;opacity:.7}
+.esubs button:hover{color:var(--ui-fg,#101828)}.esubs button.on{color:var(--ui-accent,#2f6fe4);border-bottom-color:var(--ui-accent,#2f6fe4);font-weight:700}
+/* 요소 1단 = 4열 고정 격자(줄 바꿈이 바뀌지 않게) · 도형 색 띠 · 일러스트 2열 (11/24 전문가 검토) */
+#elcats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+#elcats button{padding:5px 2px;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:8px;background:var(--ui-field,#f2f4f7);border-color:transparent;color:#1E2B5A}
+#elcats button.on{background:#1E2B5A;border-color:#1E2B5A;color:#fff}
+.esty{display:flex;align-items:center;gap:7px;padding:7px 2px 8px}.esty button{width:22px;height:22px;border-radius:50%;border:0;padding:2px;background:none;cursor:pointer;box-shadow:0 0 0 1px var(--ui-line,#e5e7eb)}
+.esty button i{display:block;width:100%;height:100%;border-radius:50%}.esty button.on{box-shadow:0 0 0 2px #1E2B5A}.esty small{color:var(--ui-muted);font-size:11px;margin-left:2px}
+.egrid.big{grid-template-columns:repeat(2,minmax(0,1fr))}
+.esec .more.ghost{color:var(--ui-muted,#98a2b3);font-weight:400;margin-left:auto;margin-right:6px}
+.esubs button.on{color:#1E2B5A;border-bottom-color:#1E2B5A}
+
+/* 접기 단추 (11/24 다듬기): 양쪽 같은 모양(세로로 긴 알약) · 남색 바탕에 흰 꺾쇠 · 패널이 반쪽을 가리지 않게 맨 위로 */
+#rszL,#rszR{z-index:20}
+.rsz-fold{width:18px!important;height:46px!important;margin-top:24px;border:0!important;border-radius:9px!important;background:linear-gradient(180deg,#2B3A70,#1E2B5A)!important;color:#fff!important;font-size:14px;line-height:46px!important;box-shadow:0 4px 12px rgba(30,43,90,.28),0 0 0 2px #fff!important;opacity:.92;transition:opacity .15s,transform .15s,background .15s}
+.rsz-fold:hover{opacity:1;background:linear-gradient(180deg,#3A5BD9,#2F5BEA)!important}
+body.fold-l #rszL .rsz-fold,body.fold-r #rszR .rsz-fold{margin-top:-23px;width:18px!important;height:46px!important;line-height:46px!important;opacity:1}
