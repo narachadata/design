@@ -2032,3 +2032,6 @@ body.zooming #textBar,body.zooming .ovl .h,body.zooming .ovl .rotline{opacity:0}
 
 /* 윗막대 「AI 도우미」 단추 뺌 (11/24 팀장님 — AI는 모두 왼쪽 「AI 도구」 한곳) */
 #btnAI{display:none!important}
+
+/* 다운로드 창: 단추 아래로 뒤 글이 비치지 않게 — 단추 아래 빈칸까지 흰색으로 덮음 (11/24) */
+.dlpanel #dlGo{bottom:0;z-index:2;box-shadow:0 -16px 14px 2px #fff,0 16px 0 16px #fff,inset 0 1px 0 rgba(255,255,255,.14)!important}
