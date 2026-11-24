@@ -1144,6 +1144,9 @@ document.addEventListener('keydown', e => {
   if (e.key.startsWith('Arrow')) { if (!sel.length) return; e.preventDefault(); const PX = isPxDoc() ? 25.4 / 96 : 0, d = PX ? (e.shiftKey ? 10 : 1) * PX : e.altKey ? 0.1 : e.shiftKey ? 5 : 1, rr = PX ? (v => Math.round(v * 1000) / 1000) : r1; /* px 문서는 1px·Shift 10px */ selEls().forEach(el => { if (el.locked) return; if (e.key === 'ArrowLeft') el.x = rr(el.x - d); if (e.key === 'ArrowRight') el.x = rr(el.x + d); if (e.key === 'ArrowUp') el.y = rr(el.y - d); if (e.key === 'ArrowDown') el.y = rr(el.y + d); }); commitSoon(); rerender(); return; }
   if (e.key === 'PageDown' || e.key === 'PageUp') { e.preventDefault(); goto(pageStep(e.key === 'PageDown' ? 1 : -1)); return; }
   if (e.key === 'Enter' && !mod && !e.altKey && sel.length === 1) { const el9 = find(sel[0]), d9 = el9 && el9.type === 'text' && !el9.locked && !isWarp(el9) ? $(`#canvas [data-id="${el9.id}"]`) : null; if (d9) { e.preventDefault(); startEdit(d9); return; } }
+  if (e.altKey && !mod && sel.length && !tlOn()) { const AK = { KeyA: 'l', KeyH: 'c', KeyD: 'r', KeyW: 't', KeyV: 'm', KeyS: 'b' }[e.code];
+    if (AK && e.shiftKey && (e.code === 'KeyH' || e.code === 'KeyV')) { e.preventDefault(); distUnits(e.code === 'KeyH'); return; }  /* ⌥⇧H / ⌥⇧V : 같은 간격 */
+    if (AK && !e.shiftKey) { e.preventDefault(); alignUnits(AK); toast({ l: '왼쪽', c: '가로 가운데', r: '오른쪽', t: '위', m: '세로 가운데', b: '아래' }[AK] + (selUnits().length > 1 ? '로 맞췄습니다' : ' — 쪽에 맞췄습니다')); return; } }
   if (e.code === 'KeyP' && !mod && !e.altKey) setTool(tool === 'pen' ? 'select' : 'pen');
   if (e.code === 'KeyT' && !mod && !e.altKey) addText('b');
 });
@@ -7224,21 +7227,26 @@ function elCtx(e) {
   const B = (x, y, w, h, c) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.5" fill="${c || '#8FA8F2'}"/>`, GV = x => `<line x1="${x}" y1="2" x2="${x}" y2="28" stroke="#7C3AED" stroke-width="1.2" stroke-dasharray="2 1.6"/>`, GH = y => `<line x1="2" y1="${y}" x2="38" y2="${y}" stroke="#7C3AED" stroke-width="1.2" stroke-dasharray="2 1.6"/>`;
   const GAP = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#E83E8C" stroke-width="1.2"/>`;
   const arrRows = nU >= 2 ? [{ html: `<div class="ctx-h">정렬 · ${nU}개</div><div class="ctgrid">`
-      + tile('al-l', GV(6) + B(6, 4, 22, 6) + B(6, 12, 14, 6, '#5B7CF0') + B(6, 20, 28, 6), '왼쪽', '왼쪽 맞춤')
-      + tile('al-c', GV(20) + B(9, 4, 22, 6) + B(13, 12, 14, 6, '#5B7CF0') + B(6, 20, 28, 6), '가운데', '가로 가운데 맞춤')
-      + tile('al-r', GV(34) + B(12, 4, 22, 6) + B(20, 12, 14, 6, '#5B7CF0') + B(6, 20, 28, 6), '오른쪽', '오른쪽 맞춤')
-      + tile('al-t', GH(5) + B(4, 5, 8, 18) + B(16, 5, 8, 11, '#5B7CF0') + B(28, 5, 8, 21), '위', '위 맞춤')
-      + tile('al-m', GH(15) + B(4, 6, 8, 18) + B(16, 9.5, 8, 11, '#5B7CF0') + B(28, 4.5, 8, 21), '중간', '세로 가운데 맞춤')
-      + tile('al-b', GH(25) + B(4, 7, 8, 18) + B(16, 14, 8, 11, '#5B7CF0') + B(28, 4, 8, 21), '아래', '아래 맞춤')
-      + tile('dist-h', B(3, 9, 8, 12) + B(16, 9, 8, 12, '#5B7CF0') + B(29, 9, 8, 12) + GAP(11, 15, 16, 15) + GAP(24, 15, 29, 15), '가로 간격', '가로 같은 간격 (3개 이상)', nU < 3)
-      + tile('dist-v', B(13, 2, 14, 6) + B(13, 12, 14, 6, '#5B7CF0') + B(13, 22, 14, 6) + GAP(20, 8, 20, 12) + GAP(20, 18, 20, 22), '세로 간격', '세로 같은 간격 (3개 이상)', nU < 3)
+      + tile('al-l', GV(6) + B(6, 4, 22, 6) + B(6, 12, 14, 6, '#5B7CF0') + B(6, 20, 28, 6), '왼쪽', '왼쪽 맞춤 (' + keyLabel('Alt+A') + ')')
+      + tile('al-c', GV(20) + B(9, 4, 22, 6) + B(13, 12, 14, 6, '#5B7CF0') + B(6, 20, 28, 6), '가운데', '가로 가운데 맞춤 (' + keyLabel('Alt+H') + ')')
+      + tile('al-r', GV(34) + B(12, 4, 22, 6) + B(20, 12, 14, 6, '#5B7CF0') + B(6, 20, 28, 6), '오른쪽', '오른쪽 맞춤 (' + keyLabel('Alt+D') + ')')
+      + tile('al-t', GH(5) + B(4, 5, 8, 18) + B(16, 5, 8, 11, '#5B7CF0') + B(28, 5, 8, 21), '위', '위 맞춤 (' + keyLabel('Alt+W') + ')')
+      + tile('al-m', GH(15) + B(4, 6, 8, 18) + B(16, 9.5, 8, 11, '#5B7CF0') + B(28, 4.5, 8, 21), '중간', '세로 가운데 맞춤 (' + keyLabel('Alt+V') + ')')
+      + tile('al-b', GH(25) + B(4, 7, 8, 18) + B(16, 14, 8, 11, '#5B7CF0') + B(28, 4, 8, 21), '아래', '아래 맞춤 (' + keyLabel('Alt+S') + ')')
+      + tile('dist-h', B(3, 9, 8, 12) + B(16, 9, 8, 12, '#5B7CF0') + B(29, 9, 8, 12) + GAP(11, 15, 16, 15) + GAP(24, 15, 29, 15), '가로 간격', '가로 같은 간격 (3개 이상 · ' + keyLabel('Alt+Shift+H') + ')', nU < 3)
+      + tile('dist-v', B(13, 2, 14, 6) + B(13, 12, 14, 6, '#5B7CF0') + B(13, 22, 14, 6) + GAP(20, 8, 20, 12) + GAP(20, 18, 20, 22), '세로 간격', '세로 같은 간격 (3개 이상 · ' + keyLabel('Alt+Shift+V') + ')', nU < 3)
       + tile('same-w', B(6, 5, 28, 8) + B(6, 17, 28, 8, '#5B7CF0'), '너비 같게', '너비 같게 (처음 고른 것 기준 · 그림·글은 비율 그대로)')
       + tile('same-h', B(7, 4, 10, 22) + B(23, 4, 10, 22, '#5B7CF0'), '높이 같게', '높이 같게 (처음 고른 것 기준 · 그림·글은 비율 그대로)')
       + tile('same-wh', B(5, 7, 13, 16) + B(22, 7, 13, 16, '#5B7CF0'), '크기 같게', '크기 같게 (처음 고른 것 기준)')
       + tile('arrange', B(4, 3, 15, 11) + B(21, 3, 15, 11, '#5B7CF0') + B(4, 16, 15, 11, '#5B7CF0') + B(21, 16, 15, 11), '사진 배치', nImg < 2 ? '사진을 2장 이상 고르면 쪽에 맞춰 배치' : '사진을 쪽 안에 크기까지 맞춰 배치 (격자·모자이크·한 줄·강조형)', nImg < 2)
       + `</div>` }, '-'] : [];
+  const PG = (x, y) => `<rect x="2" y="2" width="36" height="26" rx="2" fill="none" stroke="#B8C0D0" stroke-width="1.2" stroke-dasharray="2.5 1.8"/>` + B(x, y, 12, 10, '#5B7CF0');
+  const pageRow = nU === 1 && !locked ? [{ html: `<div class="ctx-h">쪽에 맞춰 정렬</div><div class="ctgrid">`
+      + tile('al-l', PG(4, 10), '왼쪽', '쪽 왼쪽에 (' + keyLabel('Alt+A') + ')') + tile('al-c', PG(14, 10), '가운데', '쪽 가로 가운데에 (' + keyLabel('Alt+H') + ')') + tile('al-r', PG(24, 10), '오른쪽', '쪽 오른쪽에 (' + keyLabel('Alt+D') + ')')
+      + tile('al-t', PG(14, 4), '위', '쪽 위에 (' + keyLabel('Alt+W') + ')') + tile('al-m', PG(14, 10), '중간', '쪽 세로 가운데에 (' + keyLabel('Alt+V') + ')') + tile('al-b', PG(14, 16), '아래', '쪽 아래에 (' + keyLabel('Alt+S') + ')')
+      + `</div>` }, '-'] : [];
   const wrapRow = img && !locked ? [{ html: `<div class="ctx-h">글 배치</div><div class="ctgrid wr">${WRAP_OPTS.map(([k, t, tip]) => `<button class="ct${(els[0].wrap || 'none') === k ? ' on' : ''}" data-ctx="wrap-${k}" title="${tip}" aria-label="${tip}"><span class="wpic">${wrapPic(k)}</span><span>${t}</span></button>`).join('')}</div>` }, '-'] : [];
-  openCtx(e, [...arrRows, ...wrapRow, ['copy', '복사', 'Ctrl+C'], ['cut', '잘라내기', 'Ctrl+X'], ['paste', '붙여넣기', 'Ctrl+V', !clip], ['dup', '복제', 'Ctrl+D'], ['del', '삭제', 'Delete'], '-', ['cstyle', '스타일 복사', 'Ctrl+Alt+C'], ['pstyle', '스타일 붙여넣기', 'Ctrl+Alt+V', !styleClip], '-',
+  openCtx(e, [...arrRows, ...pageRow, ...wrapRow, ['copy', '복사', 'Ctrl+C'], ['cut', '잘라내기', 'Ctrl+X'], ['paste', '붙여넣기', 'Ctrl+V', !clip], ['dup', '복제', 'Ctrl+D'], ['del', '삭제', 'Delete'], '-', ['cstyle', '스타일 복사', 'Ctrl+Alt+C'], ['pstyle', '스타일 붙여넣기', 'Ctrl+Alt+V', !styleClip], '-',
     ['front', '맨 앞으로', 'Ctrl+Shift+]'], ['up', '앞으로', 'Ctrl+]'], ['down', '뒤로', 'Ctrl+['], ['back', '맨 뒤로', 'Ctrl+Shift+['], '-',
     ...(selUnitCount() >= 2 ? [['group', '그룹으로 묶기', 'Ctrl+G']] : []), ...(els.some(x => x.group) ? [['ungroup', '그룹 해제', 'Ctrl+Shift+G']] : []), ['lock', locked ? '잠금 풀기' : '잠그기', 'Ctrl+L'],
     ...(locked ? [] : [['fitpage', '쪽에 맞추기 (비율 유지)', ''], ['fillpage', img ? '쪽 꽉 채우기' : '쪽 꽉 채우기 (넘치는 곳 잘림)', '']]),
@@ -7255,8 +7263,8 @@ document.addEventListener('keydown', e => {
   if (mod && e.altKey && e.code === 'KeyV') { stop(); pasteStyle(); return; }
   if (!sel.length || (cellSel && (!mod || e.code.startsWith('Arrow')))) return;
   if (mod && e.code === 'KeyL') { stop(); ctxDo('lock'); return; }
-  if (e.shiftKey && !mod && e.code === 'KeyH') { stop(); flipSel('h'); return; }
-  if (e.shiftKey && !mod && e.code === 'KeyV') { stop(); flipSel('v'); return; }
+  if (e.shiftKey && !mod && !e.altKey && e.code === 'KeyH') { stop(); flipSel('h'); return; }
+  if (e.shiftKey && !mod && !e.altKey && e.code === 'KeyV') { stop(); flipSel('v'); return; }
   if (!mod && !e.altKey && !e.shiftKey && /^Digit[0-9]$/.test(e.code) && !cellSel) { stop(); const n = Number(e.code.slice(5)); selEls().forEach(x => { if (!x.locked) x.opacity = n === 0 ? 1 : n / 10; }); commitSoon(); renderCanvas(); renderInspector(); toast(`투명도 ${n === 0 ? 100 : n * 10}%`); return; }
   if (mod && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) { stop(); const d = (e.code === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 15 : 1); selEls().forEach(x => { if (!x.locked) x.rot = Math.round((((x.rot || 0) + d) % 360 + 360) % 360); }); commitSoon(); renderCanvas(); renderOverlay(); renderInspector(); return; }
 }, true);
