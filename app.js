@@ -423,6 +423,7 @@ function autoFitText(d, el) {
 }
 function kScale() { return Number($('#canvas').dataset.k) || 1; }
 function renderCanvas() {
+  wrapDirty();  /* 되돌리기 등으로 요소가 새로 바뀌었을 수 있음 */
   ensureLibFonts([page()]).then(n => { if (n && !editing) renderCanvas(); });
   const c = $('#canvas'); const pg = page();
   c.style.setProperty('--pw', doc.w); c.style.setProperty('--ph', doc.h); c.style.setProperty('--b', '0mm');
@@ -1051,6 +1052,7 @@ function sizeSel(f) {
    높이를 끌어 바꾼 상자(고정)·책 본문 흐름 상자·휘어진·세로 글·글 바탕색이 있는 상자는 그대로 */
 /* 요소 하나만 다시 그리기 (팀장님 11/24 「글자 끌기점으로 크기를 바꿀 때 번쩍거림」 — 끌 때마다 쪽 전체(그림까지)를 다시 만들던 것) */
 function rerenderEl(el) {
+  wrapDirty();
   const c = $('#canvas'), old = c && c.querySelector(`[data-id="${el.id}"]`);
   if (!old || /\{(쪽|전체쪽|디데이:|남은날:)/.test(el.text || '')) { renderCanvas(); return; } /* 쪽 번호·D-day 자리는 쪽 전체 바꿈이 필요 */
   const tmp = document.createElement('div'); tmp.innerHTML = elHTML(el, 'edit'); const nu = tmp.firstElementChild; if (!nu) { renderCanvas(); return; }
@@ -7059,9 +7061,12 @@ function natAR(el) { const u = src(el.src); if (!u) return null; if (NAT_AR.has(
 const WRAPS = ['square', 'tight', 'topbottom'];
 const canWrap = e => e && (e.type === 'image' || (e.type === 'shape' && e.kind !== 'line'));  /* 11/24 도형에도 글 배치 (워드처럼) */
 const ELL_PROF = Array.from({ length: 40 }, (_, k) => { const y = (k + 0.5) / 40 - 0.5, hw = Math.sqrt(Math.max(0, 0.25 - y * y)); return hw > 0.01 ? [0.5 - hw, 0.5 + hw] : null; });
+var WA = { t: -1, any: false, map: null, doc: null };  /* var·function: 앞쪽에서 불러도 TDZ 없음 */
+function wrapIndex() { const now = performance.now(); if (WA.doc === doc && now - WA.t < 80) return WA; const map = new Map(); let any = false; (doc.pages || []).forEach(p => { if (p.els.some(e => WRAPS.includes(e.wrap) && canWrap(e))) { any = true; p.els.forEach(e => map.set(e, p)); } }); WA = { t: now, any, map, doc }; return WA; }
+function wrapDirty() { if (WA) WA.t = -1; }
 function wrapFloats(t) {
   if (!doc || !doc.pages || t.rot || t.sizing === 'autow' || t.vertical || t.flowFrame || (t.sx && Number(t.sx) !== 100) || (t.sy && Number(t.sy) !== 100) || Number(t.skew)) return '';
-  const pg = doc.pages.find(q => q.els.includes(t)); if (!pg) return '';
+  const W = wrapIndex(); if (!W.any) return ''; const pg = W.map.get(t); if (!pg) return '';  /* 글 배치를 쓰는 쪽이 없으면 바로 끝 (304쪽 교본도 느려지지 않게) */
   const imgs = pg.els.filter(i => canWrap(i) && !i.hidden && WRAPS.includes(i.wrap)); if (!imgs.length) return '';
   const pad = Number(t.pad) || 0, cx0 = t.x + pad, cy0 = t.y + pad, cw = t.w - pad * 2, chMax = t.h - pad * 2;
   const L = imgs.map(i => ({ i, b: elBox(i) })).filter(({ b }) => b.x < t.x + t.w && b.x + b.w > t.x && b.y < t.y + t.h && b.y + b.h > t.y).sort((a, b) => a.b.y - b.b.y);
@@ -7106,7 +7111,7 @@ function wrapLive(d) {
 }
 /* 글 배치 고르기: 글 뒤·글 앞은 겹친 글 상자와의 앞뒤 순서만 바꿈 */
 function setImgWrap(imgs, v) {
-  const P = page(); let touched = 0;
+  wrapDirty(); const P = page(); let touched = 0;
   imgs.forEach(im => { const b = elBox(im), texts = P.els.filter(t => t.type === 'text' && !t.hidden && (() => { const q = elBox(t); return q.x < b.x + b.w && q.x + q.w > b.x && q.y < b.y + b.h && q.y + q.h > b.y; })()); if (texts.length) touched++;
     if (v === 'none' || v === 'front' || v === 'behind') delete im.wrap; else im.wrap = v; if (v === 'behind') im.wrap = 'behind';
     if (!texts.length) return; const idx = P.els.indexOf(im); P.els.splice(idx, 1);
