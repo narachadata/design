@@ -870,6 +870,7 @@
     function coverCheck() {
       const d = A.doc, C = d.bookCover, n = cvSpec(C), pg = d.pages[0], out = [], add = (lv, msg, fix, id) => out.push({ lv, msg, fix, id });
       if (!(Number(d.bleed) > 0)) add('bad', '도련(재단할 때 잘려 나갈 여유)이 0mm입니다 — 표지는 사방 3mm가 꼭 있어야 가장자리에 흰 줄이 안 생깁니다', 'bleed');
+      if (n.perfect && n.s < 3) add('warn', `본문 ${n.pages}쪽은 무선 제본에 얇습니다(책등 ${n.s}mm) — 무선은 보통 책등 3mm(약 40~50쪽) 이상, 얇은 책은 중철(스테이플)이 튼튼하고 쌉니다 (인쇄소와 상의)`);  /* 11/24 검토: 10쪽 무선에도 경고가 없었음 */
       if (n.perfect && n.s < 3 && C.spineOn !== false) add('warn', `책등이 ${n.s}mm로 얇아 글씨를 넣지 않았습니다 (3mm 미만은 제본 오차로 잘림)`);
       if (n.f && n.f > n.tw * 2 / 3) add('warn', `날개(${n.f}mm)가 표지 폭의 3분의 2보다 깁니다 — 잘 접히지 않아요 (보통 70~100mm)`);
       if (n.f && n.f < 50) add('warn', `날개(${n.f}mm)가 너무 짧습니다 — 보통 70~100mm`);
@@ -1067,7 +1068,7 @@
         if (k === 'fsz+' || k === 'fsz-') { const dz = k === 'fsz+' ? 0.5 : -0.5, cur = ps(); if (cur.body.size + dz < 7 || cur.body.size + dz > 20) { A.toast('본문 글자는 7~20pt 사이로 정합니다', true); return; } d.bstyles = d.bstyles || {}; Object.keys(cur).forEach(sk => { const o = d.bstyles[sk] = Object.assign({}, d.bstyles[sk] || {}); o.size = Math.max(6, Math.round((cur[sk].size + dz * cur[sk].size / cur.body.size) * 2) / 2); }); await flow({ quiet: true }); A.toast(`책 전체 글자를 ${dz > 0 ? '크게' : '작게'} — 본문 ${ps().body.size}pt · 본문 ${(d.book.lastFlow || {}).pages || 0}쪽`); A.renderSide(); return; }
         if (k === 'psreset') { if (confirm('단락 스타일을 처음 값으로 되돌릴까요?')) { d.bstyles = psDefaults(B.kind || 'general'); await flow({ quiet: true }); A.toast('기본 스타일로 되돌렸습니다'); } }
         if (k === 'check') { b.disabled = true; b.textContent = '살피는 중…'; pfCache = await preflight(); open.add('check'); A.renderSide(); }
-        if (k === 'pdf') { if (stale()) await flow({ quiet: true }); pfCache = await preflight(); const bad = pfCache.filter(x => x.lv === 'bad'); if (bad.length && !window.confirm(`꼭 고칠 것이 ${bad.length}개 있습니다:\n\n${bad.map(x => '· ' + x.msg).join('\n')}\n\n그래도 인쇄소용 PDF를 만들까요?`)) { open.add('check'); A.renderSide(); return; } if (!(Number(d.bleed) > 0)) d.bleed = 3; d.cropMarks = true; { const cp = coverPagesOf(d).filter(p => !p.dlOff); if (d.book.coverMade && cp.length && window.confirm(`표지는 펼침면 파일로 따로 보내므로 본문 PDF에서 표지 ${cp.length}쪽(맨 앞)을 뺄까요?\n(빼도 화면·집 인쇄에는 그대로 있습니다)`)) cp.forEach(p => { p.dlOff = true; }); } A.commit(); A.openDownload('pdfprint'); open.add('check'); A.renderSide(); }
+        if (k === 'pdf') { if (stale()) await flow({ quiet: true }); pfCache = await preflight(); const bad = pfCache.filter(x => x.lv === 'bad'); if (bad.length && !window.confirm(`꼭 고칠 것이 ${bad.length}개 있습니다:\n\n${bad.map(x => '· ' + x.msg).join('\n')}\n\n그래도 인쇄소용 PDF를 만들까요?`)) { open.add('check'); A.renderSide(); return; } if (!(Number(d.bleed) > 0)) d.bleed = 3; d.cropMarks = true; { const cp = coverPagesOf(d).filter(p => !p.dlOff); if (cp.length && window.confirm(`인쇄소는 보통 표지를 펼침면 파일로 따로 받습니다.${d.book.coverMade ? '' : '\n(표지 펼침면은 아직 안 만들었습니다 — 「표지 펼침면」 칸에서 만들 수 있어요)'}\n\n본문 PDF에서 표지 ${cp.length}쪽(맨 앞)을 뺄까요?\n(빼도 화면·집 인쇄에는 그대로 있습니다)`)) cp.forEach(p => { p.dlOff = true; }); } A.commit(); A.openDownload('pdfprint'); open.add('check'); A.renderSide(); }
         if (k === 'booklet') { if (stale()) await flow({ quiet: true }); A.bookletPdf(); }
       };
       body.onchange = async e => {

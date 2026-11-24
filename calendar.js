@@ -837,7 +837,7 @@ NC.cal = (function () {
         replaced++;
         // 달력 칸 편집(합치기·너비·높이·칸 색·칸 글자)은 그대로 옮김
         const oc = p.els.find(e => e.type === 'cal'), nc = np.els.find(e => e.type === 'cal');
-        if (oc && nc) ['cells', 'merges', 'colW', 'rowH'].forEach(k => { if (oc[k] != null) nc[k] = JSON.parse(JSON.stringify(oc[k])); });
+        if (oc && nc) { ['cells', 'merges', 'colW', 'rowH'].forEach(k => { if (oc[k] != null) nc[k] = JSON.parse(JSON.stringify(oc[k])); }); carryS(oc, nc); }
         // 사용자가 직접 넣은 요소(스티커·사진·글 상자 등)는 새 디자인 위에 그대로 둠
         if (p.els.some(e => e.gen)) np.els.push(...p.els.filter(e => !e.gen));
         return np;
@@ -846,8 +846,10 @@ NC.cal = (function () {
     });
     return replaced;
   }
+  /* 달력 모양 중 사용자가 고른 것(주 시작·줄 수·음력 + 속성 창에서 바꾼 값 sUser)은 테마·달을 바꿔도 남김 (11/24 검토: 테마를 바꾸면 처음 값으로 돌아가고, 값이 undefined인 키가 들어가 달력이 깨짐) */
+  function carryS(oc, nc) { if (!oc || !nc) return nc; const os = oc.s || {}, keys = new Set(['weekStart', 'rows', 'lunar'].concat(Object.keys(oc.sUser || {}))); const add = {}; keys.forEach(k => { if (os[k] !== undefined) add[k] = os[k]; }); nc.s = Object.assign({}, nc.s || {}, add); Object.keys(nc.s).forEach(k => { if (nc.s[k] === undefined) delete nc.s[k]; }); if (oc.sUser) nc.sUser = Object.assign({}, oc.sUser); return nc; }
   // 칸 번호 → 칸 서식 키 (날짜 칸은 날짜로 고정해 달·주 시작이 바뀌어도 그 날짜를 따라감)
   function cellKey(el, c) { const s = Object.assign({}, CAL_DEF, el.s || {}); const first = (new Date(el.year, el.month - 1, 1).getDay() - s.weekStart + 7) % 7; const n = c - first + 1; return n >= 1 && n <= daysIn(el.year, el.month) ? 'd' + n : String(c); }
   function calRows(el) { const s = Object.assign({}, CAL_DEF, el.s || {}); const first = (new Date(el.year, el.month - 1, 1).getDay() - s.weekStart + 7) % 7; return s.rows === '6' ? 6 : s.rows === 'auto' ? Math.ceil((first + daysIn(el.year, el.month)) / 7) : 5; }
-  return { setSrc: f => { srcOf = f; }, SEASON, THEME_CATS: ['인성', '계절', '스포츠', '사진·그림', '귀여운', '모던'], cellKey, calRows, builtinHolidays, autoHolidays, canAuto, AUTO_RANGE, fetchHolidays, holidayMap, calHTML, miniHTML, applyRules, buildPages, retheme, syncFromPages, themeOf, THEMES, CAL_DEF, MINI_DEF, MONTHS_EN, daysIn, WD };
+  return { setSrc: f => { srcOf = f; }, SEASON, THEME_CATS: ['인성', '계절', '스포츠', '사진·그림', '귀여운', '모던'], cellKey, calRows, carryS, builtinHolidays, autoHolidays, canAuto, AUTO_RANGE, fetchHolidays, holidayMap, calHTML, miniHTML, applyRules, buildPages, retheme, syncFromPages, themeOf, THEMES, CAL_DEF, MINI_DEF, MONTHS_EN, daysIn, WD };
 })();
