@@ -2035,3 +2035,63 @@ body.zooming #textBar,body.zooming .ovl .h,body.zooming .ovl .rotline{opacity:0}
 
 /* 다운로드 창: 단추 아래로 뒤 글이 비치지 않게 — 단추 아래 빈칸까지 흰색으로 덮음 (11/24) */
 .dlpanel #dlGo{bottom:0;z-index:2;box-shadow:0 -16px 14px 2px #fff,0 16px 0 16px #fff,inset 0 1px 0 rgba(255,255,255,.14)!important}
+
+/* 맞춤 안내선 3종 (11/24, 전문가 의견): 쪽 기준 = 지금처럼 길게 분홍 · 개체 기준 = 개체 사이만 보라(가장자리 실선, 가운데 점선) · 같은 간격 = 보라 간격 줄 + mm 글자 */
+.ovl .guide.obj{background:#7C3AED}.ovl .guide.v.obj{bottom:auto;width:calc(1px / var(--k))}.ovl .guide.h.obj{right:auto;height:calc(1px / var(--k))}
+.ovl .guide.v.obj.mid{background:repeating-linear-gradient(to bottom,#7C3AED 0 calc(4px / var(--k)),transparent calc(4px / var(--k)) calc(7px / var(--k)))}
+.ovl .guide.h.obj.mid{background:repeating-linear-gradient(to right,#7C3AED 0 calc(4px / var(--k)),transparent calc(4px / var(--k)) calc(7px / var(--k)))}
+.ovl .guide.gap{background:transparent;display:flex;align-items:center;justify-content:center}
+.ovl .guide.gap.h{right:auto;height:0;border-top:calc(1px / var(--k)) solid #7C3AED;border-left:calc(1px / var(--k)) solid #7C3AED;border-right:calc(1px / var(--k)) solid #7C3AED;margin-top:calc(-3px / var(--k));height:calc(6px / var(--k));border-top:0;background:linear-gradient(#7C3AED,#7C3AED) center/100% calc(1px / var(--k)) no-repeat}
+.ovl .guide.gap.v{bottom:auto;width:calc(6px / var(--k));margin-left:calc(-3px / var(--k));border-top:calc(1px / var(--k)) solid #7C3AED;border-bottom:calc(1px / var(--k)) solid #7C3AED;background:linear-gradient(#7C3AED,#7C3AED) center/calc(1px / var(--k)) 100% no-repeat}
+.ovl .guide.gap b{position:absolute;background:#7C3AED;color:#fff;font-weight:700;font-size:calc(10px / var(--k));line-height:1;padding:calc(2px / var(--k)) calc(4px / var(--k));border-radius:calc(4px / var(--k));white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.ovl .guide.gap.h b{transform:translateY(calc(-100% - 3px / var(--k)))}.ovl .guide.gap.v b{transform:translateX(calc(50% + 6px / var(--k)))}
+
+/* 설정 찾기 묶음 제목 (11/24): 이모지 대신 선 아이콘 + 꺾쇠 */
+.sqh .btn{display:inline-flex;align-items:center;gap:6px}.sqh .btn .ic{width:15px;height:15px;color:var(--brand)}.sqh .btn .ic.chev{width:13px;height:13px;color:var(--g500,#667085)}
+
+/* 오른쪽 단추 정렬 줄 · 사진 쪽에 맞춰 배치 창 (11/24) */
+.ctx .ctx-h{font-size:11px;font-weight:700;color:var(--g500,#667085);padding:6px 10px 2px}
+.ctx .ctxrow{display:flex;align-items:center;gap:2px;padding:2px 6px}
+.ctx .ctxrow button.ci{width:30px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:6px}
+.ctx .ctxrow button.ci .ic{width:17px;height:17px}.ctx .ctxrow button.ci.rot90 .ic{transform:rotate(90deg)}
+.ctx .ctxrow button.ci:disabled{opacity:.35}
+.ctx .ctxsep{width:1px;height:18px;background:var(--g200,#e4e7ec);margin:0 4px}
+.ctx .ctxic{display:inline-flex;width:18px;margin-right:6px;vertical-align:-3px}.ctx .ctxic .ic{width:16px;height:16px}
+.ctx button small{color:var(--g500,#667085);font-size:11px}
+.arrpop{position:fixed;z-index:60;width:300px;background:#fff;border:1px solid var(--g200,#e4e7ec);border-radius:14px;box-shadow:var(--sh-3,0 12px 32px rgba(16,24,40,.18));padding:12px 12px 10px;font-size:13px}
+.arrpop .arr-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.arrpop .arr-k{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+.arrpop .arr-c{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;border:1px solid var(--g200,#e4e7ec);border-radius:10px;background:#fff;cursor:pointer;font:inherit;font-size:12px;color:var(--g700,#344054);transition:border-color var(--d1,100ms),box-shadow var(--d1,100ms)}
+.arrpop .arr-c:hover{border-color:var(--ui-accent,#2F5BEA)}.arrpop .arr-c.on{border-color:var(--ui-accent,#2F5BEA);box-shadow:0 0 0 2px rgba(47,91,234,.18);color:var(--ui-accent,#2F5BEA);font-weight:700}
+.arrpop .arr-c:disabled{opacity:.4;cursor:default}
+.arrpop .arr-o{display:flex;align-items:center;gap:4px;margin:6px 0;flex-wrap:wrap}.arrpop .arr-o>span{width:56px;color:var(--g600,#475467);font-size:12px}
+.arrpop .arr-o input{width:56px;padding:4px 6px;border:1px solid var(--g200,#e4e7ec);border-radius:6px;font:inherit;font-size:12px}
+.arrpop .btn.on{background:var(--ui-accent,#2F5BEA);color:#fff;border-color:var(--ui-accent,#2F5BEA)}
+.arrpop .arr-n{margin:8px 0 0;color:var(--g500,#667085);font-size:11.5px;line-height:1.5}
+
+.ctx .ctgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;padding:4px 6px 6px;width:max-content}
+.ctx .ctgrid .ct{display:flex;flex-direction:column;align-items:center;gap:2px;width:52px;padding:5px 2px 4px;border:1px solid transparent;border-radius:8px;background:transparent;font-size:10.5px;color:var(--g600,#475467);line-height:1.1;white-space:nowrap}
+.ctx .ctgrid .ct:hover:not(:disabled){background:var(--g50,#f8f9fb);border-color:var(--g200,#e4e7ec);color:var(--g900,#101828)}
+.ctx .ctgrid .ct:disabled{opacity:.35}
+.ctx .ctgrid .ct svg{display:block}
+.arrpop{width:320px}.arrpop .arr-o input{width:48px}
+
+/* 홈 (11/24): 로고를 누르면 — 지금 작업 · 무엇을 만들까 · 최근 디자인 */
+.dvhome h3{margin:18px 0 8px}
+.dvh-back{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border:1px solid var(--g200,#e4e7ec);border-radius:12px;background:linear-gradient(135deg,#f5f7ff,#fff)}
+.dvh-back>div{display:flex;flex-direction:column;gap:2px;min-width:0}.dvh-back b{font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dvh-back small{color:var(--g500,#667085);font-size:12px}
+.dvh-kinds{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.dvh-kinds button{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;border:1px solid var(--g200,#e4e7ec);border-radius:12px;background:#fff;cursor:pointer;font:inherit;font-size:12.5px;color:var(--g700,#344054);transition:border-color var(--d1,100ms),box-shadow var(--d1,100ms),transform var(--d1,100ms)}
+.dvh-kinds button:hover{border-color:var(--ui-accent,#2F5BEA);box-shadow:var(--sh-1);transform:translateY(-1px)}
+.dvh-ic{width:40px;height:40px;border-radius:10px;background:var(--g50,#f5f7ff);display:flex;align-items:center;justify-content:center;color:var(--ui-accent,#2F5BEA)}
+.dvh-ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.dvh-tools{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+
+.fmenu.ctx{max-height:calc(100vh - 16px);overflow-y:auto}
+
+/* 그림 둘레 글 배치 (11/24) */
+.el-text .wrapf{pointer-events:none;user-select:none}
+.ctx .ctgrid.wr{grid-template-columns:repeat(5,1fr)}
+.ctx .ctgrid .ct.on{background:var(--ui-accent-soft,#eef2ff);border-color:var(--ui-accent,#2F5BEA);color:var(--ui-accent,#2F5BEA)}
+.ctx .ctgrid .wpic{color:#5B7CF0;display:block;line-height:0}
+.pk.wraps{display:grid;grid-template-columns:repeat(3,1fr)}.pk.wraps .pk-t{white-space:nowrap;font-size:11px}
