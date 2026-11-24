@@ -562,6 +562,31 @@ function guideHTML(g) {
   if (g.kind === 'obj') { const m = g.mid ? ' mid' : ''; return g.v != null ? `<div class="guide v obj${m}" style="left:${g.v}mm;top:${g.a}mm;height:${r1(g.b - g.a)}mm"></div>` : `<div class="guide h obj${m}" style="top:${g.h}mm;left:${g.a}mm;width:${r1(g.b - g.a)}mm"></div>`; }
   return g.v != null ? `<div class="guide v" style="left:${g.v}mm"></div>` : `<div class="guide h" style="top:${g.h}mm"></div>`;
 }
+/* ⌥(Alt)를 누르고 있으면 거리 재기 (11/24 전문가 의견 · 피그마처럼): 고른 것 ↔ 쪽 가장자리, 다른 개체 위에 마우스를 올리면 그 개체까지 (빨간 선 + mm) */
+var measOn = false, measT = null;  /* var: 앞쪽 함수에서 불러도 TDZ 없음 */
+function measClear() { document.querySelectorAll('#ovl [data-meas]').forEach(n => n.remove()); }
+function measDraw() {
+  measClear(); if (!measOn || drag || editing || !sel.length) return; const o = $('#ovl'); if (!o) return;
+  const els = selEls(); if (!els.length) return; const S = unionBox(els), T = measT && !sel.includes(measT.id) ? elBox(measT) : null, out = [];
+  const cy = S.y + S.h / 2, cx = S.x + S.w / 2;
+  const H = (a, b, y) => { if (b - a > 0.05) out.push({ kind: 'gap', H: true, s: a, e: b, at: y }); }, V = (a, b, x) => { if (b - a > 0.05) out.push({ kind: 'gap', H: false, s: a, e: b, at: x }); };
+  if (!T) { H(0, S.x, cy); H(S.x + S.w, doc.w, cy); V(0, S.y, cx); V(S.y + S.h, doc.h, cx); }
+  else {
+    const oy = Math.max(S.y, T.y), oy2 = Math.min(S.y + S.h, T.y + T.h), ox = Math.max(S.x, T.x), ox2 = Math.min(S.x + S.w, T.x + T.w);
+    const yAt = oy2 > oy ? (oy + oy2) / 2 : cy, xAt = ox2 > ox ? (ox + ox2) / 2 : cx;
+    const inside = T.x <= S.x && T.y <= S.y && T.x + T.w >= S.x + S.w && T.y + T.h >= S.y + S.h;
+    if (inside) { H(T.x, S.x, cy); H(S.x + S.w, T.x + T.w, cy); V(T.y, S.y, cx); V(S.y + S.h, T.y + T.h, cx); }
+    else { if (T.x >= S.x + S.w) H(S.x + S.w, T.x, yAt); else if (T.x + T.w <= S.x) H(T.x + T.w, S.x, yAt);
+      if (T.y >= S.y + S.h) V(S.y + S.h, T.y, xAt); else if (T.y + T.h <= S.y) V(T.y + T.h, S.y, xAt); }
+    out.push({ box: T });
+  }
+  const t = document.createElement('div'); t.innerHTML = out.map(g => g.box ? `<div class="meas-box" style="left:${r1(g.box.x)}mm;top:${r1(g.box.y)}mm;width:${r1(g.box.w)}mm;height:${r1(g.box.h)}mm"></div>` : guideHTML(g).replace('class="guide gap', 'class="guide gap meas')).join('');
+  [...t.children].forEach(d => { d.dataset.meas = '1'; o.appendChild(d); });
+}
+document.addEventListener('keydown', e => { if (e.key !== 'Alt' || e.repeat || editing || drag || !sel.length || (e.target.matches && e.target.matches('input,textarea,select')) || document.querySelector('dialog[open]')) return; measOn = true; measDraw(); });
+document.addEventListener('keyup', e => { if (e.key === 'Alt' && measOn) { measOn = false; measT = null; measClear(); } });
+window.addEventListener('blur', () => { if (measOn) { measOn = false; measT = null; measClear(); } });
+document.addEventListener('pointermove', e => { if (!measOn) return; if (!e.altKey) { measOn = false; measT = null; measClear(); return; } const n = e.target.closest && e.target.closest('#canvas .el, #ghost .el'); const el = n ? find(n.dataset.id) : null; if (el !== measT) { measT = el; measDraw(); } }, true);
 function dragOverlay(guides) {
   const o = $('#ovl'), els = selEls(), boxes = o ? [...o.children].filter(x => x.classList.contains('sel') && !x.classList.contains('group')) : [];
   if (!o || boxes.length !== els.length) { renderOverlay(guides); return; }
@@ -571,6 +596,7 @@ function dragOverlay(guides) {
   if (guides && guides.length) { const t = document.createElement('div'); t.innerHTML = guides.map(guideHTML).join(''); [...t.children].forEach(d => { d.dataset.drag = '1'; o.appendChild(d); }); }
 }
 function renderOverlay(guides) {
+  if (measOn) setTimeout(measDraw, 0);
   const o = $('#ovl'); const els = selEls(); let h = '';
   els.forEach(el => { const single = els.length === 1, kpx = kScale() * MM, sw = el.w * kpx, sh = el.h * kpx, tiny = single && Math.min(sw, sh) < 26; h += `<div class="sel${single ? '' : ' multi'}${tiny ? ' tiny' : ''}${imgPan === el.id ? ' panning' : ''}" style="left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;transform:rotate(${el.rot || 0}deg)">`; if (single && !el.locked) h += ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].filter(d => !((d === 'n' || d === 's') && (sh < 34 || sw < 16)) && !((d === 'e' || d === 'w') && (sw < 34 || sh < 16))).map(d =>  /* 위·아래 손잡이는 높이가 낮으면, 좌·우 손잡이는 너비가 좁으면 가운데를 가리므로 뺌 (한 줄 글 상자는 좌·우 손잡이 유지) */ `<div class="h ${d}" data-h="${d}"${el.rot ? ` style="cursor:${rotCursor(d, el.rot)}"` : ''}></div>`).join('') + '<div class="rotline"></div><div class="h rot" data-h="rot"></div>'; if (el.locked) h += `<button class="lockbadge" data-unlock="${el.id}" title="잠금 풀기 (Ctrl+L)">🔒 잠금 풀기</button>`; h += '</div>'; });
   if (els.length > 1) { const U = unionBox(els), bx = U.x, by = U.y, bw = U.w, bh = U.h; h += `<div class="sel group" style="left:${bx}mm;top:${by}mm;width:${bw}mm;height:${bh}mm">${els.some(e => e.locked) ? '' : ['nw', 'ne', 'se', 'sw'].map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="함께 크기 조절 (비율 유지)"></div>`).join('') + (() => { const kp = kScale() * MM, sw = bw * kp, sh = bh * kp; return ['n', 's', 'e', 'w'].filter(d => /[ns]/.test(d) ? sw >= 34 && sh >= 16 : sh >= 34 && sw >= 16).map(d => `<div class="h ${d}" data-h="${d}" data-g="1" title="한쪽으로 늘이기·줄이기 (Shift: 비율 유지)"></div>`).join(''); })() + '<div class="rotline"></div><div class="h rot" data-h="rot" data-g="1" title="함께 돌리기 (Shift: 15°씩)"></div>'}</div>`; }
