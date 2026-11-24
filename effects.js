@@ -6,9 +6,10 @@ NC.fx = (function () {
   function rgba(hex, a) { if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return hex || '#000'; const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a == null ? 1 : a})`; }
 
   /* ---------- 글자 ---------- */
-  const TEXT_FX_DEF = { fillType: 'solid', g1: '#2f5bea', g2: '#e0564b', gAngle: 90, glow: false, glowC: '#ffd34d', glowB: 1.2, d3: 0, d3C: '#1e2b5a', d3X: 0.3, d3Y: 0.3, underline: false, strike: false, upper: false, vertical: false, blend: 'normal', warp: 'none', warpAmt: 40, bgR: 0, shA: 0.25 };
+  const TEXT_FX_DEF = { reflect: false, reflGap: 0.5, reflOp: 35, reflLen: 60, flipH: false, flipV: false, st2W: 0, st2C: '#ffffff', fillType: 'solid', g1: '#2f5bea', g2: '#e0564b', gAngle: 90, glow: false, glowC: '#ffd34d', glowB: 1.2, d3: 0, d3C: '#1e2b5a', d3X: 0.3, d3Y: 0.3, underline: false, strike: false, upper: false, vertical: false, blend: 'normal', warp: 'none', warpAmt: 40, bgR: 0, shA: 0.25 };
   function textShadows(el, useFilter) {
     const parts = [];
+    if (Number(el.st2W) > 0) { const r = Number(el.st2W) + (Number(el.strokeW) || 0) * 0.3528 / 2; for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8; parts.push([+(Math.cos(a) * r).toFixed(3), +(Math.sin(a) * r).toFixed(3), 0, el.st2C || '#ffffff']); } }
     for (let i = 1; i <= (el.d3 || 0); i++) parts.push([el.d3X * i, el.d3Y * i, 0, el.d3C]);
     if (el.glow) { parts.push([0, 0, el.glowB, el.glowC], [0, 0, el.glowB * 2, el.glowC], [0, 0, el.glowB * 0.5, el.glowC]); }
     if (el.shadow) parts.push([el.shX, el.shY, el.shB, rgba(el.shC, el.shA == null ? 0.25 : el.shA)]);
@@ -31,6 +32,9 @@ NC.fx = (function () {
     if (el.kern === 'none') s += 'font-kerning:none;'; else if (el.kern === 'opt') s += 'font-kerning:normal;font-feature-settings:"kern" 1,"palt" 1;'; /* 커닝: 꺼짐 · 글꼴 기본 · 비례(palt — 한글·가나 글자 폭을 글자 모양대로) */
     if (el.vertical) s += 'writing-mode:vertical-rl;text-orientation:upright;';
     if (el.blend && el.blend !== 'normal') s += `mix-blend-mode:${el.blend};`;
+    /* 11/24 포토샵식 꾸미기: 반사(거울) · 상하·좌우 뒤집기 (scale 속성 — 자리·회전의 transform과 따로) */
+    if (el.reflect) s += `-webkit-box-reflect:below ${Number(el.reflGap) || 0}mm linear-gradient(transparent ${100 - (Number(el.reflLen) || 60)}%, rgba(255,255,255,${(el.reflOp == null ? 35 : Number(el.reflOp)) / 100}));`;
+    if (el.flipH || el.flipV) s += `scale:${el.flipH ? -1 : 1} ${el.flipV ? -1 : 1};`;
     if (el.bg) s += `background-color:${el.bg};${grad ? '' : ''}border-radius:${el.bgR || 0}mm;`;
     if (el.pad) s += `padding:${el.pad}mm;`;
     /* 글 상자 고도화: 단 나누기(인디자인), 최대 줄 수+말줄임(Figma), 자동 너비(Figma) — 단·줄 수가 있으면 세로 정렬(flex)은 쓰지 않음 */
@@ -57,7 +61,11 @@ NC.fx = (function () {
     return `<svg viewBox="0 0 ${W} ${Hh}" width="100%" height="100%" style="overflow:visible;display:block;${sh ? `filter:${sh};` : ''}" xmlns="http://www.w3.org/2000/svg">${defs}<path id="p${el.id}" d="${d}" fill="none"/><text font-family="${esc(el.font)}, Pretendard, 'Noto Sans KR', sans-serif" font-size="${fs}" font-weight="${el.weight}" font-style="${el.italic ? 'italic' : 'normal'}" letter-spacing="${el.ls * fs}" fill="${fill}" ${stroke}>${el.warp === 'circle' && el.warpFit ? `<textPath href="#p${el.id}" startOffset="0" textLength="${(2 * Math.PI * Math.max(2, Math.min(W, Hh) / 2 - fs * 0.6) * 0.992).toFixed(2)}" lengthAdjust="spacing">${esc(text)}</textPath>` : `<textPath href="#p${el.id}" startOffset="50%" text-anchor="middle">${esc(text)}</textPath>`}</text></svg>`;
   }
   const TEXT_PRESETS = [
-    { id: 'plain', name: '기본', st: { fillType: 'solid', strokeW: 0, shadow: false, glow: false, d3: 0, bg: '' } },
+    { id: 'plain', name: '기본', st: { fillType: 'solid', strokeW: 0, shadow: false, glow: false, d3: 0, bg: '', reflect: false, st2W: 0, flipH: false, flipV: false } },
+    { id: 'reflect', name: '반사', st: { reflect: true, reflGap: 0.5, reflOp: 35, reflLen: 60 } },
+    { id: 'double', name: '이중 윤곽', st: { fillType: 'solid', color: '#FFD34D', strokeW: 1.2, strokeC: '#1E2B5A', st2W: 0.9, st2C: '#ffffff', shadow: false, glow: false, d3: 0, weight: 800 } },
+    { id: 'hollow', name: '속 빈 글자', st: { fillType: 'solid', color: 'transparent', strokeW: 1.3, strokeC: '#1E2B5A', shadow: false, glow: false, d3: 0, weight: 800 } },
+    { id: 'flipv', name: '거꾸로', st: { flipV: true } },
     { id: 'sticker', name: '스티커', st: { fillType: 'solid', color: '#1E2B5A', strokeW: 3, strokeC: '#ffffff', shadow: true, shC: '#000000', shA: 0.3, shX: 0.8, shY: 0.8, shB: 0.6, glow: false, d3: 0, weight: 800 } },
     { id: 'outline', name: '외곽선만', st: { fillType: 'solid', color: '#ffffff', strokeW: 1.5, strokeC: '#1E2B5A', shadow: false, glow: false, d3: 0, weight: 800 } },
     { id: 'shadow', name: '긴 그림자', st: { fillType: 'solid', color: '#ffffff', strokeW: 0, shadow: false, glow: false, d3: 8, d3C: '#1E2B5A', d3X: 0.35, d3Y: 0.35, weight: 800 } },
