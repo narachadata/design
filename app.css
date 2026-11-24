@@ -2127,3 +2127,4 @@ body.zooming #textBar,body.zooming .ovl .h,body.zooming .ovl .rotline{opacity:0}
 .acctbox small{font-size:11.5px;color:#4a5368;line-height:1.5}.acctbox .acctmail{font-size:16px;font-weight:800;color:#1b2130;overflow-wrap:anywhere}
 .acctbox.ok{border-style:solid;border-color:#9fd8b4;background:#f3fbf6}.acctbox.ask{border-color:#2f5bea;box-shadow:0 0 0 3px rgba(47,91,234,.14)}
 .acctin{display:flex;gap:6px}.acctin input{flex:1;min-width:0}.acctbtns{display:flex;flex-direction:column;gap:5px;flex:none}
+.attfr{margin:6px 0 4px;padding:8px 10px;border:1px dashed #cfd4dd;border-radius:10px;display:flex;flex-direction:column;gap:5px}.attfr.on{border:1.5px solid #2f5bea;background:#eef3ff}.attfr small{font-size:11.5px;color:#4a5368}

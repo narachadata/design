@@ -314,6 +314,7 @@ const elHidden = el => elVisOv.has(el.id) ? !elVisOv.get(el.id) : !!el.hidden;
 function elHTML(el, mode, ext) {
   if (elHidden(el)) return '';
   if (el.attKey && doc.att && ((el.attKey !== 'photo' && doc.att.photoOnly) || (el.attKey === 'photo' && doc.att.textOnly))) { if (mode !== 'edit') return ''; el = Object.assign({}, el, { opacity: (el.opacity == null ? 1 : el.opacity) * 0.3 }); }  /* 📷 사진만이면 글자를, ✍ 글자만이면 사진을 출력에서 뺌(편집 화면엔 흐리게) */  /* 출석부 📷 사진만: 출력·PDF·미리 보기엔 사진만, 편집 화면엔 글자를 흐리게 (11/19 팀장님 — 사진을 늦게 찍어 사진만 따로 찍을 때) */
+  if (el.attFrame && !el.attSvg && mode === 'edit' && doc.att && !doc.att.printFrame && !doc.att.frameEdit) el = Object.assign({}, el, { opacity: (el.opacity == null ? 1 : el.opacity) * 0.28 });  /* 출석부 틀(고칠 수 있는 요소): ✍ 글자만이면 편집 화면에 흐리게 — 맞춰 보기용 */
   let { x, y, w, h } = el;
   if (ext && mode === 'print' && ((el.type === 'image' && el.fit !== 'contain' && !el.rot && (!el.clip || el.clip === 'none') && !el.radius && !el.borderW) || (el.type === 'shape' && el.kind === 'rect' && !el.radius && !el.strokeW && !el.rot))) { const b = doc.bleed || 0; if (x <= 0.3) { x -= b; w += b; } if (x + w >= doc.w - 0.3) w += b; if (y <= 0.3) { y -= b; h += b; } if (y + h >= doc.h - 0.3) h += b; }
   const tx = el.type === 'text' && !isWarp(el); /* 글 상자 크기 방식: 자동 높이(기본, min-height) · 고정(height) · 자동 너비(max-content) */
@@ -6457,17 +6458,18 @@ const ATT_PHOTO = { x: 170.98, y: 23, w: 28.05, h: 30.18 };  /* 이름 아래 �
 const attDefYear = () => { const t = new Date(); return t.getFullYear() + (t.getMonth() >= 10 ? 1 : 0); };  /* 11·12월엔 다음 해 출석부 (연말 일괄) */
 const attIsDoc = () => Math.abs(doc.w - ATT_W) < 1 && Math.abs(doc.h - ATT_H) < 1;
 function attState() {
-  if (!doc.att) doc.att = { rows: [], year: attDefYear(), stMode: 'join', printFrame: false, showFrame: false, layout: {}, fv: 7 };
+  if (!doc.att) doc.att = { rows: [], year: attDefYear(), stMode: 'join', printFrame: false, showFrame: false, layout: {}, fv: 8 };
   const A = doc.att; A.rows = A.rows || []; A.layout = A.layout || {}; if (!A.year) A.year = attDefYear(); if (!A.stMode) A.stMode = 'join';
-  if (A.fv !== 2) { /* 11/19 팀장님: 주소는 지역까지만·보호자 이름 가운데 O·학교 글자 겹침 빼기·연도 칸은 등록일 — 이미 넣은 명단도 한 번 맞춤 */
+  if ((Number(A.fv) || 0) < 2) { /* (11/24 고침: 예전엔 fv !== 2라 부를 때마다 아래 단계가 다시 돌았음) 11/19 팀장님: 주소는 지역까지만·보호자 이름 가운데 O·학교 글자 겹침 빼기·연도 칸은 등록일 — 이미 넣은 명단도 한 번 맞춤 */
     A.fv = 2; if (A.stMode === 'auto') A.stMode = 'join';
     A.rows.forEach(r => { r.addr = attAddrShort(r.addr); r.guard = attMask(r.guard); r.school = attSchoolFix(r.school); if (r.src) r.st = attStatus(r.join, A); });
   }
-  if (A.fv === 2) { A.fv = 3; (doc.pages || []).forEach(p => { p.els = p.els.map(e => e.attFrame && e.type === 'image' ? Object.assign(attFrameEl(A), { id: e.id }) : e); }); }  /* 사진 틀 → 새로 그린 벡터 틀 (11/19) */
+  if (A.fv === 2) { A.fv = 3; (doc.pages || []).forEach(p => { p.els = p.els.map(e => e.attFrame === true && e.type === 'image' ? Object.assign(attFrameEl(A), { id: e.id }) : e); }); }  /* 사진 틀 → 새로 그린 벡터 틀 (11/19) */
   if (A.fv === 3) { A.fv = 4; const bs = attBusSet(); A.rows.forEach(r => { r.addr = attAddrShort(r.addr); if (r.bus == null) r.bus = bs.has(String(r.name || '').trim()); }); }  /* 주소에 붙은 메모(· 차량: …)·'중앙로55' 정리, 차량 이용 표시 (11/19) */
   if (A.fv === 4) { A.fv = 5; A.rows.forEach(r => { r.addr = attAddrShort(r.addr); }); }  /* 끝 숫자 빼기 (11/19) */
   if (A.fv === 5) { A.fv = 6; }  /* 도로명 건물 번호를 남기는 규칙 — 주소는 관리프로그램에서 다시 가져와야 번호가 돌아옴 */
   if (A.fv === 6) { A.fv = 7; const L = A.layout && A.layout.photo; if (L && L.w && L.h) { const r2 = v => Math.round(v * 100) / 100, cx = (Number(L.x) || 0) + L.w / 2; L.w = r2(L.w * 0.85); L.h = r2(L.h * 0.85); L.x = r2(cx - L.w / 2); } }  /* 사진 15% 작게(위쪽 그대로) — 기억해 둔 사진 배치도 같은 비율로 (11/19) */
+  if (A.fv === 7) { A.fv = 8; (doc.pages || []).forEach(p => { if (p.els.some(e => e.attSvg)) p.els = p.els.flatMap(e => e.attSvg ? attFrameEls(A, 'front') : [e]); }); }  /* 한 장 그림 틀 → 고칠 수 있는 요소 틀 (11/24) */
   return A;
 }
 const attRowsOn = () => attState().rows.filter(r => String(r.name || '').trim() && !r.off);
@@ -6581,11 +6583,114 @@ function attFrameSVG() {
   for (let m = 1; m <= NR; m++) o += num(m, TX + MW / 2, TY + HH + RH * (m - 0.5) + 1.55);
   return (attFrameSVG.c = o + '</svg>');
 }
+/* 출석부 틀 — 고칠 수 있는 요소로 (11/24 팀장님 「일러스트처럼 다시, 도장 로고 파일로, 사진과 똑같이, 우리 프로그램에서 수정 가능하게 — 앞장은 지난번 여백 비율 그대로」)
+   앞면: 지난번 벡터 틀(attFrameSVG)과 같은 자리(칸 이름·밑줄 = ATT_F, 표 9.4·62mm, 6mm 칸)를 글 상자·사각형·선·로고 그림으로. 로고 = 요소 → 나라차로고의 「Since 2002 로고」(brand-since)를 나눈 조각
+   (상징+두 줄 사이 NARACHA = brand-since-mark, Taekwondo = brand-taekwondo) + 「나 라 차」 글.
+   뒷면: 팀장님 사진(승급현황표 · 상담일지 및 기타 특이사항 · 체격체력)을 재서 같은 자리(사진 2000px = 209mm).
+   요소마다 attFrame·certFrame(출력 창 틀 켜기·끄기) + 잠금 + 한 묶음(group). 고친 틀은 doc.att.frames[side]에 기억 → 모든 출석부에 같게 */
+const MM2PT = 2.8346;
+function attFrameKit() {
+  const r2 = v => Math.round(v * 100) / 100, pt = mm => r2(mm * MM2PT);
+  const T = (text, x, y, w, h, st) => Object.assign({}, TEXT_DEF, { id: uid(), text, x: r2(x), y: r2(y), w: r2(w), h: r2(h), font: 'Noto Sans KR', size: 10, weight: 400, color: '#222222', align: 'left', lh: 1.15, ls: 0, sizing: 'fixed', valign: 'middle', name: '틀 · ' + String(text).replace(/\n/g, ' ').slice(0, 12) }, st || {});
+  const R = (x, y, w, h, fill, st) => Object.assign({ id: uid(), type: 'shape', kind: 'rect', x: r2(x), y: r2(y), w: r2(Math.max(0.05, w)), h: r2(Math.max(0.05, h)), rot: 0, fill: fill || '', stroke: '', strokeW: 0, radius: 0, opacity: 1, name: '틀 · 칸' }, st || {});
+  const HL = (x1, x2, y, t, c) => R(x1, y - t / 2, x2 - x1, t, c || '#3A3A3A', { name: '틀 · 가로줄' });
+  const VL = (x, y1, y2, t, c) => R(x - t / 2, y1, t, y2 - y1, c || '#3A3A3A', { name: '틀 · 세로줄' });
+  const BOX = (x, y, w, h, t, c) => R(x, y, w, h, '', { stroke: c || '#2E2E2E', strokeW: t, name: '틀 · 테두리' });
+  const DIAG = (x1, y1, x2, y2, t, c) => { const L = Math.hypot(x2 - x1, y2 - y1), a = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI, cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, hh = 0.6; return Object.assign({ id: uid(), type: 'shape', kind: 'line', x: r2(cx - L / 2), y: r2(cy - hh / 2), w: r2(L), h: hh, rot: r2(a), fill: c || '#3A3A3A', stroke: c || '#3A3A3A', strokeW: t, radius: 0, opacity: 1, name: '틀 · 사선' }); };
+  const I = (src, x, y, w, h, st) => Object.assign({ id: uid(), type: 'image', src, x: r2(x), y: r2(y), w: r2(w), h: r2(h), rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '틀 · 로고' }, st || {});
+  /* 나라차 로고 묶음: 두 줄 너비 W, 윗줄 위치 lineY — 상징·NARACHA(그림) · 나 라 차(글) · Taekwondo(그림) */
+  const logo = (cx, lineY, W, op) => { const k = W / 215, o = op == null ? {} : { opacity: op }, my = lineY - 73 * k, gap = 51 * k;
+    return [I('asset:brand-since-mark', cx - W / 2, my, W, 128 * k, Object.assign({ name: '틀 · 로고 (상징·NARACHA)' }, o)),
+      T('나라차', cx - W * 0.22, lineY + gap + 2.15 * k / 0.2358, W * 0.44, 4.4 * k / 0.2358, Object.assign({ font: 'Noto Serif KR', size: pt(3.3 * k / 0.2358), weight: 500, color: '#3E3A39', align: 'center', ls: 0.62, name: '틀 · 로고 (나라차)' }, o)),
+      I('asset:brand-taekwondo', cx - W * 0.212, lineY + gap + 8.8 * k / 0.2358, W * 0.424, W * 0.424 * 20 / 112, Object.assign({ name: '틀 · 로고 (Taekwondo)' }, o))]; };
+  return { T, R, HL, VL, BOX, DIAG, I, logo, pt, r2 };
+}
+function attFrontParts() {
+  const K = attFrameKit(), { T, R, HL, VL, BOX, DIAG, logo, pt } = K, out = [];
+  const TX = 9.4, TY = 62, MW = 6, DW = 6, HH = 6.1, RH = 6.15, NR = 12, ND = 31, RX = TX + MW + DW * ND, BY = TY + HH + RH * NR;
+  out.push(...logo(35.35, 29.3, 50.7));
+  /* 칸 이름과 밑줄 — 밑줄 자리는 ATT_F(값 글자가 밑줄 1mm 위에 앉음), 이름표 글자 바닥 = 밑줄 6.2mm 위 */
+  const lab = (t, x, base) => T(t, x - 0.2, base - 3.55, 22, 4.3, { size: pt(3.4), weight: 700, color: '#2B2B2B', valign: 'bottom', sizing: 'autow', name: '틀 · ' + t });
+  [['연도', 66.6, 21], ['생일', 97.3, 21], ['등록구분', 128.8, 21], ['주소', 66.6, 32.3], ['연락처', 118.8, 32.3], ['수련요일', 66.6, 43.2], ['학교/학년', 118.8, 43.2], ['보호자', 66.6, 54.5], ['출석번호', 118.8, 54.5]].forEach(([t, x, ln]) => out.push(lab(t, x, ln - 6.2)));
+  out.push(lab('이름', 170.1, 14.1));
+  [21, 32.3, 43.2, 54.5].forEach(y => out.push(HL(66, 162, y, 0.22, '#4A4A4A'))); out.push(HL(170.5, 200.5, 20.5, 0.22, '#4A4A4A'));
+  /* 12달 × 31일 표 */
+  out.push(R(TX, TY, RX - TX, HH, '#F0A055', { name: '틀 · 머리줄' }));
+  for (let m = 2; m <= NR; m += 2) out.push(R(TX, TY + HH + RH * (m - 1), RX - TX, RH, '#F1C9A0', { name: `틀 · ${m}월 줄` }));
+  for (let k = 0; k < ND; k++) out.push(VL(TX + MW + DW * k, TY, BY, k % 5 === 0 && k ? 0.3 : 0.16));
+  for (let r = 1; r <= NR; r++) out.push(HL(TX, RX, TY + HH + RH * (r - 1), r === 1 ? 0.3 : 0.16));
+  out.push(DIAG(TX, TY, TX + MW, TY + HH, 0.12));
+  out.push(BOX(TX, TY, RX - TX, BY - TY, 0.35));
+  out.push(T('Date', TX + 0.2, TY + 0.15, MW - 0.5, 1.9, { size: pt(1.25), align: 'right', valign: 'top', color: '#333333', name: '틀 · Date' }), T('Month', TX + 0.3, TY + HH - 2, MW - 0.5, 1.9, { size: pt(1.25), valign: 'bottom', color: '#333333', name: '틀 · Month' }));
+  const num = (t, x, y, w, h) => T(String(t), x, y, w, h, { size: pt(4.3), sx: 78, align: 'center', color: '#2A221E', name: '틀 · ' + t });
+  for (let d = 1; d <= ND; d++) out.push(num(d, TX + MW + DW * (d - 1), TY, DW, HH));
+  for (let m = 1; m <= NR; m++) out.push(num(m, TX, TY + HH + RH * (m - 1), MW, RH));
+  return out;
+}
+/* 뒷면 띠 색 (사진에서) */
+const ATT_BELT = { w: '#FFFFFF', y: '#F6C948', o: '#F07A4E', g: '#2F5C48', g2: '#3F7159', b: '#2B63C9', br: '#7B4B42', br2: '#8A5A52', r: '#E05D58', m: '#6B2C2C', k: '#222222' };
+function attBackParts() {
+  const K = attFrameKit(), { T, R, HL, VL, BOX, DIAG, logo, pt } = K, out = [], B = ATT_BELT;
+  const LX = 7.8, GX = 24.2, GX2 = 99.8, LINE = '#4A4A4A';
+  out.push(T('❖ 승급현황표', 7.2, 6.6, 34, 6.4, { size: 15, weight: 800, color: '#2B2B2B', sizing: 'autow', name: '틀 · 승급현황표' }), T('이름:', 42.2, 6.6, 14, 6.4, { size: 14, weight: 400, color: '#333333', sizing: 'autow', name: '틀 · 이름:' }));
+  out.push(T('❖상담일지 및 기타 특이사항', 102.2, 6.9, 60, 5.4, { size: 13.5, weight: 500, color: '#333333', sizing: 'autow', name: '틀 · 상담일지' }));
+  /* 띠 표 하나: rows = [[머리 칸 [번호, 색]...], ...], 가로줄(0·1·2) 규칙 = 색 묶음 안 짝 번호, 마지막 두 칸(국기원) 비움 */
+  const table = (y0, rows, rowH, label, labelBands, lc) => {
+    const n = rows[0].length, cw = (GX2 - GX) / n, H = rowH.reduce((a, b) => a + b, 0);
+    labelBands.forEach(([c, a, b]) => out.push(R(LX, y0 + H * a, GX - LX, H * (b - a), c, { name: '틀 · ' + label + ' 띠' })));
+    let y = y0;
+    rows.forEach((row, ri) => {
+      const hh = rowH[ri * 2], bh = rowH[ri * 2 + 1];
+      row.forEach(([no, col], ci) => { const x = GX + cw * ci; out.push(R(x, y, cw, hh, col === 'r/k' ? '' : B[col], { name: `틀 · ${no} 칸` })); if (col === 'r/k') { out.push(R(x, y, cw * 0.46, hh, B.r), R(x + cw * 0.46, y, cw * 0.54, hh, B.k)); } out.push(T(String(no), x, y, cw, hh, { size: 12, sx: 82, align: 'center', color: /^(w|y)$/.test(col) ? '#2A2A2A' : '#FFFFFF', name: '틀 · ' + no })); });
+      /* 가로 보조줄: 같은 색이 이어지는 묶음 안에서 둘씩 짝 → 첫 짝 0줄, 둘째 1줄, 셋째 2줄 */
+      let gs = 0; row.forEach(([no, col], ci) => { if (ci && col !== row[ci - 1][1]) gs = ci; const p = Math.floor((ci - gs) / 2), last = ri === rows.length - 1 && ci >= n - 2 && label !== '유급자'; if (last || !p) return; const x = GX + cw * ci; for (let q = 1; q <= p; q++) out.push(HL(x, x + cw, y + hh + bh * (p === 1 ? 0.5 : q / 3), 0.18, LINE)); });
+      out.push(HL(GX, GX2, y + hh, 0.2, LINE)); y += hh + bh; if (ri < rows.length - 1) out.push(HL(GX, GX2, y, 0.2, LINE));
+    });
+    for (let ci = 1; ci < n; ci++) out.push(VL(GX + cw * ci, y0, y0 + H, 0.2, LINE));
+    out.push(VL(GX, y0, y0 + H, 0.25, '#333333'), BOX(LX, y0, GX2 - LX, H, 0.3, '#333333'));
+    const cyl = y0 + H * (lc == null ? 0.5 : lc);
+    out.push(T(label, LX, cyl - 3, GX - LX, 6, { size: 14.5, weight: 800, align: 'center', color: labelBands[0][0] === B.w ? '#333333' : '#FFFFFF', name: '틀 · ' + label }));
+    out.push(T('국기원', GX + cw * (n - (label === '유급자' ? 1 : 2)), y0 + H - rowH[rowH.length - 1], cw * (label === '유급자' ? 1 : 2) - 0.6, rowH[rowH.length - 1] - 0.6, { size: label === '유급자' ? 7 : 11, align: 'right', valign: 'bottom', color: '#2A2A2A', name: '틀 · 국기원' }));
+    return H;
+  };
+  const seq = (from, to, cols) => { const o = []; for (let v = from, i = 0; from > to ? v >= to : v <= to; v += from > to ? -1 : 1, i++) o.push([v, cols[i]]); return o; };
+  table(14.6, [seq(9, 1, ['w', 'y', 'o', 'g', 'b', 'br', 'br', 'r', 'r/k'])], [5.7, 11], '유급자', [[B.w, 0, 1]]);
+  table(33.3, [seq(12, 1, ['w', 'w', 'y', 'y', 'g2', 'g2', 'b', 'b', 'br2', 'br2', 'r', 'r'])], [5.6, 11], '1품', [[B.r, 0, 0.53], [B.k, 0.53, 1]], 0.5);
+  table(51.8, [seq(24, 13, ['w', 'w', 'w', 'w', 'y', 'y', 'y', 'y', 'g', 'g', 'g', 'g']), seq(12, 1, ['b', 'b', 'b', 'b', 'm', 'm', 'm', 'm', 'r', 'r', 'r', 'r'])], [5.6, 5.3, 5.5, 5.5], '2품', [[B.k, 0, 0.324], [B.r, 0.324, 0.667], [B.k, 0.667, 1]], 0.4955);
+  table(75.6, [seq(36, 25, ['w', 'w', 'w', 'w', 'w', 'w', 'y', 'y', 'y', 'y', 'y', 'y']), seq(24, 13, ['g', 'g', 'g', 'g', 'g', 'g', 'b', 'b', 'b', 'b', 'b', 'b']), seq(12, 1, ['m', 'm', 'm', 'm', 'm', 'm', 'r', 'r', 'r', 'r', 'r', 'r'])], [5.47, 5.47, 5.47, 5.47, 5.47, 5.45], '3품', [[B.k, 0, 1]]);
+  /* 상담일지 칸 + 흐린 로고 */
+  out.push(BOX(102.4, 13.7, 95.1, 95.7, 0.3, '#555555'));
+  out.push(...logo(149.4, 57.6, 54.8, 0.2));
+  /* 체격체력 표 */
+  const X = [8.4, 18, 35.5, 50.7, 65.6, 80.7, 95.9, 111.1, 126.2, 141.6, 150.7, 159.9, 169.5, 178.9, 188.4, 197.8], Y = [110.1, 116.3, 122.4, 128.2, 134.3, 140.4];
+  out.push(R(X[0], Y[0], X[1] - X[0], Y[5] - Y[0], '#E58C3C', { name: '틀 · 체격체력 띠' }), T('체\n격\n체\n력', X[0], Y[0], X[1] - X[0], Y[5] - Y[0], { size: 15, weight: 800, align: 'center', lh: 1.25, color: '#3B2412', name: '틀 · 체격체력' }));
+  [[2, 4, '#EBA868', '체 격'], [4, 9, '#7DB1E6', '건 강 체 력'], [9, 15, '#CFD166', '줄 넘 기']].forEach(([a, b, c, t]) => out.push(R(X[a], Y[0], X[b] - X[a], Y[1] - Y[0], c, { name: '틀 · ' + t }), T(t, X[a], Y[0], X[b] - X[a], Y[1] - Y[0], { size: 13, weight: 800, align: 'center', color: '#222222', name: '틀 · ' + t })));
+  ['체중', '신장', '윗몸일으키기', '좌전굴', '악력좌/우', '멀리뛰기', '10m달리기', '앞', '뒤', '엇걸어', '2중', '뒤2중', '엇걸어2중'].forEach((t, i) => { const w = X[i + 3] - X[i + 2], est = [...t].reduce((a, ch) => a + (/[가-힣]/.test(ch) ? 1 : 0.58), 0) * 10.5 / MM2PT, sx = Math.min(100, Math.floor((w - 1.4) / est * 100)); out.push(T(t, X[i + 2], Y[1], w, Y[2] - Y[1], { size: 10.5, align: 'center', sx: sx < 100 ? sx : undefined, color: '#222222', name: '틀 · ' + t })); });
+  out.push(T('구분', X[1] + 6, Y[0] + 0.3, X[2] - X[1] - 6.5, 5.4, { size: 12, align: 'right', color: '#222222', name: '틀 · 구분' }), T('측정일', X[1] + 0.5, Y[1] + 0.5, 12, 5.4, { size: 12, color: '#222222', name: '틀 · 측정일' }), DIAG(X[1], Y[0], X[2], Y[2], 0.2, LINE));
+  out.push(T('전년기록', X[1], Y[2], X[2] - X[1], Y[3] - Y[2], { size: 12, weight: 700, align: 'center', color: '#222222', name: '틀 · 전년기록' }));
+  for (let r = 2; r < 5; r++) out.push(T('/', X[6], Y[r] + 0.2, X[7] - X[6], Y[r + 1] - Y[r], { size: 12, align: 'center', color: '#333333', name: '틀 · /' }));
+  for (let i = 2; i < X.length - 1; i++) out.push(VL(X[i], i === 3 || (i >= 5 && i <= 8) || i >= 10 ? Y[1] : Y[0], Y[5], 0.2, LINE));
+  out.push(VL(X[1], Y[0], Y[5], 0.25, '#333333'));
+  [1, 2, 3, 4].forEach(r => out.push(HL(r === 1 ? X[2] : X[1], X[15], Y[r], r === 2 ? 0.3 : 0.2, LINE)));
+  out.push(BOX(X[0], Y[0], X[15] - X[0], Y[5] - Y[0], 0.35, '#333333'));
+  return out;
+}
+/* 틀 조각 → 출석부 쪽에 넣을 요소 (기억해 둔 틀이 있으면 그것) */
+function attFrameEls(A, side) {
+  const saved = A.frames && A.frames[side], base = saved && saved.length ? clone(saved) : side === 'back' ? attBackParts() : attFrontParts();
+  return base.map(e => Object.assign(e, { id: uid(), locked: !A.frameEdit, hidden: !attFrameVis(A), certFrame: true, attFrame: side }));
+}
 /* 노란 어린이 통학 차량 (빨간 띠·둥근 창·바퀴) — 22×16 */
 const ATT_BUS_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 16" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="display:block;overflow:visible"><path d="M2.2 3.4Q2.2 1.2 4.4 1.2H14.6Q16.4 1.2 17.4 2.8L20 7Q20.6 8 20.6 9.2V11.6Q20.6 12.8 19.4 12.8H2.6Q1.4 12.8 1.4 11.6V4.4Q1.4 3.4 2.2 3.4Z" fill="#FFC83D" stroke="#3B2F2A" stroke-width="0.9" stroke-linejoin="round"/><rect x="3.4" y="3" width="3.6" height="3.4" rx="1" fill="#BFE6FF" stroke="#3B2F2A" stroke-width="0.6"/><rect x="8.2" y="3" width="3.6" height="3.4" rx="1" fill="#BFE6FF" stroke="#3B2F2A" stroke-width="0.6"/><path d="M13 3H15.2Q16 3 16.5 3.8L18.2 6.4H13Z" fill="#BFE6FF" stroke="#3B2F2A" stroke-width="0.6" stroke-linejoin="round"/><rect x="1.8" y="8.2" width="18.4" height="1.3" fill="#E5323F"/><circle cx="19.2" cy="10.8" r="0.7" fill="#FFF6C8"/><circle cx="6" cy="13" r="2.1" fill="#3B2F2A"/><circle cx="6" cy="13" r="0.8" fill="#D9D9D9"/><circle cx="15.6" cy="13" r="2.1" fill="#3B2F2A"/><circle cx="15.6" cy="13" r="0.8" fill="#D9D9D9"/></svg>';
 const attFrameVis = A => !!(A.printFrame || A.showFrame);  /* 틀까지 출력이면 편집 화면에도 틀이 보임 (11/19 팀장님) */
 const attFrameEl = A => ({ type: 'path', attSvg: 1, pts: [], id: uid(), x: 0, y: 0, w: ATT_W, h: ATT_H, rot: 0, opacity: 1, name: '출석부 틀', locked: true, hidden: !attFrameVis(A), certFrame: true, attFrame: true });
-function attPage(r, i) { const A = attState(); return { id: uid(), bg: '#ffffff', els: [attFrameEl(A)].concat(attEls(r)), label: `출석부 ${i + 1} · ${r.name || ''}`, att: { i } }; }
+function attPage(r, i) { const A = attState(); return { id: uid(), bg: '#ffffff', els: attFrameEls(A, 'front').concat(attEls(r)), label: `출석부 ${i + 1} · ${r.name || ''}`, att: { i } }; }
+/* 뒷면(승급현황표 · 상담일지 · 체격체력) — 이름만 찍음 */
+function attBackPage(r, i) { const A = attState(), L = A.layout.bname || {}, nm = String((r && r.name) || '').trim();
+  const els = attFrameEls(A, 'back'); if (nm) els.push(Object.assign({}, TEXT_DEF, { id: uid(), text: nm, font: 'Nanum Myeongjo', size: 15, weight: 800, italic: false, color: '#1a1a1a', align: 'left', lh: 1.2, ls: 0, name: '출석부 뒷면 · 이름', attKey: 'bname', x: 55, y: 6.9, w: 44, h: 6, sizing: 'fixed', fitText: true, valign: 'middle' }, L));
+  return { id: uid(), bg: '#ffffff', els, label: `출석부 ${i + 1} 뒷면 · ${nm}`, att: { i, side: 'back', empty: !r } }; }
+const attPagesFor = (r, i) => attState().back ? [attPage(r, i), attBackPage(r, i)] : [attPage(r, i)];
+const attPer = () => attState().back ? 2 : 1;
 /* 출력할 때 틀 (흰 종이에 틀까지 / 틀 인쇄된 용지에 글자만 — 기본 글자만) */
 function attFrameSync(A) { doc.pages.forEach(p => p.els.forEach(e => { if (e.attFrame) e.hidden = !attFrameVis(A); })); }
 /* 출석부 출력 네 가지 (11/19 팀장님): 🖼 틀까지(흰 종이 — 틀·글자·사진) · ✍ 글자만(사진 빼고) · 📷 사진만(사진을 늦게 찍었을 때) · ✍📷 글자와 사진(인쇄된 출석부 용지 — 기본) */
@@ -6607,25 +6712,25 @@ async function attNeedDoc() { if (attIsDoc()) return true; const from = `${Math.
 /* 만들기: 출석부 쪽을 지우고 체크된 사람마다 한 쪽 (다른 쪽은 그대로) */
 async function attMerge() {
   if (!(await attNeedDoc())) return false; const A = attState(), rows = attRowsOn(); if (!rows.length) { toast('출력할 사람이 없습니다 — ② 명단에서 체크하세요', true); return false; }
-  const pages = rows.map((r, i) => attPage(r, i)); setStatus('이름 길이에 맞춰 글자 크기를 맞추는 중…'); await fitTextOffscreen(pages.flatMap(p => p.els)); setStatus('');
+  const pages = rows.flatMap((r, i) => attPagesFor(r, i)); setStatus('이름 길이에 맞춰 글자 크기를 맞추는 중…'); await fitTextOffscreen(pages.flatMap(p => p.els)); setStatus('');
   const keep = doc.pages.filter(p => !p.att && p.els.length); doc.pages = keep.concat(pages); cur = keep.length; sel = []; fitCache.clear(); attBuilt = { id: doc.docId || '', sig: attSig(A) }; commit(); renderAll();
   toastUndo(`출석부 ${rows.length}장을 만들었습니다 — 🖨 바로 출력에서 용지에 맞게 찍습니다`); return true;
 }
 /* 실시간 출석부 (11/19 팀장님 "왼쪽에서 요청하는 내용이 오른쪽 편집 화면에 실시간으로"):
    명단·연도 칸·배치·만드는 규칙이 바뀌면 출석부 쪽을 다시 만듦 — 명단을 비우면 빈 출석부 한 장. 쪽에서 직접 옮긴 자리는 「이 쪽 배치를 모든 출석부에」로 기억해 두면 유지.
    기준(sig)은 문서에 저장하지 않음 → 예전에 만들어 둔 출석부도 열고 출석부 패널에 오면 지금 규칙으로 다시 만듦 */
-const ATT_GEN = 2; let attBuilt = { id: '', sig: '' }, attLiveT = 0, attLiveBusy = false;
-const attSig = A => JSON.stringify([ATT_GEN, A.rows, A.layout, A.year, A.stMode]);
+const ATT_GEN = 3; let attBuilt = { id: '', sig: '' }, attLiveT = 0, attLiveBusy = false;
+const attSig = A => JSON.stringify([ATT_GEN, A.rows, A.layout, A.year, A.stMode, !!A.back, A.frames || null]);
 function attLiveSoon(now) { clearTimeout(attLiveT); attLiveT = setTimeout(attLive, now ? 0 : 350); }
 async function attLive() {
   if (!doc.att || !attIsDoc() || attLiveBusy) return; const A = attState(), sig = attSig(A), id = doc.docId || '';
   if (attBuilt.id === id && attBuilt.sig === sig) return; attLiveBusy = true;
   try {
-    const rows = attRowsOn(), pages = rows.length ? rows.map((r, i) => attPage(r, i)) : [{ id: uid(), bg: '#ffffff', els: [attFrameEl(A)], label: '출석부 (명단 없음)', att: { i: 0, empty: true } }];
+    const rows = attRowsOn(), pages = rows.length ? rows.flatMap((r, i) => attPagesFor(r, i)) : [{ id: uid(), bg: '#ffffff', els: attFrameEls(A, 'front'), label: '출석부 (명단 없음)', att: { i: 0, empty: true } }].concat(A.back ? [attBackPage(null, 0)] : []);
     await fitTextOffscreen(pages.flatMap(p => p.els));
     if (attSig(A) !== sig || (doc.docId || '') !== id) { attLiveBusy = false; attLiveSoon(); return; }  /* 그사이 또 바뀜 */
     const keep = doc.pages.filter(p => !p.att && p.els.length), pr = A.rows[attPrev], at = pr ? rows.indexOf(pr) : -1, was = at >= 0 ? at : (page() && page().att ? page().att.i : 0);  /* 왼쪽에서 고르거나 고치는 사람의 쪽을 보여 줌 */
-    doc.pages = keep.concat(pages); cur = keep.length + Math.min(Math.max(0, was), pages.length - 1); sel = []; fitCache.clear();
+    doc.pages = keep.concat(pages); cur = keep.length + Math.min(Math.max(0, was * attPer() + (page() && page().att && page().att.side === 'back' && at < 0 ? 1 : 0)), pages.length - 1); sel = []; fitCache.clear();
     attBuilt = { id, sig }; commit(); const ae = document.activeElement, sb0 = $('#sidebody'), inSide = ae && sb0 && sb0.contains(ae);
     if (inSide) { renderCanvas(); fitCanvas(); renderOverlay(); renderInspector(); updateSaveBadge(); } else renderAll();  /* 왼쪽 표에 쓰는 중이면 패널은 그대로 (입력이 끊기지 않게) */
   } finally { attLiveBusy = false; }
@@ -6726,6 +6831,8 @@ function renderAttSide(body) {
   <h3>① 용지 · 틀 <small>209×150mm 가로</small></h3>
   <div class="f"><span>출력할 것</span>${attModeSeg(attModeOf(A), 'data-amode')}</div>
   <label class="chk"><input type="checkbox" data-ax="show" ${A.showFrame ? 'checked' : ''}> 화면에 틀 그림 보이기 <small class="hint" style="margin:0">(맞춰 보기용 — 출력은 위 설정대로)</small></label>
+  <label class="chk"><input type="checkbox" data-ax="back" ${A.back ? 'checked' : ''}> 뒷면(승급현황표·상담일지·체격체력)도 만들기 <small class="hint" style="margin:0">— 사람마다 앞·뒤 두 쪽, 뒷면엔 이름만</small></label>
+  <div class="attfr ${A.frameEdit ? 'on' : ''}">${A.frameEdit ? `<b>✏️ 틀 고치는 중</b><small>틀의 글자·색·선을 바로 고칠 수 있습니다(글자는 두 번 눌러 고치기, 색·크기는 오른쪽). 앞면·뒷면 중 지금 보는 쪽의 틀이 기준이 됩니다.</small><div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm primary" data-ax="fsave">✅ 고친 틀을 모든 출석부에</button><button class="btn sm" data-ax="fcancel">고치지 않고 끝내기</button></div>` : `<div class="row" style="gap:6px;flex-wrap:wrap;align-items:center"><button class="btn sm" data-ax="fedit">✏️ 틀 고치기</button>${A.frames && (A.frames.front || A.frames.back) ? `<button class="btn sm" data-ax="freset">↺ 틀 처음대로</button><small class="hint" style="margin:0">고친 틀 사용 중 (${[A.frames.front ? '앞면' : '', A.frames.back ? '뒷면' : ''].filter(Boolean).join('·')})</small>` : '<small class="hint" style="margin:0">틀은 글 상자·선·로고로 되어 있어 고칠 수 있습니다</small>'}</div>`}</div>
   <h3>② 명단 <small>${rows.length}명 중 ${nOn}명 출력 · 체크를 풀면 빠짐</small></h3>
   <div class="row" style="gap:6px;align-items:flex-end;flex-wrap:wrap"><label class="f" style="margin:0;width:6.5em"><span>출석부 연도</span><input type="number" min="2000" max="2100" data-aset="year" value="${Number(A.year)}"></label>
     <label class="f" style="margin:0;flex:1;min-width:12em"><span>'연도' 칸에 넣을 글</span><select data-aset="stMode">${[['join', '등록일'], ['auto', '자동: 신규 / 기등록'], ['old', '모두 기등록'], ['year', `연도 숫자 (${Number(A.year)})`], ['none', '비움']].map(([k, t]) => `<option value="${k}" ${A.stMode === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
@@ -6749,7 +6856,8 @@ function renderAttSide(body) {
     if (t.dataset.abus != null) { const r = A.rows[Number(t.dataset.abus)]; if (r) { r.bus = t.checked; attPrev = Number(t.dataset.abus); markDirty(); renderSide(); } return; }  /* 차량 이용 손으로 */
     if (t.dataset.aset === 'year') { A.year = Number(t.value) || attDefYear(); A.rows.forEach(r => { if (r.src) r.st = attStatus(r.join, A); }); markDirty(); renderSide(); return; }
     if (t.dataset.aset === 'stMode') { A.stMode = t.value; A.rows.forEach(r => { if (r.src) r.st = attStatus(r.join, A); }); markDirty(); renderSide(); toast('관리프로그램에서 가져온 사람의 연도 칸을 새로 채웠습니다'); return; }
-    if (t.dataset.ax === 'show') { attShowFrame(t.checked); renderSide(); } });
+    if (t.dataset.ax === 'show') { attShowFrame(t.checked); renderSide(); }
+    if (t.dataset.ax === 'back') { A.back = t.checked; markDirty(); renderSide(); toast(t.checked ? '사람마다 앞면·뒷면(승급현황표) 두 쪽으로 만듭니다 — 양면 출력은 프린터 창에서 「양면」' : '앞면만 만듭니다'); } });
   document.addEventListener('click', async e => {
     if (!on() || !e.target.closest || !sb().contains(e.target)) return; const A = attState();
     const fr = e.target.closest('[data-aframe]'); if (fr) { attSetFrame(fr.dataset.aframe === '1'); renderSide(); return; }
@@ -6769,6 +6877,10 @@ function renderAttSide(body) {
     if (k === 'printnow') { await attLive(); if (doc.pages.some(p => p.att && !p.att.empty)) openPrint('att'); else toast('출력할 출석부가 없습니다 — ② 명단에서 체크하세요', true); }  /* 11/19 팀장님: 실시간이니 만들기 없이 출력 창으로 바로 */
     if (k === 'print') openPrint('att'); if (k === 'pdf') openDownload('pdfhq');
     if (k === 'layout') { await attSaveLayout(); renderSide(); }
+    if (k === 'fedit') { A.frameEdit = true; A.showFrame = true; doc.pages.forEach(p => p.els.forEach(x => { if (x.attFrame) { x.locked = false; x.hidden = false; } })); commit(); renderAll(); toast('틀을 고칠 수 있습니다 — 다 되면 왼쪽 「✅ 고친 틀을 모든 출석부에」'); }
+    if (k === 'fsave') { const pg = page(); if (!pg || !pg.att) { toast('출석부 쪽(앞면이나 뒷면)을 열고 누르세요', true); return; } const side = pg.att.side === 'back' ? 'back' : 'front'; const els = pg.els.filter(x => x.attFrame).map(x => { const o = clone(x); ['id', 'locked', 'hidden', 'certFrame', 'attFrame', 'group'].forEach(q => delete o[q]); return o; }); if (!els.length) { toast('이 쪽에 틀이 없습니다', true); return; } A.frames = Object.assign({}, A.frames || {}, { [side]: els }); A.frameEdit = false; attBuilt.sig = ''; await attLive(); renderSide(); toast(`고친 ${side === 'back' ? '뒷면' : '앞면'} 틀을 모든 출석부에 넣었습니다 — 다음에 만들 때도 이 틀`); }
+    if (k === 'fcancel') { A.frameEdit = false; attBuilt.sig = ''; await attLive(); renderSide(); toast('틀을 고치지 않고 끝냈습니다'); }
+    if (k === 'freset' && window.confirm('고친 출석부 틀을 처음 모양으로 되돌릴까요? (명단·칸 배치는 그대로)')) { delete A.frames; A.frameEdit = false; attBuilt.sig = ''; await attLive(); renderSide(); toast('출석부 틀을 처음 모양으로 되돌렸습니다'); }
     if (k === 'layoutreset' && window.confirm('옮기거나 고친 칸 배치를 처음(용지에 맞춘 자리)으로 되돌릴까요?')) { A.layout = {}; if (doc.pages.some(p => p.att)) await attMerge(); else commit(); renderSide(); }
   });
 })();
@@ -8073,7 +8185,7 @@ if (NC.aichat) NC.aichat.init({ openAIPanel, chatMode,
     if (!F[k]) return false; const r = F[k](); return r !== false;
   },
 });
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { attFrontParts, attBackParts, attState, bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
 
 /* ---- 도구 막대 한 줄 (팀장님 11/24 「도구 막대 한 줄도 정리」) ----
    넘치면 덜 쓰는 묶음(정렬 → 순서 → 펜·그룹)부터 「⋯」 펼침 창으로 옮김(단추를 그대로 옮겨 동작 같음), 자리가 나면 제자리로. 세로 도구 막대는 그대로 */
