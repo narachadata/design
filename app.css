@@ -2185,3 +2185,81 @@ dialog.asktext{width:min(480px,92vw)}
 .livebar .lvp:first-child{margin-left:0}.livebar .lvp.more{background:#98a2b3}
 
 .tbmenu button .ic{width:17px;height:17px;color:var(--ui-muted,#667085);flex:none}
+
+/* 상태 칸: 구글 드라이브 연결은 작은 구름 그림 (11/26) */
+#status .stic{display:inline-flex;align-items:center;vertical-align:middle;color:#2f9e6b}
+#status .stic .ic{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#status .stic.busy{color:var(--ui-muted)}#status .stic.busy .ic{animation:gdpulse 1s ease-in-out infinite}
+
+/* 내 드라이브 파일 관리 (11/26): 오른쪽 클릭 메뉴·여러 개 고르기·폴더 고르기 창 */
+#dvPop{min-width:220px}#dvPop button .ic{width:16px;height:16px;color:var(--ui-muted);flex:none}#dvPop button.danger .ic{color:var(--ui-danger)}
+#dvPop button[disabled]{opacity:.4;cursor:default;background:transparent}#dvPop button:focus-visible{outline:0;background:var(--ui-accent-soft)}
+#dvPop hr{border:0;border-top:1px solid var(--ui-line);margin:5px 4px}
+#dvPop .dvph{padding:6px 10px 4px;font-size:12px;color:var(--ui-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.drive .dvdoc.sel,.drive .dvfolder.sel{border-color:var(--ui-accent);box-shadow:0 0 0 2px var(--ui-accent-soft);background:#f5f8ff}
+.drive .dvdoc.sel .dvmeta{background:#f5f8ff}
+#dvSelBar{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:center;gap:4px;background:#1d2939;color:#fff;border-radius:12px;padding:6px 6px 6px 16px;box-shadow:0 12px 32px rgba(16,24,40,.28);z-index:55;font-size:13.5px}
+#dvSelBar b{margin-right:8px;font-weight:600}
+#dvSelBar button{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;color:#fff;font:inherit;padding:7px 11px;border-radius:8px;cursor:pointer}
+#dvSelBar button:hover{background:rgba(255,255,255,.14)}#dvSelBar button.danger{color:#ffb4ab}#dvSelBar .ic{width:16px;height:16px}
+.drive input.dvren{width:100%;font:inherit;font-weight:700;padding:3px 6px;border:1.5px solid var(--ui-accent);border-radius:6px;outline:0}
+dialog.dvask,dialog.dvpick{width:min(440px,92vw);border:0;border-radius:14px;padding:0;box-shadow:0 20px 60px rgba(16,24,40,.25)}
+dialog.dvask .dhead,dialog.dvpick .dhead{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 6px}dialog.dvask h2,dialog.dvpick h2{font-size:16px;margin:0}
+dialog.dvask .dbody,dialog.dvpick .dbody{padding:8px 18px 16px}
+.dvtree{max-height:min(380px,55vh);overflow:auto;border:1px solid var(--ui-line);border-radius:10px;padding:4px}
+.dvtree button{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;padding:8px 10px;border-radius:7px;cursor:pointer;font:inherit;font-size:13.5px;text-align:left;color:var(--ui-fg)}
+.dvtree button:hover{background:var(--ui-field)}.dvtree button.on{background:var(--ui-accent-soft);color:var(--ui-accent);font-weight:600}
+.dvtree button .ic{width:16px;height:16px;color:var(--ui-muted);flex:none}.dvtree button small{margin-left:auto;color:var(--ui-muted);font-size:11.5px}
+table.dvinfo{width:100%;border-collapse:collapse;font-size:13.5px}table.dvinfo th{width:84px;text-align:left;color:var(--ui-muted);font-weight:500;padding:6px 0;vertical-align:top}table.dvinfo td{padding:6px 0;word-break:break-all}
+
+/* 내 드라이브 왼쪽 메뉴 (11/26 새로): 폴더 나무 · 끌어 놓을 곳 표시 · 휴지통은 아래 */
+dialog.nd.drive nav{gap:1px}
+dialog.nd.drive nav button{padding:9px 12px;font-size:14px;gap:11px;position:relative}
+dialog.nd.drive nav button>span:not(.dvk-ic){flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+dialog.nd.drive nav button svg{width:19px;height:19px;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+dialog.nd.drive nav button.half{color:var(--ui-accent);font-weight:600}
+dialog.nd.drive .dvtree-nav{display:flex;flex-direction:column;gap:1px;margin:0 0 4px}
+dialog.nd.drive nav .dvtf{padding-top:6px;padding-bottom:6px;font-size:13.2px;color:var(--ui-fg2)}
+dialog.nd.drive nav .dvtf svg{width:16px;height:16px;color:var(--ui-muted)}dialog.nd.drive nav .dvtf.on svg{color:var(--ui-accent)}
+dialog.nd.drive nav .dvtw{font-style:normal;color:var(--ui-muted);font-size:13px}
+dialog.nd.drive nav .dvkinds{display:flex;flex-direction:column;gap:1px;margin-top:8px}
+dialog.nd.drive nav .dvkinds small{padding:6px 12px 4px;font-size:12px;font-weight:700;color:var(--ui-muted)}
+dialog.nd.drive nav .dvnav-end{margin-top:auto;padding-top:10px;display:flex;flex-direction:column;gap:1px}
+dialog.nd.drive nav button.over,dialog.nd.drive .dvfolder.over{background:var(--ui-accent-soft)!important;color:var(--ui-accent);box-shadow:inset 0 0 0 2px var(--ui-accent)}
+dialog.nd.drive nav button[data-droptrash].over{background:#fdecea!important;color:var(--ui-danger);box-shadow:inset 0 0 0 2px var(--ui-danger)}
+dialog.nd.drive.dvdragging nav [data-dropdir],dialog.nd.drive.dvdragging nav [data-droptrash]{box-shadow:inset 0 0 0 1.5px var(--ui-line2);background:#fafbfc}
+dialog.nd.drive.dvdragging nav{background:linear-gradient(#fff,#fff)}
+.dvghost{position:fixed;top:-100px;left:-100px;padding:7px 12px;border-radius:9px;background:var(--ui-accent);color:#fff;font:600 13px/1 system-ui,sans-serif}
+dialog.nd.drive nav .dvk-ic{width:19px;flex:none;display:inline-grid;place-items:center}dialog.nd.drive nav .dvk-ic svg{width:18px;height:18px}
+
+/* 위 막대 「열기」: 아이콘 크게 · 마우스 올리면 폴더가 열리는 움직임 (11/26 팀장님) */
+#btnOpen .opic{width:21px;height:21px;overflow:visible}
+#btnOpen .opic path{transition:transform .28s cubic-bezier(.3,1.4,.5,1),opacity .2s}
+#btnOpen .opf{fill:var(--ui-bg,#fff);transform-box:view-box;transform-origin:12px 20px}
+#btnOpen .opp{opacity:0;transform:translateY(3px)}
+#btnOpen:hover .opf,#btnOpen:focus-visible .opf{transform:skewX(-16deg) scaleY(.78) translateX(1.5px)}
+#btnOpen:hover .opp,#btnOpen:focus-visible .opp{opacity:1;transform:translateY(-1.2px)}
+@media (prefers-reduced-motion:reduce){#btnOpen .opic path{transition:none}}
+
+.drive .dvdoc.sel::before,.drive .dvfolder.sel::before{content:'';position:absolute;left:8px;top:8px;width:20px;height:20px;border-radius:50%;background:var(--ui-accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12 4 4 8-8'/%3E%3C/svg%3E") center/14px no-repeat;z-index:2;box-shadow:0 0 0 2px #fff}
+.drive .dvfolder.sel::before{left:4px;top:4px;width:17px;height:17px;background-size:12px}
+
+/* 매뉴얼 단축키 모음 (11/26) */
+dialog.mandlg .dhead{gap:8px}dialog.mandlg .dhead h2{flex:1;min-width:0}
+dialog.mandlg .mankeys{display:inline-flex;align-items:center;gap:6px;margin-right:4px;font-weight:600}
+dialog.mandlg .mankeys .ic{width:18px;height:18px}
+dialog.mandlg .mankeys.on{background:var(--ui-accent-soft);color:var(--ui-accent);border-color:transparent}
+#manMain .keysq{width:100%;max-width:420px;margin:4px 0 16px;padding:9px 12px;border:1px solid var(--ui-line2);border-radius:10px;font:inherit;font-size:14px}
+#manMain .keysgrid{columns:2 380px;column-gap:18px}
+#manMain .keysg{break-inside:avoid;border:1px solid var(--ui-line);border-radius:14px;padding:12px 14px 8px;margin:0 0 16px;background:#fff}
+#manMain .keysg h4{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:14.5px}
+#manMain .keysg h4 .ic{width:18px;height:18px;color:var(--ui-accent)}
+#manMain table.mkeys{width:100%;border-collapse:collapse;font-size:13.2px}
+#manMain table.mkeys td{padding:6px 4px;border-top:1px solid var(--ui-line);vertical-align:middle}
+#manMain table.mkeys tr:first-child td{border-top:0}
+#manMain table.mkeys{table-layout:auto}#manMain table.mkeys td:first-child{width:48%;padding-right:12px;line-height:2}#manMain table.mkeys td:first-child kbd{white-space:nowrap}#manMain table.mkeys td:last-child{line-height:1.45;color:var(--ui-fg2)}
+#manMain table.mkeys kbd{display:inline-block;min-width:22px;padding:2px 7px;border:1px solid var(--ui-line2);border-bottom-width:2px;border-radius:6px;background:#f8f9fb;font:600 12px/1.5 system-ui,-apple-system,sans-serif;text-align:center;color:var(--ui-fg)}
+#manMain table.mkeys i{font-style:normal;color:var(--ui-muted);margin:0 3px;font-size:11.5px}
+#manMain table.mkeys i.or{margin:0 6px}
+#manMain table.mkeys .kw{font-size:12.5px;color:var(--ui-fg2);font-weight:600}
+#manMain .mansum kbd{padding:1px 6px;border:1px solid var(--ui-line2);border-radius:5px;background:#f8f9fb;font-size:12px}

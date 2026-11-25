@@ -147,8 +147,11 @@ function warnIfRecentOther(j) {
 // 다른 PC의 변경을 문서에 적용한 뒤: 쪽·선택 정리, 다시 그리기, 지금 기록을 고쳐 써 Ctrl+Z가 상대 변경을 되돌리지 않게, 저장 예약
 function liveAfterRemote() { cur = clamp(cur, 0, doc.pages.length - 1); sel = sel.filter(id => find(id)); if (cellSel && !find(cellSel.id)) cellSel = null; renderAll(); if (hptr >= 0) { hist[hptr] = snapshot(); histMeta[hptr].rn = NC.live.rn; } markDirty(); }
 function tnow() { return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }); }
-function setStatusTitle() { const s = $('#status'); if (s) s.title = s.textContent; }
-function setStatus(t) { setTimeout(setStatusTitle, 0); $('#status').textContent = t; }
+function setStatusTitle() { const s = $('#status'); if (s && !s.querySelector('.stic')) s.title = s.textContent; }
+/* 11/26 팀장님 「구글 드라이브 연결은 아이콘으로 작게」: 연결됨·연결하는 중은 글자 대신 작은 구름 그림(마우스 올리면 글) */
+const ST_ICON = { ok: '<path d="M7 18.5a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 10.5a3.75 3.75 0 0 1-.5 7.47z"/><path d="m9.5 13.8 1.8 1.8 3.4-3.6"/>', busy: '<path d="M7 18.5a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 10.5a3.75 3.75 0 0 1-.5 7.47z"/><path d="M9.5 14.5h.01M12 14.5h.01M14.5 14.5h.01"/>' };
+function setStatus(t) { setTimeout(setStatusTitle, 0); const s = $('#status'); const k = /^구글 드라이브에 (다시 )?연결(했습니다|됐습니다|됨)/.test(t || '') ? 'ok' : /^구글 드라이브에 연결하는 중/.test(t || '') ? 'busy' : '';
+  if (k) { s.innerHTML = `<span class="stic ${k}" role="img" aria-label="${t}"><svg class="ic" viewBox="0 0 24 24">${ST_ICON[k]}</svg></span>`; s.title = t; } else s.textContent = t; }
 /* 위 막대: 문서 크기 칩 (누르면 크기 조정) · ⋯ 더보기 메뉴 (11/19 팀장님) */
 function updDocSize() { const b = $('#docSize'); if (!b || !doc) return; const pw = doc.w * 96 / 25.4, ph = doc.h * 96 / 25.4, isPx = Math.abs(pw - Math.round(pw)) < 0.05 && Math.abs(ph - Math.round(ph)) < 0.05 && doc.w > 50; const t = isPx ? `${Math.round(pw)} × ${Math.round(ph)} px` : docSizeLabel(' × ').replace(/(px|mm|cm)$/, ' $1');  /* 화면용(px) 문서는 px로 */ if (b.textContent !== t) b.textContent = t; }
 document.addEventListener('click', e => {
@@ -1192,6 +1195,11 @@ document.addEventListener('keydown', e => {
     if (AK && !e.shiftKey) { e.preventDefault(); alignUnits(AK); toast({ l: '왼쪽', c: '가로 가운데', r: '오른쪽', t: '위', m: '세로 가운데', b: '아래' }[AK] + (selUnits().length > 1 ? '로 맞췄습니다' : ' — 쪽에 맞췄습니다')); return; } }
   if (e.code === 'KeyP' && !mod && !e.altKey) setTool(tool === 'pen' ? 'select' : 'pen');
   if (e.code === 'KeyT' && !mod && !e.altKey) addText('b');
+  /* 11/26 더한 단축키 (캔바·피그마와 같은 키) */
+  if (!mod && !e.altKey && !e.shiftKey && !e.repeat) { const SK = { KeyR: 'rect', KeyO: 'ellipse', KeyL: 'line' }[e.code]; if (SK) { e.preventDefault(); addShape(SK); return; } }
+  if (mod && !e.altKey && e.key === 'Enter') { e.preventDefault(); endEdit(); const p = e.shiftKey ? dupPage(page()) : newPage(page().bg); doc.pages.splice(cur + 1, 0, p); commit(); goto(cur + 1); toast(e.shiftKey ? `${cur}쪽을 복제했습니다 (${cur + 1}쪽)` : `${cur + 1}쪽에 새 쪽을 넣었습니다`); return; }
+  if ((e.key === 'Home' || e.key === 'End') && !mod && !e.altKey && !sel.length) { e.preventDefault(); goto(e.key === 'Home' ? 0 : doc.pages.length - 1); return; }
+  if ((e.key === '?' || (e.shiftKey && (e.code === 'Slash' || e.key === '/'))) && !mod && !e.altKey) { e.preventDefault(); openManual('keys'); return; }
 });
 function removeSel() { const lk = selEls().filter(el => el.locked).length; const keepLk = selEls().filter(el => el.locked).map(el => el.id); page().els = page().els.filter(el => !sel.includes(el.id) || el.locked); commit(); sel = keepLk; histMeta[hptr] && (histMeta[hptr].sel = histMeta[hptr].sel.slice()); rerender(); /* 기록에는 지운 요소의 선택을 남겨 Ctrl+Z 하면 다시 골라진 상태로 */ if (lk) toast(`잠긴 요소 ${lk}개는 지우지 않았습니다 (잠금을 풀고 지우세요)`); }
 function duplicate() { if (!sel.length) return; const gmap = {}; const ids = selEls().map(el => { const n = clone(el); n.id = uid(); delete n.gen; if (n.group) { gmap[n.group] = gmap[n.group] || uid(); n.group = gmap[n.group]; } n.x += 5; n.y += 5; page().els.push(n); return n.id; }); commit(); select(ids); rerender(); }
@@ -2897,9 +2905,9 @@ function renderRail() { $('#rail').innerHTML = (RAIL.map(r => r === '|' ? '<div 
 /* 매뉴얼 (그림으로 따라 하기) — 준비되기 전까지는 도움말 */
 let manCur = (() => { try { return localStorage.getItem('naracal-man-last') || 'start'; } catch (e) { return 'start'; } })();
 function openManual(id) {
-  const M = window.NC_MANUAL || []; if (!M.length) { $('#dlgHelp').showModal(); return; } if (id) manCur = id; if (!M.some(x => x.id === manCur)) manCur = M[0].id;
+  const M = window.NC_MANUAL || []; if (!M.length) { $('#dlgHelp').showModal(); return; } if (id) manCur = id; if (manCur !== 'keys' && !M.some(x => x.id === manCur)) manCur = M[0].id;
   let d = $('#dlgManual');
-  if (!d) { d = document.createElement('dialog'); d.id = 'dlgManual'; d.className = 'mandlg'; d.innerHTML = `<div class="dhead"><h2>📘 매뉴얼 <small>나라차 운영 상황별 따라 하기 — 그림의 번호를 보고 따라 하세요</small></h2><button class="btn sm" data-close>닫기</button></div><div class="manbody"><nav id="manNav"></nav><div id="manMain"></div></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close();
+  if (!d) { d = document.createElement('dialog'); d.id = 'dlgManual'; d.className = 'mandlg'; d.innerHTML = `<div class="dhead"><h2>📘 매뉴얼 <small>나라차 운영 상황별 따라 하기 — 그림의 번호를 보고 따라 하세요</small></h2><button class="btn sm mankeys" data-man="keys" title="단축키 모음 (?)"><svg class="ic" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h1M10 10h1M13.5 10h1M17 10h.5M7 14h10"/></svg>단축키 모음</button><button class="btn sm" data-close>닫기</button></div><div class="manbody"><nav id="manNav"></nav><div id="manMain"></div></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close();
     d.addEventListener('click', e => { const sgb = e.target.closest('[data-mstage]'); if (sgb) { const h = document.getElementById('mst-' + sgb.dataset.mstage); if (h) h.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; } const n = e.target.closest('[data-man]'); if (n) { manCur = n.dataset.man; try { localStorage.setItem('naracal-man-last', manCur); } catch (er) {} renderManual(); $('#manMain').scrollTop = 0; return; }
       const g = e.target.closest('[data-mgo]'); if (g) { d.close(); manualGo(g.dataset.mgo); return; }
       const im = e.target.closest('.mimg'); if (im) { manZoom(im); return; }
@@ -2907,7 +2915,34 @@ function openManual(id) {
     d.addEventListener('mouseover', e => { const li = e.target.closest('[data-mkh]'); if (!li) return; const box = li.closest('.manstep'); box.querySelectorAll('.mk').forEach(x => x.classList.toggle('hot', x.dataset.mk === li.dataset.mkh)); }); }
   renderManual(); if (!d.open) d.showModal();
 }
+/* ---- 단축키 모음 (11/26 팀장님): 매뉴얼 위 「⌨ 단축키 모음」 · 편집 화면에서 ? ---- */
+const KEY_GROUPS = [
+  ['파일 · 창', 'i-save', [['Mod+S', '저장'], ['Mod+Shift+S', '새 이름으로 저장'], ['Mod+O', '열기 — 내 드라이브'], ['Mod+P', '출력 (프린터)'], ['Mod+F', '찾기 · 바꾸기'], ['?', '단축키 모음 (이 쪽)'], ['Esc', '메뉴·창 닫기 · 고른 것 풀기 · 도구를 「고르기」로']]],
+  ['넣기', 'i-plus', [['T', '글 상자'], ['R', '사각형'], ['O', '원'], ['L', '선'], ['P', '펜(그리기) 켬 / 끔'], ['Enter', '고른 글 상자 고치기 시작'], ['Esc', '글 고치기 끝']]],
+  ['고치기', 'i-pen', [['Mod+Z', '되돌리기'], ['Mod+Shift+Z | Mod+Y', '다시 하기'], ['Mod+C | Mod+X', '복사 / 잘라 내기'], ['Mod+V', '붙여넣기'], ['Mod+Shift+V', '같은 자리에 붙여넣기'], ['Mod+D', '복제'], ['Alt+끌기', '끌어서 복제'], ['Mod+A', '이 쪽의 요소 모두 고르기'], ['Delete | Backspace', '고른 요소 지우기'], ['Mod+G', '그룹으로 묶기'], ['Mod+Shift+G', '그룹 풀기'], ['Mod+L', '잠그기 / 풀기'], ['Mod+Alt+C | Mod+Alt+V', '서식 복사 / 서식 붙여넣기']]],
+  ['움직이기 · 맞추기', 'i-dist', [['← ↑ → ↓', '1mm 옮기기 (px 문서는 1px)'], ['Shift+화살표', '5mm (px 문서는 10px)'], ['Alt+화살표', '0.1mm'], ['Mod+← | Mod+→', '1° 돌리기 (Shift를 더하면 15°)'], ['Shift+H | Shift+V', '그림 좌우 / 위아래 뒤집기'], ['1 … 9 | 0', '투명도 10~90% / 100%'], ['Mod+] | Mod+[', '한 칸 앞으로 / 뒤로'], ['Mod+Shift+] | Mod+Shift+[', '맨 앞으로 / 맨 뒤로'], ['Alt+A | Alt+H | Alt+D', '왼쪽 / 가로 가운데 / 오른쪽 맞춤'], ['Alt+W | Alt+V | Alt+S', '위 / 세로 가운데 / 아래 맞춤'], ['Alt+Shift+H | Alt+Shift+V', '가로 / 세로 같은 간격'], ['Alt 누르고 있기', '고른 요소와 다른 요소 사이 거리 보기']]],
+  ['글자', 'i-text', [['Mod+B | Mod+I | Mod+U', '굵게 / 기울임 / 밑줄'], ['Mod+Shift+. | Mod+Shift+,', '글자 크게 / 작게'], ['Mod+A', '(글 고치는 중) 이 글 상자 글 모두 고르기']]],
+  ['화면 · 쪽', 'i-pages', [['Mod+0', '화면에 딱 맞게'], ['Mod+1', '실제 크기 (100%)'], ['Mod+= | Mod+-', '크게 / 작게 보기'], ['Space+끌기', '화면 옮기기 (마우스 가운데 단추 끌기도)'], ['PageUp | PageDown', '앞 쪽 / 다음 쪽'], ['← → ↑ ↓', '(아무것도 고르지 않았을 때) 쪽 넘기기'], ['Home | End', '첫 쪽 / 끝 쪽'], ['Mod+Enter', '다음에 새 쪽 넣기'], ['Mod+Shift+Enter', '이 쪽 복제']]],
+  ['쪽 목록 (왼쪽 「페이지」)', 'i-layers', [['Mod+A', '쪽 모두 고르기'], ['Mod+C | Mod+X | Mod+V', '쪽 복사 / 잘라 내기 / 붙여넣기'], ['Mod+D', '쪽 복제'], ['Delete', '쪽 지우기'], ['Mod+↑ | Mod+↓', '쪽 순서 위로 / 아래로'], ['Shift+↑ | Shift+↓', '여러 쪽 고르기'], ['F2', '쪽 이름 바꾸기']]],
+  ['달력 칸', 'i-cal', [['Enter | F2', '칸에 글 쓰기'], ['글자 치기', '고른 칸에 바로 쓰기'], ['Delete', '칸 글·서식 지우기'], ['← ↑ → ↓', '옆 칸으로'], ['Shift+화살표', '여러 칸 고르기'], ['Esc', '칸 고르기 풀기']]],
+  ['내 드라이브', 'i-folder', [['오른쪽 클릭', '열기·이름 바꾸기·사본·이동·내려받기·정보·휴지통'], ['Mod+클릭 | Shift+클릭', '여러 개 고르기'], ['Mod+A', '모두 고르기'], ['Enter', '열기'], ['F2', '이름 바꾸기'], ['Delete', '휴지통으로'], ['끌어 놓기', '폴더·왼쪽 메뉴(내 드라이브·종류·휴지통)로 옮기기'], ['Esc', '고른 것 풀기']]],
+];
+const keyIsMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const KEY_NAME = { Mod: keyIsMac ? '⌘' : 'Ctrl', Alt: keyIsMac ? '⌥' : 'Alt', Shift: keyIsMac ? '⇧' : 'Shift', Backspace: keyIsMac ? '⌫' : 'Backspace', Enter: keyIsMac ? '↩ Enter' : 'Enter' };
+const keyHTML = k => k.split(' | ').map(alt => alt.split('+').map(t => { t = t.trim(); return /^[가-힣]/.test(t) && t.length > 1 ? `<span class="kw">${esc(t)}</span>` : `<kbd>${esc(KEY_NAME[t] || t)}</kbd>`; }).join('<i>+</i>')).join('<i class="or">또는</i>');
+function keysPageHTML(q) {
+  q = (q || '').trim().toLowerCase(); const hit = (k, d) => !q || d.toLowerCase().includes(q) || k.toLowerCase().includes(q) || keyHTML(k).toLowerCase().includes(q);
+  const groups = KEY_GROUPS.map(([t, ic, rows]) => [t, ic, rows.filter(([k, d]) => hit(k, d)).map(([k, d]) => `<tr><td>${keyHTML(k)}</td><td>${esc(d)}</td></tr>`)]).filter(g => g[2].length);
+  const tlRows = (typeof TL_KEYS !== 'undefined' ? TL_KEYS : []).filter(([a, b]) => hit(a, b)).map(([a, b]) => `<tr><td>${a.split(/(\s\/\s|\s\+\s)/).map(x => /^\s[\/+]\s$/.test(x) ? `<i>${x.trim()}</i>` : `<kbd>${esc(x.trim())}</kbd>`).join('')}</td><td>${esc(b)}</td></tr>`);
+  if (tlRows.length) groups.push(['영상 타임라인 (영상 편집 중)', 'i-video', tlRows]);
+  return `<h3 class="mantitle">⌨️ 단축키 모음</h3><p class="mansum">${keyIsMac ? '맥에서는 ⌘(Command)·⌥(Option)·⇧(Shift)' : '윈도우에서는 Ctrl·Alt·Shift'} 키를 씁니다. 편집 화면에서 <kbd>?</kbd>를 누르면 이 쪽이 바로 열립니다. 글 상자를 고치는 중이거나 입력 칸에 커서가 있을 때는 글자 키 단축키가 듣지 않습니다.</p>
+    <input type="search" class="keysq" id="keysQ" placeholder="🔍 단축키 찾기 — 예: 복제, 맞춤, 쪽" value="${esc(q)}" autocomplete="off">
+    <div class="keysgrid">${groups.map(([t, ic, rows]) => `<section class="keysg"><h4><svg class="ic"><use href="#${ic}"/></svg>${esc(t)}</h4><table class="mkeys">${rows.join('')}</table></section>`).join('') || '<p class="hint">맞는 단축키가 없습니다.</p>'}</div>`;
+}
 function renderManual() {
+  if (manCur === 'keys') { const M0 = window.NC_MANUAL || []; $('#manNav').innerHTML = M0.map(x => `<button data-man="${x.id}"><span class="mi">${x.icon}</span><span><b>${esc(x.title)}</b><small>${esc(x.when)}</small></span></button>`).join(''); $('#manMain').innerHTML = keysPageHTML(''); document.querySelectorAll('#dlgManual .mankeys').forEach(b => b.classList.add('on'));
+    const q = $('#keysQ'); q.addEventListener('input', () => { const v = q.value; const box = document.createElement('div'); box.innerHTML = keysPageHTML(v); $('#manMain .keysgrid').replaceWith(box.querySelector('.keysgrid')); }); return; }
+  document.querySelectorAll('#dlgManual .mankeys').forEach(b => b.classList.remove('on'));
   const M = window.NC_MANUAL || [], S = M.find(x => x.id === manCur) || M[0], i = M.indexOf(S), nx = M[i + 1];
   $('#manNav').innerHTML = M.map(x => `<button data-man="${x.id}" class="${x.id === S.id ? 'on' : ''}"><span class="mi">${x.icon}</span><span><b>${esc(x.title)}</b><small>${esc(x.when)}</small></span></button>`).join('');
   const circ = n => '①②③④⑤⑥⑦⑧⑨⑩'[n] || (n + 1);
@@ -2915,7 +2950,7 @@ function renderManual() {
 }
 function manZoom(im) { let z = $('#manZoom'); if (z) z.remove(); z = document.createElement('div'); z.id = 'manZoom'; z.innerHTML = `<div class="mzwrap">${im.innerHTML.replace('<span class="mzoom">🔍 크게</span>', '')}</div><button class="btn" data-mzc>닫기 (Esc)</button>`; $('#dlgManual').appendChild(z); const close = () => { z.remove(); document.removeEventListener('keydown', key, true); }; const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }; document.addEventListener('keydown', key, true); z.onclick = close; }
 /* 매뉴얼의 '바로 해 보기' */
-function manualGo(g) { const rail = k => { const b = $(`#rail [data-tab="${k}"]`); if (b) { b._fromCode = true; b.click(); } };
+function manualGo(g) { if (g === 'keys') { openManual('keys'); return; } const rail = k => { const b = $(`#rail [data-tab="${k}"]`); if (b) { b._fromCode = true; b.click(); } };
   ({ tpl: () => rail('tpl'), aitools: () => rail('ai'), virtueTpl: () => { tplCat = 'all'; tplQ = ''; tplF = { format: '', season: '', age: '', occasion: '인성', biz: '' }; rail('tpl'); }, photo: () => rail('photo'), nara: () => rail('naracha'), elems: () => rail('elems'), video: () => rail('video'), settings: () => openSettings(), cert: () => naraGo('cert'), att: () => naraGo('att'), attPick: () => { naraGo('att'); openAttPick(); }, news: () => naraGo('news'), calendar: () => naraGo('calendar'), pages: () => rail('pages'), book: () => { rail('pages'); openBook(); }, bookedit: () => rail('book'), drive: () => openDrive(), import: () => openImport(), resize: () => openResize(), print: () => openPrint(), qr: () => openQr(), dday: () => openDday(), dojang: () => openDojang(), wizard: () => openWizard(doc.calendar.year || 2027), rules: () => openRules(), download: () => openDownload(), vkeys: () => tlKeysHelp(), aichat: () => { if (NC.aichat) NC.aichat.show(true); }, filemenu: () => $('#btnFileMenu').click() }[g] || (() => {}))(); }
 /* ---- 설정 (세로 메뉴 맨 아래 ⚙): 여러 곳에 흩어져 있던 설정을 한곳에. 바꾸면 바로 적용되고 이 PC에 기억(일부는 동기화 폴더로 두 PC 같이) ---- */
 let setTab = (() => { try { return localStorage.getItem('naracal-settab') || 'view'; } catch (e) { return 'view'; } })(); /* 마지막으로 본 설정 칸 기억 */
@@ -4527,16 +4562,31 @@ function openDrive(path, view) {
     <div class="ndbody"><nav id="dvNav"></nav><div class="ndmain" id="dvMain"></div></div>`;
     document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close();
     $('#dvNew').onclick = () => { d.close(); openNewDesign(); }; $('#dvImport').onclick = () => { d.close(); openImport(); };
-    d.addEventListener('click', driveClick); d.addEventListener('dragstart', driveDrag); d.addEventListener('dragover', e => { if (e.target.closest('[data-dropdir]')) { e.preventDefault(); e.target.closest('[data-dropdir]').classList.add('over'); } });
-    d.addEventListener('dragleave', e => { const t = e.target.closest('[data-dropdir]'); if (t) t.classList.remove('over'); }); d.addEventListener('drop', driveDrop);
+    d.addEventListener('click', driveClick); d.addEventListener('contextmenu', driveContext); document.addEventListener('keydown', driveKey);  /* 문서 전체에서 받음 — 메뉴를 닫으면 초점이 창 밖으로 빠져도 F2·Delete가 들음 */ d.addEventListener('cancel', e => { if ($('#dvPop') || (drv.sel && drv.sel.size) || document.querySelector('#dvMain input.dvren')) { e.preventDefault(); } }); d.addEventListener('close', () => { drv.sel = new Set(); $('#dvPop') && $('#dvPop').remove(); $('#dvSelBar') && $('#dvSelBar').remove(); }); d.addEventListener('dragstart', driveDrag); d.addEventListener('dragover', e => { const z = e.target.closest('[data-dropdir],[data-droptrash]'); if (z) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; d.querySelectorAll('.over').forEach(x => { if (x !== z) x.classList.remove('over'); }); z.classList.add('over'); } }); d.addEventListener('dragend', () => { d.classList.remove('dvdragging'); d.querySelectorAll('.over').forEach(x => x.classList.remove('over')); });
+    d.addEventListener('dragleave', e => { const t = e.target.closest('[data-dropdir],[data-droptrash]'); if (t && !t.contains(e.relatedTarget)) t.classList.remove('over'); }); d.addEventListener('drop', driveDrop);
   }
   renderDrive(); if (!d.open) d.showModal();
 }
+/* 왼쪽 메뉴 (11/26 새로): 홈 · 내 드라이브(폴더 나무 — 지금 폴더 쪽은 펼침) · 최근 · 이 브라우저에만 · 종류별 · 휴지통 · 저장·동기화 설정.
+   디자인·폴더를 끌어 내 드라이브·폴더·종류·휴지통 위에 놓으면 그리로 옮김 */
+const NAV_IC = { home: '<path d="M4 11 12 4l8 7M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>', drive: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>', recent: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/>', local: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  sync: '<path d="M20 11a8 8 0 0 0-14.9-3.5M4 4v3.5h3.5M4 13a8 8 0 0 0 14.9 3.5M20 20v-3.5h-3.5"/>', fold: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>' };
+async function renderDriveNav(ready) {
+  const nav = $('#dvNav'); if (!nav) return; const dd = p => `data-dropdir="${esc(JSON.stringify(p))}"`;
+  let tree = ''; if (ready) { const all = (await store.allFolders().catch(() => [[]])).filter(p => p.length && p[0] !== store.TRASH).sort((a, b) => a.join('\u0001').localeCompare(b.join('\u0001'), 'ko'));
+    const here = drv.view === 'drive' ? drv.path : [], open = p => p.length === 1 || (here.length >= p.length - 1 && p.slice(0, -1).every((x, i) => here[i] === x));
+    const has = p => all.some(q => q.length > p.length && p.every((x, i) => q[i] === x));
+    tree = all.filter(open).map(p => { const on = drv.view === 'drive' && here.join('/') === p.join('/'); return `<button class="dvtf ${on ? 'on' : ''}" data-dvpath="${esc(JSON.stringify(p))}" ${dd(p)} style="padding-left:${18 + p.length * 14}px" title="${esc(p.join(' › '))}"><svg viewBox="0 0 24 24">${NAV_IC.fold}</svg><span>${esc(p[p.length - 1])}</span>${has(p) ? '<i class="dvtw">›</i>' : ''}</button>`; }).join(''); }
+  const btn = (k, t, extra) => `<button data-dvnav="${k}" class="${drv.view === k && !(k === 'drive' && drv.path.length) ? 'on' : drv.view === k ? 'half' : ''}" ${extra || ''}><svg viewBox="0 0 24 24">${NAV_IC[k]}</svg><span>${t}</span></button>`;
+  nav.innerHTML = btn('home', '홈') + btn('drive', '내 드라이브', dd([])) + (tree ? `<div class="dvtree-nav">${tree}</div>` : '') + btn('recent', '최근 디자인') + btn('local', '이 브라우저에만')
+    + `<div class="dvkinds"><small>종류별</small>${DOC_KINDS.map(([k, t, ic]) => `<button data-dvkind="${k}" class="${drv.view === 'kind' && drv.kind === k ? 'on' : ''}" ${ready ? dd([t]) : ''} title="${esc(t)} — 끌어 놓으면 「${esc(t)}」 폴더로"><span class="dvk-ic">${DOC_KIND_SVG[k] ? `<svg viewBox="0 0 24 24">${DOC_KIND_SVG[k]}</svg>` : ic}</span><span>${esc(t)}</span></button>`).join('')}</div>`
+    + `<div class="dvnav-end">${btn('trash', '휴지통', ready ? 'data-droptrash="1" title="끌어 놓으면 휴지통으로"' : '')}<hr>${btn('sync', '저장·동기화 설정')}</div>`;
+}
 async function renderDrive() {
-  const ready = await store.folderReady();
+  drv.sel = new Set(); $('#dvSelBar') && $('#dvSelBar').remove(); $('#dvPop') && $('#dvPop').remove();
+  const ready = await store.folderReady(); try { drv.curP = await curDocPath(); } catch (e) { drv.curP = null; }
   { const h2 = $('#dlgDrive h2'); if (h2) h2.textContent = drv.view === 'home' ? '홈' : '내 드라이브'; }
-  $('#dvNav').innerHTML = [['home', '홈', '<path d="M4 11 12 4l8 7M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>'], ['drive', '내 드라이브', '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'], ['recent', '최근 디자인', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'], ['trash', '휴지통', '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'], ['local', '이 브라우저에만', '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>']]
-    .map(([k, t, ic]) => `<button data-dvnav="${k}" class="${drv.view === k ? 'on' : ''}"><svg viewBox="0 0 24 24">${ic}</svg>${t}</button>`).join('') + `<div class="dvkinds"><small>종류별</small>${DOC_KINDS.map(([k, t, ic]) => `<button data-dvkind="${k}" class="${drv.view === 'kind' && drv.kind === k ? 'on' : ''}"><span class="dvk-ic">${DOC_KIND_SVG[k] ? `<svg viewBox="0 0 24 24">${DOC_KIND_SVG[k]}</svg>` : ic}</span>${esc(t)}</button>`).join('')}</div>` + `<hr><button data-dvnav="sync"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5l2-2v6h-6l2.3-2.3A5.5 5.5 0 0 0 6.5 12M20 12a8 8 0 0 1-14 5l-2 2v-6h6l-2.3 2.3A5.5 5.5 0 0 0 17.5 12"/></svg>저장·동기화 설정</button>`;
+  await renderDriveNav(ready);
   const main = $('#dvMain');
   const homeTop = () => { const HK = ['print', 'sns', 'pres', 'video', 'sign', 'cal', 'news', 'doc'].map(k => ND_GROUPS.find(g => g[0] === k)).filter(Boolean);
     const blankNow = !doc.pages.some(p => p.els.length);  /* 빈 문서(닫은 뒤 등)면 「지금 작업 중」 칸을 감춤 */  /* 문서를 닫은 뒤(빈 새 디자인)에는 「지금 작업 중」 칸을 감춤 (11/25) */
@@ -4566,7 +4616,7 @@ async function renderDrive() {
   const nm = x => esc(x.name.replace(/\.design\.json$/i, ''));
   const when = t => new Date(t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const trash = drv.view === 'trash';
-  const fcardH = f => `<div class="dvfolder" data-dvfolder="${esc(f.name)}" ${trash ? '' : `data-dropdir="${esc(JSON.stringify(f.path))}"`}><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><div><b>${esc(f.name)}</b><small>${f.count}개 항목</small></div><button class="dvmore" data-dvmenu="folder:${esc(f.name)}" title="더보기">⋯</button></div>`;
+  const fcardH = f => `<div class="dvfolder" data-dvfolder="${esc(f.name)}" draggable="${trash ? 'false' : 'true'}" ${trash ? '' : `data-dropdir="${esc(JSON.stringify(f.path))}"`}><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><div><b>${esc(f.name)}</b><small>${f.count}개 항목</small></div><button class="dvmore" data-dvmenu="folder:${esc(f.name)}" title="더보기">⋯</button></div>`;
   const dcardH = (x, i) => `<div class="dvdoc ${isCur(x) ? 'cur' : ''}" data-dvdoc="${i}" draggable="${trash ? 'false' : 'true'}"><div class="dvthumb" data-thumb="${i}"></div><div class="dvmeta"><b title="${nm(x)}">${nm(x)}</b><small>${when(x.lastModified)}${drv.view !== 'drive' && x.path.length ? ' · ' + esc(x.path.join(' › ')) : ''}${isCur(x) ? ' · <em>작업 중</em>' : ''}</small></div><button class="dvmore" data-dvmenu="doc:${i}" title="더보기">⋯</button></div>`;
   drv.docs = docs; drv.folders = folders;
   if (drv.view === 'home') { main.innerHTML = homeTop() + `<h3 style="margin-top:22px">최근 디자인</h3>${docs.length ? `<div class="dvdocs">${docs.map(dcardH).join('')}</div>` : '<p class="hint">아직 디자인이 없습니다.</p>'}`;
@@ -4577,7 +4627,7 @@ async function renderDrive() {
     <select id="dvSort"><option value="date" ${drv.sort === 'date' ? 'selected' : ''}>수정한 날짜</option><option value="name" ${drv.sort === 'name' ? 'selected' : ''}>이름</option></select>
     ${drv.view === 'drive' && !q ? '<button class="btn" data-dvact="mkdir"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM12 10v6M9 13h6"/></svg>새 폴더</button>' : ''}
     ${trash && (folders.length || docs.length) ? '<button class="btn danger" data-dvact="empty">휴지통 비우기</button>' : ''}</div>
-  ${trash ? '<p class="hint">휴지통의 항목은 "되살리기"로 내 드라이브 맨 위로 돌아갑니다. "영구 삭제"하면 되돌릴 수 없습니다.</p>' : drv.view === 'drive' && !q ? '<p class="hint">디자인을 끌어 폴더 위에 놓으면 그 폴더로 옮겨집니다. 이 폴더에서 "새 디자인 만들기"를 누르면 새 디자인이 이 폴더에 저장됩니다.</p>' : ''}
+  ${trash ? '<p class="hint">휴지통의 항목은 "되살리기"로 내 드라이브 맨 위로 돌아갑니다. "영구 삭제"하면 되돌릴 수 없습니다.</p>' : drv.view === 'drive' && !q ? `<p class="hint">마우스 <b>오른쪽 버튼</b>으로 열기·이름 바꾸기·사본·이동·휴지통 · ${isMac ? '⌘' : 'Ctrl'}·Shift를 누른 채 누르면 여러 개 고르기 · 디자인·폴더를 끌어 폴더나 <b>왼쪽 메뉴</b>(내 드라이브·폴더·종류·휴지통)에 놓으면 옮겨집니다. 이 폴더에서 "새 디자인 만들기"를 누르면 이 폴더에 저장됩니다.</p>` : ''}
   ${drv.view === 'drive' && drv.path.length && !q ? `<div class="dvfolder up" data-crumb="${drv.path.length - 1}" data-dropdir="${esc(JSON.stringify(drv.path.slice(0, -1)))}"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/></svg><div><b>상위 폴더로</b><small>${esc(drv.path.length > 1 ? drv.path[drv.path.length - 2] : '내 드라이브')}</small></div></div>` : ''}
   ${folders.length ? `<div class="dvfolders">${folders.map(fcardH).join('')}</div>` : ''}
   ${docs.length ? `<div class="dvdocs">${docs.map(dcardH).join('')}</div>` : !folders.length ? `<p class="hint" style="margin-top:30px;text-align:center">${trash ? '휴지통이 비어 있습니다.' : q ? '맞는 디자인이 없습니다.' : '아직 디자인이 없습니다. 오른쪽 위 "새 디자인 만들기"로 시작하세요.'}</p>` : ''}`;
@@ -4609,6 +4659,7 @@ async function driveClick(e) {
   const t = e.target;
   const hm = t.closest('[data-dvhome]'); if (hm) { const v = hm.dataset.dvhome, d = $('#dlgDrive'); d.close(); if (v.startsWith('new:')) { ndState.nav = v.slice(4); ndState.q = ''; openNewDesign(); } else if (v === 'tpl') { if (document.body.classList.contains('fold-l')) setFold('l', false, true); sideTab = 'tpl'; renderRail(); renderSide(); } else if (v === 'import') openImport(); return; }
   const nav = t.closest('[data-dvnav]'); if (nav) { const v = nav.dataset.dvnav; if (v === 'sync') { stackOpen(openSaveDialog, () => { if ($('#dlgDrive').open) renderDrive(); }); return; } /* 저장 설정을 내 드라이브 위에 겹쳐 열고, 닫으면 내 드라이브로 (폴더가 바뀌었을 수 있어 다시 그림) */ drv.view = v; drv.q = ''; if (v === 'drive') drv.path = drv.path || []; renderDrive(); return; }
+  const tp = t.closest('[data-dvpath]'); if (tp) { drv.path = JSON.parse(tp.dataset.dvpath); drv.view = 'drive'; drv.q = ''; renderDrive(); return; }
   const kb = t.closest('[data-dvkind]'); if (kb) { drv.view = 'kind'; drv.kind = kb.dataset.dvkind; drv.q = ''; renderDrive(); return; }
   const ex = t.closest('[data-dvexp]'); if (ex) { const x = drv.exp[Number(ex.dataset.dvexp)]; try { const f = await x.handle.getFile(); const u = URL.createObjectURL(f); window.open(u, '_blank'); setTimeout(() => URL.revokeObjectURL(u), 60000); } catch (err) { toast('열 수 없습니다: ' + err.message, true); } return; }
   const ga = t.closest('[data-dvgather]'); if (ga) { const K = kindInfo(drv.kind), list = drv.stray.slice(); if (!window.confirm(`${list.length}개 문서를 「내 드라이브 › ${K[1]}」 폴더로 옮길까요?\n(지금 작업 중인 문서도 옮겨지며 그 자리에서 계속 저장됩니다)`)) return;
@@ -4626,70 +4677,211 @@ async function driveClick(e) {
     return;
   }
   const mm = t.closest('[data-dvmenu]'); if (mm) { e.stopPropagation(); driveMenu(mm, mm.dataset.dvmenu); return; }
-  const mi = t.closest('[data-dvmi]'); if (mi) { const [kind, key, op] = mi.dataset.dvmi.split('|'); $('#dvPop') && $('#dvPop').remove(); await driveOp(kind, key, op); return; }
+  const mi = t.closest('[data-dvmi]'); if (mi) { if (mi.disabled) return; const [kind, key, op] = mi.dataset.dvmi.split('|'); $('#dvPop') && $('#dvPop').remove(); if (kind === 'bg') return driveBg(op); if (kind === 'multi') return driveMulti(op); if (op === 'rename') return dvInlineRename(kind, key); await driveOp(kind, key, op); return; }
   if (!t.closest('#dvPop')) $('#dvPop') && $('#dvPop').remove();
+  if (t.closest('#dvSelBar')) return;
+  { const card = t.closest('[data-dvdoc],[data-dvfolder]'); if (card && (e.metaKey || e.ctrlKey || e.shiftKey)) { dvSelect(card, e.shiftKey ? 'range' : 'toggle'); return; } if (!card && t.closest('#dvMain') && drv.sel && drv.sel.size) { drv.sel = new Set(); dvSelShow(); } }
   const f = t.closest('[data-dvfolder]'); if (f && drv.view !== 'trash') { drv.path = drv.path.concat(f.dataset.dvfolder); drv.view = 'drive'; drv.q = ''; renderDrive(); return; }
   const dc = t.closest('[data-dvdoc]'); if (dc && drv.view !== 'trash') { const x = drv.docs[Number(dc.dataset.dvdoc)]; try { await openFolderDoc(x.handle, `"${x.name.replace(/\.design\.json$/i, '')}"를 열었습니다`); $('#dlgDrive').close(); } catch (err) { toast('열 수 없습니다: ' + err.message, true); } }
 }
-function driveMenu(btn, spec) {
+/* ---- 내 드라이브 파일 관리 (11/26 팀장님 「오른쪽 버튼으로 파일 관리 · 고도화」): 오른쪽 클릭 메뉴 · 여러 개 고르기(⌘/Ctrl·Shift) · 키보드(Enter·F2·Delete·⌘A·Esc)
+   · 폴더 고르기 창 · 그 자리에서 이름 바꾸기 · 정보 · 파일로 내려받기. 메뉴는 창 안에 머물게(아래 공간이 모자라면 위로) ---- */
+const DV_IC = { open: 'i-open', rename: 'i-pen', dup: 'i-dup', move: 'i-folder', down: 'i-save', info: 'i-eye', trash: 'i-del', restore: 'i-undo', purge: 'i-del', newdoc: 'i-new', mkdir: 'i-folder', import: 'i-upload', refresh: 'i-refresh', sort: 'i-dist', all: 'i-group', clear: 'i-clean', empty: 'i-del' };
+const dvKey = el => el.dataset.dvdoc != null ? 'doc:' + el.dataset.dvdoc : 'folder:' + el.dataset.dvfolder;
+const dvCards = () => [...document.querySelectorAll('#dvMain [data-dvdoc], #dvMain [data-dvfolder]')];
+function dvSelShow() {
+  if (!drv.sel) drv.sel = new Set(); dvCards().forEach(c => c.classList.toggle('sel', drv.sel.has(dvKey(c))));
+  const d = $('#dlgDrive'); if (!d) return; let b = $('#dvSelBar'); const n = drv.sel.size;
+  if (n < 2) { if (b) b.remove(); return; }  /* 하나만 고르면 막대 없이 (카드를 가리지 않게) */
+  if (!b) { b = document.createElement('div'); b.id = 'dvSelBar'; d.appendChild(b); }
+  const trash = drv.view === 'trash';
+  b.innerHTML = `<b>${n}개 선택</b>${trash ? `<button data-dvmi="multi||restore"><svg class="ic"><use href="#i-undo"/></svg>되살리기</button><button class="danger" data-dvmi="multi||purge"><svg class="ic"><use href="#i-del"/></svg>영구 삭제</button>` : `<button data-dvmi="multi||move"><svg class="ic"><use href="#i-folder"/></svg>이동</button><button class="danger" data-dvmi="multi||trash"><svg class="ic"><use href="#i-del"/></svg>휴지통으로</button>`}<button data-dvmi="multi||clear" title="선택 풀기 (Esc)">✕</button>`;
+}
+function dvSelect(card, how) {  /* how: 'only' · 'toggle' · 'range' */
+  if (!drv.sel) drv.sel = new Set(); const k = dvKey(card);
+  if (how === 'range' && drv.anchor) { const ks = dvCards().map(dvKey), i = ks.indexOf(drv.anchor), j = ks.indexOf(k); if (i >= 0 && j >= 0) { ks.slice(Math.min(i, j), Math.max(i, j) + 1).forEach(x => drv.sel.add(x)); dvSelShow(); return; } }
+  if (how === 'toggle') { drv.sel.has(k) ? drv.sel.delete(k) : drv.sel.add(k); } else { drv.sel = new Set([k]); }
+  drv.anchor = k; dvSelShow();
+}
+function dvPlace(p, x, y, anchor) {  /* 메뉴를 창 안(그리고 화면 안)에 — 아래가 모자라면 위로, 오른쪽이 모자라면 왼쪽으로 */
+  const d = $('#dlgDrive'), box = d ? d.getBoundingClientRect() : { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
+  const L0 = Math.max(8, box.left + 8), T0 = Math.max(8, box.top + 8), R0 = Math.min(innerWidth - 8, box.right - 8), B0 = Math.min(innerHeight - 8, box.bottom - 8);
+  p.style.maxHeight = (B0 - T0) + 'px'; p.style.overflowY = 'auto'; p.style.left = '0px'; p.style.top = '0px';
+  const o = p.getBoundingClientRect(), w = p.offsetWidth, h = p.offsetHeight; let L, T;
+  if (anchor) { L = anchor.right - w; T = anchor.bottom + 4; if (T + h > B0 && anchor.top - 4 - h >= T0) T = anchor.top - 4 - h; }
+  else { L = x; T = y; if (L + w > R0) L = x - w; if (T + h > B0) T = y - h; }
+  L = Math.max(L0, Math.min(L, R0 - w)); T = Math.max(T0, Math.min(T, B0 - h));
+  p.style.left = (L - o.left) + 'px'; p.style.top = (T - o.top) + 'px';
+}
+function dvPop(items, x, y, anchor) {
   $('#dvPop') && $('#dvPop').remove();
-  const [kind, key] = spec.split(':'); const trash = drv.view === 'trash';
-  const items = trash ? [['restore', '되살리기'], ['purge', '영구 삭제']] : kind === 'folder' ? [['open', '열기'], ['rename', '이름 바꾸기'], ['move', '다른 폴더로 이동…'], ['trash', '휴지통으로']] : [['open', '열기'], ['rename', '이름 바꾸기'], ['dup', '사본 만들기'], ['move', '다른 폴더로 이동…'], ['trash', '휴지통으로']];
-  const p = document.createElement('div'); p.id = 'dvPop'; p.className = 'fmenu';
-  p.innerHTML = items.map(([op, t]) => `<button data-dvmi="${kind}|${esc(key)}|${op}" class="${op === 'trash' || op === 'purge' ? 'danger' : ''}">${t}</button>`).join('');
-  $('#dlgDrive').appendChild(p); const r = btn.getBoundingClientRect();
-  p.style.left = Math.min(r.right - p.offsetWidth, innerWidth - p.offsetWidth - 8) + 'px'; p.style.top = (r.bottom + 4) + 'px';
+  const p = document.createElement('div'); p.id = 'dvPop'; p.className = 'fmenu'; p.setAttribute('role', 'menu');
+  p.innerHTML = items.map(it => it === '-' ? '<hr>' : it.head ? `<div class="dvph">${esc(it.head)}</div>` : `<button role="menuitem" data-dvmi="${it.mi}" class="${it.danger ? 'danger' : ''}" ${it.off ? 'disabled' : ''}><svg class="ic"><use href="#${DV_IC[it.ic] || 'i-open'}"/></svg>${esc(it.t)}${it.k ? `<kbd>${it.k}</kbd>` : ''}</button>`).join('');
+  $('#dlgDrive').appendChild(p); dvPlace(p, x, y, anchor); const f = p.querySelector('button:not([disabled])'); if (f) f.focus({ preventScroll: true });
 }
-async function pickFolder(exclude) {
-  const all = await store.allFolders(); const opts = all.filter(p => !exclude || !p.join('/').startsWith(exclude));
-  const list = opts.map((p, i) => `${i + 1}. ${p.length ? p.join(' › ') : '내 드라이브 (맨 위)'}`).join('\n');
-  const a = window.prompt(`어느 폴더로 옮길까요? 번호를 넣으세요.\n\n${list}`, '1'); if (a == null) return null;
-  const k = Number(a) - 1; if (!(k >= 0 && k < opts.length)) { toast('번호를 확인해 주세요', true); return null; } return opts[k];
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+function dvItems(kind, key) {
+  const trash = drv.view === 'trash', mi = op => `${kind}|${esc(key)}|${op}`;
+  if (trash) return [{ ic: 'restore', t: '되살리기', mi: mi('restore') }, '-', { ic: 'purge', t: '영구 삭제', mi: mi('purge'), danger: true, k: isMac ? '⌫' : 'Del' }];
+  if (kind === 'folder') return [{ ic: 'open', t: '열기', mi: mi('open'), k: '↵' }, { ic: 'newdoc', t: '이 폴더에 새 디자인', mi: mi('newdoc') }, '-', { ic: 'rename', t: '이름 바꾸기', mi: mi('rename'), k: 'F2' }, { ic: 'move', t: '다른 폴더로 이동…', mi: mi('move') }, '-', { ic: 'trash', t: '휴지통으로', mi: mi('trash'), danger: true, k: isMac ? '⌫' : 'Del' }];
+  const x = drv.docs[Number(key)], cur = x && drvIsCur(x);
+  return [{ head: x ? x.name.replace(/\.design\.json$/i, '') : '' }, { ic: 'open', t: cur ? '작업으로 돌아가기' : '열기', mi: mi('open'), k: '↵' }, '-', { ic: 'rename', t: '이름 바꾸기', mi: mi('rename'), k: 'F2' }, { ic: 'dup', t: '사본 만들기', mi: mi('dup') }, { ic: 'move', t: '다른 폴더로 이동…', mi: mi('move') }, '-', { ic: 'down', t: '파일로 내려받기 (백업)', mi: mi('down') }, { ic: 'info', t: '정보 보기', mi: mi('info') }, '-', { ic: 'trash', t: '휴지통으로', mi: mi('trash'), danger: true, off: cur, k: isMac ? '⌫' : 'Del' }];
 }
-async function driveOp(kind, key, op) {
+function drvIsCur(x) { const st = store.state; return !!(st.handle && x && x.name === st.fileName && drv.curP && drv.curP.join('/') === x.path.join('/')); }
+function driveMenu(btn, spec) {  /* ⋯ 단추 */
+  const [kind, key] = spec.split(':'); const card = btn.closest('[data-dvdoc],[data-dvfolder]'); if (card && !(drv.sel && drv.sel.has(dvKey(card)))) dvSelect(card, 'only');
+  if (drv.sel && drv.sel.size > 1 && card && drv.sel.has(dvKey(card))) { dvPop(dvMultiItems(), 0, 0, btn.getBoundingClientRect()); return; }
+  dvPop(dvItems(kind, key), 0, 0, btn.getBoundingClientRect());
+}
+function dvMultiItems() { const n = drv.sel.size; return drv.view === 'trash' ? [{ head: `${n}개 선택` }, { ic: 'restore', t: `${n}개 되살리기`, mi: 'multi||restore' }, '-', { ic: 'purge', t: `${n}개 영구 삭제`, mi: 'multi||purge', danger: true }]
+  : [{ head: `${n}개 선택` }, { ic: 'move', t: `${n}개 다른 폴더로 이동…`, mi: 'multi||move' }, '-', { ic: 'trash', t: `${n}개 휴지통으로`, mi: 'multi||trash', danger: true, k: isMac ? '⌫' : 'Del' }, '-', { ic: 'clear', t: '선택 풀기', mi: 'multi||clear', k: 'Esc' }]; }
+function driveContext(e) {
+  if (e.target.closest('input, textarea, select, #dvPop, #dvSelBar, .ndhead, #dvNav')) return;  /* 글 칸은 브라우저 메뉴 그대로 */
+  const main = e.target.closest('#dvMain'); if (!main) return; e.preventDefault();
+  const card = e.target.closest('[data-dvdoc],[data-dvfolder]');
+  if (card) { if (!(drv.sel && drv.sel.has(dvKey(card)))) dvSelect(card, 'only');
+    if (drv.sel.size > 1) { dvPop(dvMultiItems(), e.clientX, e.clientY); return; }
+    const k = dvKey(card).split(':'); dvPop(dvItems(k[0], k.slice(1).join(':')), e.clientX, e.clientY); return; }
+  drv.sel = new Set(); dvSelShow(); const trash = drv.view === 'trash', inDrive = drv.view === 'drive' && !drv.q;
+  const items = trash ? [{ ic: 'refresh', t: '새로 고침', mi: 'bg||refresh' }, '-', { ic: 'empty', t: '휴지통 비우기', mi: 'bg||empty', danger: true, off: !(drv.docs.length || drv.folders.length) }]
+    : [...(inDrive ? [{ head: drv.path.length ? drv.path.join(' › ') : '내 드라이브' }, { ic: 'newdoc', t: '여기에 새 디자인', mi: 'bg||newdoc' }, { ic: 'mkdir', t: '새 폴더', mi: 'bg||mkdir' }, '-'] : []),
+      { ic: 'import', t: '다른 프로그램 파일 가져오기', mi: 'bg||import' }, { ic: 'sort', t: drv.sort === 'name' ? '수정한 날짜로 정렬' : '이름으로 정렬', mi: 'bg||sort' }, { ic: 'all', t: '모두 고르기', mi: 'bg||all', k: isMac ? '⌘A' : 'Ctrl+A', off: !dvCards().length }, { ic: 'refresh', t: '새로 고침', mi: 'bg||refresh' }];
+  dvPop(items, e.clientX, e.clientY);
+}
+async function driveBg(op) {
+  if (op === 'refresh') return renderDrive();
+  if (op === 'sort') { drv.sort = drv.sort === 'name' ? 'date' : 'name'; return renderDrive(); }
+  if (op === 'all') { drv.sel = new Set(dvCards().map(dvKey)); return dvSelShow(); }
+  if (op === 'newdoc') { $('#dlgDrive').close(); return openNewDesign(); }
+  if (op === 'import') { $('#dlgDrive').close(); return openImport(); }
+  if (op === 'mkdir') { const n = await dvAsk('새 폴더', '폴더 이름', '새 폴더'); if (n) { try { await store.makeFolder(drv.path, n); renderDrive(); toast(`「${n}」 폴더를 만들었습니다`); } catch (err) { toast(err.message, true); } } return; }
+  if (op === 'empty' && window.confirm('휴지통을 비울까요? 안의 디자인과 폴더가 영구히 삭제됩니다.')) { for (const x of drv.folders.concat(drv.docs)) await store.emptyEntry(x.name); toast('휴지통을 비웠습니다'); renderDrive(); }
+}
+function dvAsk(title, label, val) {  /* 작은 입력 창 (window.prompt 대신 — 한글 입력·Enter·Esc) */
+  return new Promise(res => { const d = document.createElement('dialog'); d.className = 'dvask'; let done = false; const fin = v => { if (done) return; done = true; res(v); d.close(); };
+    d.innerHTML = `<div class="dhead"><h2>${esc(title)}</h2></div><div class="dbody"><label class="f"><span>${esc(label)}</span><input type="text" maxlength="80" value="${esc(val || '')}"></label><div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" data-no>취소</button><button class="btn primary" data-ok>확인</button></div></div>`;
+    document.body.appendChild(d); const i = d.querySelector('input'); d.querySelector('[data-no]').onclick = () => fin(null);
+    const ok = () => { const v = i.value.replace(/[\\/:*?"<>|]/g, '_').trim(); fin(v || null); }; d.querySelector('[data-ok]').onclick = ok;
+    i.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); ok(); } });
+    d.addEventListener('close', () => { if (!done) { done = true; res(null); } d.remove(); }); d.showModal(); i.focus(); i.select(); });
+}
+function pickFolder(exclude, title) {  /* 폴더 고르기 창 — 예전엔 번호를 적는 창이었음. exclude = 옮기는 폴더들(그 안으로는 못 옮김) */
+  return new Promise(async res => {
+    const ex = (exclude || []).filter(Boolean), bad = p => ex.some(e => e.length <= p.length && e.every((x, i) => x === p[i]));
+    const all = (await store.allFolders().catch(() => [[]])).filter(p => !bad(p)).sort((a, b) => a.join('\u0001').localeCompare(b.join('\u0001'), 'ko'));
+    const here = drv.view === 'drive' ? drv.path : null; let pick = null, done = false;
+    const d = document.createElement('dialog'); d.className = 'dvpick'; const fin = v => { if (done) return; done = true; res(v); d.close(); };
+    d.innerHTML = `<div class="dhead"><h2>${esc(title || '어느 폴더로 옮길까요?')}</h2><button class="btn sm" data-no>닫기</button></div><div class="dbody"><div class="dvtree">${all.map((p, i) => `<button data-pk="${i}" style="padding-left:${10 + p.length * 18}px"><svg class="ic"><use href="#${p.length ? 'i-folder' : 'i-cloud'}"/></svg><span>${esc(p.length ? p[p.length - 1] : '내 드라이브 (맨 위)')}</span>${here && here.join('/') === p.join('/') ? '<small>지금 위치</small>' : ''}</button>`).join('')}</div>
+      <div class="row" style="justify-content:space-between;margin-top:10px"><button class="btn sm" data-mk><svg class="ic"><use href="#i-plus"/></svg>고른 곳에 새 폴더</button><span><button class="btn" data-no>취소</button> <button class="btn primary" data-ok disabled>여기로 옮기기</button></span></div></div>`;
+    document.body.appendChild(d); d.querySelectorAll('[data-no]').forEach(b => b.onclick = () => fin(null));
+    const okB = d.querySelector('[data-ok]'), sel = i => { pick = all[i]; d.querySelectorAll('[data-pk]').forEach(b => b.classList.toggle('on', Number(b.dataset.pk) === i)); okB.disabled = false; okB.textContent = `「${pick.length ? pick[pick.length - 1] : '내 드라이브'}」로 옮기기`; };
+    d.querySelector('.dvtree').addEventListener('click', e => { const b = e.target.closest('[data-pk]'); if (b) sel(Number(b.dataset.pk)); });
+    d.querySelector('.dvtree').addEventListener('dblclick', e => { const b = e.target.closest('[data-pk]'); if (b) { sel(Number(b.dataset.pk)); fin(pick); } });
+    okB.onclick = () => pick && fin(pick);
+    d.querySelector('[data-mk]').onclick = async () => { const base = pick || here || []; const n = await dvAsk('새 폴더', `「${base.length ? base.join(' › ') : '내 드라이브'}」 안에 만들 폴더 이름`, '새 폴더'); if (!n) return; try { await store.makeFolder(base, n); fin(base.concat(n)); } catch (err) { toast(err.message, true); } };
+    d.addEventListener('close', () => { if (!done) { done = true; res(null); } d.remove(); }); d.showModal();
+  });
+}
+function dvInlineRename(kind, key) {  /* 카드 이름 자리에서 바로 고치기 (Enter 확인 · Esc 취소) */
+  const card = kind === 'folder' ? [...document.querySelectorAll('#dvMain [data-dvfolder]')].find(c => c.dataset.dvfolder === key) : document.querySelector(`#dvMain [data-dvdoc="${key}"]`);
+  const b = card && card.querySelector('b'); if (!b) return driveOp(kind, key, 'rename');
+  const old = kind === 'folder' ? key : drv.docs[Number(key)].name.replace(/\.design\.json$/i, '');
+  const i = document.createElement('input'); i.className = 'dvren'; i.value = old; i.maxLength = 80; b.replaceWith(i); i.focus(); i.select(); card.draggable = false;
+  let done = false; const fin = async ok => { if (done) return; done = true; const v = i.value.replace(/[\\/:*?"<>|]/g, '_').trim(); if (!ok || !v || v === old) { i.replaceWith(b); card.draggable = kind !== 'folder' && drv.view !== 'trash'; return; } await driveOp(kind, key, 'rename', { name: v }); };
+  i.addEventListener('keydown', e => { e.stopPropagation(); if (e.isComposing) return; if (e.key === 'Enter') { e.preventDefault(); fin(true); } if (e.key === 'Escape') { e.preventDefault(); fin(false); } });
+  i.addEventListener('blur', () => fin(true)); ['click', 'dblclick', 'mousedown'].forEach(t => i.addEventListener(t, e => e.stopPropagation()));
+}
+async function dvInfo(x) {
+  let j = {}; try { j = JSON.parse(await (await x.handle.getFile()).text()); } catch (e) {}
+  const f = await x.handle.getFile().catch(() => null); const sz = f ? (f.size > 1048576 ? (f.size / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(f.size / 1024)) + 'KB') : '';
+  const w = Number(j.w) || 0, h = Number(j.h) || 0, pw = w * 96 / 25.4, ph = h * 96 / 25.4, px = Math.abs(pw - Math.round(pw)) < 0.05 && Math.abs(ph - Math.round(ph)) < 0.05 && w > 50;
+  const rows = [['이름', j.name || x.name.replace(/\.design\.json$/i, '')], ['위치', '내 드라이브' + (x.path.length ? ' › ' + x.path.join(' › ') : '')], ['크기', w ? (px ? `${Math.round(pw)} × ${Math.round(ph)} px` : `${+w.toFixed(1)} × ${+h.toFixed(1)} mm`) : '—'], ['쪽 수', (j.pages || []).length + '쪽'], ['파일 크기', sz], ['고친 때', new Date(x.lastModified).toLocaleString('ko-KR')], ['저장한 PC', j.savedBy || '—']];
+  const d = document.createElement('dialog'); d.className = 'dvask'; d.innerHTML = `<div class="dhead"><h2>정보</h2><button class="btn sm" data-no>닫기</button></div><div class="dbody"><table class="dvinfo">${rows.map(r => `<tr><th>${r[0]}</th><td>${esc(String(r[1]))}</td></tr>`).join('')}</table></div>`;
+  document.body.appendChild(d); d.querySelector('[data-no]').onclick = () => d.close(); d.addEventListener('close', () => d.remove()); d.showModal();
+}
+async function driveOp(kind, key, op, o) {
+  o = o || {}; const quiet = !!o.quiet;
   try {
     const st = store.state;
     if (kind === 'folder') {
-      const f = drv.folders.find(x => x.name === key); if (!f) return; const from = drv.view === 'trash' ? [store.TRASH] : drv.path;
-      if (op === 'open') { drv.path = f.path; renderDrive(); return; }
-      if (op === 'rename') { const n = window.prompt('폴더 이름', f.name); if (!n || n === f.name) return; await store.moveEntry(f.handle, from, from, n.replace(/[\\/:*?"<>|]/g, '_').trim()); }
-      if (op === 'move') { const to = await pickFolder(f.path.join('/')); if (!to) return; await store.moveEntry(f.handle, from, to); }
-      if (op === 'trash') { const cp = await curDocPath(); if (cp && cp.join('/').startsWith(f.path.join('/'))) throw new Error('지금 작업 중인 디자인이 이 폴더 안에 있습니다. 다른 디자인을 먼저 여세요.'); if (!window.confirm(`"${f.name}" 폴더를 안의 디자인과 함께 휴지통으로 옮길까요?`)) return; await store.toTrash(f.handle, from); }
+      const f = drv.folders.find(x => x.name === key); if (!f) return false; const from = drv.view === 'trash' ? [store.TRASH] : drv.path;
+      if (op === 'open') { drv.path = f.path; drv.view = 'drive'; drv.q = ''; renderDrive(); return true; }
+      if (op === 'newdoc') { drv.path = f.path; drv.view = 'drive'; $('#dlgDrive').close(); openNewDesign(); return true; }
+      if (op === 'rename') { const n = o.name || await dvAsk('폴더 이름 바꾸기', '폴더 이름', f.name); if (!n || n === f.name) return false; const cp = await curDocPath(); await store.moveEntry(f.handle, from, from, n.replace(/[\\/:*?"<>|]/g, '_').trim()); if (cp && f.path.every((x, i) => cp[i] === x)) await dvRelinkCur(); }
+      if (op === 'move') { const to = o.to || await pickFolder([f.path]); if (!to) return false; if (to.length >= f.path.length && f.path.every((x, i) => to[i] === x)) throw new Error('폴더를 자기 안으로 옮길 수 없습니다'); const cp = await curDocPath(); await store.moveEntry(f.handle, from, to); if (cp && f.path.every((x, i) => cp[i] === x)) await dvRelinkCur(); }
+      if (op === 'trash') { const cp = await curDocPath(); if (cp && f.path.every((x, i) => cp[i] === x)) throw new Error(`「${f.name}」 폴더 안에 지금 작업 중인 디자인이 있습니다. 다른 디자인을 먼저 여세요.`); if (!quiet && !window.confirm(`"${f.name}" 폴더를 안의 디자인과 함께 휴지통으로 옮길까요?`)) return false; await store.toTrash(f.handle, from); }
       if (op === 'restore') await store.moveEntry(f.handle, [store.TRASH], []);
-      if (op === 'purge') { if (!window.confirm(`"${f.name}" 폴더를 영구 삭제할까요? 되돌릴 수 없습니다.`)) return; await store.emptyEntry(f.name); }
+      if (op === 'purge') { if (!quiet && !window.confirm(`"${f.name}" 폴더를 영구 삭제할까요? 되돌릴 수 없습니다.`)) return false; await store.emptyEntry(f.name); }
     } else {
-      const x = drv.docs[Number(key)]; if (!x) return; const curP = await curDocPath();
+      const x = drv.docs[Number(key)]; if (!x) return false; const curP = await curDocPath();
       const isCur = st.handle && x.name === st.fileName && curP && curP.join('/') === x.path.join('/');
       const label = x.name.replace(/\.design\.json$/i, '');
-      if (op === 'open') { await openFolderDoc(x.handle); $('#dlgDrive').close(); return; }
+      if (op === 'open') { if (isCur) { $('#dlgDrive').close(); return true; } await openFolderDoc(x.handle); $('#dlgDrive').close(); return true; }
+      if (op === 'info') { await dvInfo(x); return true; }
+      if (op === 'down') { const j = JSON.parse(await (await x.handle.getFile()).text()); store.download(Object.assign(j, { name: j.name || label })); toast(`「${label}」 파일을 내려받았습니다 (.design.json — 다른 PC에서 「다른 프로그램 파일 가져오기」 옆 열기로 엶)`); return true; }
       if (op === 'rename') {
-        const n = window.prompt('디자인 이름', label); if (!n || n === label) return;
+        const n = o.name || await dvAsk('디자인 이름 바꾸기', '디자인 이름', label); if (!n || n === label) return false;
         if (isCur) { doc.name = n.trim(); $('#pname').value = doc.name; markDirty(); clearTimeout(fileTimer); await saveFileNow(); }
         else { const j = JSON.parse(await (await x.handle.getFile()).text()); j.name = n.trim(); const w = await x.handle.createWritable(); await w.write(JSON.stringify(j)); await w.close(); }
         const nh = await store.moveEntry(x.handle, x.path, x.path, n.replace(/[\\/:*?"<>|]/g, '_').trim() + '.design.json');
         if (isCur) { st.handle = nh; st.fileName = nh.name; st.lastMod = (await nh.getFile()).lastModified; await store.idbSet('fileHandle', nh); updateSaveBadge(); }
       }
-      if (op === 'dup') { const j = JSON.parse(await (await x.handle.getFile()).text()); j.name = (j.name || label) + ' 사본'; const d = await store.dirAt(x.path); const h = await d.getFileHandle(await store.uniqueNameIn(j.name, d), { create: true }); const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign(j, { saveId: '', lineage: [] }))); await w.close(); toast('사본을 만들었습니다'); }
-      if (op === 'move') { const to = await pickFolder(); if (!to) return; if (isCur && st.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const nh = await store.moveEntry(x.handle, x.path, to); if (isCur) { st.handle = nh; st.fileName = nh.name; st.lastMod = (await nh.getFile()).lastModified; await store.idbSet('fileHandle', nh); updateSaveBadge(); } toast(`"${label}"${eul(label)} ${to.length ? to.join(' › ') : '내 드라이브'}로 옮겼습니다`); }
-      if (op === 'trash') { if (isCur) throw new Error('지금 작업 중인 디자인은 휴지통으로 보낼 수 없습니다. 다른 디자인을 먼저 여세요.'); await store.toTrash(x.handle, x.path); toast('휴지통으로 옮겼습니다'); }
-      if (op === 'restore') { await store.moveEntry(x.handle, [store.TRASH], []); toast('내 드라이브로 되살렸습니다'); }
-      if (op === 'purge') { if (!window.confirm(`"${label}"${eul(label)} 영구 삭제할까요? 되돌릴 수 없습니다.`)) return; await store.emptyEntry(x.name); }
+      if (op === 'dup') { const j = JSON.parse(await (await x.handle.getFile()).text()); j.name = (j.name || label) + ' 사본'; const d = await store.dirAt(x.path); const h = await d.getFileHandle(await store.uniqueNameIn(j.name, d), { create: true }); const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign(j, { saveId: '', lineage: [], docId: Date.now().toString(36) + Math.random().toString(36).slice(2, 8) }))); await w.close(); toast('사본을 만들었습니다'); }
+      if (op === 'move') { const to = o.to || await pickFolder(); if (!to) return false; if (to.join('/') === x.path.join('/')) return false; if (isCur && st.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const nh = await store.moveEntry(x.handle, x.path, to); if (isCur) { st.handle = nh; st.fileName = nh.name; st.lastMod = (await nh.getFile()).lastModified; await store.idbSet('fileHandle', nh); updateSaveBadge(); } if (!quiet) toast(`"${label}"${eul(label)} ${to.length ? to.join(' › ') : '내 드라이브'}로 옮겼습니다`); }
+      if (op === 'trash') { if (isCur) throw new Error('지금 작업 중인 디자인은 휴지통으로 보낼 수 없습니다. 다른 디자인을 먼저 여세요.'); await store.toTrash(x.handle, x.path); if (!quiet) toast(`「${label}」${eul(label)} 휴지통으로 옮겼습니다 — 휴지통에서 되살릴 수 있습니다`); }
+      if (op === 'restore') { await store.moveEntry(x.handle, [store.TRASH], []); if (!quiet) toast('내 드라이브로 되살렸습니다'); }
+      if (op === 'purge') { if (!quiet && !window.confirm(`"${label}"${eul(label)} 영구 삭제할까요? 되돌릴 수 없습니다.`)) return false; await store.emptyEntry(x.name); }
     }
-    renderDrive();
-  } catch (err) { toast(err.message, true); }
+    if (!quiet) renderDrive(); return true;
+  } catch (err) { if (quiet) throw err; toast(err.message, true); return false; }
 }
-function driveDrag(e) { const dc = e.target.closest('[data-dvdoc]'); if (!dc) return; e.dataTransfer.setData('text/x-nc-doc', dc.dataset.dvdoc); e.dataTransfer.effectAllowed = 'move'; }
+async function dvRelinkCur() {  /* 작업 중인 문서가 든 폴더의 이름·자리가 바뀌면 그 파일을 다시 찾아 이어서 저장 */
+  try { const st = store.state, nm = st.fileName, all = await store.walkDocs(); const hit = all.filter(x => x.name === nm); if (hit.length === 1) { st.handle = hit[0].handle; st.lastMod = hit[0].lastModified; await store.idbSet('fileHandle', hit[0].handle).catch(() => {}); updateSaveBadge(); } } catch (e) {}
+}
+async function driveMulti(op, to, mo) {
+  if (op === 'clear') { drv.sel = new Set(); dvSelShow(); return; }
+  const keys = [...(drv.sel || [])]; if (!keys.length) return; const n = keys.length;
+  if (op === 'move') { to = to || await pickFolder(keys.filter(k => k.startsWith('folder:')).map(k => (drv.folders.find(f => f.name === k.slice(7)) || {}).path), `${n}개를 어느 폴더로 옮길까요?`); if (!to) return; }
+  if (op === 'trash' && !(mo && mo.noAsk) && n > 1 && !window.confirm(`고른 ${n}개를 휴지통으로 옮길까요? (휴지통에서 되살릴 수 있습니다)`)) return;
+  if (op === 'purge' && !window.confirm(`고른 ${n}개를 영구 삭제할까요? 되돌릴 수 없습니다.`)) return;
+  if (op === 'trash' && mo && mo.noAsk && keys.some(k => k.startsWith('folder:')) && !window.confirm(`폴더를 안의 디자인과 함께 휴지통으로 옮길까요?`)) return;
+  let ok = 0; const bad = [];
+  for (const k of keys) { const i = k.indexOf(':'), kind = k.slice(0, i), key = k.slice(i + 1); try { if (await driveOp(kind, key, op, { quiet: true, to })) ok++; } catch (err) { bad.push(err.message); } }
+  drv.docs0 = drv.docs; drv.sel = new Set(); await renderDrive();
+  const what = { move: `${to && to.length ? '「' + to.join(' › ') + '」' : '내 드라이브 맨 위'}로 옮겼습니다`, trash: '휴지통으로 옮겼습니다', restore: '되살렸습니다', purge: '영구 삭제했습니다' }[op];
+  const one = n === 1 ? (keys[0].startsWith('folder:') ? keys[0].slice(7) : ((drv.docs0 || [])[Number(keys[0].slice(4))] || { name: '' }).name.replace(/\.design\.json$/i, '')) : '';
+  toast(`${one ? `「${one}」${eul(one)}` : ok + '개를'} ${what}${bad.length ? ` · ${bad.length}개는 못 함 — ${bad[0]}` : ''}`, !!bad.length);
+}
+function driveKey(e) {
+  const d = $('#dlgDrive'); if (!d || !d.open || e.target.closest('input, textarea, select')) return; if (document.querySelector('dialog.dvask[open], dialog.dvpick[open]')) return;
+  const pop = $('#dvPop');
+  if (pop && ['ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); const bs = [...pop.querySelectorAll('button:not([disabled])')], i = bs.indexOf(document.activeElement); const nx = bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length]; if (nx) nx.focus(); return; }
+  if (e.key === 'Escape') { if (pop) { e.preventDefault(); pop.remove(); return; } if (drv.sel && drv.sel.size) { e.preventDefault(); driveMulti('clear'); } return; }
+  if (pop) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); driveBg('all'); return; }
+  const ks = [...(drv.sel || [])]; if (!ks.length) return;
+  const one = ks.length === 1 ? [ks[0].slice(0, ks[0].indexOf(':')), ks[0].slice(ks[0].indexOf(':') + 1)] : null;
+  if (e.key === 'Delete' || (e.key === 'Backspace' && (e.metaKey || isMac))) { e.preventDefault(); if (one && drv.view !== 'trash') { driveOp(one[0], one[1], 'trash'); } else driveMulti(drv.view === 'trash' ? 'purge' : 'trash'); return; }
+  if (e.key === 'F2' && one && drv.view !== 'trash') { e.preventDefault(); dvInlineRename(one[0], one[1]); return; }
+  if (e.key === 'Enter' && one && drv.view !== 'trash') { e.preventDefault(); driveOp(one[0], one[1], 'open'); }
+}
+function driveDrag(e) {
+  const c = e.target.closest('[data-dvdoc],[data-dvfolder]'); if (!c || c.draggable === false || drv.view === 'trash') return; const k = dvKey(c);
+  if (!(drv.sel && drv.sel.has(k))) { drv.sel = new Set([k]); drv.anchor = k; dvSelShow(); }
+  e.dataTransfer.setData('text/x-nc-drive', '1'); e.dataTransfer.setData('text/plain', drv.sel.size > 1 ? `${drv.sel.size}개` : (c.querySelector('b') || {}).textContent || ''); e.dataTransfer.effectAllowed = 'move';
+  if (drv.sel.size > 1) { const g = document.createElement('div'); g.className = 'dvghost'; g.textContent = `${drv.sel.size}개 옮기기`; document.body.appendChild(g); e.dataTransfer.setDragImage(g, 20, 16); setTimeout(() => g.remove(), 0); }
+  setTimeout(() => { const d = $('#dlgDrive'); if (d) d.classList.add('dvdragging'); }, 0);
+}
 async function driveDrop(e) {
-  const t = e.target.closest('[data-dropdir]'); if (!t) return; e.preventDefault(); t.classList.remove('over');
-  const i = e.dataTransfer.getData('text/x-nc-doc'); if (i === '') return; const x = drv.docs[Number(i)]; if (!x) return;
-  const to = JSON.parse(t.dataset.dropdir); if (to.join('/') === x.path.join('/')) return;
-  try {
-    const st = store.state, curP = await curDocPath(); const isCur = st.handle && x.name === st.fileName && curP && curP.join('/') === x.path.join('/');
-    if (isCur && st.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
-    const nh = await store.moveEntry(x.handle, x.path, to);
-    if (isCur) { st.handle = nh; st.fileName = nh.name; st.lastMod = (await nh.getFile()).lastModified; await store.idbSet('fileHandle', nh); updateSaveBadge(); }
-    toast(`${to.length ? to[to.length - 1] : '내 드라이브'} 폴더로 옮겼습니다`); renderDrive();
-  } catch (err) { toast(err.message, true); }
+  const d = $('#dlgDrive'); if (d) d.classList.remove('dvdragging');
+  const t = e.target.closest('[data-dropdir],[data-droptrash]'); if (!t) return; e.preventDefault(); t.classList.remove('over');
+  if (!e.dataTransfer.types.includes('text/x-nc-drive') || !drv.sel || !drv.sel.size) return;
+  if (t.dataset.droptrash) return driveMulti('trash', null, { noAsk: true });
+  const to = JSON.parse(t.dataset.dropdir);
+  for (const k of drv.sel) if (k.startsWith('folder:')) { const f = drv.folders.find(x => x.name === k.slice(7)); if (f && to.length >= f.path.length && f.path.every((x, i) => to[i] === x)) { toast('폴더를 자기 안으로 옮길 수 없습니다', true); return; } }
+  if ([...drv.sel].every(k => { if (k.startsWith('doc:')) { const x = drv.docs[Number(k.slice(4))]; return x && x.path.join('/') === to.join('/'); } const f = drv.folders.find(x => x.name === k.slice(7)); return f && f.path.slice(0, -1).join('/') === to.join('/'); })) return;  /* 제자리 */
+  try { await store.ensureDir(to); } catch (err) {}
+  return driveMulti('move', to);
 }
 
 /* ---- 저장 위치 고르기 (처음 저장 · 새 이름으로 저장): 동기화 폴더 안의 폴더 = 위치. 새 폴더·이름 바꾸기·삭제(휴지통)도 여기서 ---- */
@@ -8481,7 +8673,7 @@ if (NC.aichat) NC.aichat.init({ openAIPanel, chatMode,
     if (!F[k]) return false; const r = F[k](); return r !== false;
   },
 });
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { openSaveDialog, openAcctGuide, connectDriveChecked, gdMigrate, cleanConflictCopies, afterFolderReady, saveFileNow: () => saveFileNow(), attFrontParts, attBackParts, attState, resizedDoc, bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { setStatus, openSaveDialog, openAcctGuide, connectDriveChecked, gdMigrate, cleanConflictCopies, afterFolderReady, saveFileNow: () => saveFileNow(), attFrontParts, attBackParts, attState, resizedDoc, bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
 
 /* ---- 도구 막대 한 줄 (팀장님 11/24 「도구 막대 한 줄도 정리」) ----
    넘치면 덜 쓰는 묶음(정렬 → 순서 → 펜·그룹)부터 「⋯」 펼침 창으로 옮김(단추를 그대로 옮겨 동작 같음), 자리가 나면 제자리로. 세로 도구 막대는 그대로 */
