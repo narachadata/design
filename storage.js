@@ -31,7 +31,8 @@ NC.store = (function () {
   }
   async function reconnect() {
     try {
-      const h = await idbGet('fileHandle'); if (!h) return 'none';
+      let h = await idbGet('fileHandle'); if (!h) return 'none';
+      if (h.__gd) { h = window.NC.gdrive ? await NC.gdrive.reviveAsync(h) : null; if (!h) return 'none'; } /* 구글 로그인 저장(앱 없이)의 문서 */
       state.handle = h; state.fileName = h.name;
       const p = await h.queryPermission({ mode: 'readwrite' });
       return p; // 'granted' | 'prompt' | 'denied'
@@ -159,6 +160,9 @@ NC.store = (function () {
   const SET_FILE = '설정.naracha.json';
   const SYNC_KEYS = ['naracal-live', 'naracal-ai-v1', 'naracal-studio-presets', 'naracal-brand-colors', 'naracal-recent-colors', 'naracal-recent-fonts', 'naracal-recent-elems', 'naracal-recent-tpls', 'naracal-recent-formats', 'naracal-rules-saved', 'naracal-dojang', 'naracal-cert-serial', 'naracal-acct'];
   Object.assign(state, { dir: null, dirName: '', dirSupported: !!window.showDirectoryPicker, setMod: 0, setBase: {} });
+  /* 구글 로그인으로 저장 (드라이브 앱 없이 — gdrive.js): 이 PC에 먼저 쓰고 드라이브에는 뒤에서 올림 */
+  async function connectDrive() { const h = await NC.gdrive.connect(); return useFolder(h); }
+  const isDrive = () => !!(state.dir && state.dir.__gd);
   async function connectFolder() {
     if (!state.dirSupported) throw new Error('이 브라우저는 폴더 연결을 지원하지 않습니다 (Chrome, Edge 권장).');
     const h = await window.showDirectoryPicker({ id: 'naracha-sync', mode: 'readwrite' });
@@ -179,7 +183,8 @@ NC.store = (function () {
   }
   async function reconnectFolder() {
     try {
-      const h = await idbGet('syncDir'); if (!h) return 'none';
+      let h = await idbGet('syncDir'); if (!h) return 'none';
+      if (h.__gd) { h = window.NC.gdrive ? await NC.gdrive.reviveAsync(h) : null; if (!h) return 'none'; }
       state.dir = h; state.dirName = h.name;
       return await h.queryPermission({ mode: 'readwrite' });
     } catch (e) { return 'none'; }
@@ -340,5 +345,5 @@ NC.store = (function () {
 
   return { ensureDir, writeBlobAt, listFiles, snapshot, listSnapshots, readSnapshot, state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
     writeCopy, pcName, setPcName, adopt, descends, pcId: () => pc().id,
-    connectFolder, useFolder, folderInfo, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, findDocById, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
+    connectFolder, connectDrive, isDrive, useFolder, folderInfo, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, findDocById, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
 })();

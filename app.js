@@ -162,7 +162,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#tbMenu')) $('#tbMenu').remove(); });
 function updDocBadge() { const pn = $('#pname'); if (pn) { pn.title = doc && doc.name ? doc.name : ''; let vb = document.getElementById('vcopyBadge'); const isCopy = !!(doc && doc.video && doc.video.isCopy); if (isCopy && !vb) { vb = document.createElement('span'); vb.id = 'vcopyBadge'; vb.className = 'vcopy-badge'; vb.textContent = '🎬 영상 사본'; vb.title = '영상용 사본입니다 — 원본 디자인은 그대로 남아 있습니다'; pn.after(vb); } if (vb) vb.hidden = !isCopy; } }
-function updateSaveBadge() { updDocSize(); updDocBadge(); /* 이름이 길어도 전체 이름(마우스 올림)·영상 사본 딱지 (11/24 검토) */ const b = $('#btnSave'); if (!b) return; const st = store.state; b.querySelector('span').textContent = '저장'; b.title = st.handle ? `저장 (Ctrl+S) · ${st.dir ? '동기화 폴더' : '파일'}: ${st.fileName}` : '저장 (Ctrl+S) · 아직 파일로 저장하지 않음'; b.classList.toggle('on', !!st.handle); }
+function updateSaveBadge() { updDocSize(); updDocBadge(); /* 이름이 길어도 전체 이름(마우스 올림)·영상 사본 딱지 (11/24 검토) */ const b = $('#btnSave'); if (!b) return; const st = store.state; b.querySelector('span').textContent = '저장'; b.title = st.handle ? `저장 (Ctrl+S) · ${st.dir ? '동기화 폴더' : '파일'}: ${st.fileName}` : '저장 (Ctrl+S) · 아직 파일로 저장하지 않음'; b.classList.toggle('on', !!st.handle); gdChip(); }
 // 이 PC에 원본이 없는 동영상·소리(내 PC 원본 'm:'만 해당 — 공방 그림·기본 소리·공유 자료는 온라인에 있으므로 늘 열림)
 const mediaMissing = new Set();
 function mediaRefs() { const out = []; doc.pages.forEach((pg, i) => pg.els.forEach(el => { if (el.type === 'video' && NC.media.isLocal(el.src)) out.push({ id: el.src.slice(2), where: `${i + 1}쪽 동영상`, kind: 'video' }); })); if (doc.audio && NC.media.isLocal(doc.audio.src)) out.push({ id: doc.audio.src.slice(2), where: '배경 음악', kind: 'audio' }); (doc.tracks || []).forEach(t => (t.items || []).forEach(it => { if (NC.media.isLocal(it.ref)) out.push({ id: it.ref.slice(2), where: `${t.name} 트랙`, kind: 'audio' }); })); return out; }
@@ -4157,7 +4157,7 @@ async function acctCopyLink() { const u = acctLink(); if (!u) { toast('먼저 �
 /* 계정 칸 (안내 창·저장 설정 공통) */
 function acctBox(ctx) {
   const a = acctGet(), ready = !!store.state.dir;
-  if (a) return `<div class="acctbox ok"><i>👤</i><div><small>${a.via === 'link' ? '다른 PC에서 알려 준' : '우리 공방'} 구글 계정${a.by ? ` · 「${esc(a.by)}」${a.via === 'link' ? '에서 쓰는 계정' : '에서 적음'}` : ''}</small><b class="acctmail">${esc(a.email)}</b><small>모든 PC의 구글 드라이브 앱이 <b>이 계정</b>으로 로그인되어 있어야 합니다.</small></div><div class="acctbtns"><button class="btn sm" data-acct="edit">고치기</button>${ready ? '<button class="btn sm" data-acct="link">🔗 다른 PC에 알려 주기</button>' : ''}</div></div>`;
+  if (a) return `<div class="acctbox ok"><i>👤</i><div><small>${a.via === 'link' ? '다른 PC에서 알려 준' : '우리 공방'} 구글 계정${a.by ? ` · 「${esc(a.by)}」${a.via === 'link' ? '에서 쓰는 계정' : '에서 적음'}` : ''}</small><b class="acctmail">${esc(a.email)}</b><small>모든 PC가 <b>이 계정</b>으로 ${store.isDrive() ? '구글 로그인' : '로그인(구글 로그인으로 저장, 또는 구글 드라이브 앱)'}해야 합니다.</small></div><div class="acctbtns"><button class="btn sm" data-acct="edit">고치기</button>${ready ? '<button class="btn sm" data-acct="link">🔗 다른 PC에 알려 주기</button>' : ''}</div></div>`;
   return `<div class="acctbox"><i>👤</i><div><small>우리 공방 구글 계정 ${ready ? '— 이 PC가 연결한 드라이브 앱 계정을 적어 두세요' : '— 다른 PC에서 쓰는 계정을 알면 적어 두세요'}</small><div class="acctin"><input type="email" id="acctIn${ctx}" placeholder="예: dojang@gmail.com" autocomplete="off"><button class="btn sm primary" data-acct="save">적어 두기</button></div><small>${ready ? '적어 두면 다른 PC의 공방 안내에도 「이 계정으로 연결하세요」라고 보입니다(구글 드라이브 폴더 설정으로 같아짐).' : '모르면: 이미 쓰는 PC에서 공방 → ⚙ 설정 → 저장 설정을 열면 계정이 보이고, 「🔗 다른 PC에 알려 주기」 링크를 이 PC에서 열면 여기에 저절로 들어옵니다.'}</small></div></div>`;
 }
 function acctBind(root, ctx, after) {
@@ -4175,17 +4175,19 @@ function openAcctGuide(first) {
   const how = mac
     ? `<b>Mac</b>: 화면 맨 위 메뉴 막대의 <b>구글 드라이브 아이콘</b>(삼각형 모양)을 누르면 오른쪽 위 동그란 계정 사진 옆에 이메일이 보입니다. Finder 왼쪽 <b>위치</b>의 「Google Drive」에 마우스를 올려도 보입니다.`
     : `<b>Windows</b>: 작업 표시줄 오른쪽 <b>^</b> 안의 <b>구글 드라이브 아이콘</b>을 누르면 위쪽 계정 사진 옆에 이메일이 보입니다. 파일 탐색기의 <code>G:</code> 드라이브(Google Drive)가 그 계정의 드라이브입니다.`;
-  d.innerHTML = `<div class="dhead"><h2>👤 이 PC에서 공방 시작하기 <small>구글 계정 · 저장 폴더 연결 — 4단계</small></h2><button class="btn sm" data-close>닫기</button></div>
+  d.innerHTML = `<div class="dhead"><h2>👤 이 PC에서 공방 시작하기 <small>같은 구글 계정으로 — 로그인만 (또는 드라이브 앱 폴더)</small></h2><button class="btn sm" data-close>닫기</button></div>
   <div class="dbody">
-    <div class="acctpic"><div class="ap-pc"><i>💻</i><b>도장 PC</b></div><span class="ap-ln"></span><div class="ap-cl"><svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><path d="M9 22h17a7 7 0 0 0 .8-13.95A9 9 0 0 0 9.6 7.2 7.5 7.5 0 0 0 9 22z" fill="#2f5bea"/><circle cx="17" cy="14.5" r="3.4" fill="#fff"/><path d="M11.6 21.5a5.6 5.6 0 0 1 10.8 0z" fill="#fff"/></svg><b>같은 구글 계정 하나</b><small>내 드라이브 › 나라차디자인공방<br>문서 · 설정 · 자료실 · AI 결과함</small></div><span class="ap-ln"></span><div class="ap-pc"><i>🏠</i><b>집 PC · 노트북</b></div></div>
+    <div class="acctpic"><div class="ap-pc"><i>💻</i><b>도장 PC</b></div><span class="ap-ln"></span><div class="ap-cl"><svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><path d="M9 22h17a7 7 0 0 0 .8-13.95A9 9 0 0 0 9.6 7.2 7.5 7.5 0 0 0 9 22z" fill="#2f5bea"/><circle cx="17" cy="14.5" r="3.4" fill="#fff"/><path d="M11.6 21.5a5.6 5.6 0 0 1 10.8 0z" fill="#fff"/></svg><b>같은 구글 계정 하나</b><small>구글 드라이브 › 공방 폴더<br>문서 · 설정 · 자료실 · AI 결과함</small></div><span class="ap-ln"></span><div class="ap-pc"><i>🏠</i><b>집 PC · 노트북</b></div></div>
     <p class="acctwarn">⚠️ PC마다 <b>다른 계정</b>으로 연결하면 자료가 두 곳에 따로 쌓입니다 — 모든 PC가 <b>같은 계정</b>이어야 합니다.</p>
     <div id="acctSlotG">${acctBox('G')}</div>
+    ${gdBox().replace('data-sv="gd"', 'data-ac="gd"')}
+    <details class="bk-more"><summary>또는 B. 구글 드라이브 앱 폴더로 — 4단계 (앱을 이미 쓰는 PC)</summary>
     <ol class="svsteps">
       <li><span>1</span><div><b>이 PC에 「Google Drive 데스크톱」 설치</b><small>구글에서 「Google Drive 데스크톱 다운로드」를 찾아 설치합니다. 이미 있으면 넘어가세요.</small></div></li>
       <li><span>2</span><div><b>${acctGet() ? `<span class="acctmail-in">${esc(acctGet().email)}</span>` : '쓰던 PC와 같은 계정'}으로 로그인</b><small>설치하면 로그인 창이 뜹니다. ${acctGet() ? '위 계정' : '다른 PC의 드라이브 앱에 로그인한 계정(그 PC 공방 → ⚙ 설정 → 저장 설정 맨 위에 보임)'}으로 로그인하세요.<br>이미 다른 계정으로 로그인돼 있으면: ${how}</small></div></li>
       <li><span>3</span><div><b>잠시 기다리기 — 폴더가 보일 때까지</b><small>${mac ? 'Finder 왼쪽 <b>Google Drive → 내 드라이브</b>' : '파일 탐색기 <b>Google Drive (G:) → 내 드라이브</b>'} 안에 <b>「나라차디자인공방」</b> 폴더가 보이면 준비 끝입니다(처음엔 몇 분 걸릴 수 있어요).</small><p class="acctno">🚫 <b>새 폴더를 만들지 마세요!</b> 다른 PC에서 쓰던 폴더가 저절로 내려옵니다. 같은 이름으로 새로 만들면 <b>빈 폴더</b>가 하나 더 생겨 자료가 갈라집니다.</p></div></li>
       <li><span>4</span><div><b>공방에서 그 폴더 고르기</b><small>아래 단추 → <b>내 드라이브 → 나라차디자인공방</b> → 「열기(선택)」. 공방이 폴더 안을 보고 <b>「✅ 도장 PC에서 쓰던 폴더입니다」</b>라고 알려 주고, 가장 최근 문서를 엽니다. 「비어 있는 폴더」라고 나오면 계정이나 폴더가 다른 것입니다 — 「연결하지 않기」를 누르고 2·3번을 다시 보세요.</small><button class="btn primary" data-ac="dir">☁️ 저장 폴더 고르기</button></div></li>
-    </ol>
+    </ol></details>
     <details class="bk-more" open><summary>🔄 연결하면 무엇이 같아지나요?</summary><div class="acctsync"><p>✅ <b>같아지는 것</b> — 폴더 안 모든 문서(종류 폴더 포함) · 설정(글꼴·AI 키·도장 정보·요소 빼기·최근 색) · 나라차 자료실(디자인자료) · AI 결과함 · 버전 기록. 한 PC에서 고치면 구글 드라이브가 올린 뒤 다른 PC에 내려옵니다(보통 몇 초~1분).</p><p>⚠️ <b>같아지지 않는 것</b> — 폴더에 저장하지 않고 <b>그 PC 브라우저에만</b> 있던 문서. 쓰던 PC에서 공방 → ⚙ 설정 → 저장 설정의 「지금 문서를 폴더에 저장」이나 「이 브라우저에만 있는 문서」로 먼저 폴더에 넣어 두세요.</p><p>💡 두 PC에서 <b>같은 문서를 동시에</b> 고치면 공방이 어느 쪽으로 할지 묻고, 다른 쪽은 「충돌 사본」으로 남겨 지워지지 않습니다.</p></div></details>
     <details class="bk-more"><summary>ⓘ 어느 PC에서도 처음 쓰는 거라면?</summary><div>도장 공용 구글 계정(관리프로그램 구글 시트가 있는 계정)으로 드라이브 앱에 로그인한 뒤, 4번에서 폴더를 고르는 창의 <b>내 드라이브</b>에서 「새 폴더」로 <b>나라차디자인공방</b>을 <b>한 번만</b> 만들고 고르세요. 그다음 위 👤 칸에 그 계정을 적어 두면 다른 PC 안내에 보입니다.</div></details>
     <details class="bk-more"><summary>ⓘ 크롬(브라우저) 계정·관리프로그램 접속키는?</summary><div>저장에는 크롬 로그인 계정이 쓰이지 않습니다(구글 드라이브 앱의 계정만). 다만 크롬 오른쪽 위 프로필도 같은 계정이면 Gemini 채팅·구글 드라이브 웹이 같은 계정으로 열려 편합니다.<br>관리프로그램 접속키는 이 브라우저에서 관리프로그램에 한 번 로그인하면 공방·소식지가 그 키를 <b>저절로</b> 씁니다(따로 넣지 않아도 됨).</div></details>
@@ -4194,7 +4196,52 @@ function openAcctGuide(first) {
   d.querySelectorAll('[data-close]').forEach(b => b.onclick = () => d.close());
   const reAcct = () => { const sl = d.querySelector('#acctSlotG'); if (sl) { sl.innerHTML = acctBox('G'); acctBind(sl, 'G', reAcct); } }; reAcct();
   d.querySelector('[data-ac="dir"]').onclick = async () => { try { const ok = await connectFolderChecked(); if (ok) d.close(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } };
+  { const g = d.querySelector('[data-ac="gd"]'); if (g) g.onclick = async () => { try { const ok = await connectDriveChecked(); if (ok) d.close(); } catch (e) { setStatus(''); toast(e.message, true); } }; }
   if (!d.open) d.showModal();
+}
+/* ---------- 구글 로그인으로 저장 (드라이브 앱 없이 — gdrive.js, 팀장님 11/25 「앱을 설치하지 않아도 공유」「1차로 PC에 저장, 드라이브에 업로드」) ---------- */
+function gdLine(gs) { if (!gs || !gs.on) return ''; if (gs.need) return `🔑 로그인 필요 — 고친 것은 이 PC에 있음${gs.pending ? ` (올릴 것 ${gs.pending}개)` : ''}`; if (gs.pending) return `⏫ 드라이브에 올리는 중 (${gs.pending}개 남음)${gs.err ? ' · ' + esc(gs.err) : ''}`; return '✔ 모두 드라이브에 올림 · 이 PC에 먼저 저장 후 뒤에서 올림'; }
+function gdBox() { return `<div class="gdbox"><b>✨ A. 구글 로그인으로 저장 <em>추천 · 앱 설치 없이</em></b><p>구글 계정${acctGet() ? ` <b class="acctmail-in">${esc(acctGet().email)}</b>` : ''}으로 로그인만 하면 됩니다. 저장은 <b>이 PC에 바로</b> 되고, 구글 드라이브의 「${esc(NC.gdrive.ROOT_NAME)}」 폴더에는 <b>뒤에서 올라갑니다</b> — 작업이 멈추지 않고, 인터넷이 끊겨도 다시 연결되면 이어서 올립니다. 다른 PC도 같은 계정으로 로그인하면 같은 문서·설정이 보입니다.</p><button class="btn primary" data-sv="gd">🔑 구글 로그인으로 시작</button><small>로그인 창에서 「Google에서 확인하지 않은 앱」이 나오면 메인 프로그램과 같은 우리 도장 설정이니 「계속」(또는 「고급 → 이동」)을 누르면 됩니다. 영상·음악 원본처럼 아주 큰 파일(40MB 넘게)은 그 PC에만 둡니다.</small></div>`; }
+let gdChipT = 0;
+function gdChip() { clearTimeout(gdChipT); gdChipT = setTimeout(() => { const b = $('#btnSave'); if (!b) return; let c = b.querySelector('.gdchip'); const gs = store.isDrive && store.isDrive() ? NC.gdrive.status() : null;
+  if (!gs || (!gs.pending && !gs.need)) { if (c) c.remove(); } else { if (!c) { c = document.createElement('i'); c.className = 'gdchip'; b.appendChild(c); } c.textContent = gs.need ? '🔑' : '⏫' + gs.pending; c.title = gs.need ? '구글 로그인이 필요합니다 (고친 것은 이 PC에 저장돼 있음) — 저장 ▾ → 저장 설정' : `구글 드라이브에 올리는 중 — ${gs.pending}개 남음`; c.classList.toggle('need', !!gs.need); }
+  const s = $('#status'); if (gs && gs.need && s && !s.querySelector('#gdRe')) { s.innerHTML = `<button class="btn sm primary" id="gdRe">🔑 구글 다시 로그인${gs.pending ? ` — 올릴 것 ${gs.pending}개 (이 PC에는 저장됨)` : ' — 다른 PC에서 고친 것 받기'}</button>`; $('#gdRe').onclick = async () => { try { await NC.gdrive.login(); NC.gdrive.run(); setStatus('구글 드라이브에 다시 연결했습니다'); } catch (e) { toast(e.message, true); } }; }
+  else if (gs && !gs.need && s && s.querySelector('#gdRe')) setStatus('구글 드라이브에 다시 연결했습니다'); }, 200); }
+if (window.NC && NC.gdrive) NC.gdrive.onChange(gdChip);
+/* 지금 폴더(드라이브 앱)의 문서·설정을 구글 로그인 저장 곳으로 옮김 — 휴지통·버전 기록·아주 큰 파일은 빼고 */
+async function gdMigrate(src, dst, say) {
+  let n = 0, big = 0; const skip = new Set(['휴지통', '.기록']);
+  const walk = async (s, d, depth) => { for await (const [name, h] of s.entries()) {
+    if (h.kind === 'directory') { if (depth === 0 && skip.has(name)) continue; await walk(h, await d.getDirectoryHandle(name, { create: true }), depth + 1); }
+    else { let f; try { f = await h.getFile(); } catch (e) { continue; } if (f.size > 40 * 1048576) { big++; continue; } let ok = false; try { await d.getFileHandle(name); ok = true; } catch (e) {} if (ok && name !== '설정.naracha.json') continue; const w = await (await d.getFileHandle(name, { create: true })).createWritable(); await w.write(/\.(json|txt)$/i.test(name) ? await f.text() : f); await w.close(); n++; if (say && n % 5 === 0) say(n); } } };
+  await walk(src, dst, 0); return { n, big };
+}
+async function connectDriveChecked() {
+  const st = store.state, old = (st.dir && !st.dir.__gd && await store.folderReady()) ? st.dir : null;
+  let curPath = null, oc = null; try { if (old && st.handle) curPath = await old.resolve(st.handle); } catch (e) {} try { if (old) oc = await store.folderInfo(); } catch (e) {}
+  if (st.dirty && st.handle) { try { clearTimeout(fileTimer); await saveFileNow(); } catch (e) {} }
+  setStatus('구글에 로그인하는 중…');
+  await store.connectDrive();
+  const gs = NC.gdrive.status(), ac = acctGet();
+  if (gs.email && ac && ac.email.toLowerCase() !== gs.email.toLowerCase()) {
+    if (!(await confirmBtns(`로그인한 계정 「${gs.email}」이 우리 공방 계정 「${ac.email}」과 다릅니다.\n다른 계정이면 자료가 따로 쌓입니다.\n\n확인: 이 계정으로 계속 (공방 계정을 이것으로 바꿈)\n취소: 연결하지 않기 (구글 로그인 창에서 「${ac.email}」을 고르세요)`))) { await store.disconnectFolder(); if (old) await store.useFolder(old); updateSaveBadge(); setStatus('연결하지 않았습니다'); return false; }
+    acctSet(gs.email);
+  } else if (gs.email && !ac) acctSet(gs.email);
+  let c = await store.folderInfo();
+  if (old && !(c.set || c.docs || c.folders)) {
+    if (oc && (oc.docs || oc.folders || oc.set) && await confirmBtns(`지금 폴더 「${old.name}」의 문서·설정을 구글 드라이브(앱 없이 쓰는 곳)로 옮길까요?\n(문서 ${oc.docs}개 · 폴더 ${oc.folders}개 — 지금 폴더의 파일은 그대로 남습니다)\n\n확인: 옮기기 (권장)\n취소: 빈 곳에서 새로 시작`)) {
+      setStatus('옮기는 중… (이 PC에 먼저 담고 드라이브에는 뒤에서 올립니다)');
+      const r = await gdMigrate(old, st.dir, k => setStatus(`옮기는 중… ${k}개`));
+      toast(`✅ ${r.n}개를 옮겼습니다${r.big ? ` · 아주 큰 파일 ${r.big}개는 지금 폴더에만 둠` : ''} — 드라이브에는 뒤에서 올라갑니다 (저장 단추 옆 ⏫ 숫자)`);
+      if (curPath) { try { let d = st.dir; for (const p of curPath.slice(0, -1)) d = await d.getDirectoryHandle(p); const h = await d.getFileHandle(curPath[curPath.length - 1]); await store.openHandle(h); st.dirty = false; } catch (e) { console.warn(e); } }
+      c = await store.folderInfo();
+    }
+  }
+  await afterFolderReady(); updateSaveBadge(); gdChip();
+  if (c.set && c.set.by && c.set.by !== store.pcName()) toast(`✅ 「${c.set.by}」에서 쓰던 공방 자료입니다 — 같은 계정(${gs.email || ''})이 맞습니다`);
+  else if (c.docs || c.folders) toast(`✅ 구글 드라이브에 연결했습니다 (문서 ${c.docs}개) — 이제 이 PC에 먼저 저장하고 드라이브에 올립니다`);
+  else toast('✅ 구글 드라이브에 새 저장 곳을 만들었습니다 — 다른 PC도 같은 계정으로 「구글 로그인으로 시작」을 누르세요');
+  return true;
 }
 /* 폴더를 고르고 → 안을 보고(다른 PC에서 쓰던 폴더인지) → 맞으면 연결 마무리. 연결했으면 true */
 async function connectFolderChecked() {
@@ -4225,25 +4272,28 @@ async function renderSaveDialog() {
   const docs = ready ? await store.listDocs() : [];
   const curIn = ready && st.handle && await store.inFolder(st.handle);
   const when = t => new Date(t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const fileOK = !!st.handle && (!ready || curIn), oc = b => b ? 'ok' : 'no';
+  const fileOK = !!st.handle && (!ready || curIn), oc = b => b ? 'ok' : 'no', gd = store.isDrive(), gs = gd ? NC.gdrive.status() : {};
   const flow = `<div class="svflow">
     <div class="svstep ok"><i>💻</i><b>이 브라우저</b><small>늘 자동으로 임시 보관</small><em>✔ 켜짐</em></div><span class="svarr">→</span>
-    <div class="svstep ${oc(ready)}"><i>☁️</i><b>구글 드라이브 폴더</b><small>${ready ? esc(st.dirName || '동기화 폴더') : st.dir ? '연결했지만 이 창에서 허락이 필요' : '아직 연결 안 함'}${acctGet() ? `<br>👤 ${esc(acctGet().email)}` : ''}</small><em>${ready ? '✔ 연결됨' : '○ 아직'}</em></div><span class="svarr">→</span>
+    <div class="svstep ${oc(ready && !(gd && gs.need))}"><i>☁️</i><b>${gd ? '구글 드라이브 (앱 없이)' : '구글 드라이브 폴더'}</b><small>${gd ? `${gs.email ? '👤 ' + esc(gs.email) + '<br>' : ''}${gdLine(gs)}` : `${ready ? esc(st.dirName || '동기화 폴더') : st.dir ? '연결했지만 이 창에서 허락이 필요' : '아직 연결 안 함'}${acctGet() ? `<br>👤 ${esc(acctGet().email)}` : ''}`}</small><em>${gd ? (gs.need ? '🔑 로그인 필요' : '✔ 연결됨') : ready ? '✔ 연결됨' : '○ 아직'}</em></div><span class="svarr">→</span>
     <div class="svstep ${oc(fileOK)}"><i>📄</i><b>지금 문서</b><small>${st.handle ? esc(String(st.fileName || '').replace(/\.design\.json$/i, '')) + (ready ? (curIn ? ' · 폴더 안' : ' · 폴더 밖') : '') : '파일로는 아직 안 저장'}</small><em>${fileOK ? '✔ 파일에 자동 저장' : '○ 브라우저에만'}</em></div></div>`;
   let todo;
   if (!st.dirSupported && !ready) todo = `<div class="svtodo warn"><b>⚠️ 이 브라우저는 폴더 연결을 못 합니다</b><p>Chrome이나 Edge에서 열면 구글 드라이브 폴더에 저장할 수 있어요. 지금은 「사본 내려받기」로 보관하세요.</p></div>`;
+  else if (gd && gs.need) todo = `<div class="svtodo"><b>🔑 구글에 다시 로그인해 주세요</b><p>로그인은 한 시간쯤 지나면 끝납니다. 그동안 고친 것은 <b>이 PC에 안전하게 저장</b>되어 있고${gs.pending ? ` (드라이브에 올릴 것 ${gs.pending}개)` : ''}, 로그인하면 바로 올라갑니다.</p><button class="btn primary" data-sv="gdlogin">🔑 구글 로그인</button></div>`;
   else if (st.dir && !ready) todo = `<div class="svtodo"><b>🔑 한 번만 허락해 주세요</b><p>전에 연결한 폴더 <b>${esc(st.dirName || '')}</b>를 이 창에서 다시 쓰려면 브라우저 허락이 필요합니다.</p><button class="btn primary" data-sv="redir">폴더 다시 허락하기</button></div>`;
-  else if (!ready) todo = `<div class="svtodo"><b>🚀 처음 설정</b><ol class="svsteps">
+  else if (!ready) todo = `<div class="svtodo"><b>🚀 처음 설정 — 두 가지 중 하나</b>${gdBox()}<details class="bk-more"><summary>또는 B. 구글 드라이브 앱 폴더로 (앱을 이미 쓰는 PC)</summary><ol class="svsteps">
       <li><span>1</span><div><b>구글 드라이브 앱 설치</b><small>각 PC에 「Google Drive 데스크톱」을 설치하고 <b>모든 PC에서 같은 구글 계정</b>으로 로그인 (이미 했으면 넘어가기)</small><button class="btn sm" data-sv="acct">👤 「이 PC에서 공방 시작하기」 4단계 안내 열기</button></div></li>
       <li><span>2</span><div><b>저장 폴더 고르기</b><small>아래 단추 → <b>내 드라이브 → 나라차디자인공방</b> 폴더 고르기. <b>다른 PC에서 쓰던 폴더가 저절로 내려오니 새로 만들지 마세요</b> (어느 PC에서도 처음일 때만 그 창에서 「새 폴더」). Windows는 <code>G:\\내 드라이브</code>, Mac은 Finder 왼쪽 <code>Google Drive</code></small><button class="btn primary" data-sv="dir">☁️ 저장 폴더 고르기</button></div></li>
-      <li><span>3</span><div><b>이 PC 이름 정하기</b><small>아래 「내 저장 설정」의 이 PC 이름 (예: 도장 PC, 집 맥북) — 두 PC에서 함께 쓸 때 어느 PC인지 알려 줌</small></div></li></ol>
+      <li><span>3</span><div><b>이 PC 이름 정하기</b><small>아래 「내 저장 설정」의 이 PC 이름 (예: 도장 PC, 집 맥북) — 두 PC에서 함께 쓸 때 어느 PC인지 알려 줌</small></div></li></ol></details>
       <p class="hint" style="margin:6px 0 0">연결하면 문서와 설정(글꼴·요소·API 키 등)이 이 폴더를 통해 다른 PC와 같아집니다. 안 해도 이 브라우저에는 저장됩니다.</p></div>`;
   else if (!curIn) todo = `<div class="svtodo"><b>📥 지금 문서를 폴더에 넣기</b><p>폴더는 연결됐지만 지금 문서는 ${st.handle ? '폴더 밖 파일' : '아직 브라우저에만'} 있습니다. 폴더에 저장하면 다른 PC에서도 열 수 있어요.</p><button class="btn primary" data-sv="intodir">지금 문서를 폴더에 저장</button></div>`;
   else todo = `<div class="svtodo done"><b>✅ 저장 설정이 모두 되어 있습니다</b><p>고칠 때는 아래 「내 저장 설정」에서 바꾸세요. 문서는 고칠 때마다 저절로 폴더에 저장됩니다.</p></div>`;
   const row = (ic, t, val, ctl) => `<div class="svrow"><i>${ic}</i><span><b>${t}</b><small>${val}</small></span><div class="svctl">${ctl}</div></div>`;
   const swc = (id, on) => `<input type="checkbox" class="sw" id="${id}" ${on ? 'checked' : ''}>`;
   const mine = `<h3 class="svh">👤 우리 공방 구글 계정 <small>모든 PC가 같은 계정</small></h3><div id="acctSlotS">${acctBox('S')}</div><h3 class="svh">⚙ 내 저장 설정 <small>지금 값 · 바꾸기</small></h3><div class="svlist">
-    ${row('☁️', '저장 폴더 (구글 드라이브)', ready ? `<code>${esc(st.dirName || '')}</code> — 두 PC가 이 폴더로 같아짐` : st.dir ? `${esc(st.dirName || '')} (허락 필요)` : '연결 안 함 — 이 브라우저에만 저장', ready ? `<button class="btn sm" data-sv="dir">바꾸기</button><button class="btn sm danger" data-sv="discdir">연결 끊기</button>` : st.dir ? `<button class="btn sm primary" data-sv="redir">허락</button>` : `<button class="btn sm primary" data-sv="dir" ${st.dirSupported ? '' : 'disabled'}>연결</button>`)}
+    ${gd ? row('☁️', '저장 곳 (구글 로그인 · 앱 없이)', `${esc(gs.root)} — ${gdLine(gs)}`, `${gs.need ? '<button class="btn sm primary" data-sv="gdlogin">로그인</button>' : ''}<button class="btn sm" data-sv="gdopen" title="구글 드라이브 웹에서 열기">드라이브 열기</button><button class="btn sm danger" data-sv="discdir">연결 끊기</button>`) : ''}
+    ${!gd && ready ? row('✨', '앱 없이 쓰기로 바꾸기', '구글 로그인만으로 저장 — 지금 폴더의 문서·설정을 옮겨 드림. 다른 PC도 같은 방식으로', '<button class="btn sm primary" data-sv="gd">바꾸기</button>') : ''}
+    ${gd ? '' : row('☁️', '저장 폴더 (구글 드라이브)', ready ? `<code>${esc(st.dirName || '')}</code> — 두 PC가 이 폴더로 같아짐` : st.dir ? `${esc(st.dirName || '')} (허락 필요)` : '연결 안 함 — 이 브라우저에만 저장', ready ? `<button class="btn sm" data-sv="dir">바꾸기</button><button class="btn sm danger" data-sv="discdir">연결 끊기</button>` : st.dir ? `<button class="btn sm primary" data-sv="redir">허락</button>` : `<button class="btn sm primary" data-sv="dir" ${st.dirSupported ? '' : 'disabled'}>연결</button>`)}
     ${row('🏷', '이 PC 이름', '두 PC에서 함께 쓸 때·버전 기록에 표시', `<input type="text" id="svPcName" value="${esc(store.pcName())}" maxlength="20" placeholder="예: 도장 PC">`)}
     ${row('📄', '지금 문서', st.handle ? `${esc(String(st.fileName || ''))}${ready ? (curIn ? ' — 폴더 안 (자동 저장)' : ' — 폴더 밖 파일') : ' — 파일에 자동 저장'}` : '파일 없이 브라우저에만', `<button class="btn sm" data-sv="now" ${st.handle ? '' : 'disabled'}>지금 저장</button>${ready ? (curIn ? '' : '<button class="btn sm primary" data-sv="intodir">폴더에 저장</button>') : `<button class="btn sm" data-sv="connect" ${st.supported ? '' : 'disabled'}>${st.handle ? '다른 파일로' : '파일 하나 연결'}</button>`}${st.handle && !ready ? '<button class="btn sm danger" data-sv="disc">연결 해제</button>' : ''}`)}
     ${ready ? row('🗂', '새 문서 저장 위치', prefOn('naracal-kind-folders') ? '종류 폴더(이미지·영상·도서·캘린더…)를 미리 골라 둠' : '마지막에 쓴 폴더를 골라 둠', swc('svKind', prefOn('naracal-kind-folders'))) : ''}
@@ -4256,10 +4306,13 @@ async function renderSaveDialog() {
   const run = async fn => { try { await fn(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } };
   const act = {
     dir: async () => { const ok = await connectFolderChecked(); if (ok) renderSaveDialog(); },
+    gd: async () => { const ok = await connectDriveChecked(); if (ok) renderSaveDialog(); },
+    gdlogin: async () => { await NC.gdrive.login(); NC.gdrive.run(); toast('구글에 다시 로그인했습니다 — 이 PC에 모아 둔 것을 드라이브에 올립니다'); renderSaveDialog(); },
+    gdopen: async () => { window.open('https://drive.google.com/drive/search?q=' + encodeURIComponent(NC.gdrive.ROOT_NAME), '_blank'); },
     acct: async () => { openAcctGuide(); },
     redir: async () => { if (await store.requestFolderPermission()) { await afterFolderReady({ loadCurrent: true }); updateSaveBadge(); renderSaveDialog(); } },
     intodir: async () => { d.close(); await saveNow(); },
-    discdir: async () => { if (!window.confirm('이 PC에서 저장 폴더 연결을 끊을까요? (폴더 안 파일은 그대로 남고, 언제든 다시 연결할 수 있습니다)')) return; await store.disconnectFolder(); await store.disconnect(); updateSaveBadge(); setStatus('브라우저에만 저장됩니다'); renderSaveDialog(); },
+    discdir: async () => { const gp = store.isDrive() ? NC.gdrive.status().pending : 0; if (!window.confirm(`이 PC에서 저장 ${store.isDrive() ? '곳(구글 로그인)' : '폴더'} 연결을 끊을까요? (드라이브의 파일은 그대로 남고, 언제든 다시 연결할 수 있습니다)${gp ? `\n\n⚠️ 아직 드라이브에 올리지 못한 것이 ${gp}개 있습니다 — 다시 연결하면 이어서 올립니다.` : ''}`)) return; await store.disconnectFolder(); await store.disconnect(); updateSaveBadge(); setStatus('브라우저에만 저장됩니다'); renderSaveDialog(); },
     connect: async () => { gcAssets(); await store.connectNew(doc); updateSaveBadge(); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); toast('파일에 연결했습니다. 이제 자동으로 저장됩니다.'); renderSaveDialog(); },
     now: async () => { gcAssets(); await saveFileNow(); renderSaveDialog(); },
     other: async () => { d.close(); await openOtherFile(); },
@@ -8345,7 +8398,7 @@ if (NC.aichat) NC.aichat.init({ openAIPanel, chatMode,
     if (!F[k]) return false; const r = F[k](); return r !== false;
   },
 });
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { attFrontParts, attBackParts, attState, resizedDoc, bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { openSaveDialog, openAcctGuide, connectDriveChecked, gdMigrate, afterFolderReady, saveFileNow: () => saveFileNow(), attFrontParts, attBackParts, attState, resizedDoc, bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
 
 /* ---- 도구 막대 한 줄 (팀장님 11/24 「도구 막대 한 줄도 정리」) ----
    넘치면 덜 쓰는 묶음(정렬 → 순서 → 펜·그룹)부터 「⋯」 펼침 창으로 옮김(단추를 그대로 옮겨 동작 같음), 자리가 나면 제자리로. 세로 도구 막대는 그대로 */
