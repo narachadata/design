@@ -174,14 +174,18 @@ NC.gdrive = (function () {
     if (S.busy) return; await load(); if (!S.queue.length) return;
     if (!tokOK()) { S.need = true; emit(); return; }
     S.busy = true; emit();
+    /* 안 되는 것은 버리지 않고(예전엔 5번 뒤 버려서 ⏫가 사라져도 안 올라간 것이 있을 수 있었음) 오류를 남기고 점점 늦게 다시, 나머지는 계속 올림 */
     try {
-      let skipped = 0;
-      while (S.queue.length > skipped) {
-        const o = S.queue[skipped]; o.run = 1;
-        try { await doOp(o); S.queue.splice(skipped, 1); S.done++; S.err = ''; }
-        catch (e) { delete o.run; if (e.later) { skipped++; continue; } if (e.auth) break; S.err = e.message; if (e.net) { S.wait = now() + 30000; kick(30000); break; } o.tries = (o.tries || 0) + 1; if (o.tries >= 5) { S.queue.splice(skipped, 1); console.warn('드라이브에 올리지 못함', o, e); } else { kick(15000 * o.tries); break; } }
+      let i = 0;
+      while (i < S.queue.length) {
+        const o = S.queue[i]; if (o.next && o.next > now()) { i++; continue; } o.run = 1;
+        try { await doOp(o); S.queue.splice(i, 1); S.done++; }
+        catch (e) { delete o.run; if (e.later) { i++; continue; } if (e.auth) break; if (e.net) { S.err = e.message; S.wait = now() + 30000; kick(30000); break; }
+          o.tries = (o.tries || 0) + 1; o.err = e.message; o.next = now() + Math.min(15000 * Math.pow(2, o.tries - 1), 600000); S.err = e.message; console.warn('드라이브에 올리지 못함 — 다시 해 봄', o, e); i++; }
         saveQ(); persist(true); emit();
       }
+      if (!S.queue.some(o => o.tries)) S.err = '';
+      const nx = S.queue.filter(o => o.next).map(o => o.next - now()); if (nx.length) kick(Math.max(1000, Math.min(...nx)));
     } finally { S.busy = false; saveQ(); persist(true); emit(); }
   }
 
@@ -250,7 +254,17 @@ NC.gdrive = (function () {
   function revive(o) { if (!o || !o.__gd || !o.k) return null; const n = node(o.k); return n ? handle(n) : null; }
   async function reviveAsync(o) { await load(); return revive(o); }
   async function disconnect() { await load(); S.rootId = ''; S.rootK = ''; S.nodes.clear(); cache.clear(); S.queue = []; S.listedAt = 0; await saveQ(); await persist(); emit(); }
-  function status() { return { on: !!S.rootK, email: S.email, root: ROOT_NAME, pending: S.queue.length, busy: S.busy, need: S.need || (!!S.rootK && !tokOK() && !S.fake), err: S.err, done: S.done, conflicts: S.conflicts, listedAt: S.listedAt, local: [...S.nodes.values()].filter(n => n.local).length }; }
+  /* 점검: 드라이브를 지금 다시 읽고, 이 PC가 보는 공방 곳과 올릴 것·오류를 셈 (팀장님 11/25 「노트북에서 도장 PC 파일이 안 뜸」) */
+  async function diag() {
+    await load(); let listErr = ''; if (S.rootK && tokOK()) { try { await listAll(); } catch (e) { listErr = e.message; } }
+    const all = [...S.nodes.values()].filter(n => n.k !== S.rootK && !n.gone), inAsset = n => { let p = n.parent; while (p && p !== S.rootK) { const x = node(p); if (!x) break; if (x.name === ASSET_DIR || x.name === '.기록') return true; p = x.parent; } return n.name === ASSET_DIR || n.name === '.기록'; };
+    const vis = all.filter(n => !inAsset(n)), up = all.filter(n => n.id);
+    return { email: S.email, rootId: S.rootId, created: S.found === false, docs: vis.filter(n => /\.design\.json$/i.test(n.name)).length, docsUp: vis.filter(n => /\.design\.json$/i.test(n.name) && n.id).length, folders: vis.filter(n => n.folder).length, files: all.length, onDrive: up.length,
+      pending: S.queue.length, failed: S.queue.filter(o => o.tries).length, errs: [...new Set(S.queue.filter(o => o.err).map(o => o.err))].slice(0, 3), err: S.err, listErr, listedAt: S.listedAt, need: !tokOK() && !S.fake };
+  }
+  /* 다른 계정으로: 이 PC의 로그인·공방 곳 기억을 지우고(드라이브 파일은 그대로) 다시 로그인 */
+  function forget() { const t = S.token; S.token = ''; S.exp = 0; saveTok(); try { if (t && !S.fake && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(t, () => {}); } catch (e) {} S.rootId = ''; S.rootK = ''; S.email = ''; S.found = undefined; S.nodes.clear(); cache.clear(); S.queue = []; S.listedAt = 0; S.err = ''; saveQ(); persist(); emit(); }
+  function status() { return { on: !!S.rootK, created: S.found === false, failed: S.queue.filter(o => o.tries).length, email: S.email, root: ROOT_NAME, pending: S.queue.length, busy: S.busy, need: S.need || (!!S.rootK && !tokOK() && !S.fake), err: S.err, done: S.done, conflicts: S.conflicts, listedAt: S.listedAt, local: [...S.nodes.values()].filter(n => n.local).length }; }
   function onChange(f) { S.listeners.add(f); return () => S.listeners.delete(f); }
   async function flush(ms) { const t0 = now(); kick(0); while (S.queue.length && now() - t0 < (ms || 20000)) { if (!tokOK()) break; await new Promise(r => setTimeout(r, 200)); if (!S.busy) kick(0); } return S.queue.length; }
   window.addEventListener('online', () => kick(500));
@@ -259,7 +273,7 @@ NC.gdrive = (function () {
   /* ---------- 시험용 가짜 드라이브 (?qa 에서만) — 실제 구글에 가지 않고 같은 요청·응답 모양으로 ---------- */
   function fake() {
     S.fake = true; S.token = 'fake'; S.exp = now() + 3600e3;
-    const F = new Map(), sessions = new Map(); let seq = 0, calls = 0; F.set('root', { id: 'root', name: '내 드라이브', mimeType: FOLDER, parents: [], modifiedTime: new Date().toISOString() });
+    const F = new Map(), sessions = new Map(); let seq = 0, calls = 0, failN = 0; F.set('root', { id: 'root', name: '내 드라이브', mimeType: FOLDER, parents: [], modifiedTime: new Date().toISOString() });
     const out = f => ({ id: f.id, name: f.name, parents: f.parents, mimeType: f.mimeType, size: f.data != null ? String(f.data.length) : undefined, modifiedTime: f.modifiedTime, appProperties: f.appProperties, trashed: !!f.trashed });
     const res = (o, s, h) => new Response(o == null ? null : (typeof o === 'string' ? o : JSON.stringify(o)), { status: s || 200, headers: Object.assign({ 'Content-Type': 'application/json' }, h || {}) });
     const touch = f => { f.modifiedTime = new Date(Date.now() + (seq++)).toISOString(); };
@@ -271,6 +285,7 @@ NC.gdrive = (function () {
       if (u.searchParams.get('sess')) { const s = sessions.get(u.searchParams.get('sess')); const body = o.body instanceof Blob ? await o.body.text() : String(o.body); let f = s.id ? F.get(s.id) : null; if (!f) { f = { id: 'f' + (++seq) }; F.set(f.id, f); } apply(f, s.meta); f.data = body; return res(out(f)); }
       const up = p.includes('/upload/'), idm = p.match(/\/files\/([^/]+)$/), id = idm && idm[1];
       if (up && q.get('uploadType') === 'resumable') { const sid = 's' + (++seq); sessions.set(sid, { id, meta: JSON.parse(o.body) }); return res(null, 200, { Location: 'https://fake.upload/?sess=' + sid }); }
+      if (up && failN > 0) { failN--; return res({ error: { message: '시험용 실패' } }, 500); }
       if (up) { const t = await o.body.text(), b = (o.headers['Content-Type'].match(/boundary=(\S+)/) || [])[1]; const parts = t.split('--' + b).slice(1, -1).map(x => x.replace(/^\r\n/, '').replace(/\r\n$/, '')); const meta = JSON.parse(parts[0].split('\r\n\r\n').slice(1).join('\r\n\r\n')); const data = parts[1].split('\r\n\r\n').slice(1).join('\r\n\r\n');
         let f = id ? F.get(id) : null; if (id && !f) return res({ error: { message: 'not found' } }, 404); if (!f) { f = { id: 'f' + (++seq) }; F.set(f.id, f); } apply(f, meta); f.data = data; return res(out(f)); }
       if (id && m === 'GET') { const f = F.get(id); if (!f) return res({ error: { message: 'not found' } }, 404); if (q.get('alt') === 'media') return new Response(f.data || '', { status: 200 }); return res(out(f)); }
@@ -279,10 +294,10 @@ NC.gdrive = (function () {
       if (p.endsWith('/files') && m === 'GET') { const qq = q.get('q') || ''; let L = [...F.values()].filter(f => f.id !== 'root' && !f.trashed); const nm = qq.match(/name='([^']+)'/); if (nm) L = L.filter(f => f.name === nm[1] && (f.parents || []).includes('root')); return res({ files: L.map(out) }); }
       return res({ error: { message: 'fake: ' + m + ' ' + p } }, 400);
     };
-    return { files: F, calls: () => calls, other: (id, text) => { const f = F.get(id); f.data = text; f.appProperties = Object.assign({}, f.appProperties, { lm: String(Date.now() + 99999) }); touch(f); } };
+    return { files: F, calls: () => calls, fail: n => { failN = n; }, other: (id, text) => { const f = F.get(id); f.data = text; f.appProperties = Object.assign({}, f.appProperties, { lm: String(Date.now() + 99999) }); touch(f); } };
   }
 
   /* 로그인 창은 누른 순간에 열어야 크롬이 막지 않음 → 저장 설정·안내 창을 열 때 미리 불러 둠 */
   function preload() { if (S.fake) return; loadGIS().catch(() => {}); }
-  return { connect, login, preload, revive, reviveAsync, disconnect, status, onChange, flush, fresh: () => fresh(true), run: () => run(), load, ROOT_NAME, tokOK, _fake: fake, _S: S };
+  return { connect, login, preload, diag, forget, revive, reviveAsync, disconnect, status, onChange, flush, fresh: () => fresh(true), run: () => run(), load, ROOT_NAME, tokOK, _fake: fake, _S: S };
 })();

@@ -4203,6 +4203,16 @@ function openAcctGuide(first) {
 }
 /* ---------- 구글 로그인으로 저장 (드라이브 앱 없이 — gdrive.js, 팀장님 11/25 「앱을 설치하지 않아도 공유」「1차로 PC에 저장, 드라이브에 업로드」) ---------- */
 function gdLine(gs) { if (!gs || !gs.on) return ''; if (gs.need) return `🔑 로그인 필요 — 고친 것은 이 PC에 있음${gs.pending ? ` (올릴 것 ${gs.pending}개)` : ''}`; if (gs.pending) return `⏫ 드라이브에 올리는 중 (${gs.pending}개 남음)${gs.err ? ' · ' + esc(gs.err) : ''}`; return '✔ 모두 드라이브에 올림 · 이 PC에 먼저 저장 후 뒤에서 올림'; }
+function gdDiagHTML(g) {
+  const tail = g.rootId ? g.rootId.slice(-6) : '—', warn = [];
+  if (g.need) warn.push('🔑 로그인이 끝나 있습니다 — 「로그인」을 눌러야 드라이브를 읽고 올립니다.');
+  if (g.listErr) warn.push('⚠️ 드라이브를 읽지 못함: ' + esc(g.listErr));
+  if (g.failed) warn.push(`⚠️ 올리지 못한 것 ${g.failed}개 — 저절로 다시 해 봅니다${g.errs.length ? ` (${g.errs.map(esc).join(' / ')})` : ''}`);
+  if (g.docs && g.docsUp < g.docs) warn.push(`⏫ 문서 ${g.docs - g.docsUp}개는 아직 이 PC에만 — 다 올라가야 다른 PC에 보입니다.`);
+  return `<div class="svtodo gddiag"><b>🔍 구글 드라이브 점검</b><table><tr><th>👤 로그인 계정</th><td><b>${esc(g.email || '(알 수 없음)')}</b></td></tr><tr><th>📁 공방 곳</th><td>${esc(NC.gdrive.ROOT_NAME)} · 번호 끝 <code>${esc(tail)}</code></td></tr><tr><th>📄 문서</th><td>${g.docs}개 (드라이브에 올라간 것 ${g.docsUp}개) · 폴더 ${g.folders}개</td></tr><tr><th>⏫ 올릴 것</th><td>${g.pending ? g.pending + '개 남음' : '없음 — 모두 올림'}</td></tr></table>
+    ${warn.length ? `<p class="gdwarn">${warn.join('<br>')}</p>` : ''}<p class="hint" style="margin:6px 0">다른 PC와 같은 곳인지 보려면: 두 PC에서 이 점검을 눌러 <b>계정</b>과 <b>번호 끝</b>이 같은지 보세요. 다르면 아래 「다른 계정으로 다시 로그인」.</p>
+    <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm primary" data-sv="gdrefresh">🔄 드라이브에서 다시 받기</button>${g.need ? '<button class="btn sm" data-sv="gdlogin">🔑 로그인</button>' : ''}<button class="btn sm" data-sv="gdswitch">👤 다른 계정으로 다시 로그인</button></div></div>`;
+}
 function gdBox() { return `<div class="gdbox"><b>✨ A. 구글 로그인으로 저장 <em>추천 · 앱 설치 없이</em></b><p>구글 계정${acctGet() ? ` <b class="acctmail-in">${esc(acctGet().email)}</b>` : ''}으로 로그인만 하면 됩니다. 저장은 <b>이 PC에 바로</b> 되고, 구글 드라이브의 「${esc(NC.gdrive.ROOT_NAME)}」 폴더에는 <b>뒤에서 올라갑니다</b> — 작업이 멈추지 않고, 인터넷이 끊겨도 다시 연결되면 이어서 올립니다. 다른 PC도 같은 계정으로 로그인하면 같은 문서·설정이 보입니다.</p><button class="btn primary" data-sv="gd">🔑 구글 로그인으로 시작</button><small>로그인 창에서 「Google에서 확인하지 않은 앱」이 나오면 메인 프로그램과 같은 우리 도장 설정이니 「계속」(또는 「고급 → 이동」)을 누르면 됩니다. 영상·음악 원본처럼 아주 큰 파일(40MB 넘게)은 그 PC에만 둡니다.</small></div>`; }
 let gdChipT = 0;
 function gdChip() { clearTimeout(gdChipT); gdChipT = setTimeout(() => { const b = $('#btnSave'); if (!b) return; let c = b.querySelector('.gdchip'); const gs = store.isDrive && store.isDrive() ? NC.gdrive.status() : null;
@@ -4230,6 +4240,9 @@ async function connectDriveChecked() {
     if (!(await confirmBtns(`로그인한 계정 「${gs.email}」이 우리 공방 계정 「${ac.email}」과 다릅니다.\n다른 계정이면 자료가 따로 쌓입니다.\n\n확인: 이 계정으로 계속 (공방 계정을 이것으로 바꿈)\n취소: 연결하지 않기 (구글 로그인 창에서 「${ac.email}」을 고르세요)`))) { await store.disconnectFolder(); if (old) await store.useFolder(old); updateSaveBadge(); setStatus('연결하지 않았습니다'); return false; }
     acctSet(gs.email);
   } else if (gs.email && !ac) acctSet(gs.email);
+  const c0 = await store.folderInfo();  /* 새로 만들었거나 비어 있는 곳 = 다른 PC와 다른 계정일 수 있음 → 물음 */
+  if ((NC.gdrive.status().created || !(c0.set || c0.docs || c0.folders)) && !(await confirmBtns(`「${gs.email || '로그인한 계정'}」의 구글 드라이브에는 아직 공방 자료가 없습니다(새 공방 곳).\n\n• 앱 없이 쓰는 것을 이 PC에서 처음 시작하는 거라면(도장 PC 첫 연결 등) → 확인\n• 다른 PC(예: 도장 PC)에서 이미 쓰고 있다면 → 다른 계정으로 로그인한 것입니다. 취소를 누르고 그 PC와 같은 계정(저장 설정 맨 위에 보이는 계정)으로 다시 로그인하세요.\n\n확인: 이 계정으로 새로 시작\n취소: 연결하지 않기 (다른 계정으로 다시)`))) {
+    NC.gdrive.forget(); await store.disconnectFolder(); if (old) await store.useFolder(old); updateSaveBadge(); setStatus(''); toast('연결하지 않았습니다 — 저장 설정 → 「🔑 구글 로그인으로 시작」을 눌러 다른 PC와 같은 계정을 고르세요'); return false; }
   let c = await store.folderInfo();
   if (old && !(c.set || c.docs || c.folders)) {
     if (oc && (oc.docs || oc.folders || oc.set) && await confirmBtns(`지금 폴더 「${old.name}」의 문서·설정을 구글 드라이브(앱 없이 쓰는 곳)로 옮길까요?\n(문서 ${oc.docs}개 · 폴더 ${oc.folders}개 — 지금 폴더의 파일은 그대로 남습니다)\n\n확인: 옮기기 (권장)\n취소: 빈 곳에서 새로 시작`)) {
@@ -4294,7 +4307,7 @@ async function renderSaveDialog() {
   const row = (ic, t, val, ctl) => `<div class="svrow"><i>${ic}</i><span><b>${t}</b><small>${val}</small></span><div class="svctl">${ctl}</div></div>`;
   const swc = (id, on) => `<input type="checkbox" class="sw" id="${id}" ${on ? 'checked' : ''}>`;
   const mine = `<h3 class="svh">👤 우리 공방 구글 계정 <small>모든 PC가 같은 계정</small></h3><div id="acctSlotS">${acctBox('S')}</div><h3 class="svh">⚙ 내 저장 설정 <small>지금 값 · 바꾸기</small></h3><div class="svlist">
-    ${gd ? row('☁️', '저장 곳 (구글 로그인 · 앱 없이)', `${esc(gs.root)} — ${gdLine(gs)}`, `${gs.need ? '<button class="btn sm primary" data-sv="gdlogin">로그인</button>' : ''}<button class="btn sm" data-sv="gdopen" title="구글 드라이브 웹에서 열기">드라이브 열기</button><button class="btn sm danger" data-sv="discdir">연결 끊기</button>`) : ''}
+    ${gd ? row('☁️', '저장 곳 (구글 로그인 · 앱 없이)', `${esc(gs.root)} — ${gdLine(gs)}`, `${gs.need ? '<button class="btn sm primary" data-sv="gdlogin">로그인</button>' : ''}<button class="btn sm" data-sv="gddiag" title="이 PC가 보는 구글 계정·공방 곳·올릴 것을 점검">🔍 점검</button><button class="btn sm" data-sv="gdopen" title="구글 드라이브 웹에서 열기">드라이브 열기</button><button class="btn sm danger" data-sv="discdir">연결 끊기</button>`) : ''}
     ${!gd && ready ? row('✨', '앱 없이 쓰기로 바꾸기', '구글 로그인만으로 저장 — 지금 폴더의 문서·설정을 옮겨 드림. 다른 PC도 같은 방식으로', '<button class="btn sm primary" data-sv="gd">바꾸기</button>') : ''}
     ${gd ? '' : row('☁️', '저장 폴더 (구글 드라이브)', ready ? `<code>${esc(st.dirName || '')}</code> — 두 PC가 이 폴더로 같아짐` : st.dir ? `${esc(st.dirName || '')} (허락 필요)` : '연결 안 함 — 이 브라우저에만 저장', ready ? `<button class="btn sm" data-sv="dir">바꾸기</button><button class="btn sm danger" data-sv="discdir">연결 끊기</button>` : st.dir ? `<button class="btn sm primary" data-sv="redir">허락</button>` : `<button class="btn sm primary" data-sv="dir" ${st.dirSupported ? '' : 'disabled'}>연결</button>`)}
     ${row('🏷', '이 PC 이름', '두 PC에서 함께 쓸 때·버전 기록에 표시', `<input type="text" id="svPcName" value="${esc(store.pcName())}" maxlength="20" placeholder="예: 도장 PC">`)}
@@ -4305,12 +4318,15 @@ async function renderSaveDialog() {
     ${row('📂', '다른 곳의 문서 열기', '폴더 밖이나 받은 파일', '<button class="btn sm" data-sv="other">열기</button>')}
   </div>
   ${ready ? `<details class="bk-more"><summary>📁 폴더 맨 위의 문서 (${docs.length})</summary><div>${docs.length ? `<ul class="list">${docs.map((x, i) => `<li data-doc="${i}" title="누르면 엽니다"><span>${esc(x.name.replace(/\.design\.json$/i, ''))}</span><small class="hint" style="margin:0">${when(x.lastModified)} · ${Math.max(1, Math.round(x.size / 1024)).toLocaleString()}KB</small>${st.handle && x.name === st.fileName && curIn ? '<b style="min-width:auto">작업 중</b>' : ''}</li>`).join('')}</ul>` : '<p class="hint">아직 문서가 없습니다.</p>'}</div></details>` : ''}`;
-  $('#saveBody').innerHTML = `<h3 class="svh">📍 지금 저장 상태</h3>` + flow + todo + mine + `<details class="bk-more svlive"><summary>🔗 실시간 같이 편집 — 지금 ${(() => { try { return NC.live.cfg().on ? '<b style="color:#1f7a45">켜짐</b>' : '꺼짐'; } catch (e) { return '꺼짐'; } })()} <small>두 PC에서 같은 문서를 동시에 — 고급, 안 써도 저장에는 문제없음</small></summary><div>${NC.live.settingsHTML()}</div></details>` + `<details class="bk-more"><summary>ⓘ 문서 파일에는 무엇이 들어가나요?</summary><div>올린 이미지와 AI 이미지가 문서 파일에 함께 들어갑니다. 내장 글꼴과 2026 삽화는 프로그램에 있으므로 파일이 가벼워집니다. 두 PC에서 같은 문서를 동시에 고쳐 내용이 갈라지면 어느 쪽으로 계속할지 묻고, 다른 쪽은 "충돌 사본" 파일로 보관해 지워지는 내용이 없습니다.</div></details>`;
+  $('#saveBody').innerHTML = `<h3 class="svh">📍 지금 저장 상태</h3>` + flow + todo + (gd ? '<div id="gdDiag"></div>' : '') + mine + `<details class="bk-more svlive"><summary>🔗 실시간 같이 편집 — 지금 ${(() => { try { return NC.live.cfg().on ? '<b style="color:#1f7a45">켜짐</b>' : '꺼짐'; } catch (e) { return '꺼짐'; } })()} <small>두 PC에서 같은 문서를 동시에 — 고급, 안 써도 저장에는 문제없음</small></summary><div>${NC.live.settingsHTML()}</div></details>` + `<details class="bk-more"><summary>ⓘ 문서 파일에는 무엇이 들어가나요?</summary><div>올린 이미지와 AI 이미지가 문서 파일에 함께 들어갑니다. 내장 글꼴과 2026 삽화는 프로그램에 있으므로 파일이 가벼워집니다. 두 PC에서 같은 문서를 동시에 고쳐 내용이 갈라지면 어느 쪽으로 계속할지 묻고, 다른 쪽은 "충돌 사본" 파일로 보관해 지워지는 내용이 없습니다.</div></details>`;
   const run = async fn => { try { await fn(); } catch (e) { if (e.name !== 'AbortError') toast(e.message, true); } };
   const act = {
     dir: async () => { const ok = await connectFolderChecked(); if (ok) renderSaveDialog(); },
     gd: async () => { const ok = await connectDriveChecked(); if (ok) renderSaveDialog(); },
     gdlogin: async () => { await NC.gdrive.login(); NC.gdrive.run(); toast('구글에 다시 로그인했습니다 — 이 PC에 모아 둔 것을 드라이브에 올립니다'); renderSaveDialog(); },
+    gddiag: async () => { const box = $('#gdDiag'); if (!box) return; box.innerHTML = '<div class="svtodo"><b>🔍 점검 중…</b><p>구글 드라이브를 다시 읽고 있습니다.</p></div>'; box.scrollIntoView({ block: 'nearest' }); const g = await NC.gdrive.diag(); box.innerHTML = gdDiagHTML(g); box.scrollIntoView({ block: 'nearest' }); },
+    gdrefresh: async () => { await NC.gdrive.fresh(); NC.gdrive.run(); const n = (await store.walkDocs()).length; await renderSaveDialog(); toast(`구글 드라이브를 다시 읽었습니다 — 문서 ${n}개 (저장 ▾ → 내 드라이브에서 엽니다)`); if (!(st.handle && await store.inFolder(st.handle)) && n) { d.close(); await afterFolderReady(); } },
+    gdswitch: async () => { NC.gdrive.forget(); const ok = await connectDriveChecked(); renderSaveDialog(); if (ok) toast('다른 계정으로 다시 연결했습니다'); },
     gdopen: async () => { window.open('https://drive.google.com/drive/search?q=' + encodeURIComponent(NC.gdrive.ROOT_NAME), '_blank'); },
     acct: async () => { openAcctGuide(); },
     redir: async () => { if (await store.requestFolderPermission()) { await afterFolderReady({ loadCurrent: true }); updateSaveBadge(); renderSaveDialog(); } },
