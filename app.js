@@ -6735,20 +6735,25 @@ function attFrameKit() {
   const DIAG = (x1, y1, x2, y2, t, c) => { const L = Math.hypot(x2 - x1, y2 - y1), a = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI, cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, hh = 0.6; return Object.assign({ id: uid(), type: 'shape', kind: 'line', x: r2(cx - L / 2), y: r2(cy - hh / 2), w: r2(L), h: hh, rot: r2(a), fill: c || '#3A3A3A', stroke: c || '#3A3A3A', strokeW: t, radius: 0, opacity: 1, name: '틀 · 사선' }); };
   const I = (src, x, y, w, h, st) => Object.assign({ id: uid(), type: 'image', src, x: r2(x), y: r2(y), w: r2(w), h: r2(h), rot: 0, fit: 'contain', pos: '50% 50%', flip: false, radius: 0, opacity: 1, name: '틀 · 로고' }, st || {});
   /* 나라차 로고 묶음: 두 줄 너비 W, 윗줄 위치 lineY — 상징·NARACHA(그림) · 나 라 차(글) · Taekwondo(그림) */
-  const logo = (cx, lineY, W, op) => { const k = W / 215, o = op == null ? {} : { opacity: op }, my = lineY - 73 * k, gap = 51 * k;
-    return [I('asset:brand-since-mark', cx - W / 2, my, W, 128 * k, Object.assign({ name: '틀 · 로고 (상징·NARACHA)' }, o)),
-      T('나라차', cx - W * 0.22, lineY + gap + 2.15 * k / 0.2358, W * 0.44, 4.4 * k / 0.2358, Object.assign({ font: 'Noto Serif KR', size: pt(3.3 * k / 0.2358), weight: 500, color: '#3E3A39', align: 'center', ls: 0.62, name: '틀 · 로고 (나라차)' }, o)),
-      I('asset:brand-taekwondo', cx - W * 0.212, lineY + gap + 8.8 * k / 0.2358, W * 0.424, W * 0.424 * 20 / 112, Object.assign({ name: '틀 · 로고 (Taekwondo)' }, o))]; };
+  /* 나라차 로고 묶음 (Since 2002 로고 조각, 단위 = 로고 SVG 좌표): 두 줄 너비 W(줄 214.7단위), 윗줄 윗선 lineY — 상징·두 줄·NARACHA(그림) · 나 라 차(글) · Taekwondo(그림). 비율은 실제 출석부 용지에서 잼 (11/25) */
+  const logo = (cx, lineY, W, op) => { const k = W / 214.7, o = op == null ? {} : { opacity: op }, x0 = cx - W / 2 - 0.6 * k, y0 = lineY - 72.3 * k;
+    return [I('asset:brand-since-mark', x0, y0, 216 * k, 127 * k, Object.assign({ name: '틀 · 로고 (상징·NARACHA)' }, o)),
+      T('나라차', cx - W * 0.2, lineY + 13.67 / 50.3 * W, W * 0.4, 5.4 / 50.3 * W, Object.assign({ font: 'Noto Serif KR', size: pt(3.75 / 50.3 * W), weight: 500, color: '#3E3A39', align: 'center', ls: 0.3, valign: 'top', name: '틀 · 로고 (나라차)' }, o)),
+      (() => { const kt = 21.8 / 109.4 / 50.3 * W; return I('asset:brand-taekwondo', cx - 109.4 * kt / 2 - 0.7 * kt, lineY + 21.35 / 50.3 * W - 0.8 * kt, 110.8 * kt, 18.6 * kt, Object.assign({ name: '틀 · 로고 (Taekwondo)' }, o)); })()]; };
   return { T, R, HL, VL, BOX, DIAG, I, logo, pt, r2 };
 }
 function attFrontParts() {
   const K = attFrameKit(), { T, R, HL, VL, BOX, DIAG, logo, pt } = K, out = [];
   const TX = 9.4, TY = 62, MW = 6, DW = 6, HH = 6.1, RH = 6.15, NR = 12, ND = 31, RX = TX + MW + DW * ND, BY = TY + HH + RH * NR;
-  out.push(...logo(35.35, 29.3, 50.7));
+  /* 로고: 실제 출석부 용지(assets/att/naracha-att-frame.jpg, 8px/mm)를 재서 조각마다 같은 자리 (11/25) — 두 줄 윗선 29.45·41.3mm(폭 10.2~60.5), 상징 27~43.5×13.9~26.1, 나라차 글자 윗선 45.1, Taekwondo 24.5~46.3×50.8 */
+  { const k = 50.3 / 214.7; out.push(K.I('asset:brand-since-word', K.r2(10.2 - 0.6 * k), K.r2(29.45 - 0.5 * k), K.r2(216 * k), K.r2(54.5 * k), { name: '틀 · 로고 (두 줄·NARACHA)' })); }
+  { const k = 16.5 / 85.3; out.push(K.I('asset:brand-since-symbol', K.r2(27 - 0.6 * k), K.r2(13.9 - 0.5 * k), K.r2(86.5 * k), K.r2(65.3 * k), { name: '틀 · 로고 (상징)' })); }
+  out.push(T('나라차', 25.7, 44.72, 20, 5, { font: 'Noto Serif KR', size: pt(3.4), weight: 500, color: '#3E3A39', align: 'center', ls: 0.36, valign: 'top', name: '틀 · 로고 (나라차)' }));
+  { const k = 21.8 / 109.4; out.push(K.I('asset:brand-taekwondo', K.r2(24.5 - 0.7 * k), K.r2(50.8 - 0.8 * k), K.r2(110.8 * k), K.r2(18.6 * k), { name: '틀 · 로고 (Taekwondo)' })); }
   /* 칸 이름과 밑줄 — 밑줄 자리는 ATT_F(값 글자가 밑줄 1mm 위에 앉음), 이름표 글자 바닥 = 밑줄 6.2mm 위 */
-  const lab = (t, x, base) => T(t, x - 0.2, base - 3.55, 22, 4.3, { size: pt(3.4), weight: 700, color: '#2B2B2B', valign: 'bottom', sizing: 'autow', name: '틀 · ' + t });
-  [['연도', 66.6, 21], ['생일', 97.3, 21], ['등록구분', 128.8, 21], ['주소', 66.6, 32.3], ['연락처', 118.8, 32.3], ['수련요일', 66.6, 43.2], ['학교/학년', 118.8, 43.2], ['보호자', 66.6, 54.5], ['출석번호', 118.8, 54.5]].forEach(([t, x, ln]) => out.push(lab(t, x, ln - 6.2)));
-  out.push(lab('이름', 170.1, 14.1));
+  /* 칸 이름: 실제 출석부 용지에서 잰 글자 왼끝·윗선(mm) — 글자 높이 약 2.2mm(2.7mm 굵은 고딕) (11/25) */
+  const lab = (t, x, top) => T(t, x - 0.3, top - 0.24, 24, 3.6, { size: pt(2.7), sx: 93, weight: 700, color: '#2B2B2B', valign: 'top', sizing: 'autow', name: '틀 · ' + t });
+  [['연도', 66.9, 12.4], ['생일', 97.4, 12.3], ['등록구분', 128.9, 12.1], ['이름', 170.3, 12], ['주소', 66.9, 24.3], ['연락처', 119.1, 24], ['수련요일', 67, 34.5], ['학교/학년', 119.3, 34.3], ['보호자', 67, 45.1], ['출석번호', 119.3, 45]].forEach(([t, x, top]) => out.push(lab(t, x, top)));
   [21, 32.3, 43.2, 54.5].forEach(y => out.push(HL(66, 162, y, 0.22, '#4A4A4A'))); out.push(HL(170.5, 200.5, 20.5, 0.22, '#4A4A4A'));
   /* 12달 × 31일 표 */
   out.push(R(TX, TY, RX - TX, HH, '#F0A055', { name: '틀 · 머리줄' }));
