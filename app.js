@@ -155,7 +155,8 @@ document.addEventListener('click', e => {
   if (e.target.closest && e.target.closest('#docSize')) { $('#btnResize').click(); return; }
   const mb = e.target.closest && e.target.closest('#btnMore'); const open = $('#tbMenu');
   if (mb) { if (open) { open.remove(); return; } const m = document.createElement('div'); m.id = 'tbMenu'; m.className = 'tbmenu';
-    m.innerHTML = [['btnResize', '📐', '크기 조정', '문서 크기 바꾸기'], ['btnHoliday', '📅', '공휴일', '달력 휴일'], ['btnFonts', '🔤', '글꼴 관리', '내 글꼴 올리기'], ['settings', '⚙️', '설정', '화면·저장·도장 정보·출력'], ['btnHelp', '❓', '도움말', '단축키·사용법']].map(([id, ic, t, d]) => `<button type="button" data-tbm="${id}"><span>${ic}</span>${t}<small>${d}</small></button>`).join('');
+    /* 11/25 위 막대 정리에 맞춰 이모지 → 선 아이콘 */
+    m.innerHTML = [['btnResize', 'i-ruler', '크기 조정', '문서 크기 바꾸기'], ['btnHoliday', 'i-cal', '공휴일', '달력 휴일'], ['btnFonts', 'i-font', '글꼴 관리', '내 글꼴 올리기'], ['settings', 'i-settings', '설정', '화면·저장·도장 정보·출력'], ['btnHelp', 'i-help', '도움말', '단축키·사용법']].map(([id, ic, t, d]) => `<button type="button" data-tbm="${id}"><svg class="ic"><use href="#${ic}"/></svg>${t}<small>${d}</small></button>`).join('');
     document.body.appendChild(m); const r = mb.getBoundingClientRect(); m.style.top = (r.bottom + 4) + 'px'; m.style.left = Math.max(8, Math.min(r.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px'; return; }
   const it = e.target.closest && e.target.closest('[data-tbm]'); if (it) { const id = it.dataset.tbm; if (open) open.remove(); if (id === 'settings') { openSettings(); return; } const b = document.getElementById(id); if (b) b.click(); return; }
   if (open && !(e.target.closest && e.target.closest('#tbMenu'))) open.remove();

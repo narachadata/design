@@ -2183,3 +2183,5 @@ dialog.asktext{width:min(480px,92vw)}
 .livebar .lv .lvps{display:inline-flex;margin-left:3px}
 .livebar .lvp{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--c,#2f9e6b);color:#fff;font-size:10.5px;font-weight:700;font-style:normal;border:2px solid var(--ui-bg,#fff);margin-left:-5px}
 .livebar .lvp:first-child{margin-left:0}.livebar .lvp.more{background:#98a2b3}
+
+.tbmenu button .ic{width:17px;height:17px;color:var(--ui-muted,#667085);flex:none}
