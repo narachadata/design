@@ -4202,7 +4202,7 @@ function openAcctGuide(first) {
   if (!d.open) d.showModal();
 }
 /* ---------- 구글 로그인으로 저장 (드라이브 앱 없이 — gdrive.js, 팀장님 11/25 「앱을 설치하지 않아도 공유」「1차로 PC에 저장, 드라이브에 업로드」) ---------- */
-function gdLine(gs) { if (!gs || !gs.on) return ''; if (gs.need) return `🔑 로그인 필요 — 고친 것은 이 PC에 있음${gs.pending ? ` (올릴 것 ${gs.pending}개)` : ''}`; if (gs.pending) return `⏫ 드라이브에 올리는 중 (${gs.pending}개 남음)${gs.err ? ' · ' + esc(gs.err) : ''}`; return '✔ 모두 드라이브에 올림 · 이 PC에 먼저 저장 후 뒤에서 올림'; }
+function gdLine(gs) { if (!gs || !gs.on) return ''; if (gs.need) return `🔑 로그인 필요 — 고친 것은 이 PC에 있음${gs.pendDocs ? ` (올릴 문서·설정 ${gs.pendDocs}개)` : ''}`; if (gs.pendDocs) return `⏫ 문서·설정 ${gs.pendDocs}개 올리는 중${gs.err ? ' · ' + esc(gs.err) : ''}`; if (gs.pendOther) return `✔ 문서는 모두 올림 · 자료실 그림 등 ${gs.pendOther}개는 뒤에서 올리는 중`; return '✔ 모두 드라이브에 올림 · 이 PC에 먼저 저장 후 뒤에서 올림'; }
 function gdDiagHTML(g) {
   const tail = g.rootId ? g.rootId.slice(-6) : '—', warn = [];
   if (g.need) warn.push('🔑 로그인이 끝나 있습니다 — 「로그인」을 눌러야 드라이브를 읽고 올립니다.');
@@ -4225,16 +4225,16 @@ async function gdSyncNow() {
     const n = await NC.gdrive.pushAll(); await NC.gdrive.fresh(); NC.gdrive.run();
     const docs = (await store.walkDocs()).length; const g = NC.gdrive.status();
     if (store.state.handle && store.state.dir) { try { NC.gdrive._S.listedAt = 0; await checkExternalChange(); } catch (e) {} }  /* 지금 연 문서를 다른 PC가 고쳤으면 바로 알림 */
-    toast(`☁ 동기화: ${n ? `이 PC 것 ${n}개 올리는 중 · ` : '올릴 것 없음 · '}드라이브 문서 ${docs}개 확인${g.failed ? ` · ⚠️ 올리지 못한 것 ${g.failed}개 (저장 설정 → 🔍 점검)` : ''}`);
+    toast(`☁ 동기화: ${g.pendDocs ? `문서·설정 ${g.pendDocs}개 올리는 중` : '문서는 모두 올림'}${g.pendOther ? ` · 자료실 그림 등 ${g.pendOther}개는 뒤에서` : ''} · 드라이브 문서 ${docs}개 확인${g.failed ? ` · ⚠️ 올리지 못한 것 ${g.failed}개 (저장 설정 → 🔍 점검)` : ''}`);
   } catch (e) { toast(e.message, true); }
   finally { const b = $('#btnSync'); if (b) b.classList.remove('busy'); gdChip(); }
 }
 function gdChip() { clearTimeout(gdChipT); gdChipT = setTimeout(() => { const b = $('#btnSave'); if (!b) return;
   { const on = store.isDrive && store.isDrive(); let sb = $('#btnSync'); const sp = b.closest('.split') || b;
     if (!on) { if (sb) sb.remove(); } else { if (!sb) { sb = document.createElement('button'); sb.className = 'btn'; sb.id = 'btnSync'; sb.onclick = gdSyncNow; sp.after(sb); }
-      const g = NC.gdrive.status(); const st2 = g.need ? ['🔑', '동기화', '구글 로그인이 끝났습니다 — 눌러서 로그인하고 동기화'] : g.failed ? ['⚠️', '동기화', `올리지 못한 것 ${g.failed}개 — 눌러서 다시 올리기·받기`] : g.pending ? ['⏫', '동기화 ' + g.pending, `구글 드라이브에 올리는 중 (${g.pending}개 남음) — 눌러서 바로 올리기·받기`] : ['☁', '동기화', '모두 올림 — 눌러서 다른 PC에서 고친 것 받기·다시 맞추기'];
+      const g = NC.gdrive.status(); const st2 = g.need ? ['🔑', '동기화', '구글 로그인이 끝났습니다 — 눌러서 로그인하고 동기화'] : g.failed ? ['⚠️', '동기화', `올리지 못한 것 ${g.failed}개 — 눌러서 다시 올리기·받기`] : g.pendDocs ? ['⏫', '동기화 ' + g.pendDocs, `문서·설정 ${g.pendDocs}개를 구글 드라이브에 올리는 중${g.pendOther ? ` (자료실 그림 등 ${g.pendOther}개는 그다음 뒤에서)` : ''} — 눌러서 바로 올리기·받기`] : ['☁', '동기화', `문서는 모두 올림${g.pendOther ? ` · 자료실 그림·내보낸 파일 등 ${g.pendOther}개는 뒤에서 올리는 중` : ''} — 눌러서 다른 PC에서 고친 것 받기·다시 맞추기`];
       sb.innerHTML = `<span class="sic">${st2[0]}</span><span>${st2[1]}</span>`; sb.title = st2[2]; sb.classList.toggle('warn', !!(g.need || g.failed)); } } let c = b.querySelector('.gdchip'); const gs = store.isDrive && store.isDrive() ? NC.gdrive.status() : null;
-  if (!gs || (!gs.pending && !gs.need)) { if (c) c.remove(); } else { if (!c) { c = document.createElement('i'); c.className = 'gdchip'; b.appendChild(c); } c.textContent = gs.need ? '🔑' : '⏫' + gs.pending; c.title = gs.need ? '구글 로그인이 필요합니다 (고친 것은 이 PC에 저장돼 있음) — 저장 ▾ → 저장 설정' : `구글 드라이브에 올리는 중 — ${gs.pending}개 남음`; c.classList.toggle('need', !!gs.need); }
+  if (!gs || (!gs.pendDocs && !gs.need)) { if (c) c.remove(); } else { if (!c) { c = document.createElement('i'); c.className = 'gdchip'; b.appendChild(c); } c.textContent = gs.need ? '🔑' : '⏫' + gs.pendDocs; c.title = gs.need ? '구글 로그인이 필요합니다 (고친 것은 이 PC에 저장돼 있음) — 저장 ▾ → 저장 설정' : `구글 드라이브에 올리는 중 — ${gs.pending}개 남음`; c.classList.toggle('need', !!gs.need); }
   const s = $('#status'); if (gs && gs.need && s && !s.querySelector('#gdRe')) { s.innerHTML = `<button class="btn sm primary" id="gdRe">🔑 구글 다시 로그인${gs.pending ? ` — 올릴 것 ${gs.pending}개 (이 PC에는 저장됨)` : ' — 다른 PC에서 고친 것 받기'}</button>`; $('#gdRe').onclick = async () => { try { await NC.gdrive.login(); NC.gdrive.run(); setStatus('구글 드라이브에 다시 연결했습니다'); } catch (e) { toast(e.message, true); } }; }
   else if (gs && !gs.need && s && s.querySelector('#gdRe')) setStatus('구글 드라이브에 다시 연결했습니다'); }, 200); }
 if (window.NC && NC.gdrive) NC.gdrive.onChange(gdChip);

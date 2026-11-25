@@ -17,7 +17,9 @@ NC.gdrive = (function () {
   /* 이 PC에만 둘 큰 파일 = 영상·음악 원본 등. 문서(.design.json)는 사진을 떼어 올리므로 크기와 상관없이 올림 (11/25 — 사진 많은 문서가 40MB를 넘어 안 올라갔음) */
   const tooBig = n => n.size > BIG && !/\.(json|txt)$/i.test(n.name);
   const FIELDS = 'id,name,parents,mimeType,size,modifiedTime,appProperties,trashed';
-  let fetcher = (u, o) => fetch(u, o);
+  /* 요청 시간 제한 — 큰 파일 올리기는 넉넉히(크기에 따라), 나머지 60초. 걸린 요청 하나 때문에 올리기 전체가 멈추던 것 막음 (11/25) */
+  const realFetch = (u, o) => { const ac = new AbortController(), sz = o && o.body && (o.body.size || (o.body.length || 0)) || 0, ms = 60000 + Math.round(sz / 1024 / 20) * 1000; const t = setTimeout(() => ac.abort(), Math.min(ms, 30 * 60000)); return fetch(u, Object.assign({}, o, { signal: ac.signal })).finally(() => clearTimeout(t)); };
+  let fetcher = realFetch;
   const S = { token: '', exp: 0, email: '', rootId: '', rootK: '', nodes: new Map(), listedAt: 0, queue: [], busy: false, err: '', need: false, wait: 0, done: 0, conflicts: 0, autoTries: 0, listeners: new Set() };
   const st = () => NC.store;
   const rid = () => 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -34,7 +36,7 @@ NC.gdrive = (function () {
   function loadTok() { try { const o = JSON.parse(localStorage.getItem('naracal-gd-tok') || 'null'); if (o && o.t && o.e > now()) { S.token = o.t; S.exp = o.e; } } catch (e) {} }
   loadTok();  /* 로그인 단추를 누른 순간 바로 판단하도록 미리 */
   let loaded = null;
-  function load() { if (loaded) return loaded; loaded = (async () => { loadTok(); const m = await st().idbGet('gd-meta').catch(() => null); if (m && m.rootK) { S.rootId = m.rootId || ''; S.rootK = m.rootK; S.email = m.email || ''; S.listedAt = 0; (m.nodes || []).forEach(n => S.nodes.set(n.k, n)); } const q = await st().idbGet('gd-q').catch(() => null); if (Array.isArray(q)) S.queue = q; })(); return loaded; }
+  function load() { if (loaded) return loaded; loaded = (async () => { loadTok(); const m = await st().idbGet('gd-meta').catch(() => null); if (m && m.rootK) { S.rootId = m.rootId || ''; S.rootK = m.rootK; S.email = m.email || ''; S.listedAt = 0; (m.nodes || []).forEach(n => S.nodes.set(n.k, n)); } const q = await st().idbGet('gd-q').catch(() => null); if (Array.isArray(q)) { q.forEach(o => { delete o.run; }); S.queue = q; } })(); return loaded; }
 
   /* ---------- 구글 로그인 ---------- */
   function loadGIS() { return new Promise((res, rej) => { if (window.google && google.accounts && google.accounts.oauth2) return res(); const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; s.onload = () => res(); s.onerror = () => rej(new Error('구글 로그인을 불러오지 못했습니다 — 인터넷 연결을 확인하세요')); document.head.appendChild(s); }); }
@@ -60,7 +62,7 @@ NC.gdrive = (function () {
   async function call(url, opt, raw) {
     if (!tokOK()) { S.need = true; emit(); const e = new Error('구글 로그인이 필요합니다'); e.auth = true; throw e; }
     opt = Object.assign({}, opt || {}); opt.headers = Object.assign({ Authorization: 'Bearer ' + S.token }, opt.headers || {});
-    let r; try { r = await fetcher(url, opt); } catch (e) { const x = new Error('인터넷에 연결되지 않았습니다'); x.net = true; throw x; }
+    let r; try { r = await fetcher(url, opt); } catch (e) { if (e && e.name === 'AbortError') { const x = new Error('시간이 너무 오래 걸려 다음에 다시'); x.slow = true; throw x; } const x = new Error('인터넷에 연결되지 않았습니다'); x.net = true; throw x; }
     if (r.status === 401) { S.token = ''; S.exp = 0; saveTok(); S.need = true; emit(); const e = new Error('구글 로그인이 필요합니다'); e.auth = true; throw e; }
     if (!r.ok) { let m = ''; try { m = ((await r.json()).error || {}).message || ''; } catch (e) {} const e = new Error(`구글 드라이브 오류 ${r.status}${m ? ' — ' + m : ''}`); e.status = r.status; throw e; }
     return raw ? r : (r.status === 204 ? null : r.json());
@@ -74,7 +76,7 @@ NC.gdrive = (function () {
     }
     const r = await call(`${UP}/files${id ? '/' + id : ''}?${qs({ uploadType: 'resumable', fields: FIELDS })}`, { method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': type }, body: JSON.stringify(meta) }, true);
     const loc = r.headers.get('Location'); if (!loc) throw new Error('큰 파일 올리기를 시작하지 못했습니다');
-    let r2; try { r2 = await fetcher(loc, { method: 'PUT', headers: { 'Content-Type': type }, body: typeof body === 'string' ? new Blob([body], { type }) : body }); } catch (e) { const x = new Error('인터넷에 연결되지 않았습니다'); x.net = true; throw x; }
+    let r2; try { r2 = await fetcher(loc, { method: 'PUT', headers: { 'Content-Type': type }, body: typeof body === 'string' ? new Blob([body], { type }) : body }); } catch (e) { if (e && e.name === 'AbortError') { const x = new Error('시간이 너무 오래 걸려 다음에 다시'); x.slow = true; throw x; } const x = new Error('인터넷에 연결되지 않았습니다'); x.net = true; throw x; }
     if (!r2.ok) { const e = new Error('큰 파일 올리기 오류 ' + r2.status); e.status = r2.status; throw e; }
     return r2.json();
   }
@@ -285,7 +287,7 @@ NC.gdrive = (function () {
   }
   /* 다른 계정으로: 이 PC의 로그인·공방 곳 기억을 지우고(드라이브 파일은 그대로) 다시 로그인 */
   function forget() { const t = S.token; S.token = ''; S.exp = 0; saveTok(); try { if (t && !S.fake && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(t, () => {}); } catch (e) {} S.rootId = ''; S.rootK = ''; S.email = ''; S.found = undefined; S.nodes.clear(); cache.clear(); S.queue = []; S.listedAt = 0; S.err = ''; saveQ(); persist(); emit(); }
-  function status() { return { on: !!S.rootK, created: S.found === false, failed: S.queue.filter(o => o.tries).length, email: S.email, root: ROOT_NAME, pending: S.queue.length, busy: S.busy, need: S.need || (!!S.rootK && !tokOK() && !S.fake), err: S.err, done: S.done, conflicts: S.conflicts, listedAt: S.listedAt, local: [...S.nodes.values()].filter(n => n.local).length }; }
+  function status() { const qk = queueKinds(); return { on: !!S.rootK, pendDocs: qk.docs, pendOther: qk.other, created: S.found === false, failed: S.queue.filter(o => o.tries).length, email: S.email, root: ROOT_NAME, pending: S.queue.length, busy: S.busy, need: S.need || (!!S.rootK && !tokOK() && !S.fake), err: S.err, done: S.done, conflicts: S.conflicts, listedAt: S.listedAt, local: [...S.nodes.values()].filter(n => n.local).length }; }
   function onChange(f) { S.listeners.add(f); return () => S.listeners.delete(f); }
   async function flush(ms) { const t0 = now(); kick(0); while (S.queue.length && now() - t0 < (ms || 20000)) { if (!tokOK()) break; await new Promise(r => setTimeout(r, 200)); if (!S.busy) kick(0); } return S.queue.length; }
   window.addEventListener('online', () => kick(500));
