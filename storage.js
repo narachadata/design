@@ -212,7 +212,9 @@ NC.store = (function () {
     for (const k of Object.keys(L)) if (JSON.stringify(L[k]) !== JSON.stringify(B[k])) out[k] = L[k];
     return JSON.stringify(out);
   }
-  function mergeAll(L, B, R) { const o = {}; for (const k of SYNC_KEYS) { const v = mergeVal(L[k], B[k], R[k]); if (v != null) o[k] = v; } return o; }
+  /* 상장 다음 번호: 두 PC가 따로 상장을 찍어도 번호가 뒤로 가지 않게 앞 글자별 큰 번호 (11/25 두 PC 점검) */
+  function maxSerial(l, r) { const L = obj(l) || {}, R = obj(r) || {}, o = Object.assign({}, R); for (const k of Object.keys(L)) o[k] = Math.max(Number(L[k]) || 0, Number(R[k]) || 0); return Object.keys(o).length ? JSON.stringify(o) : (l != null ? l : r); }
+  function mergeAll(L, B, R) { const o = {}; for (const k of SYNC_KEYS) { const v = k === 'naracal-cert-serial' ? maxSerial(L[k], R[k]) : mergeVal(L[k], B[k], R[k]); if (v != null) o[k] = v; } return o; }
   // 이 PC에서 바뀐 설정을 폴더에 씀. 그 사이 다른 PC가 바꾼 게 있으면 먼저 합침 ('merged' 반환)
   async function pushSettings(force) {
     if (!(await folderReady())) return false;
@@ -229,7 +231,8 @@ NC.store = (function () {
   async function pullSettings() {
     if (!(await folderReady())) return false;
     const r = await readRemote(); if (!r) return false;
-    if (state.setMod && r.f.lastModified <= state.setMod + 500) return false;
+    /* 구글 로그인 저장은 「때」가 쓴 PC의 시계라 PC끼리 시계가 조금 달라도 받게: 같은 판이면 건너뜀, 다르면 합침 (11/25) */
+    if (state.setMod && (isDrive() ? r.f.lastModified === state.setMod : r.f.lastModified <= state.setMod + 500)) return false;
     const first = !state.setMod, L = localSettings(), B0 = first ? loadBase() : null;
     /* 처음(창을 연 뒤 첫 가져오기): 지난번 맞춘 값을 기억하고 있으면 그걸 기준으로 합침 → 이 PC에서 그사이 바꾼 값을 지키고 다른 PC 값도 받음. 기억이 없으면 예전처럼 폴더 값 */
     applyVals(first ? (B0 ? mergeAll(L, B0, r.vals) : Object.assign({}, L, r.vals)) : mergeAll(L, state.setBase, r.vals));

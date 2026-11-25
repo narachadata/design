@@ -34,7 +34,8 @@ NC.media = (function () {
   }
   async function addHandle(h, id) { if (id) fileC.delete('m:' + id); const f = await h.getFile(); const rec = { id: id || rid(), name: f.name, size: f.size, type: f.type, lastModified: f.lastModified, added: Date.now(), handle: h }; await tx('readwrite', s => s.put(rec)); urls.set(rec.id, URL.createObjectURL(f)); return meta(rec); }
   async function addFile(f, id) { if (id) fileC.delete('m:' + id); const rec = { id: id || rid(), name: f.name, size: f.size, type: f.type, lastModified: f.lastModified, added: Date.now(), blob: f }; await tx('readwrite', s => s.put(rec)); urls.set(rec.id, URL.createObjectURL(f)); return meta(rec); }
-  const meta = r => ({ id: r.id, name: r.name, size: r.size, type: r.type || '', lastModified: r.lastModified });
+  /* pc: 원본이 있는 PC 이름 — 다른 PC에서 그 영상 문서를 열면 「원본은 ○○에 있음」으로 알려 줌 (11/25 두 PC 따로 만들기 점검) */
+  const meta = r => ({ id: r.id, name: r.name, size: r.size, type: r.type || '', lastModified: r.lastModified, pc: (NC.store && NC.store.pcName && NC.store.pcName()) || '' });
   // 보관함: 이 PC에서 고른 원본 전부 (최근 것부터). kind = 'video' | 'audio'
   const kindOf = r => /^video\//.test(r.type || '') || /\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(r.name || '') ? 'video' : 'audio';
   async function list() { const all = await tx('readonly', s => s.getAll()); return (all || []).map(r => Object.assign(meta(r), { kind: kindOf(r), added: r.added || r.lastModified || 0, copy: !!r.blob })).sort((a, b) => b.added - a.added); }
