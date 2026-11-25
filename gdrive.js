@@ -30,6 +30,7 @@ NC.gdrive = (function () {
   const cGet = k => st().idbGet('gd-c:' + k).catch(() => null), cSet = (k, v) => st().idbSet('gd-c:' + k, v), cDel = k => st().idbDel('gd-c:' + k).catch(() => {});
   function saveTok() { try { localStorage.setItem('naracal-gd-tok', JSON.stringify({ t: S.token, e: S.exp })); } catch (e) {} }
   function loadTok() { try { const o = JSON.parse(localStorage.getItem('naracal-gd-tok') || 'null'); if (o && o.t && o.e > now()) { S.token = o.t; S.exp = o.e; } } catch (e) {} }
+  loadTok();  /* 로그인 단추를 누른 순간 바로 판단하도록 미리 */
   let loaded = null;
   function load() { if (loaded) return loaded; loaded = (async () => { loadTok(); const m = await st().idbGet('gd-meta').catch(() => null); if (m && m.rootK) { S.rootId = m.rootId || ''; S.rootK = m.rootK; S.email = m.email || ''; S.listedAt = 0; (m.nodes || []).forEach(n => S.nodes.set(n.k, n)); } const q = await st().idbGet('gd-q').catch(() => null); if (Array.isArray(q)) S.queue = q; })(); return loaded; }
 
@@ -41,11 +42,13 @@ NC.gdrive = (function () {
   function login() {
     if (S.fake) { S.token = 'fake'; S.exp = now() + 3600e3; S.need = false; emit(); return Promise.resolve(true); }
     if (logging) return logging;
-    logging = loadGIS().then(() => new Promise((res, rej) => {
+    const open = () => new Promise((res, rej) => {
       const tc = google.accounts.oauth2.initTokenClient({ client_id: CID, scope: SCOPE, hint: hint(), callback: r => { if (r && r.access_token) { S.token = r.access_token; S.exp = now() + ((Number(r.expires_in) || 3600) - 60) * 1000; saveTok(); S.need = false; S.err = ''; S.autoTries = 0; emit(); res(true); kick(); } else rej(new Error('구글 로그인이 취소되었습니다')); },
         error_callback: e => rej(new Error(e && e.type === 'popup_closed' ? '로그인 창이 닫혔습니다' : e && e.type === 'popup_failed_to_open' ? '로그인 창이 막혔습니다 — 주소창 오른쪽의 팝업 차단을 풀어 주세요' : '구글 로그인이 되지 않았습니다')) });
       tc.requestAccessToken();
-    })).finally(() => { logging = null; });
+    });
+    const ready = window.google && google.accounts && google.accounts.oauth2;
+    logging = (ready ? open() : loadGIS().then(open)).finally(() => { logging = null; });
     return logging;
   }
   /* 한 시간쯤 지나 로그인이 끝나면: 다음에 화면을 누를 때 로그인 창을 잠깐 띄워 이어 감(브라우저는 누를 때만 창을 허락). 두 번 안 되면 단추로 */
@@ -279,5 +282,7 @@ NC.gdrive = (function () {
     return { files: F, calls: () => calls, other: (id, text) => { const f = F.get(id); f.data = text; f.appProperties = Object.assign({}, f.appProperties, { lm: String(Date.now() + 99999) }); touch(f); } };
   }
 
-  return { connect, login, revive, reviveAsync, disconnect, status, onChange, flush, fresh: () => fresh(true), run: () => run(), load, ROOT_NAME, tokOK, _fake: fake, _S: S };
+  /* 로그인 창은 누른 순간에 열어야 크롬이 막지 않음 → 저장 설정·안내 창을 열 때 미리 불러 둠 */
+  function preload() { if (S.fake) return; loadGIS().catch(() => {}); }
+  return { connect, login, preload, revive, reviveAsync, disconnect, status, onChange, flush, fresh: () => fresh(true), run: () => run(), load, ROOT_NAME, tokOK, _fake: fake, _S: S };
 })();

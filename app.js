@@ -4138,6 +4138,7 @@ $('#btnHoliday').onclick = () => openHoliday();
 $$('dialog [data-close]').forEach(b => b.onclick = () => b.closest('dialog').close());
 
 async function openSaveDialog() {
+  try { NC.gdrive.preload(); } catch (e) {}
   let d = $('#dlgSave'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgSave'; d.innerHTML = `<div class="dhead"><h2>💾 저장 설정 <small>지금 상태 · 처음 설정 · 바꾸기</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="saveBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
   await renderSaveDialog();
   if (!d.open) d.showModal();
@@ -4169,6 +4170,7 @@ function acctBind(root, ctx, after) {
   });
 }
 function openAcctGuide(first) {
+  try { NC.gdrive.preload(); } catch (e) {}
   try { localStorage.setItem('naracal-acct-guide', String(Date.now())); } catch (e) {}
   let d = $('#dlgAcct'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgAcct'; d.className = 'acctdlg'; document.body.appendChild(d); }
   const mac = /Mac/i.test(navigator.platform || navigator.userAgent);
@@ -4217,11 +4219,12 @@ async function gdMigrate(src, dst, say) {
   await walk(src, dst, 0); return { n, big };
 }
 async function connectDriveChecked() {
+  try { if (!NC.gdrive.tokOK()) await NC.gdrive.login(); } catch (e) { setStatus(''); throw e; }  /* 로그인 창은 누른 순간 맨 먼저 (늦으면 크롬이 팝업으로 막음) */
   const st = store.state, old = (st.dir && !st.dir.__gd && await store.folderReady()) ? st.dir : null;
   let curPath = null, oc = null; try { if (old && st.handle) curPath = await old.resolve(st.handle); } catch (e) {} try { if (old) oc = await store.folderInfo(); } catch (e) {}
   if (st.dirty && st.handle) { try { clearTimeout(fileTimer); await saveFileNow(); } catch (e) {} }
-  setStatus('구글에 로그인하는 중…');
-  await store.connectDrive();
+  setStatus('구글 드라이브에 연결하는 중…');
+  try { await store.connectDrive(); } catch (e) { setStatus(''); throw e; }
   const gs = NC.gdrive.status(), ac = acctGet();
   if (gs.email && ac && ac.email.toLowerCase() !== gs.email.toLowerCase()) {
     if (!(await confirmBtns(`로그인한 계정 「${gs.email}」이 우리 공방 계정 「${ac.email}」과 다릅니다.\n다른 계정이면 자료가 따로 쌓입니다.\n\n확인: 이 계정으로 계속 (공방 계정을 이것으로 바꿈)\n취소: 연결하지 않기 (구글 로그인 창에서 「${ac.email}」을 고르세요)`))) { await store.disconnectFolder(); if (old) await store.useFolder(old); updateSaveBadge(); setStatus('연결하지 않았습니다'); return false; }
@@ -8547,6 +8550,7 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
       $('#reconnDir').onclick = async () => { try { if (await store.requestFolderPermission()) { await afterFolderReady({ loadCurrent: true }); updateSaveBadge(); toast('동기화 폴더에 연결했습니다'); } } catch (e) { toast(e.message, true); } };
     }
   } catch (e) { console.warn(e); }
+  try { if (store.isDrive()) NC.gdrive.preload(); } catch (e) {}
   updateSaveBadge(); updateToolbarState();
   NC.live.attach({ canSave: () => !!(store.state.handle && !store.state.needPerm), doc: () => doc, state: () => ({ cur, sel, drag: !!drag, dragKind: drag && drag.kind, editing: !!editing || !!$('#cellEd') }), afterRemote: liveAfterRemote, saveSoon: () => { if (store.state.dirty) markDirty(); }, openSettings: openSaveDialog, toast });
   document.fonts && document.fonts.ready.then(() => renderAll());
