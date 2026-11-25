@@ -75,7 +75,8 @@ NC.store = (function () {
     try {
       const f0 = await state.handle.getFile();
       if (state.lastMod && f0.lastModified !== state.lastMod) { /* 시계가 어긋난 PC·늦게 도착한 판도 알아채도록 '달라졌으면' 내용 확인 */
-        let j = null; try { j = JSON.parse(await f0.text()); } catch (e) {}
+        let j = null, rerr = null; try { j = JSON.parse(await f0.text()); } catch (e) { if (e && e.name !== 'SyntaxError') rerr = e; }
+        if (!j && rerr) return { retry: true };  /* 잠깐 못 읽음(다른 PC 사진을 아직 못 받음·인터넷·로그인) — 덮지 않고 다시, 충돌 사본은 만들지 않음 (11/25 점검) */
         if (!j) { /* 동기화 중이라 덜 받은 파일일 수 있음: 덮어쓰지 않고 잠시 뒤 다시. 4번째에 이 PC 작업을 충돌 사본으로 한 번 보관(예전엔 4번째에 덮어씀) */
           if (++state.retries === 4) { try { await writeCopy(doc, pcName() + ' 저장 대기'); } catch (e) {} }
           return { retry: true, held: state.retries >= 4 }; }

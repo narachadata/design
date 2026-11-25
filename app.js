@@ -4239,8 +4239,8 @@ function gdChip() { clearTimeout(gdChipT); gdChipT = setTimeout(() => { const b 
   { const on = store.isDrive && store.isDrive(); let sb = $('#btnSync'); const sp = b.closest('.split') || b;
     if (!on) { if (sb) sb.remove(); } else { if (!sb) { sb = document.createElement('button'); sb.className = 'btn'; sb.id = 'btnSync'; sb.onclick = gdSyncNow; sp.after(sb); }
       const g = NC.gdrive.status(); const st2 = g.need ? ['🔑', '동기화', '구글 로그인이 끝났습니다 — 눌러서 로그인하고 동기화'] : g.failed ? ['⚠️', '동기화', `올리지 못한 것 ${g.failed}개 — 눌러서 다시 올리기·받기`] : g.pendDocs ? ['⏫', '동기화 ' + g.pendDocs, `문서·설정 ${g.pendDocs}개를 구글 드라이브에 올리는 중${g.pendOther ? ` (자료실 그림 등 ${g.pendOther}개는 그다음 뒤에서)` : ''} — 눌러서 바로 올리기·받기`] : ['☁', '동기화', `문서는 모두 올림${g.pendOther ? ` · 자료실 그림·내보낸 파일 등 ${g.pendOther}개는 뒤에서 올리는 중` : ''} — 눌러서 다른 PC에서 고친 것 받기·다시 맞추기`];
-      sb.innerHTML = `<span class="sic">${st2[0]}</span><span>${st2[1]}</span>`; sb.title = st2[2]; sb.classList.toggle('warn', !!(g.need || g.failed)); } } let c = b.querySelector('.gdchip'); const gs = store.isDrive && store.isDrive() ? NC.gdrive.status() : null;
-  if (!gs || (!gs.pendDocs && !gs.need)) { if (c) c.remove(); } else { if (!c) { c = document.createElement('i'); c.className = 'gdchip'; b.appendChild(c); } c.textContent = gs.need ? '🔑' : '⏫' + gs.pendDocs; c.title = gs.need ? '구글 로그인이 필요합니다 (고친 것은 이 PC에 저장돼 있음) — 저장 ▾ → 저장 설정' : `구글 드라이브에 올리는 중 — ${gs.pending}개 남음`; c.classList.toggle('need', !!gs.need); }
+      const badge = g.need ? '<b class="sbadge warn">!</b>' : g.failed ? '<b class="sbadge warn">!</b>' : g.pendDocs ? `<b class="sbadge">${g.pendDocs > 99 ? '99+' : g.pendDocs}</b>` : '';  /* 11/25 위 막대 정리: 글자 없이 구름 그림 — 올릴 문서 수·문제(!)만 배지 */
+      sb.className = 'btn icon'; sb.innerHTML = `<svg class="ic sic" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.9-3.5M4 4v3.5h3.5M4 13a8 8 0 0 0 14.9 3.5M20 20v-3.5h-3.5"/></svg>${badge}`; sb.title = '동기화 — ' + st2[2]; sb.setAttribute('aria-label', '동기화'); sb.classList.toggle('warn', !!(g.need || g.failed)); } } { const c = b.querySelector('.gdchip'); if (c) c.remove(); } const gs = store.isDrive && store.isDrive() ? NC.gdrive.status() : null;
   const s = $('#status'); if (gs && gs.need && s && !s.querySelector('#gdRe')) { s.innerHTML = `<button class="btn sm primary" id="gdRe">🔑 구글 다시 로그인${gs.pending ? ` — 올릴 것 ${gs.pending}개 (이 PC에는 저장됨)` : ' — 다른 PC에서 고친 것 받기'}</button>`; $('#gdRe').onclick = async () => { try { await NC.gdrive.login(); NC.gdrive.run(); setStatus('구글 드라이브에 다시 연결했습니다'); } catch (e) { toast(e.message, true); } }; }
   else if (gs && !gs.need && s && s.querySelector('#gdRe')) setStatus('구글 드라이브에 다시 연결했습니다'); }, 200); }
 if (window.NC && NC.gdrive) NC.gdrive.onChange(gdChip);
@@ -4256,7 +4256,7 @@ async function cleanConflictCopies() {
     const base = c.name.replace(/ \(충돌 사본 [^)]*\)( \d+)?(\.design\.json)$/i, '$2'), main = mains.get(c.path.join('/') + '/' + base);
     if (!main || (store.state.handle && await store.state.handle.isSameEntry(c.handle).catch(() => false))) { kept++; continue; }
     let cj, mj; try { cj = JSON.parse(await (await c.handle.getFile()).text()); mj = JSON.parse(await (await main.handle.getFile()).text()); } catch (e) { kept++; continue; }
-    const sid = cj.saveId || cj.copyOf || '', same = (sid && (sid === mj.saveId || (mj.lineage || []).includes(sid))) || strip(cj) === strip(mj);
+    const sid = cj.saveId || '', same = (sid && (sid === mj.saveId || (mj.lineage || []).includes(sid))) || strip(cj) === strip(mj);  /* 드라이브 사본은 그 판의 저장 번호 그대로 → 본 문서 지난 판에 있으면 이미 들어 있음. 공방 사본(copyOf)은 바탕 판일 뿐이라 내용이 같을 때만 */
     if (!same) { kept++; continue; }
     try { await store.toTrash(c.handle, c.path); moved++; } catch (e) { kept++; }
   }
@@ -4370,7 +4370,7 @@ async function renderSaveDialog() {
     gdpush: async () => { const n = await NC.gdrive.pushAll(); toast(n ? `⏫ ${n}개를 다시 올립니다 — 저장 단추 옆 숫자가 사라질 때까지 공방을 켜 두세요` : '다시 올릴 것이 없습니다 — 이 PC 것은 모두 드라이브에 있습니다'); setTimeout(() => act.gddiag().catch(() => {}), 2500); },
     gdremig: async () => { if (!window.showDirectoryPicker) { toast('이 브라우저는 폴더 고르기를 못 합니다 (Chrome·Edge)', true); return; } let src = await window.showDirectoryPicker({ id: 'naracha-sync', mode: 'read' }); { let has = false, child = null; for await (const [nm, h] of src.entries()) { if (h.kind === 'file' && (/\.design\.json$/i.test(nm) || nm === '설정.naracha.json')) has = true; if (h.kind === 'directory' && nm === '나라차디자인공방') child = h; } if (!has && child) src = child; else if (!has && !(await confirmBtns(`고른 「${src.name}」 폴더에는 공방 문서가 바로 보이지 않습니다.\n예전 폴더는 보통 「내 드라이브 › 나라차디자인공방」입니다.\n\n확인: 그래도 이 폴더에서 옮기기\n취소: 그만두기`))) return; } setStatus('예전 폴더에서 옮기는 중…'); const r = await gdMigrate(src, st.dir, k => setStatus(`옮기는 중… ${k}개`)); const n = await NC.gdrive.pushAll(); setStatus(''); toast(`✅ 예전 폴더에서 ${r.n}개를 새로 옮겼습니다${r.big ? ` · 아주 큰 영상·음악 ${r.big}개는 빼고` : ''} — ${n}개를 드라이브에 올립니다`); setTimeout(() => act.gddiag().catch(() => {}), 2500); },
     gdrefresh: async () => { await NC.gdrive.fresh(); NC.gdrive.run(); const n = (await store.walkDocs()).length; await renderSaveDialog(); toast(`구글 드라이브를 다시 읽었습니다 — 문서 ${n}개 (저장 ▾ → 내 드라이브에서 엽니다)`); if (!(st.handle && await store.inFolder(st.handle)) && n) { d.close(); await afterFolderReady(); } },
-    gdswitch: async () => { const gq = NC.gdrive.status(); if ((gq.pending || gq.local) && !window.confirm(`이 PC에는 아직 드라이브에 올리지 못한 것이 ${gq.pending}개${gq.local ? `, 이 PC에만 둔 아주 큰 파일이 ${gq.local}개` : ''} 있습니다.\n다른 계정으로 바꾸면 이것들은 지금 계정 드라이브에 올라가지 않습니다.\n\n먼저 「☁ 동기화」로 다 올린 뒤 바꾸기를 권합니다. 그래도 바꿀까요?`)) return; NC.gdrive.forget(); const ok = await connectDriveChecked(); renderSaveDialog(); if (ok) toast('다른 계정으로 다시 연결했습니다'); },
+    gdswitch: async () => { const gq = NC.gdrive.status(); if ((gq.pending || gq.local) && !window.confirm(`이 PC에는 아직 드라이브에 올리지 못한 것이 ${gq.pending}개${gq.local ? `, 이 PC에만 둔 아주 큰 파일이 ${gq.local}개` : ''} 있습니다.\n다른 계정으로 바꾸면 이것들은 지금 계정 드라이브에 올라가지 않습니다.\n\n먼저 저장 옆 동기화 단추(돌아가는 화살표)로 다 올린 뒤 바꾸기를 권합니다. 그래도 바꿀까요?`)) return; NC.gdrive.forget(); const ok = await connectDriveChecked(); renderSaveDialog(); if (ok) toast('다른 계정으로 다시 연결했습니다'); },
     gdopen: async () => { window.open('https://drive.google.com/drive/search?q=' + encodeURIComponent(NC.gdrive.ROOT_NAME), '_blank'); },
     acct: async () => { openAcctGuide(); },
     redir: async () => { if (await store.requestFolderPermission()) { await afterFolderReady({ loadCurrent: true }); updateSaveBadge(); renderSaveDialog(); } },
@@ -4481,6 +4481,21 @@ async function restorePrevDoc(pick) {
   if (!j || !j.pages) { toast('되살릴 직전 문서가 없습니다', true); return; }
   if (!(await keepCurrentDoc())) return; await store.disconnect(); delete j._keptAt; delete j._tab; await loadDoc(j, `직전 문서 "${j.name || '디자인'}"를 되살렸습니다 (방금 보던 문서는 다시 '직전 문서'로 보관)`); updateSaveBadge();
 }
+/* 문서 닫기 (11/25 팀장님 「현재 열고 편집하는 파일을 닫기하는 메뉴」): 고친 것은 파일에 저장(파일이 없으면 「직전 문서」로 보관) → 파일 연결을 끊고 빈 문서 → 홈(내 드라이브) */
+async function closeDoc() {
+  if (editing) endEdit(); if (tlOn && tlOn()) { try { tlShow(false); } catch (e) {} }
+  const st = store.state, name = doc.name || '디자인', hadFile = !!st.handle, has = doc.pages.some(p => p.els.length);
+  if (!hadFile && has && !(await confirmBtns(`「${name}」은(는) 아직 파일로 저장하지 않았습니다.\n\n확인: 저장할 곳을 골라 저장한 뒤 닫기\n취소: 저장하지 않고 닫기 — 이 브라우저 「직전 문서」에 보관 (저장 ▾ → 직전 문서 되살리기)`))) { /* 직전 문서로 보관하고 닫음 */ }
+  else if (!hadFile && has) { await saveNow(); if (!store.state.handle) { toast('저장하지 않아 닫지 않았습니다 — 다시 닫기를 누르세요', true); return; } }
+  setStatus('문서를 닫는 중…');
+  if (!(await keepCurrentDoc())) { setStatus(''); return; }
+  const saved = !!store.state.handle && !store.state.dirty;
+  await store.disconnect(); clearTimeout(fileTimer);
+  doc = newDoc(); doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); store.state.dirty = false;
+  renderAll(); updateSaveBadge(); sideTab = 'tpl'; renderRail(); renderSide(); fitCanvas && fitCanvas();
+  setStatus(''); toast(saved || hadFile ? `「${name}」을(를) 저장하고 닫았습니다 — 다시 열려면 내 드라이브에서` : has ? `「${name}」을(를) 닫았습니다 — 저장 ▾ → 「직전 문서 되살리기」로 다시 열 수 있습니다` : `「${name}」을(를) 닫았습니다`);
+  openDrive(null, 'home');
+}
 async function createDesign(w, h, name, fmtId) {
   if (fmtId) { const r = recentFormats().filter(x => x !== fmtId); r.unshift(fmtId); try { localStorage.setItem('naracal-recent-formats', JSON.stringify(r.slice(0, 6))); } catch (e) {} }
   await keepCurrentDoc();
@@ -4521,7 +4536,8 @@ async function renderDrive() {
     .map(([k, t, ic]) => `<button data-dvnav="${k}" class="${drv.view === k ? 'on' : ''}"><svg viewBox="0 0 24 24">${ic}</svg>${t}</button>`).join('') + `<div class="dvkinds"><small>종류별</small>${DOC_KINDS.map(([k, t, ic]) => `<button data-dvkind="${k}" class="${drv.view === 'kind' && drv.kind === k ? 'on' : ''}"><span class="dvk-ic">${DOC_KIND_SVG[k] ? `<svg viewBox="0 0 24 24">${DOC_KIND_SVG[k]}</svg>` : ic}</span>${esc(t)}</button>`).join('')}</div>` + `<hr><button data-dvnav="sync"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5l2-2v6h-6l2.3-2.3A5.5 5.5 0 0 0 6.5 12M20 12a8 8 0 0 1-14 5l-2 2v-6h6l-2.3 2.3A5.5 5.5 0 0 0 17.5 12"/></svg>저장·동기화 설정</button>`;
   const main = $('#dvMain');
   const homeTop = () => { const HK = ['print', 'sns', 'pres', 'video', 'sign', 'cal', 'news', 'doc'].map(k => ND_GROUPS.find(g => g[0] === k)).filter(Boolean);
-    return `<div class="dvhome"><div class="dvh-back"><div><small>지금 작업 중</small><b>${esc(doc.name || '이름 없는 디자인')}</b><small>${doc.pages.length}쪽 · ${esc(fmtLabel(FORMATS.find(x => x[0] === doc.fmt) || ['', '', '', doc.w, doc.h, isPxDoc() ? 'px' : 'mm']))}</small></div><button class="btn primary" data-dvhome="back">작업으로 돌아가기</button></div>
+    const blankNow = !store.state.handle && !doc.pages.some(p => p.els.length);  /* 문서를 닫은 뒤(빈 새 디자인)에는 「지금 작업 중」 칸을 감춤 (11/25) */
+    return `<div class="dvhome">${blankNow ? '' : `<div class="dvh-back"><div><small>지금 작업 중</small><b>${esc(doc.name || '이름 없는 디자인')}</b><small>${doc.pages.length}쪽 · ${esc(fmtLabel(FORMATS.find(x => x[0] === doc.fmt) || ['', '', '', doc.w, doc.h, isPxDoc() ? 'px' : 'mm']))}</small></div><button class="btn primary" data-dvhome="back">작업으로 돌아가기</button></div>`}
       <h3>무엇을 만들어 볼까요?</h3><div class="dvh-kinds">${HK.map(([k, t, ic]) => `<button data-dvhome="new:${k}"><span class="dvh-ic"><svg viewBox="0 0 24 24">${ic}</svg></span><span>${t}</span></button>`).join('')}<button data-dvhome="new:rec"><span class="dvh-ic"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span>모든 크기 보기</span></button></div>
       <div class="dvh-tools"><button class="btn" data-dvhome="tpl"><svg class="ic"><use href="#i-tpl"/></svg>템플릿에서 고르기</button><button class="btn" data-dvhome="import"><svg class="ic"><use href="#i-upload"/></svg>다른 프로그램 파일 가져오기</button><button class="btn" data-dvnav="drive"><svg class="ic"><use href="#i-folder"/></svg>내 드라이브 열기</button></div></div>`; };
   if (drv.view === 'local') { const L = await prevDocList(); const tm = x => x._keptAt ? new Date(x._keptAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
@@ -4773,7 +4789,8 @@ function openFileMenu() {
   <button data-fm="bulk"><svg class="ic"><use href="#i-dup"/></svg>대량 만들기… (상장·명찰을 명단으로)</button>
   <button data-fm="versions"><svg class="ic"><use href="#i-pages"/></svg>버전 기록… (예전 상태로 되돌리기)</button>
   <button data-fm="resize"><svg class="ic"><use href="#i-pages"/></svg>크기 조정… (다른 크기로 사본)</button>
-  <button data-fm="rename"><svg class="ic"><use href="#i-text"/></svg>이름 바꾸기</button><hr>
+  <button data-fm="rename"><svg class="ic"><use href="#i-text"/></svg>이름 바꾸기</button>
+  <button data-fm="close"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>문서 닫기 (저장하고 홈으로)</button><hr>
   <button data-fm="new"><svg class="ic"><use href="#i-new"/></svg>새 디자인…</button>
   <button data-fm="open"><svg class="ic"><use href="#i-folder"/></svg>내 드라이브 (열기)…<kbd>Ctrl+O</kbd></button>
   <button data-fm="import"><svg class="ic"><use href="#i-upload"/></svg>다른 프로그램 파일 가져오기… (포토샵·인디자인·일러스트·PDF)</button>
@@ -4781,7 +4798,7 @@ function openFileMenu() {
   <button data-fm="down"><svg class="ic"><use href="#i-upload"/></svg>파일로 내려받기 (JSON)</button><hr>
   <button data-fm="sync"><svg class="ic"><use href="#i-folder"/></svg>저장 · 동기화 설정…</button>`;
   document.body.appendChild(m); m.style.left = Math.max(8, Math.min(b.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px'; m.style.top = (b.bottom + 6) + 'px';
-  m.onclick = e => { const x = e.target.closest('[data-fm]'); if (!x) return; m.remove(); ({ import: () => openImport(), prev: restorePrevDoc, save: saveNow, saveas: saveAs, dup: duplicateDoc, resize: openResize, versions: openVersions, bulk: openBulk, rename: () => { const p = $('#pname'); p.focus(); p.select(); toast('위쪽 문서 이름 칸에서 바로 고쳐 쓰세요 (Enter)'); }, new: openNewDesign, open: () => $('#btnOpen').click(), down: () => { gcAssets(); store.download(doc); }, sync: openSaveDialog })[x.dataset.fm](); };
+  m.onclick = e => { const x = e.target.closest('[data-fm]'); if (!x) return; m.remove(); ({ import: () => openImport(), prev: restorePrevDoc, save: saveNow, saveas: saveAs, dup: duplicateDoc, resize: openResize, versions: openVersions, bulk: openBulk, rename: () => { const p = $('#pname'); p.focus(); p.select(); toast('위쪽 문서 이름 칸에서 바로 고쳐 쓰세요 (Enter)'); }, new: openNewDesign, close: closeDoc, open: () => $('#btnOpen').click(), down: () => { gcAssets(); store.download(doc); }, sync: openSaveDialog })[x.dataset.fm](); };
   setTimeout(() => document.addEventListener('pointerdown', function off(ev) { if (!m.contains(ev.target) && ev.target.closest('#btnFileMenu') == null) { m.remove(); } document.removeEventListener('pointerdown', off); }), 0);
   document.addEventListener('keydown', function escFm(ev) { if (!document.body.contains(m)) { document.removeEventListener('keydown', escFm, true); return; } if (ev.key === 'Escape') { ev.preventDefault(); m.remove(); document.removeEventListener('keydown', escFm, true); $('#btnFileMenu').focus(); } }, true);
 }

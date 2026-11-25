@@ -325,7 +325,11 @@ NC.live = (function () {
     const ps = room ? Array.from(room.peers.values()) : [];
     const show = ps.length || (cfg().fb && cfg().on);
     const mini = !ps.length && s.cls !== 'err';  /* 11/19 팀장님: 혼자 쓸 때는 눈에 띄지 않게 작은 점만 (다른 PC가 들어오거나 오류일 때만 글자로) */
-    b.innerHTML = show ? (mini ? `<span class="lv mini ${s.cls}" title="${esc(s.t + (s.tip ? ' · ' + s.tip : '') + ' — 다른 PC가 같은 문서를 열면 함께 편집됩니다 (누르면 실시간 설정)')}"><i></i></span>` : `<span class="lv ${s.cls}" title="${esc(s.tip || s.t)}"><i></i>${esc(s.t)}${ps.length ? ` · 함께 ${ps.length}` : ''}</span>`) + ps.map(p => `<span class="lv" style="--c:${p.color}" title="${esc(p.email || '')}"><i></i>${esc(p.pc)}${pageNo(p.cur)}${p.id === oldest() && p.id !== me.id ? ' (저장 담당)' : ''}</span>`).join('') : '';
+    /* 11/25 위 막대 정리: 실시간 표시를 한 칸으로 — 초록 점 · 함께 N · 상대 PC 첫 글자 동그라미, 자세한 것(어느 PC·몇 쪽·저장 담당)은 마우스를 올리면 */
+    const who = ps.map(p => `${p.pc || '다른 PC'}${pageNo(p.cur)}${p.id === oldest() && p.id !== me.id ? ' (저장 담당)' : ''}`).join('\n');
+    b.innerHTML = show ? (mini ? `<span class="lv mini ${s.cls}" title="${esc(s.t + (s.tip ? ' · ' + s.tip : '') + ' — 다른 PC가 같은 문서를 열면 함께 편집됩니다 (누르면 실시간 설정)')}"><i></i></span>`
+      : ps.length ? `<span class="lv ${s.cls}" title="${esc(s.t + (s.tip ? ' · ' + s.tip : '') + '\n함께 편집 중:\n' + who + '\n(누르면 실시간 설정)')}"><i></i>함께<span class="lvps">${ps.slice(0, 4).map(p => `<b class="lvp" style="--c:${p.color}">${esc(String(p.pc || '?').trim().slice(0, 1))}</b>`).join('')}${ps.length > 4 ? `<b class="lvp more">+${ps.length - 4}</b>` : ''}</span></span>`
+      : `<span class="lv ${s.cls}" title="${esc(s.tip || s.t)}"><i></i>${esc(s.t)}</span>`) : '';
   }
   listeners.add(renderBar);
   function pageNo(pid) { const d = api && api.doc(); if (!d || !pid) return ''; const i = d.pages.findIndex(p => p.id === pid); return i >= 0 ? ` · ${i + 1}쪽` : ''; }

@@ -2172,3 +2172,14 @@ dialog.asktext{width:min(480px,92vw)}
 .gddiag table{border-collapse:collapse;margin:8px 0;font-size:13px}.gddiag th{text-align:left;font-weight:600;color:var(--ui-muted);padding:3px 12px 3px 0;white-space:nowrap}.gddiag td{padding:3px 0}.gddiag .gdwarn{background:#fff7e6;border:1px solid #f2d59a;border-radius:8px;padding:8px 10px;font-size:12.5px;line-height:1.6}
 #btnSync{margin-left:6px;gap:5px}#btnSync .sic{font-size:13px;line-height:1}#btnSync.warn{border-color:#e0a100;background:#fff7e6}#btnSync.busy{opacity:.6;pointer-events:none}#btnSync.busy .sic{animation:gdspin 1s linear infinite;display:inline-block}@keyframes gdspin{to{transform:rotate(360deg)}}
 .topbar #btnSync,#btnSync{width:auto!important;min-width:0;display:inline-flex!important;align-items:center;padding:0 10px!important;white-space:nowrap;font-size:12.5px!important;gap:5px!important;font-weight:600;color:#2f5bea;border-color:#c9d6fb}#btnSync>span{display:inline!important}
+
+/* 위 막대 정리 (11/25 팀장님 「깔끔한 버튼, 중요하지 않은 건 작게」): 새 디자인·열기·더보기·출력·동기화는 그림 단추, 저장·다운로드만 글자 */
+.topbar #btnNew.btn.icon{background:var(--ui-accent-soft);color:var(--ui-accent);border-color:transparent}
+.topbar #btnSync,#btnSync{width:34px!important;height:34px;padding:0!important;justify-content:center;position:relative;margin-left:4px;color:var(--ui-fg,#344054);border-color:var(--ui-line);font-weight:400}
+#btnSync .sic{font-size:inherit;animation:none}#btnSync.busy .sic{animation:gdpulse 1s ease-in-out infinite}@keyframes gdpulse{50%{opacity:.35}}
+#btnSync.warn{border-color:#e0a100;background:#fff7e6;color:#9a6700}
+#btnSync .sbadge{position:absolute;top:-5px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--ui-accent,#2f5bea);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;font-style:normal;pointer-events:none;box-shadow:0 0 0 2px var(--ui-bg,#fff)}
+#btnSync .sbadge.warn{background:#e0a100}
+.livebar .lv .lvps{display:inline-flex;margin-left:3px}
+.livebar .lvp{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--c,#2f9e6b);color:#fff;font-size:10.5px;font-weight:700;font-style:normal;border:2px solid var(--ui-bg,#fff);margin-left:-5px}
+.livebar .lvp:first-child{margin-left:0}.livebar .lvp.more{background:#98a2b3}
