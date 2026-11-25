@@ -172,18 +172,24 @@ NC.gdrive = (function () {
       Object.assign(n, { id: f.id, rparent: pid, rlm: lm }); if (n.k !== f.id && S.nodes.get(f.id) && S.nodes.get(f.id) !== n) S.nodes.delete(f.id);
     }
   }
+  /* 올릴 순서: 폴더 → 문서(.design.json)·설정 → 나머지(자료실 그림·내보낸 파일·버전 기록 등). 같은 무리 안에서는 들어온 순서 그대로 (11/25 — 308개 중 문서가 뒤에 밀렸음) */
+  const kindOf = o => { const n = node(o.k); if (o.op === 'mkdir') return 0; if (!n) return 3; if (/\.design\.json$|^설정\.naracha\.json$/i.test(n.name) && !inHist(n)) return 1; if (o.op === 'mv' || o.op === 'rm') return 1; return 2 + (inHist(n) ? 1 : 0); };
+  function inHist(n) { let p = n.parent, d = 0; while (p && p !== S.rootK && d++ < 50) { const x = node(p); if (!x) break; if (x.name === '.기록') return true; p = x.parent; } return false; }
+  function sortQ() { const run1 = S.queue.filter(o => o.run); const rest = S.queue.filter(o => !o.run).map((o, i) => [kindOf(o), i, o]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(x => x[2]); S.queue = run1.concat(rest); }
+  function queueKinds() { let docs = 0, other = 0; for (const o of S.queue) { const k = kindOf(o); if (k === 1) docs++; else other++; } return { docs, other }; }
   async function run() {
     if (S.busy) return; await load(); if (!S.queue.length) return;
     if (!tokOK()) { S.need = true; emit(); return; }
     S.busy = true; emit();
     /* 안 되는 것은 버리지 않고(예전엔 5번 뒤 버려서 ⏫가 사라져도 안 올라간 것이 있을 수 있었음) 오류를 남기고 점점 늦게 다시, 나머지는 계속 올림 */
     try {
-      let i = 0;
-      while (i < S.queue.length) {
-        const o = S.queue[i]; if (o.next && o.next > now()) { i++; continue; } o.run = 1;
-        try { await doOp(o); S.queue.splice(i, 1); S.done++; }
-        catch (e) { delete o.run; if (e.later) { i++; continue; } if (e.auth) break; if (e.net) { S.err = e.message; S.wait = now() + 30000; kick(30000); break; }
-          o.tries = (o.tries || 0) + 1; o.err = e.message; o.next = now() + Math.min(15000 * Math.pow(2, o.tries - 1), 600000); S.err = e.message; console.warn('드라이브에 올리지 못함 — 다시 해 봄', o, e); i++; }
+      const skip = new Set();  /* 이번 차례에 건너뛸 것(윗 폴더가 아직 안 올라감·잠시 뒤 다시) */
+      for (;;) {
+        sortQ();  /* 올리는 사이 새로 들어온 문서도 앞으로 */
+        const o = S.queue.find(x => !skip.has(x) && !(x.next && x.next > now())); if (!o) break; o.run = 1;
+        try { await doOp(o); const j = S.queue.indexOf(o); if (j >= 0) S.queue.splice(j, 1); S.done++; }
+        catch (e) { delete o.run; if (e.later) { skip.add(o); continue; } if (e.auth) break; if (e.net) { S.err = e.message; S.wait = now() + 30000; kick(30000); break; }
+          o.tries = (o.tries || 0) + 1; o.err = e.message; o.next = now() + Math.min(15000 * Math.pow(2, o.tries - 1), 600000); S.err = e.message; console.warn('드라이브에 올리지 못함 — 다시 해 봄', o, e); skip.add(o); }
         saveQ(); persist(true); emit();
       }
       if (!S.queue.some(o => o.tries)) S.err = '';
@@ -262,7 +268,7 @@ NC.gdrive = (function () {
     const all = [...S.nodes.values()].filter(n => n.k !== S.rootK && !n.gone), inAsset = n => { let p = n.parent; while (p && p !== S.rootK) { const x = node(p); if (!x) break; if (x.name === ASSET_DIR || x.name === '.기록') return true; p = x.parent; } return n.name === ASSET_DIR || n.name === '.기록'; };
     const vis = all.filter(n => !inAsset(n)), up = all.filter(n => n.id);
     return { email: S.email, rootId: S.rootId, created: S.found === false, docs: vis.filter(n => /\.design\.json$/i.test(n.name)).length, docsUp: vis.filter(n => /\.design\.json$/i.test(n.name) && n.id).length, folders: vis.filter(n => n.folder).length, files: all.length, onDrive: up.length,
-      pending: S.queue.length, localOnly: all.filter(n => n.local).length, failed: S.queue.filter(o => o.tries).length, errs: [...new Set(S.queue.filter(o => o.err).map(o => o.err))].slice(0, 3), err: S.err, listErr, listedAt: S.listedAt, need: !tokOK() && !S.fake };
+      pending: S.queue.length, pendDocs: queueKinds().docs, pendOther: queueKinds().other, localOnly: all.filter(n => n.local).length, failed: S.queue.filter(o => o.tries).length, errs: [...new Set(S.queue.filter(o => o.err).map(o => o.err))].slice(0, 3), err: S.err, listErr, listedAt: S.listedAt, need: !tokOK() && !S.fake };
   }
   /* 이 PC에 있는데 드라이브에 없거나 더 새로운 것을 모두 다시 올릴 줄에 넣음 (폴더 먼저, 얕은 것부터) */
   async function pushAll() {
