@@ -4216,7 +4216,24 @@ function gdDiagHTML(g) {
 }
 function gdBox() { return `<div class="gdbox"><b>✨ A. 구글 로그인으로 저장 <em>추천 · 앱 설치 없이</em></b><p>구글 계정${acctGet() ? ` <b class="acctmail-in">${esc(acctGet().email)}</b>` : ''}으로 로그인만 하면 됩니다. 저장은 <b>이 PC에 바로</b> 되고, 구글 드라이브의 「${esc(NC.gdrive.ROOT_NAME)}」 폴더에는 <b>뒤에서 올라갑니다</b> — 작업이 멈추지 않고, 인터넷이 끊겨도 다시 연결되면 이어서 올립니다. 다른 PC도 같은 계정으로 로그인하면 같은 문서·설정이 보입니다.</p><button class="btn primary" data-sv="gd">🔑 구글 로그인으로 시작</button><small>로그인 창에서 「Google에서 확인하지 않은 앱」이 나오면 메인 프로그램과 같은 우리 도장 설정이니 「계속」(또는 「고급 → 이동」)을 누르면 됩니다. 영상·음악 원본처럼 아주 큰 파일(40MB 넘게)은 그 PC에만 둡니다.</small></div>`; }
 let gdChipT = 0;
-function gdChip() { clearTimeout(gdChipT); gdChipT = setTimeout(() => { const b = $('#btnSave'); if (!b) return; let c = b.querySelector('.gdchip'); const gs = store.isDrive && store.isDrive() ? NC.gdrive.status() : null;
+/* ☁ 동기화 단추 (팀장님 11/25 「자동 올리기가 안 되는 경우 올리기·동기화 버튼」) — 구글 로그인으로 쓸 때만 저장 단추 옆에.
+   누르면: 로그인이 끝났으면 로그인 → 이 PC에서 안 올라간 것 모두 올리기(pushAll) → 드라이브 다시 읽기(다른 PC 것 받기) */
+async function gdSyncNow() {
+  try {
+    if (!NC.gdrive.tokOK()) await NC.gdrive.login();  /* 누른 순간 먼저 (팝업 막힘 방지) */
+    const b = $('#btnSync'); if (b) b.classList.add('busy');
+    const n = await NC.gdrive.pushAll(); await NC.gdrive.fresh(); NC.gdrive.run();
+    const docs = (await store.walkDocs()).length; const g = NC.gdrive.status();
+    if (store.state.handle && store.state.dir) { try { NC.gdrive._S.listedAt = 0; await checkExternalChange(); } catch (e) {} }  /* 지금 연 문서를 다른 PC가 고쳤으면 바로 알림 */
+    toast(`☁ 동기화: ${n ? `이 PC 것 ${n}개 올리는 중 · ` : '올릴 것 없음 · '}드라이브 문서 ${docs}개 확인${g.failed ? ` · ⚠️ 올리지 못한 것 ${g.failed}개 (저장 설정 → 🔍 점검)` : ''}`);
+  } catch (e) { toast(e.message, true); }
+  finally { const b = $('#btnSync'); if (b) b.classList.remove('busy'); gdChip(); }
+}
+function gdChip() { clearTimeout(gdChipT); gdChipT = setTimeout(() => { const b = $('#btnSave'); if (!b) return;
+  { const on = store.isDrive && store.isDrive(); let sb = $('#btnSync'); const sp = b.closest('.split') || b;
+    if (!on) { if (sb) sb.remove(); } else { if (!sb) { sb = document.createElement('button'); sb.className = 'btn'; sb.id = 'btnSync'; sb.onclick = gdSyncNow; sp.after(sb); }
+      const g = NC.gdrive.status(); const st2 = g.need ? ['🔑', '동기화', '구글 로그인이 끝났습니다 — 눌러서 로그인하고 동기화'] : g.failed ? ['⚠️', '동기화', `올리지 못한 것 ${g.failed}개 — 눌러서 다시 올리기·받기`] : g.pending ? ['⏫', '동기화 ' + g.pending, `구글 드라이브에 올리는 중 (${g.pending}개 남음) — 눌러서 바로 올리기·받기`] : ['☁', '동기화', '모두 올림 — 눌러서 다른 PC에서 고친 것 받기·다시 맞추기'];
+      sb.innerHTML = `<span class="sic">${st2[0]}</span><span>${st2[1]}</span>`; sb.title = st2[2]; sb.classList.toggle('warn', !!(g.need || g.failed)); } } let c = b.querySelector('.gdchip'); const gs = store.isDrive && store.isDrive() ? NC.gdrive.status() : null;
   if (!gs || (!gs.pending && !gs.need)) { if (c) c.remove(); } else { if (!c) { c = document.createElement('i'); c.className = 'gdchip'; b.appendChild(c); } c.textContent = gs.need ? '🔑' : '⏫' + gs.pending; c.title = gs.need ? '구글 로그인이 필요합니다 (고친 것은 이 PC에 저장돼 있음) — 저장 ▾ → 저장 설정' : `구글 드라이브에 올리는 중 — ${gs.pending}개 남음`; c.classList.toggle('need', !!gs.need); }
   const s = $('#status'); if (gs && gs.need && s && !s.querySelector('#gdRe')) { s.innerHTML = `<button class="btn sm primary" id="gdRe">🔑 구글 다시 로그인${gs.pending ? ` — 올릴 것 ${gs.pending}개 (이 PC에는 저장됨)` : ' — 다른 PC에서 고친 것 받기'}</button>`; $('#gdRe').onclick = async () => { try { await NC.gdrive.login(); NC.gdrive.run(); setStatus('구글 드라이브에 다시 연결했습니다'); } catch (e) { toast(e.message, true); } }; }
   else if (gs && !gs.need && s && s.querySelector('#gdRe')) setStatus('구글 드라이브에 다시 연결했습니다'); }, 200); }
