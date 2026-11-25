@@ -267,12 +267,13 @@ async function afterFolderReady(opts) {
   gcAssets();
   if (docs.length) {
     const nm = docs[0].name.replace(/\.design\.json$/i, '');
-    if (!freshDraft) {
+    if (!freshDraft && doc.pages.some(p => p.els.length)) {  /* 빈 문서는 폴더에 따로 저장하지 않음 (11/25 — 빈 「새 디자인」 파일이 쌓였음) */
       if (!window.confirm(`동기화 폴더에 문서가 ${docs.length}개 있습니다.\n\n확인: 가장 최근 문서 "${nm}"를 엽니다 (지금 화면의 문서도 폴더에 따로 저장해 둡니다)\n취소: 지금 문서를 계속 쓰고 폴더에 저장합니다`)) { await store.saveIntoFolder(doc); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); return; }
       await store.saveIntoFolder(doc); store.state.dirty = false;
     }
     await openFolderDoc(docs[0].handle, `동기화 폴더의 최근 문서 "${nm}"를 열었습니다`); return;
   }
+  if (!doc.pages.some(p => p.els.length)) { setStatus('저장 곳에 연결했습니다 · 새 디자인을 만들거나 저장(Ctrl+S)하면 파일로 저장됩니다'); return; }  /* 빈 문서는 파일로 만들지 않음 */
   await store.saveIntoFolder(doc); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`);
 }
 async function openFolderDoc(h, msg) {
@@ -4538,10 +4539,10 @@ async function renderDrive() {
     .map(([k, t, ic]) => `<button data-dvnav="${k}" class="${drv.view === k ? 'on' : ''}"><svg viewBox="0 0 24 24">${ic}</svg>${t}</button>`).join('') + `<div class="dvkinds"><small>종류별</small>${DOC_KINDS.map(([k, t, ic]) => `<button data-dvkind="${k}" class="${drv.view === 'kind' && drv.kind === k ? 'on' : ''}"><span class="dvk-ic">${DOC_KIND_SVG[k] ? `<svg viewBox="0 0 24 24">${DOC_KIND_SVG[k]}</svg>` : ic}</span>${esc(t)}</button>`).join('')}</div>` + `<hr><button data-dvnav="sync"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5l2-2v6h-6l2.3-2.3A5.5 5.5 0 0 0 6.5 12M20 12a8 8 0 0 1-14 5l-2 2v-6h6l-2.3 2.3A5.5 5.5 0 0 0 17.5 12"/></svg>저장·동기화 설정</button>`;
   const main = $('#dvMain');
   const homeTop = () => { const HK = ['print', 'sns', 'pres', 'video', 'sign', 'cal', 'news', 'doc'].map(k => ND_GROUPS.find(g => g[0] === k)).filter(Boolean);
-    const blankNow = !store.state.handle && !doc.pages.some(p => p.els.length);  /* 문서를 닫은 뒤(빈 새 디자인)에는 「지금 작업 중」 칸을 감춤 (11/25) */
+    const blankNow = !doc.pages.some(p => p.els.length);  /* 빈 문서(닫은 뒤 등)면 「지금 작업 중」 칸을 감춤 */  /* 문서를 닫은 뒤(빈 새 디자인)에는 「지금 작업 중」 칸을 감춤 (11/25) */
     return `<div class="dvhome">${blankNow ? '' : `<div class="dvh-back"><div><small>지금 작업 중</small><b>${esc(doc.name || '이름 없는 디자인')}</b><small>${doc.pages.length}쪽 · ${esc(fmtLabel(FORMATS.find(x => x[0] === doc.fmt) || ['', '', '', doc.w, doc.h, isPxDoc() ? 'px' : 'mm']))}</small></div><button class="btn primary" data-dvhome="back">작업으로 돌아가기</button></div>`}
       <h3>무엇을 만들어 볼까요?</h3><div class="dvh-kinds">${HK.map(([k, t, ic]) => `<button data-dvhome="new:${k}"><span class="dvh-ic"><svg viewBox="0 0 24 24">${ic}</svg></span><span>${t}</span></button>`).join('')}<button data-dvhome="new:rec"><span class="dvh-ic"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span>모든 크기 보기</span></button></div>
-      <div class="dvh-tools"><button class="btn" data-dvhome="tpl"><svg class="ic"><use href="#i-tpl"/></svg>템플릿에서 고르기</button><button class="btn" data-dvhome="import"><svg class="ic"><use href="#i-upload"/></svg>다른 프로그램 파일 가져오기</button><button class="btn" data-dvnav="drive"><svg class="ic"><use href="#i-folder"/></svg>내 드라이브 열기</button></div></div>`; };
+      <div class="dvh-tools"><button class="btn" data-dvhome="tpl"><svg class="ic"><use href="#i-tpl"/></svg>템플릿에서 고르기</button><button class="btn" data-dvnav="drive"><svg class="ic"><use href="#i-folder"/></svg>내 드라이브 열기</button></div></div>`; };
   if (drv.view === 'local') { const L = await prevDocList(); const tm = x => x._keptAt ? new Date(x._keptAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
     main.innerHTML = `<h3 style="margin:0 0 4px">이 브라우저에만 있는 문서</h3><p class="hint">파일·드라이브에 저장하지 않은 채 다른 문서로 넘어간 문서와, 같은 브라우저의 다른 탭에서 쓰던 문서입니다. 열어서 <b>저장</b>하면 드라이브에 들어갑니다. (이 PC 브라우저에만 있으므로 다른 PC에서는 보이지 않습니다)</p>${L.length ? `<div class="dvlocal">${L.map((x, i) => `<button class="btn full" data-dvlocal="${i}" style="justify-content:space-between;margin-bottom:6px"><span>${esc(x.name || '디자인')} <small>${x.pages.length}쪽${x._tab ? ' · 다른 탭에서 쓰던 문서' : x.docId && x.docId === doc.docId ? ' · 지금 연 문서의 예전 상태' : ''}</small></span><small>${tm(x)}</small></button>`).join('')}</div>` : '<div class="dvempty"><p class="hint">없습니다 — 모든 문서가 파일·드라이브에 저장되어 있습니다.</p></div>'}`; return; }
   if (!ready && drv.view === 'home') { const L = await prevDocList().catch(() => []); const tm = x => x._keptAt ? new Date(x._keptAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
