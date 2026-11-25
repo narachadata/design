@@ -104,7 +104,7 @@ NC.store = (function () {
     if (state.dir && (await folderReady())) {
       for (let n = 2, b0 = name; n < 50; n++) { try { await state.dir.getFileHandle(name + '.design.json'); name = `${b0} ${n}`; } catch (e) { break; } } /* 같은 초에 또 생겨도 앞 사본을 덮지 않게 */
       const h = await state.dir.getFileHandle(name + '.design.json', { create: true });
-      const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign({}, data, { name, saveId: '', lineage: [], docId: rid() }))); await w.close();
+      const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign({}, data, { name, saveId: '', lineage: [], docId: rid(), copyOf: (data && data.saveId) || '' }))); await w.close();
       return name + '.design.json';
     }
     download(Object.assign({}, data, { name })); return name + '.design.json (내려받기)';

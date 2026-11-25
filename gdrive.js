@@ -20,7 +20,7 @@ NC.gdrive = (function () {
   /* 요청 시간 제한 — 큰 파일 올리기는 넉넉히(크기에 따라), 나머지 60초. 걸린 요청 하나 때문에 올리기 전체가 멈추던 것 막음 (11/25) */
   const realFetch = (u, o) => { const ac = new AbortController(), sz = o && o.body && (o.body.size || (o.body.length || 0)) || 0, ms = 60000 + Math.round(sz / 1024 / 20) * 1000; const t = setTimeout(() => ac.abort(), Math.min(ms, 30 * 60000)); return fetch(u, Object.assign({}, o, { signal: ac.signal })).finally(() => clearTimeout(t)); };
   let fetcher = realFetch;
-  const S = { token: '', exp: 0, email: '', rootId: '', rootK: '', nodes: new Map(), listedAt: 0, queue: [], busy: false, err: '', need: false, wait: 0, done: 0, conflicts: 0, autoTries: 0, listeners: new Set() };
+  const S = { token: '', exp: 0, email: '', rootId: '', rootK: '', nodes: new Map(), ren: new Map(), listedAt: 0, queue: [], busy: false, err: '', need: false, wait: 0, done: 0, conflicts: 0, autoTries: 0, listeners: new Set() };
   const st = () => NC.store;
   const rid = () => 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const now = () => Date.now();
@@ -28,15 +28,53 @@ NC.gdrive = (function () {
   function nfErr(n) { const e = new Error(`「${n}」이(가) 없습니다`); e.name = 'NotFoundError'; return e; }
 
   /* ---------- 이 PC에 남기기 ---------- */
-  let saveT = 0;
-  function persist(soon) { clearTimeout(saveT); const go = () => st().idbSet('gd-meta', { rootId: S.rootId, rootK: S.rootK, email: S.email, listedAt: S.listedAt, nodes: [...S.nodes.values()] }).catch(() => {}); if (soon) saveT = setTimeout(go, 400); else return go(); }
-  const saveQ = () => st().idbSet('gd-q', S.queue).catch(() => {});
+  /* 같은 PC에서 공방 창을 둘 열어도(11/25 남은 것): 창마다 「지난번 맞춘 판」(seenN·seenQ)과 비교해 **내가 바꾼 것만** 이 PC 기록에 더하고,
+     다른 창이 바꾼 것은 받아 옴 — 예전엔 창마다 통째로 써서 한 창이 고친 문서·올릴 것을 다른 창이 지울 수 있었음. 쓰기는 잠금(Web Locks)으로 한 번에 하나 */
+  let saveT = 0, seenN = new Map(), seenQ = new Set(), syncing = null, again = false;
+  const ser = n => JSON.stringify(n), qkey = o => o.qi || (o.qi = rid());
+  const qser = o => JSON.stringify(Object.assign({}, o, { run: undefined }));
+  let bc = null; try { bc = new BroadcastChannel('naracha-gd'); bc.onmessage = e => { if (e.data === 'sync' && S.rootK) { clearTimeout(saveT); saveT = setTimeout(() => { sync().then(() => { emit(); kick(500); }); }, 150); } }; } catch (e) {}
+  const withLock = f => navigator.locks ? navigator.locks.request('naracha-gd-meta', f) : f();
+  function dedupeIds() {  /* 두 창이 같은 드라이브 파일을 다른 이름표(k)로 알게 된 경우 하나로 — 더 새로 고친 것을 남기고 다른 이름표는 그리로 가리킴 */
+    const byId = new Map();
+    for (const n of [...S.nodes.values()]) { if (!n.id) continue; const o = byId.get(n.id); if (!o) { byId.set(n.id, n); continue; }
+      const keep = (n.lm || 0) > (o.lm || 0) ? n : o, drop = keep === n ? o : n; S.ren.set(drop.k, keep.k); S.nodes.delete(drop.k); cache.delete(drop.k); byId.set(n.id, keep);
+      S.nodes.forEach(x => { if (x.parent === drop.k) x.parent = keep.k; if (x.alias === drop.k) x.alias = keep.k; }); S.queue.forEach(q => { if (q.k === drop.k) q.k = keep.k; }); }
+  }
+  async function sync() {
+    if (syncing) { again = true; return syncing; }
+    syncing = withLock(async () => {
+      const m = await st().idbGet('gd-meta').catch(() => null), q0 = await st().idbGet('gd-q').catch(() => null);
+      if (!S.reset && m && m.rootK && m.rootK === S.rootK) {
+        const stored = new Map((m.nodes || []).map(n => [n.k, n]));
+        const fmerge = (mine, sn, was) => { const w = JSON.parse(was); for (const x of new Set([...Object.keys(mine), ...Object.keys(sn)])) { if (JSON.stringify(mine[x]) !== JSON.stringify(w[x])) continue; if (x in sn) mine[x] = sn[x]; else delete mine[x]; } };  /* 칸마다: 내가 바꾼 칸은 내 것, 아니면 다른 창 것 (한 창은 올린 번호, 다른 창은 새 저장 때를 바꿔도 둘 다 남음) */
+        for (const k of new Set([...stored.keys(), ...S.nodes.keys()])) { const mine = S.nodes.get(k), sn = stored.get(k), was = seenN.get(k);
+          if (mine && sn) { if (mine !== sn) { const mj = ser(mine); if (mj === was) { Object.keys(mine).forEach(x => { if (!(x in sn)) delete mine[x]; }); Object.assign(mine, sn); } else if (was && ser(sn) !== was) fmerge(mine, sn, was); } stored.set(k, mine); }
+          else if (mine) { if (was && ser(mine) === was) { S.nodes.delete(k); cache.delete(k); } else stored.set(k, mine); }  /* 다른 창이 지운 것 · 새로 만든 것 */
+          else if (was) stored.delete(k); else S.nodes.set(k, sn); }  /* 내가 지운 것 · 다른 창이 더한 것 */
+        (m.ren || []).forEach(([a, b]) => { if (!S.ren.has(a)) S.ren.set(a, b); });
+        const myQ = new Map(S.queue.map(o => [qkey(o), o])), out = [];
+        for (const o of (Array.isArray(q0) ? q0 : [])) { const k = qkey(o); if (myQ.has(k)) { out.push(myQ.get(k)); myQ.delete(k); } else if (!seenQ.has(k)) { delete o.run; out.push(o); } }  /* 다른 창이 넣은 올릴 것 · 내가 끝낸 것은 뺌 */
+        for (const [k, o] of myQ) if (!seenQ.has(k) || o.run) out.push(o);  /* 내가 새로 넣은 것 (다른 창이 끝낸 것은 뺌) */
+        S.queue.splice(0, S.queue.length, ...out);
+      }
+      if (!S.reset && m && m.rootK && !S.rootK && !S.forgot) { S.rootId = m.rootId || ''; S.rootK = m.rootK; S.email = m.email || ''; (m.nodes || []).forEach(n => S.nodes.set(n.k, n)); }  /* 다른 창이 연결함 */
+      dedupeIds(); S.queue.forEach(qkey);
+      const nodes = [...S.nodes.values()];
+      await st().idbSet('gd-meta', { rootId: S.rootId, rootK: S.rootK, email: S.email, listedAt: S.listedAt, nodes, ren: [...S.ren].slice(-500) });
+      await st().idbSet('gd-q', S.queue.map(o => JSON.parse(qser(o))));
+      seenN = new Map(nodes.map(n => [n.k, ser(n)])); seenQ = new Set(S.queue.map(qkey)); S.reset = false;
+    }).catch(e => console.warn('이 PC 기록', e)).finally(() => { syncing = null; try { bc && bc.postMessage('sync'); } catch (e) {} if (again) { again = false; sync(); } });
+    return syncing;
+  }
+  function persist(soon) { clearTimeout(saveT); if (soon) saveT = setTimeout(sync, 400); else return sync(); }
+  const saveQ = () => persist(true);
   const cGet = k => st().idbGet('gd-c:' + k).catch(() => null), cSet = (k, v) => st().idbSet('gd-c:' + k, v), cDel = k => st().idbDel('gd-c:' + k).catch(() => {});
   function saveTok() { try { localStorage.setItem('naracal-gd-tok', JSON.stringify({ t: S.token, e: S.exp })); } catch (e) {} }
   function loadTok() { try { const o = JSON.parse(localStorage.getItem('naracal-gd-tok') || 'null'); if (o && o.t && o.e > now()) { S.token = o.t; S.exp = o.e; } } catch (e) {} }
   loadTok();  /* 로그인 단추를 누른 순간 바로 판단하도록 미리 */
   let loaded = null;
-  function load() { if (loaded) return loaded; loaded = (async () => { loadTok(); const m = await st().idbGet('gd-meta').catch(() => null); if (m && m.rootK) { S.rootId = m.rootId || ''; S.rootK = m.rootK; S.email = m.email || ''; S.listedAt = 0; (m.nodes || []).forEach(n => S.nodes.set(n.k, n)); } const q = await st().idbGet('gd-q').catch(() => null); if (Array.isArray(q)) { q.forEach(o => { delete o.run; }); S.queue = q; } })(); return loaded; }
+  function load() { if (loaded) return loaded; loaded = (async () => { loadTok(); const m = await st().idbGet('gd-meta').catch(() => null); if (m && m.rootK) { S.rootId = m.rootId || ''; S.rootK = m.rootK; S.email = m.email || ''; S.listedAt = 0; (m.nodes || []).forEach(n => S.nodes.set(n.k, n)); (m.ren || []).forEach(([a, b]) => S.ren.set(a, b)); seenN = new Map((m.nodes || []).map(n => [n.k, ser(n)])); } const q = await st().idbGet('gd-q').catch(() => null); if (Array.isArray(q)) { q.forEach(o => { delete o.run; }); S.queue = q; seenQ = new Set(q.map(qkey)); } })(); return loaded; }
 
   /* ---------- 구글 로그인 ---------- */
   function loadGIS() { return new Promise((res, rej) => { if (window.google && google.accounts && google.accounts.oauth2) return res(); const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; s.onload = () => res(); s.onerror = () => rej(new Error('구글 로그인을 불러오지 못했습니다 — 인터넷 연결을 확인하세요')); document.head.appendChild(s); }); }
@@ -82,7 +120,7 @@ NC.gdrive = (function () {
   }
 
   /* ---------- 나무(폴더·파일 목록) ---------- */
-  const node = k => S.nodes.get(k);
+  const node = k => S.nodes.get(k) || (S.ren.has(k) ? S.nodes.get(S.ren.get(k)) || S.nodes.get(S.ren.get(S.ren.get(k)) || '') : undefined);
   const kOfId = id => { for (const n of S.nodes.values()) if (n.id === id) return n.k; return ''; };
   /* 두 PC가 같은 때(목록을 새로 받기 전·인터넷이 끊긴 사이) 같은 이름 폴더(영상·이미지·인쇄물·.그림·.기록…)를 따로 만들면 드라이브에 두 벌이 생김 (11/25 두 PC 시험)
      → 같은 윗 폴더·같은 이름 폴더는 한 폴더로 합쳐 보임: 먼저 생긴 것(만든 때 → 번호 순)이 본 폴더, 나머지는 alias(가리킴) — 두 PC가 같은 규칙이라 같게 보임. 드라이브 파일은 옮기거나 지우지 않음 */
@@ -173,6 +211,21 @@ NC.gdrive = (function () {
     }
     delete j._gdA; return JSON.stringify(j);
   }
+  /* 새로 만들 때는 드라이브에서 미리 받은 번호(generateIds)로 — 시간 초과·끊김으로 다시 보내도 같은 파일·폴더가 두 개 생기지 않음(이미 있으면 409 → 그것을 씀) (11/25 남은 것) */
+  async function newId(n) { if (n.pid) return n.pid; if (!S.ids || !S.ids.length) { try { const j = await call(`${API}/files/generateIds?${qs({ count: 20, space: 'drive', type: 'files' })}`); S.ids = j.ids || []; } catch (e) { if (e.auth || e.net) throw e; S.ids = []; } } n.pid = S.ids.shift() || ''; if (n.pid) await persist(); return n.pid; }
+  async function existing(id) { try { return await call(`${API}/files/${id}?fields=${FIELDS}`); } catch (e) { if (e.status === 404) return null; throw e; } }
+  /* 「충돌 사본」은 정말 갈라졌을 때만 (11/25 팀장님 「열고 보기만 해도 충돌 사본이 많이 생김」): 드라이브 판과 이 PC 판의 저장 번호(saveId·lineage)를 봐서
+     같은 판이거나 이 PC 판이 드라이브 판을 이어 고친 것이면 true(그대로 올림), 드라이브 판이 이 PC 판을 이어 고친 것이면 n.newer(이 PC 옛 판은 버림) */
+  async function sameLine(n, f, mine) {
+    if (!/\.design\.json$/i.test(n.name) || typeof mine !== 'string') return false;
+    let a, b; try { a = JSON.parse(mine); b = JSON.parse(await (await call(`${API}/files/${f.id}?alt=media`, {}, true)).text()); } catch (e) { if (e.auth || e.net) throw e; return false; }
+    const as = a.saveId || '', bs = b.saveId || '';
+    if (as && as === bs) return true;
+    if (bs && (a.lineage || []).includes(bs)) return true;
+    if (as && (b.lineage || []).includes(as)) { n.newer = true; return false; }
+    const strip = j => { const o = Object.assign({}, j); ['saveId', 'lineage', 'savedBy', 'savedAt', 'pcId', 'assets', '_gdA'].forEach(k => delete o[k]); return JSON.stringify(o); };
+    return strip(a) === strip(b);  /* 저장 번호가 없어도 내용(그림 빼고)이 같으면 같은 판 */
+  }
   const typeOf = n => /\.json$/i.test(n) ? 'application/json' : /\.txt$/i.test(n) ? 'text/plain' : /\.png$/i.test(n) ? 'image/png' : /\.jpe?g$/i.test(n) ? 'image/jpeg' : /\.webp$/i.test(n) ? 'image/webp' : /\.pdf$/i.test(n) ? 'application/pdf' : /\.mp4$/i.test(n) ? 'video/mp4' : /\.svg$/i.test(n) ? 'image/svg+xml' : 'application/octet-stream';
   const stamp = () => { const t = new Date(), p = n => String(n).padStart(2, '0'); return `${p(t.getMonth() + 1)}-${p(t.getDate())} ${p(t.getHours())}${p(t.getMinutes())}`; };
   async function doOp(o) {
@@ -180,7 +233,8 @@ NC.gdrive = (function () {
     if (o.op === 'rm') { if (o.id) { try { await call(`${API}/files/${o.id}?fields=id`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trashed: true }) }); } catch (e) { if (e.status !== 404) throw e; } } return; }
     if (!n || n.gone) return;
     const pk0 = real(n.parent), pid = pk0 === S.rootK ? S.rootId : (node(pk0) || {}).id; if (!pid) { const e = new Error('윗 폴더가 아직 안 올라감'); e.later = true; throw e; }
-    if (o.op === 'mkdir') { if (n.id || n.alias) return; const f = await call(`${API}/files?fields=${FIELDS}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n.name, mimeType: FOLDER, parents: [pid], appProperties: { lm: String(n.lm) } }) }); Object.assign(n, { id: f.id, rparent: pid, rlm: n.lm, upAt: now() }); return; }
+    if (o.op === 'mkdir') { if (n.id || n.alias) return; const pre = await newId(n); let f = null; try { f = await call(`${API}/files?fields=${FIELDS}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign(pre ? { id: pre } : {}, { name: n.name, mimeType: FOLDER, parents: [pid], appProperties: { lm: String(n.lm) } })) }); } catch (e) { if (!(e.status === 409 && pre)) throw e; f = await existing(pre); if (!f) throw e; }  /* 409: 지난번 보낸 것이 이미 만들어짐 */
+      Object.assign(n, { id: f.id, rparent: pid, rlm: n.lm, upAt: now() }); delete n.pid; return; }
     if (o.op === 'mv') { if (!n.id) { const e = new Error('처음 올리기가 끝나면 옮김'); e.later = true; throw e; } await call(`${API}/files/${n.id}?${qs(Object.assign({ fields: 'id' }, n.rparent && n.rparent !== pid ? { addParents: pid, removeParents: n.rparent } : {}))}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n.name }) }); n.rparent = pid; n.upAt = now(); return; }
     if (o.op === 'put') {
       if (n.folder) return;
@@ -194,6 +248,8 @@ NC.gdrive = (function () {
           /* 문서가 아닌 같이 쓰는 파일: 설정은 덮지 않고 받아서 합친 뒤 다시 올림(11/25 두 PC 시험 — 예전엔 「충돌 사본」만 생기고 이 PC 바꾼 값이 드라이브에 안 올라갔음), 나머지(요소 숨김 등)는 나중 것으로 */
           if (n.name === '설정.naracha.json') { Object.assign(n, { lm: lmOf(f), rlm: lmOf(f), size: Number(f.size) || 0 }); cDel(n.k); persist(true); setTimeout(() => { try { window.dispatchEvent(new CustomEvent('gdrive-settings-conflict')); } catch (e) {} }, 0); return; }
         }
+        else if (n.rlm && lmOf(f) !== n.rlm && await sameLine(n, f, c.data)) { /* 때만 다르고 내용은 이어진 판(같은 판·이 PC가 이어 고친 판) → 사본 없이 그대로 올림 */ }
+        else if (n.rlm && lmOf(f) !== n.rlm && n.newer) { delete n.newer; Object.assign(n, { lm: lmOf(f), rlm: lmOf(f), size: Number(f.size) || 0 }); cDel(n.k); return; }  /* 드라이브 것이 이 PC 것을 이어 고친 판 → 이 PC 옛 판은 올리지 않음 */
         else if (n.rlm && lmOf(f) !== n.rlm) {
           const nm = n.name.replace(/(\.design\.json|\.[^.]+)?$/, m => ` (충돌 사본 ${stamp()} ${String(st().pcName()).replace(/[\\/:*?"<>|]/g, '_')})${m}`);
           const cf = await upload('', { name: nm, parents: [pid], appProperties: { lm: String(lm) } }, body, typeOf(n.name)); S.nodes.set(cf.id, { k: cf.id, id: cf.id, name: nm, parent: n.parent, folder: false, size: Number(cf.size) || 0, lm: lmOf(cf), rlm: lmOf(cf), rparent: pid }); cSet(cf.id, { lm: lmOf(cf), data: c.data }).catch(() => {});
@@ -201,8 +257,11 @@ NC.gdrive = (function () {
           Object.assign(n, { lm: lmOf(f), rlm: lmOf(f), size: Number(f.size) || 0 }); cDel(n.k); S.conflicts++; return;
         }
       }
-      const meta = n.id ? { name: n.name, appProperties: { lm: String(lm) } } : { name: n.name, parents: [pid], appProperties: { lm: String(lm) } };
-      const f = await upload(n.id, meta, body, typeOf(n.name));
+      if (!n.id) { const pre = await newId(n); if (pre && n.sent) { const ex = await existing(pre); if (ex && !ex.trashed) Object.assign(n, { id: ex.id, rparent: (ex.parents || [])[0] || pid }); } }  /* 지난번 만들기가 드라이브엔 됐는데 답을 못 받음 → 그 파일을 고쳐 씀 */
+      const meta = n.id ? { name: n.name, appProperties: { lm: String(lm) } } : Object.assign(n.pid ? { id: n.pid } : {}, { name: n.name, parents: [pid], appProperties: { lm: String(lm) } });
+      if (!n.id && n.pid && !n.sent) { n.sent = 1; await persist(); }  /* 한 번 보낸 뒤에만 「이미 만들어졌나」 물음 */
+      let f; try { f = await upload(n.id, meta, body, typeOf(n.name)); } catch (e) { if (!(e.status === 409 && n.pid)) throw e; const ex = await existing(n.pid); if (!ex) throw e; n.id = ex.id; f = await upload(n.id, { name: n.name, appProperties: { lm: String(lm) } }, body, typeOf(n.name)); }
+      delete n.pid; delete n.sent;
       Object.assign(n, { id: f.id, rparent: pid, rlm: lm, upAt: now() }); if (n.k !== f.id && S.nodes.get(f.id) && S.nodes.get(f.id) !== n) S.nodes.delete(f.id);
     }
   }
@@ -285,7 +344,7 @@ NC.gdrive = (function () {
       const id = c.id; drop(c.k); if (id) S.queue.push({ op: 'rm', k: c.k, id }); al.forEach(([k, i]) => S.queue.push({ op: 'rm', k, id: i })); if (id || al.length) { saveQ(); kick(); } persist(true); emit(); }
     async resolve(h) { if (!h || !h.__gd) return null; const path = [], me = real(this.k); let k = h.k; while (k && real(k) !== me) { const n = node(k); if (!n) return null; path.unshift(n.name); k = n.parent; } return k && real(k) === me ? path : null; } }
   const cache = new Map();
-  function handle(n) { let h = cache.get(n.k); if (!h) { h = n.folder ? new GDir(n.k) : new GFile(n.k); cache.set(n.k, h); } return h; }
+  function handle(n) { n = node(n.k) || n; let h = cache.get(n.k); if (!h) { h = n.folder ? new GDir(n.k) : new GFile(n.k); cache.set(n.k, h); } return h; }
 
   /* ---------- 연결 ---------- */
   async function connect() {
@@ -297,12 +356,12 @@ NC.gdrive = (function () {
       if (!f) f = await call(`${API}/files?fields=id,name`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: ROOT_NAME, mimeType: FOLDER, parents: ['root'] }) });
       S.rootId = f.id; S.rootK = f.id; S.nodes.set(f.id, { k: f.id, id: f.id, name: ROOT_NAME, parent: '', folder: true, size: 0, lm: now() });
     }
-    await listAll(); await persist(); kick();
+    S.forgot = false; await listAll(); await persist(); kick();
     return handle(node(S.rootK));
   }
   function revive(o) { if (!o || !o.__gd || !o.k) return null; const n = node(o.k); return n ? handle(n) : null; }
   async function reviveAsync(o) { await load(); return revive(o); }
-  async function disconnect() { await load(); S.rootId = ''; S.rootK = ''; S.nodes.clear(); cache.clear(); S.queue = []; S.listedAt = 0; await saveQ(); await persist(); emit(); }
+  async function disconnect() { await load(); S.reset = true; S.forgot = true; S.rootId = ''; S.rootK = ''; S.nodes.clear(); cache.clear(); S.queue = []; S.listedAt = 0; await saveQ(); await persist(); emit(); }
   /* 점검: 드라이브를 지금 다시 읽고, 이 PC가 보는 공방 곳과 올릴 것·오류를 셈 (팀장님 11/25 「노트북에서 도장 PC 파일이 안 뜸」) */
   async function diag() {
     await load(); let listErr = ''; if (S.rootK && tokOK()) { try { await listAll(); } catch (e) { listErr = e.message; } }
@@ -320,12 +379,12 @@ NC.gdrive = (function () {
       if (x.folder) { if (!x.id && !S.queue.some(o => o.k === x.k)) { S.queue.push({ op: 'mkdir', k: x.k }); n++; } continue; }
       x.local = tooBig(x); if (x.local) continue;
       const c = await cGet(x.k); if (!c) continue;  /* 이 PC에 내용이 없으면 드라이브에서 받은 것 그대로 */
-      if (!x.id || c.lm !== x.rlm) { if (!S.queue.some(o => o.k === x.k && o.op === 'put')) { S.queue.push({ op: 'put', k: x.k }); n++; } }
+      if (!x.id || (c.lm === x.lm && c.lm !== x.rlm)) { if (!S.queue.some(o => o.k === x.k && o.op === 'put')) { S.queue.push({ op: 'put', k: x.k }); n++; } }  /* c.lm < x.lm = 드라이브에서 받은 옛 판(다른 PC가 그 뒤에 고침) → 올리지 않음 (11/25 — 다른 PC 새 판을 옛 판으로 덮을 수 있었음) */
     }
     S.queue.forEach(o => { o.next = 0; }); saveQ(); emit(); kick(0); return n;
   }
   /* 다른 계정으로: 이 PC의 로그인·공방 곳 기억을 지우고(드라이브 파일은 그대로) 다시 로그인 */
-  function forget() { const t = S.token; S.token = ''; S.exp = 0; saveTok(); try { if (t && !S.fake && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(t, () => {}); } catch (e) {} S.rootId = ''; S.rootK = ''; S.email = ''; S.found = undefined; S.nodes.clear(); cache.clear(); S.queue = []; S.listedAt = 0; S.err = ''; saveQ(); persist(); emit(); }
+  function forget() { const t = S.token; S.token = ''; S.exp = 0; saveTok(); try { if (t && !S.fake && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(t, () => {}); } catch (e) {} S.reset = true; S.forgot = true; S.rootId = ''; S.rootK = ''; S.email = ''; S.found = undefined; S.nodes.clear(); cache.clear(); S.queue = []; S.listedAt = 0; S.err = ''; saveQ(); persist(); emit(); }
   function status() { const qk = queueKinds(); return { on: !!S.rootK, pendDocs: qk.docs, pendOther: qk.other, created: S.found === false, failed: S.queue.filter(o => o.tries).length, email: S.email, root: ROOT_NAME, pending: S.queue.length, busy: S.busy, need: S.need || (!!S.rootK && !tokOK() && !S.fake), err: S.err, done: S.done, conflicts: S.conflicts, listedAt: S.listedAt, local: [...S.nodes.values()].filter(n => n.local).length }; }
   function onChange(f) { S.listeners.add(f); return () => S.listeners.delete(f); }
   async function flush(ms) { const t0 = now(); kick(0); while (S.queue.length && now() - t0 < (ms || 20000)) { if (!tokOK()) break; await new Promise(r => setTimeout(r, 200)); if (!S.busy) kick(0); } return S.queue.length; }
@@ -346,15 +405,16 @@ NC.gdrive = (function () {
       calls++; o = o || {}; const u = new URL(url), p = u.pathname, m = (o.method || 'GET').toUpperCase(), q = u.searchParams;
       if (o.headers && o.headers.Authorization !== 'Bearer fake' && !u.searchParams.get('sess')) return res({ error: { message: 'auth' } }, 401);
       if (p.endsWith('/about')) return res({ user: { emailAddress: 'qa@example.com', displayName: 'QA' } });
-      if (u.searchParams.get('sess')) { const s = sessions.get(u.searchParams.get('sess')); const body = o.body instanceof Blob ? await o.body.text() : String(o.body); let f = s.id ? F.get(s.id) : null; if (!f) { f = { id: 'f' + (++seq) }; F.set(f.id, f); } apply(f, s.meta); f.data = body; return res(out(f)); }
+      if (u.searchParams.get('sess')) { const s = sessions.get(u.searchParams.get('sess')); const body = o.body instanceof Blob ? await o.body.text() : String(o.body); let f = s.id ? F.get(s.id) : null; if (!f) { f = { id: (s.meta && s.meta.id) || 'f' + (++seq) }; F.set(f.id, f); } apply(f, s.meta); f.data = body; return res(out(f)); }
+      if (p.endsWith('/files/generateIds')) return res({ ids: Array.from({ length: Number(q.get('count')) || 10 }, () => 'g' + (++seq) + Math.random().toString(36).slice(2, 6)) });
       const up = p.includes('/upload/'), idm = p.match(/\/files\/([^/]+)$/), id = idm && idm[1];
       if (up && q.get('uploadType') === 'resumable') { const sid = 's' + (++seq); sessions.set(sid, { id, meta: JSON.parse(o.body) }); return res(null, 200, { Location: 'https://fake.upload/?sess=' + sid }); }
       if (up && failN > 0) { failN--; return res({ error: { message: '시험용 실패' } }, 500); }
       if (up) { const t = await o.body.text(), b = (o.headers['Content-Type'].match(/boundary=(\S+)/) || [])[1]; const parts = t.split('--' + b).slice(1, -1).map(x => x.replace(/^\r\n/, '').replace(/\r\n$/, '')); const meta = JSON.parse(parts[0].split('\r\n\r\n').slice(1).join('\r\n\r\n')); const data = parts[1].split('\r\n\r\n').slice(1).join('\r\n\r\n');
-        let f = id ? F.get(id) : null; if (id && !f) return res({ error: { message: 'not found' } }, 404); if (!f) { f = { id: 'f' + (++seq) }; F.set(f.id, f); } apply(f, meta); f.data = data; return res(out(f)); }
+        let f = id ? F.get(id) : null; if (id && !f) return res({ error: { message: 'not found' } }, 404); if (!f) { if (meta.id && F.has(meta.id)) return res({ error: { message: 'exists' } }, 409); f = { id: meta.id || 'f' + (++seq) }; F.set(f.id, f); } apply(f, meta); f.data = data; return res(out(f)); }
       if (id && m === 'GET') { const f = F.get(id); if (!f) return res({ error: { message: 'not found' } }, 404); if (q.get('alt') === 'media') return new Response(f.data || '', { status: 200 }); return res(out(f)); }
       if (id && m === 'PATCH') { const f = F.get(id); if (!f) return res({ error: { message: 'not found' } }, 404); const meta = JSON.parse(o.body || '{}'); if (q.get('addParents')) f.parents = [q.get('addParents')]; apply(f, meta); return res(out(f)); }
-      if (p.endsWith('/files') && m === 'POST') { const meta = JSON.parse(o.body); const f = { id: 'f' + (++seq) }; F.set(f.id, f); apply(f, meta); return res(out(f)); }
+      if (p.endsWith('/files') && m === 'POST') { const meta = JSON.parse(o.body); if (meta.id && F.has(meta.id)) return res({ error: { message: 'exists' } }, 409); const f = { id: meta.id || 'f' + (++seq) }; F.set(f.id, f); apply(f, meta); return res(out(f)); }
       if (p.endsWith('/files') && m === 'GET') { const qq = q.get('q') || ''; let L = [...F.values()].filter(f => f.id !== 'root' && !f.trashed); const nm = qq.match(/name='([^']+)'/); if (nm) L = L.filter(f => f.name === nm[1] && (!/'root' in parents/.test(qq) || (f.parents || []).includes('root'))); return res({ files: L.map(out) }); }
       return res({ error: { message: 'fake: ' + m + ' ' + p } }, 400);
     };

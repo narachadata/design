@@ -3183,8 +3183,12 @@ function renderSide0() {
    뺀 목록은 자료실 폴더 「요소 숨김.json」에 보관해 두 PC가 같고, 폴더가 없으면 이 PC에. 처음에는 태권도 캐릭터(만화) 묶음을 뺀 상태 */
 let elOff = new Set((() => { try { const v = JSON.parse(localStorage.getItem('naracal-el-off') || 'null'); return Array.isArray(v) ? v : ['sub:cartoon']; } catch (e) { return ['sub:cartoon']; } })());
 const isOff = it => elOff.has(it.id) || elOff.has('x:' + it.id) || (!!it.sub && elOff.has('sub:' + it.sub)); /* x: = 비우기 한 프로그램 요소(지울 수 없어 늘 빠짐) */
-async function saveElOff() { const l = [...elOff]; try { localStorage.setItem('naracal-el-off', JSON.stringify(l)); } catch (e) {} try { if (NC.lib.ready) await NC.lib.writeOff(l); } catch (e) { console.warn('요소 숨김 저장', e); } }
-NC.lib.onReady(async () => { const r = await NC.lib.readOff(); if (r && Array.isArray(r.off)) { elOff = new Set(r.off); try { localStorage.setItem('naracal-el-off', JSON.stringify(r.off)); } catch (e) {} if (sideTab === 'elems') renderElems(); } else saveElOff(); });
+/* 요소 숨김: 두 PC가 따로 빼거나 되살려도 둘 다 남게 — 지난번 맞춘 목록(elOffBase)과 비교해 이 PC가 뺀 것·되살린 것만 폴더 목록에 더함 (11/25 남은 것, 예전엔 나중에 쓴 PC 목록으로 통째로 덮음) */
+let elOffBase = null;
+async function saveElOff() { let l = [...elOff];
+  try { if (NC.lib.ready) { const r = await NC.lib.readOff(); if (r && Array.isArray(r.off) && elOffBase) { const base = new Set(elOffBase), add = l.filter(x => !base.has(x)), del = new Set(elOffBase.filter(x => !elOff.has(x))); l = [...new Set(r.off.concat(add))].filter(x => !del.has(x)); elOff = new Set(l); } await NC.lib.writeOff(l); elOffBase = l.slice(); } } catch (e) { console.warn('요소 숨김 저장', e); }
+  try { localStorage.setItem('naracal-el-off', JSON.stringify(l)); } catch (e) {} }
+NC.lib.onReady(async () => { const r = await NC.lib.readOff(); if (r && Array.isArray(r.off)) { elOff = new Set(r.off); elOffBase = r.off.slice(); try { localStorage.setItem('naracal-el-off', JSON.stringify(r.off)); } catch (e) {} if (sideTab === 'elems') renderElems(); } else saveElOff(); });
 async function elemDelete(id) { const it = getElem(id); if (!it) return;
   if (id.startsWith('blk-')) { delMyBlock(id); return; }
   if (it.lib && /^ai-/.test(it.lib.id || '')) { if (!window.confirm(`'${it.name}'${eul(it.name)} 지울까요?\n자료실 「내 그림」에서 파일까지 지워져 두 PC 모두에서 사라지고, 되살릴 수 없습니다. (이미 문서에 넣은 그림은 그대로)`)) return; try { await NC.lib.removeMine(it.lib.id); toast(`'${it.name}'${eul(it.name)} 지웠습니다`); } catch (e) { toast('지우지 못했습니다: ' + e.message, true); } renderElems(); return; }
@@ -4214,7 +4218,7 @@ function gdDiagHTML(g) {
   if (g.docs && g.docsUp < g.docs) warn.push(`⏫ 문서 ${g.docs - g.docsUp}개는 아직 이 PC에만 — 「⏫ 이 PC 것 모두 다시 올리기」를 누르세요.`);
   return `<div class="svtodo gddiag"><b>🔍 구글 드라이브 점검</b><table><tr><th>👤 로그인 계정</th><td><b>${esc(g.email || '(알 수 없음)')}</b></td></tr><tr><th>📁 공방 곳</th><td>${esc(NC.gdrive.ROOT_NAME)} · 번호 끝 <code>${esc(tail)}</code></td></tr><tr><th>📄 문서</th><td>${g.docs}개 (드라이브에 올라간 것 ${g.docsUp}개) · 폴더 ${g.folders}개</td></tr><tr><th>⏫ 올릴 것</th><td>${g.pending ? `${g.pending}개 남음 — <b>문서·설정 ${g.pendDocs}개</b> 먼저, 그다음 자료실 그림·글꼴·내보낸 파일·버전 기록 등 ${g.pendOther}개` : '없음 — 모두 올림'}</td></tr></table>
     ${warn.length ? `<p class="gdwarn">${warn.join('<br>')}</p>` : ''}<p class="hint" style="margin:6px 0">다른 PC와 같은 곳인지 보려면: 두 PC에서 이 점검을 눌러 <b>계정</b>과 <b>번호 끝</b>이 같은지 보세요. 다르면 아래 「다른 계정으로 다시 로그인」.</p>
-    <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm primary" data-sv="gdpush" title="이 PC에 있는데 드라이브에 안 올라간(또는 더 새로운) 문서·폴더를 모두 다시 올림">⏫ 이 PC 것 모두 다시 올리기</button><button class="btn sm" data-sv="gdremig" title="드라이브 앱의 예전 폴더(내 드라이브 › 나라차디자인공방)를 골라 빠진 문서를 다시 옮김">📂 예전 폴더에서 다시 옮기기</button><button class="btn sm" data-sv="gdrefresh">🔄 드라이브에서 다시 받기</button>${g.need ? '<button class="btn sm" data-sv="gdlogin">🔑 로그인</button>' : ''}<button class="btn sm" data-sv="gdswitch">👤 다른 계정으로 다시 로그인</button></div></div>`;
+    <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm" data-sv="cfclean" title="「충돌 사본」 가운데 본 문서와 같거나 본 문서에 이미 들어 있는 옛 판만 휴지통으로 (내용이 다른 사본은 그대로 둠 · 휴지통에서 되살릴 수 있음)">🧹 충돌 사본 정리</button><button class="btn sm primary" data-sv="gdpush" title="이 PC에 있는데 드라이브에 안 올라간(또는 더 새로운) 문서·폴더를 모두 다시 올림">⏫ 이 PC 것 모두 다시 올리기</button><button class="btn sm" data-sv="gdremig" title="드라이브 앱의 예전 폴더(내 드라이브 › 나라차디자인공방)를 골라 빠진 문서를 다시 옮김">📂 예전 폴더에서 다시 옮기기</button><button class="btn sm" data-sv="gdrefresh">🔄 드라이브에서 다시 받기</button>${g.need ? '<button class="btn sm" data-sv="gdlogin">🔑 로그인</button>' : ''}<button class="btn sm" data-sv="gdswitch">👤 다른 계정으로 다시 로그인</button></div></div>`;
 }
 function gdBox() { return `<div class="gdbox"><b>✨ A. 구글 로그인으로 저장 <em>추천 · 앱 설치 없이</em></b><p>구글 계정${acctGet() ? ` <b class="acctmail-in">${esc(acctGet().email)}</b>` : ''}으로 로그인만 하면 됩니다. 저장은 <b>이 PC에 바로</b> 되고, 구글 드라이브의 「${esc(NC.gdrive.ROOT_NAME)}」 폴더에는 <b>뒤에서 올라갑니다</b> — 작업이 멈추지 않고, 인터넷이 끊겨도 다시 연결되면 이어서 올립니다. 다른 PC도 같은 계정으로 로그인하면 같은 문서·설정이 보입니다.</p><button class="btn primary" data-sv="gd">🔑 구글 로그인으로 시작</button><small>로그인 창에서 「Google에서 확인하지 않은 앱」이 나오면 메인 프로그램과 같은 우리 도장 설정이니 「계속」(또는 「고급 → 이동」)을 누르면 됩니다. 영상·음악 원본처럼 아주 큰 파일(40MB 넘게)은 그 PC에만 둡니다.</small></div>`; }
 let gdChipT = 0;
@@ -4241,6 +4245,23 @@ function gdChip() { clearTimeout(gdChipT); gdChipT = setTimeout(() => { const b 
   else if (gs && !gs.need && s && s.querySelector('#gdRe')) setStatus('구글 드라이브에 다시 연결했습니다'); }, 200); }
 if (window.NC && NC.gdrive) NC.gdrive.onChange(gdChip);
 /* 지금 폴더(드라이브 앱)의 문서·설정을 구글 로그인 저장 곳으로 옮김 — 휴지통·버전 기록·아주 큰 파일은 빼고 */
+/* 충돌 사본 정리 (11/25 팀장님 「충돌 사본이 많이 만들어짐」): 같은 폴더의 본 문서와 비교해 — 사본의 원래 저장 번호(saveId·copyOf)가 본 문서와 같거나 본 문서의 지난 판(lineage)에 있으면,
+   또는 내용(이름·저장 번호 빼고)이 같으면 → 휴지통으로. 본 문서가 없거나 내용이 다른 사본은 그대로 둠 */
+async function cleanConflictCopies() {
+  const docs = await store.walkDocs(), isCopy = d => /\(충돌 사본 /.test(d.name), copies = docs.filter(isCopy);
+  const mains = new Map(docs.filter(d => !isCopy(d)).map(d => [d.path.join('/') + '/' + d.name, d]));
+  const strip = j => { const o = Object.assign({}, j); ['name', 'saveId', 'lineage', 'savedBy', 'savedAt', 'pcId', 'docId', 'copyOf'].forEach(k => delete o[k]); return JSON.stringify(o); };
+  let moved = 0, kept = 0;
+  for (const c of copies) {
+    const base = c.name.replace(/ \(충돌 사본 [^)]*\)( \d+)?(\.design\.json)$/i, '$2'), main = mains.get(c.path.join('/') + '/' + base);
+    if (!main || (store.state.handle && await store.state.handle.isSameEntry(c.handle).catch(() => false))) { kept++; continue; }
+    let cj, mj; try { cj = JSON.parse(await (await c.handle.getFile()).text()); mj = JSON.parse(await (await main.handle.getFile()).text()); } catch (e) { kept++; continue; }
+    const sid = cj.saveId || cj.copyOf || '', same = (sid && (sid === mj.saveId || (mj.lineage || []).includes(sid))) || strip(cj) === strip(mj);
+    if (!same) { kept++; continue; }
+    try { await store.toTrash(c.handle, c.path); moved++; } catch (e) { kept++; }
+  }
+  return { moved, kept, total: copies.length };
+}
 async function gdMigrate(src, dst, say) {
   let n = 0, big = 0; const skip = new Set(['휴지통', '.기록']);
   const walk = async (s, d, depth) => { for await (const [name, h] of s.entries()) {
@@ -4345,6 +4366,7 @@ async function renderSaveDialog() {
     gd: async () => { const ok = await connectDriveChecked(); if (ok) renderSaveDialog(); },
     gdlogin: async () => { await NC.gdrive.login(); NC.gdrive.run(); toast('구글에 다시 로그인했습니다 — 이 PC에 모아 둔 것을 드라이브에 올립니다'); renderSaveDialog(); },
     gddiag: async () => { const box = $('#gdDiag'); if (!box) return; box.innerHTML = '<div class="svtodo"><b>🔍 점검 중…</b><p>구글 드라이브를 다시 읽고 있습니다.</p></div>'; box.scrollIntoView({ block: 'nearest' }); const g = await NC.gdrive.diag(); box.innerHTML = gdDiagHTML(g); box.scrollIntoView({ block: 'nearest' }); },
+    cfclean: async () => { setStatus('충돌 사본 살피는 중…'); try { const r = await cleanConflictCopies(); setStatus(''); toast(r.total ? `🧹 충돌 사본 ${r.total}개 중 ${r.moved}개를 휴지통으로 옮겼습니다 (본 문서와 같거나 이미 들어 있는 옛 판)${r.kept ? ` · 내용이 다른 ${r.kept}개는 남겼습니다 — 열어 보고 필요 없으면 지우세요` : ''}` : '충돌 사본이 없습니다'); } catch (e) { setStatus(''); toast('정리하지 못했습니다: ' + e.message, true); } },
     gdpush: async () => { const n = await NC.gdrive.pushAll(); toast(n ? `⏫ ${n}개를 다시 올립니다 — 저장 단추 옆 숫자가 사라질 때까지 공방을 켜 두세요` : '다시 올릴 것이 없습니다 — 이 PC 것은 모두 드라이브에 있습니다'); setTimeout(() => act.gddiag().catch(() => {}), 2500); },
     gdremig: async () => { if (!window.showDirectoryPicker) { toast('이 브라우저는 폴더 고르기를 못 합니다 (Chrome·Edge)', true); return; } let src = await window.showDirectoryPicker({ id: 'naracha-sync', mode: 'read' }); { let has = false, child = null; for await (const [nm, h] of src.entries()) { if (h.kind === 'file' && (/\.design\.json$/i.test(nm) || nm === '설정.naracha.json')) has = true; if (h.kind === 'directory' && nm === '나라차디자인공방') child = h; } if (!has && child) src = child; else if (!has && !(await confirmBtns(`고른 「${src.name}」 폴더에는 공방 문서가 바로 보이지 않습니다.\n예전 폴더는 보통 「내 드라이브 › 나라차디자인공방」입니다.\n\n확인: 그래도 이 폴더에서 옮기기\n취소: 그만두기`))) return; } setStatus('예전 폴더에서 옮기는 중…'); const r = await gdMigrate(src, st.dir, k => setStatus(`옮기는 중… ${k}개`)); const n = await NC.gdrive.pushAll(); setStatus(''); toast(`✅ 예전 폴더에서 ${r.n}개를 새로 옮겼습니다${r.big ? ` · 아주 큰 영상·음악 ${r.big}개는 빼고` : ''} — ${n}개를 드라이브에 올립니다`); setTimeout(() => act.gddiag().catch(() => {}), 2500); },
     gdrefresh: async () => { await NC.gdrive.fresh(); NC.gdrive.run(); const n = (await store.walkDocs()).length; await renderSaveDialog(); toast(`구글 드라이브를 다시 읽었습니다 — 문서 ${n}개 (저장 ▾ → 내 드라이브에서 엽니다)`); if (!(st.handle && await store.inFolder(st.handle)) && n) { d.close(); await afterFolderReady(); } },
@@ -8439,7 +8461,7 @@ if (NC.aichat) NC.aichat.init({ openAIPanel, chatMode,
     if (!F[k]) return false; const r = F[k](); return r !== false;
   },
 });
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { openSaveDialog, openAcctGuide, connectDriveChecked, gdMigrate, afterFolderReady, saveFileNow: () => saveFileNow(), attFrontParts, attBackParts, attState, resizedDoc, bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { openSaveDialog, openAcctGuide, connectDriveChecked, gdMigrate, cleanConflictCopies, afterFolderReady, saveFileNow: () => saveFileNow(), attFrontParts, attBackParts, attState, resizedDoc, bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
 
 /* ---- 도구 막대 한 줄 (팀장님 11/24 「도구 막대 한 줄도 정리」) ----
    넘치면 덜 쓰는 묶음(정렬 → 순서 → 펜·그룹)부터 「⋯」 펼침 창으로 옮김(단추를 그대로 옮겨 동작 같음), 자리가 나면 제자리로. 세로 도구 막대는 그대로 */
