@@ -296,11 +296,12 @@ NC.gdrive = (function () {
       const skip = new Set();  /* 이번 차례에 건너뛸 것(윗 폴더가 아직 안 올라감·잠시 뒤 다시) */
       for (;;) {
         sortQ();  /* 올리는 사이 새로 들어온 문서도 앞으로 */
-        const o = S.queue.find(x => !skip.has(x) && !x.run && !(x.next && x.next > now())); if (!o) break; o.run = 1;
-        try { await doOp(o); const j = S.queue.indexOf(o); if (j >= 0) S.queue.splice(j, 1); S.done++; }
+        const o = S.queue.find(x => !skip.has(x) && !x.run && !(x.next && x.next > now())); if (!o) break; o.run = 1; const hadId = !!((node(o.k) || {}).id); let created = false;
+        try { await doOp(o); created = !hadId && !!((node(o.k) || {}).id); const j = S.queue.indexOf(o); if (j >= 0) S.queue.splice(j, 1); S.done++; }
         catch (e) { delete o.run; if (e.later) { skip.add(o); continue; } if (e.auth) break; if (e.net) { S.err = e.message; S.wait = now() + 30000; kick(30000); break; }
           o.tries = (o.tries || 0) + 1; o.err = e.message; o.next = now() + Math.min(15000 * Math.pow(2, o.tries - 1), 600000); S.err = e.message; console.warn('드라이브에 올리지 못함 — 다시 해 봄', o, e); skip.add(o); }
-        await persist(); saveQ(); emit();
+        if (created || o.op === 'rm' || o.op === 'mv') await persist(); else persist(true);  /* 새로 만든 것(드라이브 번호가 생김)·지우기·옮기기만 바로 남기고, 고쳐 올린 것은 0.4초 모아서 (11/25 — 수백 개 올릴 때 하나마다 이 PC 기록 전체를 쓰던 것) */
+        emit();
       }
       if (!S.queue.some(o => o.tries)) S.err = '';
       const nx = S.queue.filter(o => o.next).map(o => o.next - now()); if (nx.length) kick(Math.max(1000, Math.min(...nx)));
@@ -310,6 +311,7 @@ NC.gdrive = (function () {
   /* ---------- 내용 읽기 (이 PC에 있으면 바로, 없으면 내려받기) ---------- */
   async function content(n) {
     const c = await cGet(n.k); if (c && c.lm === n.lm) return c.data;
+    if (c && c.lm > (n.lm || 0) && !tooBig(n)) { n.lm = c.lm; persist(true); if (n.id || !n.folder) enqueue({ op: 'put', k: n.k }); return c.data; }  /* 이 PC에 저장했는데 기록에 남기기 전 꺼졌던 것 → 이 PC 것을 믿고 다시 올림 (드라이브 옛 판으로 덮지 않음) */
     if (!n.id) { if (c) return c.data; return ''; }
     const r = await call(`${API}/files/${n.id}?alt=media`, {}, true);
     let data = /\.(json|txt)$/i.test(n.name) ? await r.text() : await r.blob();
@@ -401,7 +403,8 @@ NC.gdrive = (function () {
   function onChange(f) { S.listeners.add(f); return () => S.listeners.delete(f); }
   async function flush(ms) { const t0 = now(); kick(0); while (S.queue.length && now() - t0 < (ms || 20000)) { if (!tokOK()) break; await new Promise(r => setTimeout(r, 200)); if (!S.busy) kick(0); } return S.queue.length; }
   window.addEventListener('online', () => kick(500));
-  window.addEventListener('beforeunload', e => { if (S.queue.length && S.rootK) { saveQ(); } });
+  window.addEventListener('beforeunload', e => { if (S.rootK) { clearTimeout(saveT); sync(); } });  /* 창을 닫을 때는 모아 두지 않고 바로 남김 */
+  document.addEventListener('visibilitychange', () => { if (document.hidden && S.rootK) { clearTimeout(saveT); sync(); } });
 
   /* ---------- 시험용 가짜 드라이브 (?qa 에서만) — 실제 구글에 가지 않고 같은 요청·응답 모양으로 ---------- */
   function fake() {
