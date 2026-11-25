@@ -14,6 +14,8 @@ NC.gdrive = (function () {
   const API = 'https://www.googleapis.com/drive/v3', UP = 'https://www.googleapis.com/upload/drive/v3';
   const FOLDER = 'application/vnd.google-apps.folder', ASSET_DIR = '.그림';
   const BIG = 40 * 1024 * 1024, FRESH = 20000, ONE_SHOT = 4.5 * 1024 * 1024;
+  /* 이 PC에만 둘 큰 파일 = 영상·음악 원본 등. 문서(.design.json)는 사진을 떼어 올리므로 크기와 상관없이 올림 (11/25 — 사진 많은 문서가 40MB를 넘어 안 올라갔음) */
+  const tooBig = n => n.size > BIG && !/\.(json|txt)$/i.test(n.name);
   const FIELDS = 'id,name,parents,mimeType,size,modifiedTime,appProperties,trashed';
   let fetcher = (u, o) => fetch(u, o);
   const S = { token: '', exp: 0, email: '', rootId: '', rootK: '', nodes: new Map(), listedAt: 0, queue: [], busy: false, err: '', need: false, wait: 0, done: 0, conflicts: 0, autoTries: 0, listeners: new Set() };
@@ -153,7 +155,7 @@ NC.gdrive = (function () {
     if (o.op === 'mv') { if (!n.id) return; await call(`${API}/files/${n.id}?${qs(Object.assign({ fields: 'id' }, n.rparent && n.rparent !== pid ? { addParents: pid, removeParents: n.rparent } : {}))}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n.name }) }); n.rparent = pid; return; }
     if (o.op === 'put') {
       if (n.folder) return;
-      const c = await cGet(n.k); if (!c) return; if (n.size > BIG) { n.local = true; return; }
+      const c = await cGet(n.k); if (!c) return; if (tooBig(n)) { n.local = true; return; } n.local = false;
       const lm = c.lm; let body = c.data;
       if (typeof body === 'string' && /\.design\.json$/i.test(n.name)) body = await packDoc(body);
       if (n.id) { /* 올리기 전에: 그사이 다른 PC가 같은 파일을 올렸으면 덮지 않고 이 PC 것을 「충돌 사본」으로 */
@@ -221,7 +223,7 @@ NC.gdrive = (function () {
       const d = await content(n); return new File([d], n.name, { type: typeOf(n.name), lastModified: n.lm }); }
     async createWritable() { const self = this, parts = []; return { async write(d) { if (d && typeof d === 'object' && d.type === 'write') d = d.data; if (d instanceof GInfo) d = await d.text(); parts.push(d); }, async truncate() {}, async seek() {}, async abort() { parts.length = 0; },
       async close() { const n = node(self.k); if (!n) throw nfErr(self.name); const allStr = parts.every(p => typeof p === 'string'); const data = allStr ? parts.join('') : new Blob(parts, { type: typeOf(n.name) }); const lm = Math.max(now(), (n.lm || 0) + 1);
-        await cSet(n.k, { lm, data }); Object.assign(n, { lm, size: typeof data === 'string' ? data.length : data.size, gone: false }); if (n.size > BIG) n.local = true; persist(true); if (!n.local) enqueue({ op: 'put', k: n.k }); emit(); } }; } }
+        await cSet(n.k, { lm, data }); Object.assign(n, { lm, size: typeof data === 'string' ? data.length : data.size, gone: false }); n.local = tooBig(n); persist(true); if (!n.local) enqueue({ op: 'put', k: n.k }); emit(); } }; } }
   class GDir extends GBase { get kind() { return 'directory'; }
     async *entries() { await fresh(); for (const n of kids(this.k).sort((a, b) => a.name.localeCompare(b.name, 'ko'))) yield [n.name, handle(n)]; }
     async *values() { for await (const [, h] of this.entries()) yield h; }
@@ -260,7 +262,20 @@ NC.gdrive = (function () {
     const all = [...S.nodes.values()].filter(n => n.k !== S.rootK && !n.gone), inAsset = n => { let p = n.parent; while (p && p !== S.rootK) { const x = node(p); if (!x) break; if (x.name === ASSET_DIR || x.name === '.기록') return true; p = x.parent; } return n.name === ASSET_DIR || n.name === '.기록'; };
     const vis = all.filter(n => !inAsset(n)), up = all.filter(n => n.id);
     return { email: S.email, rootId: S.rootId, created: S.found === false, docs: vis.filter(n => /\.design\.json$/i.test(n.name)).length, docsUp: vis.filter(n => /\.design\.json$/i.test(n.name) && n.id).length, folders: vis.filter(n => n.folder).length, files: all.length, onDrive: up.length,
-      pending: S.queue.length, failed: S.queue.filter(o => o.tries).length, errs: [...new Set(S.queue.filter(o => o.err).map(o => o.err))].slice(0, 3), err: S.err, listErr, listedAt: S.listedAt, need: !tokOK() && !S.fake };
+      pending: S.queue.length, localOnly: all.filter(n => n.local).length, failed: S.queue.filter(o => o.tries).length, errs: [...new Set(S.queue.filter(o => o.err).map(o => o.err))].slice(0, 3), err: S.err, listErr, listedAt: S.listedAt, need: !tokOK() && !S.fake };
+  }
+  /* 이 PC에 있는데 드라이브에 없거나 더 새로운 것을 모두 다시 올릴 줄에 넣음 (폴더 먼저, 얕은 것부터) */
+  async function pushAll() {
+    await load(); if (!S.rootK) return 0; const depth = x => { let d = 0, p = x.parent; while (p && p !== S.rootK && d < 50) { d++; p = (node(p) || {}).parent; } return d; };
+    const L = [...S.nodes.values()].filter(x => x.k !== S.rootK && !x.gone).sort((a, b) => (b.folder - a.folder) || depth(a) - depth(b));
+    let n = 0;
+    for (const x of L) {
+      if (x.folder) { if (!x.id && !S.queue.some(o => o.k === x.k)) { S.queue.push({ op: 'mkdir', k: x.k }); n++; } continue; }
+      x.local = tooBig(x); if (x.local) continue;
+      const c = await cGet(x.k); if (!c) continue;  /* 이 PC에 내용이 없으면 드라이브에서 받은 것 그대로 */
+      if (!x.id || c.lm !== x.rlm) { if (!S.queue.some(o => o.k === x.k && o.op === 'put')) { S.queue.push({ op: 'put', k: x.k }); n++; } }
+    }
+    S.queue.forEach(o => { o.next = 0; }); saveQ(); emit(); kick(0); return n;
   }
   /* 다른 계정으로: 이 PC의 로그인·공방 곳 기억을 지우고(드라이브 파일은 그대로) 다시 로그인 */
   function forget() { const t = S.token; S.token = ''; S.exp = 0; saveTok(); try { if (t && !S.fake && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(t, () => {}); } catch (e) {} S.rootId = ''; S.rootK = ''; S.email = ''; S.found = undefined; S.nodes.clear(); cache.clear(); S.queue = []; S.listedAt = 0; S.err = ''; saveQ(); persist(); emit(); }
@@ -299,5 +314,5 @@ NC.gdrive = (function () {
 
   /* 로그인 창은 누른 순간에 열어야 크롬이 막지 않음 → 저장 설정·안내 창을 열 때 미리 불러 둠 */
   function preload() { if (S.fake) return; loadGIS().catch(() => {}); }
-  return { connect, login, preload, diag, forget, revive, reviveAsync, disconnect, status, onChange, flush, fresh: () => fresh(true), run: () => run(), load, ROOT_NAME, tokOK, _fake: fake, _S: S };
+  return { connect, login, preload, diag, forget, pushAll, revive, reviveAsync, disconnect, status, onChange, flush, fresh: () => fresh(true), run: () => run(), load, ROOT_NAME, tokOK, _fake: fake, _S: S };
 })();
