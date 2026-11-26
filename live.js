@@ -133,6 +133,15 @@ NC.live = (function () {
     if (Array.isArray(theirsD.fonts) || Array.isArray(mineD.fonts)) { const seen = new Set(), f = []; [].concat(theirsD.fonts || [], mineD.fonts || []).forEach(x => { const k = J(x); if (!seen.has(k)) { seen.add(k); f.push(x); } }); out.fonts = f; }
     return out;
   }
+  /* 기준판을 못 찾을 때(예전 판·새로 고침 직후): 사본을 만들지 않고 둘을 합침 — 이 PC 판에 상대에만 있는 쪽·요소를 더함(같은 요소는 이 PC 것), 그림·글꼴은 합집합 */
+  function unionDocs(mineD, theirsD) {
+    const out = JSON.parse(J(Object.assign({}, mineD, { assets: undefined }))); out.assets = Object.assign({}, theirsD.assets || {}, mineD.assets || {});
+    const mp = new Map(out.pages.map(p => [p.id, p]));
+    (theirsD.pages || []).forEach((tp, ti) => { const p = mp.get(tp.id); if (!p) { out.pages.splice(Math.min(ti, out.pages.length), 0, JSON.parse(J(tp))); return; }
+      const have = new Set((p.els || []).map(e => e.id)); (tp.els || []).forEach((e, ei) => { if (!have.has(e.id)) p.els.splice(Math.min(ei, p.els.length), 0, JSON.parse(J(e))); }); });
+    if (Array.isArray(theirsD.fonts) || Array.isArray(mineD.fonts)) { const seen = new Set(), f = []; [].concat(mineD.fonts || [], theirsD.fonts || []).forEach(x => { const k = J(x); if (!seen.has(k)) { seen.add(k); f.push(x); } }); out.fonts = f; }
+    return out;
+  }
   /* 지금 열린 문서 d를 target과 같게 — 통째로 바꾸지 않고 달라진 요소만(보던 쪽·선택·되돌리기가 그대로) */
   function patchTo(d, target) {
     const ops = diff(scan(d), scan(target), target);
@@ -448,5 +457,5 @@ NC.live = (function () {
   }
 
   function attach(a) { api = a; ensureUI(); if (cfg().fb) loadFb(); sync(); }
-  return { attach, changed, step, peers, deferSave, fromFile, merge: mergeDocs, patchTo, paint, settingsHTML, bindSettings, cfg, setCfg, rulesText, parseFbConfig, login, logout, onChange: f => listeners.add(f), get rn() { return rn; }, active: () => !!room, me, debug: () => ({ room: room && { docId: room.docId, peers: Array.from(room.peers.values()), fb: !!room.fb }, fb: { ready: fb.ready, user: fb.user && fb.user.email, connected: fb.connected, err: fb.err }, pending: Array.from(pending), rn, queue: queue.length }) };
+  return { attach, changed, step, peers, deferSave, fromFile, merge: mergeDocs, union: unionDocs, patchTo, paint, settingsHTML, bindSettings, cfg, setCfg, rulesText, parseFbConfig, login, logout, onChange: f => listeners.add(f), get rn() { return rn; }, active: () => !!room, me, debug: () => ({ room: room && { docId: room.docId, peers: Array.from(room.peers.values()), fb: !!room.fb }, fb: { ready: fb.ready, user: fb.user && fb.user.email, connected: fb.connected, err: fb.err }, pending: Array.from(pending), rn, queue: queue.length }) };
 })();

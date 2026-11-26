@@ -2317,3 +2317,15 @@ dialog [data-tidy]{text-wrap:pretty}
 .el-tbl{cursor:default}
 .el-tbl td.tsel{box-shadow:inset 0 0 0 9999px rgba(47,91,234,.16),inset 0 0 0 1.5px #2f5bea}
 #inspector .tbsel{background:var(--ui-field,#f5f7fb);border:1px solid var(--ui-line);border-radius:8px;padding:8px 10px;margin:0 0 10px}
+
+/* ===== 11/26 나눔고딕 굵기 정리 (팀장님 「굵게 보여야 할 메뉴」): 나눔고딕은 보통 400 · 굵게 700 · 아주 굵게 800뿐이라
+   예전 글꼴의 중간 굵기(500)로 구분하던 곳이 보통 글자가 됨 → 제목 줄은 굵게, 설명은 보통 */
+#ctxMenu,.fmenu,#tbMenu,#dvPop,.popmenu,[role=menu]{font-family:var(--font-ui)}
+#ctxMenu kbd,.fmenu kbd,#tbMenu kbd,#dvPop kbd{font-family:var(--font-ui);font-weight:400}
+.fmenu button:has(small),#tbMenu button:has(small),#ctxMenu button:has(small),#dvPop button:has(small){font-weight:700}
+.fmenu button small,#tbMenu button small,#ctxMenu button small,#dvPop button small{font-weight:400}
+#inspector details > summary{font-weight:700}
+#inspector details > summary small{font-weight:400}
+table.dvinfo th{font-weight:700}
+.f>span{color:var(--ui-fg,#1b2130)}
+.fmenu .fstate,#dvPop .dvph{font-weight:400}

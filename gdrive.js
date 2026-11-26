@@ -85,7 +85,7 @@ NC.gdrive = (function () {
   function loadTok() { try { const o = JSON.parse(localStorage.getItem('naracal-gd-tok') || 'null'); if (o && o.t && o.e > now()) { S.token = o.t; S.exp = o.e; } } catch (e) {} }
   loadTok();  /* 로그인 단추를 누른 순간 바로 판단하도록 미리 */
   let loaded = null;
-  function load() { if (loaded) return loaded; loaded = (async () => { loadTok(); const m = await st().idbGet('gd-meta').catch(() => null); if (m && m.rootK) { S.rootId = m.rootId || ''; S.rootK = m.rootK; S.email = m.email || ''; S.listedAt = 0; (m.nodes || []).forEach(n => S.nodes.set(n.k, n)); (m.ren || []).forEach(([a, b]) => S.ren.set(a, b)); S.gen = m.gen || 0; seenN = new Map((m.nodes || []).map(n => [n.k, ser(n)])); } const q = await st().idbGet('gd-q').catch(() => null); if (Array.isArray(q)) { q.forEach(o => { delete o.run; }); S.queue = q; seenQ = new Set(q.map(qkey)); } })(); return loaded; }
+  function load() { if (loaded) return loaded; loaded = (async () => { loadTok(); const m = await st().idbGet('gd-meta').catch(() => null); if (m) S.gen = Math.max(S.gen || 0, m.gen || 0);  /* 11/26: 연결을 끊은 기록(rootK 없음)의 번호도 읽음 — 안 읽으면 다시 연결할 때 「다른 창이 끊음」으로 보고 방금 만든 연결을 지워 오류 */ if (m && m.rootK) { S.rootId = m.rootId || ''; S.rootK = m.rootK; S.email = m.email || ''; S.listedAt = 0; (m.nodes || []).forEach(n => S.nodes.set(n.k, n)); (m.ren || []).forEach(([a, b]) => S.ren.set(a, b)); S.gen = m.gen || 0; seenN = new Map((m.nodes || []).map(n => [n.k, ser(n)])); } const q = await st().idbGet('gd-q').catch(() => null); if (Array.isArray(q)) { q.forEach(o => { delete o.run; }); S.queue = q; seenQ = new Set(q.map(qkey)); } })(); return loaded; }
 
   /* ---------- 구글 로그인 ---------- */
   function loadGIS() { return new Promise((res, rej) => { if (window.google && google.accounts && google.accounts.oauth2) return res(); const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; s.onload = () => res(); s.onerror = () => rej(new Error('구글 로그인을 불러오지 못했습니다 — 인터넷 연결을 확인하세요')); document.head.appendChild(s); }); }
@@ -319,10 +319,11 @@ NC.gdrive = (function () {
   function keepB(k, t) { if (typeof t !== 'string') return; const b = stripDoc(t); if (b) st().idbSet('gd-b:' + k, b).catch(() => {}); }
   async function mergeUp(n, f, c, pid) {  /* 성공하면 true: 합친 판을 올리고 이 PC 판도 합친 판으로 */
     if (!window.NC || !NC.live || !NC.live.merge || typeof c.data !== 'string') return false;
-    const bt = await st().idbGet('gd-b:' + n.k).catch(() => null); if (!bt) return false;
-    let T, M, B; try { B = JSON.parse(bt); M = JSON.parse(c.data); T = JSON.parse(await unpackDoc(await (await call(`${API}/files/${f.id}?alt=media`, {}, true)).text())); } catch (e) { if (e && e.name === 'SyntaxError') return false; throw e; }
+    const bt = await st().idbGet('gd-b:' + n.k).catch(() => null);
+    let T, M, B; try { M = JSON.parse(c.data); B = bt ? JSON.parse(bt) : null; T = JSON.parse(await unpackDoc(await (await call(`${API}/files/${f.id}?alt=media`, {}, true)).text())); } catch (e) { if (e && e.name === 'SyntaxError') return false; throw e; }
     if (!T || !T.pages || !M || !M.pages || (T.docId && M.docId && T.docId !== M.docId)) return false;
-    const out = NC.live.merge(B, M, T), sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    if (!B && st().commonBase) B = await st().commonBase(M, T);  /* 11/26: 기준판이 없던 예전 문서·새로 고침 직후 — 계보가 겹치는 판, 그것도 없으면 합집합(사본 없음) */
+    const out = B ? NC.live.merge(B, M, T) : NC.live.union(M, T), sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     Object.assign(out, { docId: M.docId || T.docId, name: T.name || M.name, saveId: sid, lineage: [...new Set([sid].concat(M.lineage || [], T.lineage || []))].slice(0, 60), savedBy: T.savedBy || M.savedBy, pcId: T.pcId || M.pcId, savedAt: now() });
     const text = JSON.stringify(out), c3 = await cGet(n.k); if (c3 && c3.lm !== c.lm) return 'later';  /* 그사이 또 저장 → 다음 올리기에서 다시 합침 */
     const lm2 = Math.max(now(), (n.lm || 0) + 1), body = await packDoc(text);

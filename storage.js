@@ -59,6 +59,8 @@ NC.store = (function () {
   let VERS = null; const versLoad = () => VERS ? Promise.resolve(VERS) : idbGet('docVers').then(v => (VERS = Array.isArray(VERS) ? VERS : Array.isArray(v) ? v : [])).catch(() => (VERS = VERS || []));
   function remember(j) { if (!j || !j.saveId) return; versLoad().then(L => { if (L.some(v => v.id === j.saveId)) return; let t; try { t = JSON.stringify(Object.assign({}, j, { assets: undefined, _gdA: undefined })); } catch (e) { return; } L.unshift({ id: j.saveId, docId: j.docId || '', t }); L.splice(8); idbSet('docVers', L).catch(() => {}); }); }
   async function verById(id) { if (!id) return null; const L = await versLoad(); const v = L.find(x => x.id === id); if (!v) return null; try { return JSON.parse(v.t); } catch (e) { return null; } }
+  /* 두 판의 계보(saveId·lineage)가 함께 가진 가장 최근 판(이 브라우저에 기억된 것) — 새로 고침 직후처럼 내 마지막 판을 모를 때도 */
+  async function commonBase(a, b) { const L = await versLoad(); if (!a || !b) return null; const B = new Set([b.saveId].concat(b.lineage || []).filter(Boolean)); for (const id of [a.saveId].concat(a.lineage || [])) { if (!id || !B.has(id)) continue; const v = L.find(x => x.id === id); if (v) { try { return JSON.parse(v.t); } catch (e) { return null; } } } return null; }
   async function baseFor(theirs) { const L = await versLoad(); if (!theirs) return null; const T = new Set([theirs.saveId].concat(theirs.lineage || []).filter(Boolean)); for (const id of [state.lastSaveId].concat(state.lineage || [])) { if (!id || !T.has(id)) continue; const v = L.find(x => x.id === id && (!theirs.docId || !x.docId || x.docId === theirs.docId)); if (v) { try { return JSON.parse(v.t); } catch (e) { return null; } } } return null; }
   // 이 브라우저 작업의 바탕 판(마지막으로 이어받거나 저장한 saveId) — 다시 열 때 그사이 다른 PC가 저장했는지 알아보는 데 씀
   function keepBase(docId) { if (state.lastSaveId) idbSet('docBase', { saveId: state.lastSaveId, docId: docId || '', t: Date.now() }).catch(() => {}); }
@@ -86,7 +88,7 @@ NC.store = (function () {
           if (++state.retries === 4) { try { await writeCopy(doc, pcName() + ' 저장 대기'); } catch (e) {} }
           return { retry: true, held: state.retries >= 4 }; }
         else state.retries = 0;
-        if (j && (j.saveId || '') !== state.lastSaveId) { if (window.NC && NC.live && NC.live.peers() && j.docId && j.docId === doc.docId) { if (!descends(j) && lostEls(j, doc)) { if (await baseFor(j)) return { conflict: true, file: f0, data: j }; try { await writeCopy(j, (j.savedBy || '다른 PC') + ' 저장본'); } catch (e) {} } adopt(j); } else return { conflict: true, file: f0, data: j }; } // 실시간으로 같이 고치는 중이면 상대 저장본을 이어받아 그 다음 판으로 저장
+        if (j && (j.saveId || '') !== state.lastSaveId) { if (window.NC && NC.live && NC.live.peers() && j.docId && j.docId === doc.docId) { if (!descends(j) && lostEls(j, doc)) return { conflict: true, file: f0, data: j };  /* 11/26: 사본 대신 합치기(app.js mergeTheirs) */ adopt(j); } else return { conflict: true, file: f0, data: j }; } // 실시간으로 같이 고치는 중이면 상대 저장본을 이어받아 그 다음 판으로 저장
       }
       const seq = state.seq, saveId = rid(), lineage = [saveId].concat(state.lineage).slice(0, 60);
       if (!doc.docId) doc.docId = rid(); // 버전 기록을 묶는 문서 번호 (이름을 바꾸거나 옮겨도 그대로)
@@ -358,6 +360,6 @@ NC.store = (function () {
   async function emptyEntry(name, handle) { const t = await state.dir.getDirectoryHandle(TRASH); await t.removeEntry(name, handle && handle.__gd ? { recursive: true, handle } : { recursive: true }); }  /* 11/26: 구글 드라이브는 같은 이름이 둘일 수 있어 손잡이로 그 파일만 */
 
   return { ensureDir, writeBlobAt, listFiles, snapshot, listSnapshots, readSnapshot, state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, trashFrom, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
-    writeCopy, pcName, setPcName, adopt, descends, baseFor, verById, remember, pcId: () => pc().id,
+    writeCopy, pcName, setPcName, adopt, descends, baseFor, commonBase, verById, remember, pcId: () => pc().id,
     connectFolder, connectDrive, isDrive, useFolder, folderInfo, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, findDocById, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
 })();
