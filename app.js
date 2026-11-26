@@ -150,7 +150,7 @@ function tnow() { return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit
 function setStatusTitle() { const s = $('#status'); if (s && !s.querySelector('.stic')) s.title = s.textContent; }
 /* 11/26 팀장님 「구글 드라이브 연결은 아이콘으로 작게」: 연결됨·연결하는 중은 글자 대신 작은 구름 그림(마우스 올리면 글) */
 const ST_ICON = { ok: '<path d="M7 18.5a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 10.5a3.75 3.75 0 0 1-.5 7.47z"/><path d="m9.5 13.8 1.8 1.8 3.4-3.6"/>', busy: '<path d="M7 18.5a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 10.5a3.75 3.75 0 0 1-.5 7.47z"/><path d="M9.5 14.5h.01M12 14.5h.01M14.5 14.5h.01"/>' };
-function setStatus(t) { setTimeout(setStatusTitle, 0); const s = $('#status'); const k = /^구글 드라이브에 (다시 )?연결(했습니다|됐습니다|됨)/.test(t || '') ? 'ok' : /^구글 드라이브에 연결하는 중/.test(t || '') ? 'busy' : '';
+function setStatus(t) { setTimeout(setStatusTitle, 0); const s = $('#status'); if (typeof t === 'string' && /^파일에 저장됨/.test(t)) { try { const g = store.isDrive && store.isDrive() && NC.gdrive.status(); if (g && (g.failed || g.need)) t += g.need ? ' · ⚠ 구글 로그인이 끝나 드라이브엔 아직 못 올림' : ` · ⚠ 드라이브 올리기 실패 ${g.failed}개 (동기화 단추)`; } catch (e) {} }  /* 11/26 데이터 조: 올리기가 실패하는 중에도 「저장됨」만 보이던 것 */ const k = /^구글 드라이브에 (다시 )?연결(했습니다|됐습니다|됨)/.test(t || '') ? 'ok' : /^구글 드라이브에 연결하는 중/.test(t || '') ? 'busy' : '';
   if (k) { s.innerHTML = `<span class="stic ${k}" role="img" aria-label="${t}"><svg class="ic" viewBox="0 0 24 24">${ST_ICON[k]}</svg></span>`; s.title = t; } else s.textContent = t; }
 /* 위 막대: 문서 크기 칩 (누르면 크기 조정) · ⋯ 더보기 메뉴 (11/19 팀장님) */
 function updDocSize() { const b = $('#docSize'); if (!b || !doc) return; const pw = doc.w * 96 / 25.4, ph = doc.h * 96 / 25.4, isPx = Math.abs(pw - Math.round(pw)) < 0.05 && Math.abs(ph - Math.round(ph)) < 0.05 && doc.w > 50; const t = isPx ? `${Math.round(pw)} × ${Math.round(ph)} px` : docSizeLabel(' × ').replace(/(px|mm|cm)$/, ' $1');  /* 화면용(px) 문서는 px로 */ if (b.textContent !== t) b.textContent = t; }
@@ -232,7 +232,9 @@ async function loadDoc(j, from, quiet) {
 }
 let trashWarned = '';
 async function checkTrashed() {  /* 11/26 데이터 조: 열어 둔 문서를 다른 PC가 휴지통에 넣으면 알림 + 되살리기 (모르고 휴지통 안 파일에 계속 저장하던 것) */
-  const st = store.state; if (!st.handle || !store.isDrive || !store.isDrive()) return; const cp = await curDocPath().catch(() => null); if (!cp || cp[0] !== store.TRASH) { trashWarned = ''; return; }
+  const st = store.state; if (!st.handle || !store.isDrive || !store.isDrive()) return;
+  try { const hn = st.handle.name; if (hn && hn !== st.fileName) { st.fileName = hn; await store.idbSet('fileHandle', st.handle).catch(() => {}); updateSaveBadge(); } } catch (e) {}  /* 11/26 데이터 조: 다른 PC가 이름을 바꾸면 이 PC는 옛 이름으로 보이고 보호도 풀리던 것 */
+  const cp = await curDocPath().catch(() => null); if (!cp || cp[0] !== store.TRASH) { trashWarned = ''; return; }
   if (trashWarned === st.fileName) return; trashWarned = st.fileName;
   const t = toastEl(); t.className = 'toast act'; t.innerHTML = `<span>⚠ 지금 문서 「${esc(doc.name || st.fileName)}」를 다른 PC에서 휴지통에 넣었습니다 — 계속 쓰려면 되살리세요</span><button type="button">원래 자리로 되살리기</button>`; toastShow(t);
   t.querySelector('button').onclick = async () => { toastHide(t); try { const to = (store.trashFrom && store.trashFrom(st.fileName)) || []; await store.ensureDir(to); const nh = await store.moveEntry(st.handle, [store.TRASH], to); st.handle = nh; st.fileName = nh.name; await store.idbSet('fileHandle', nh).catch(() => {}); updateSaveBadge(); trashWarned = ''; toast(`「${doc.name || nh.name}」을(를) 「${to.length ? to.join(' › ') : '내 드라이브'}」로 되살렸습니다`); } catch (e) { toast('되살리지 못했습니다: ' + e.message, true); } };
@@ -4641,7 +4643,7 @@ async function renderDrive() {
   const q = drv.q.trim().toLowerCase();
   if (drv.view === 'home') { docs = (await store.walkDocs().catch(() => [])).sort((a, b) => b.lastModified - a.lastModified).slice(0, 8); }
   else if (drv.view === 'trash') { const r = await store.listDir([store.TRASH]).catch(() => ({ folders: [], docs: [] })); folders = r.folders; docs = r.docs; title = '휴지통'; }
-  else if (drv.view === 'kind' && !q) { const all = await store.walkDocs(), ks = await Promise.all(all.map(kindOfEntry)), K = kindInfo(drv.kind); docs = all.filter((x, i) => ks[i] === drv.kind).sort((a, b) => b.lastModified - a.lastModified); title = `${K[2]} ${esc(K[1])} <small class="hint" style="font-weight:400">— 모든 폴더에서 이 종류 문서를 모았습니다</small>`; drv.exp = await store.listFiles([K[1], EXPORT_DIR]); drv.stray = docs.filter(x => kindOfPath(x.path) !== drv.kind); }
+  else if (drv.view === 'kind' && !q) { const all = await store.walkDocs(), ks = await Promise.all(all.map(kindOfEntry)), K = kindInfo(drv.kind); docs = all.filter((x, i) => ks[i] === drv.kind).sort((a, b) => b.lastModified - a.lastModified); title = `<span class="dvk-ic" style="display:inline-grid;vertical-align:-3px">${DOC_KIND_SVG[drv.kind] ? `<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round">${DOC_KIND_SVG[drv.kind]}</svg>` : K[2]}</span> ${esc(K[1])} <small class="hint" style="font-weight:400">— 모든 폴더에서 이 종류 문서를 모았습니다</small>`; drv.exp = await store.listFiles([K[1], EXPORT_DIR]); drv.stray = docs.filter(x => kindOfPath(x.path) !== drv.kind); }
   else if (drv.view === 'recent' || q) { docs = (await store.walkDocs()).sort((a, b) => b.lastModified - a.lastModified); if (!q) docs = docs.slice(0, 30); title = q ? `"${esc(drv.q)}" 검색 결과` : '최근 디자인'; }
   else { const r = await store.listDir(drv.path).catch(() => { drv.path = []; return store.listDir([]); }); folders = r.folders; docs = r.docs;
     crumbs = [`<button data-crumb="0">내 드라이브</button>`].concat(drv.path.map((p, i) => `<button data-crumb="${i + 1}">${esc(p)}</button>`)).join('<span>›</span>'); }
