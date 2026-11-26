@@ -103,7 +103,9 @@ NC.store = (function () {
     } finally { state.saving = false; }
   }
   // 충돌 때 한쪽 내용을 따로 보관: 동기화 폴더가 있으면 그 안에 "충돌 사본" 파일로, 없으면 내려받기로
-  async function writeCopy(data, label) {
+  /* 사본이 생긴 까닭 기록 (11/26 「배포 뒤 사본이 계속」 — 다음에 원인을 바로 보려고, 이 PC localStorage 최근 20개, 🔍 점검에 보임) */
+  function noteCopy(name, why) { try { const L = JSON.parse(localStorage.getItem('naracal-copylog') || '[]'); L.unshift({ t: Date.now(), name: String(name || '').slice(0, 80), why: String(why || '').slice(0, 80), v: window.NARACAL_VER || '' }); localStorage.setItem('naracal-copylog', JSON.stringify(L.slice(0, 20))); } catch (e) {} }
+  async function writeCopy(data, label) { noteCopy((data && data.name) || '', '공방: ' + (label || ''));
     const t = new Date(), p2 = n => String(n).padStart(2, '0');
     const stamp = `${p2(t.getMonth() + 1)}-${p2(t.getDate())} ${p2(t.getHours())}${p2(t.getMinutes())}${p2(t.getSeconds())}`;
     const base = (data.name || 'design').replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 80) || 'design';
@@ -250,7 +252,7 @@ NC.store = (function () {
     return true;
   }
   // 문서 번호(docId)로 동기화 폴더 안의 문서 파일 찾기 (영상 사본 → 원본 다시 가져오기용)
-  async function findDocById(id) { if (!id) return null; let docs = []; try { docs = (await walkDocs()).sort((a, b) => ((a.path || [])[0] === TRASH) - ((b.path || [])[0] === TRASH)); } catch (e) { docs = await listDocs(); }  /* 11/26 데이터 조: 맨 위 폴더만 보던 것 — 하위 폴더까지 */ for (const x of docs) { try { const f = await x.handle.getFile(); if (f.size > 40 * 1024 * 1024) continue; const t = await f.text(); const m = t.match(/"docId":"([^"]+)"/); if (m && m[1] === id) return x.handle; } catch (e) {} } return null; }
+  async function findDocById(id, o) { if (!id) return null; let docs = []; try { docs = (await walkDocs()).sort((a, b) => ((a.path || [])[0] === TRASH) - ((b.path || [])[0] === TRASH)); } catch (e) { docs = await listDocs(); }  /* 11/26 데이터 조: 맨 위 폴더만 보던 것 — 하위 폴더까지 */ for (const x of docs) { if (o && o.main && (((x.path || [])[0] === TRASH) || /\(충돌 사본 /.test(x.name || ''))) continue;  /* 이어 저장할 본 문서만 (휴지통·충돌 사본 빼고) */ try { const f = await x.handle.getFile(); if (f.size > 40 * 1024 * 1024) continue; const t = await f.text(); const m = t.match(/"docId":"([^"]+)"/); if (m && m[1] === id) return x.handle; } catch (e) {} } return null; }
   async function listDocs() {
     if (!(await folderReady())) return [];
     const out = [];
@@ -360,6 +362,6 @@ NC.store = (function () {
   async function emptyEntry(name, handle) { const t = await state.dir.getDirectoryHandle(TRASH); await t.removeEntry(name, handle && handle.__gd ? { recursive: true, handle } : { recursive: true }); }  /* 11/26: 구글 드라이브는 같은 이름이 둘일 수 있어 손잡이로 그 파일만 */
 
   return { ensureDir, writeBlobAt, listFiles, snapshot, listSnapshots, readSnapshot, state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, trashFrom, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
-    writeCopy, pcName, setPcName, adopt, descends, baseFor, commonBase, verById, remember, pcId: () => pc().id,
+    writeCopy, pcName, setPcName, adopt, descends, baseFor, commonBase, verById, remember, noteCopy, pcId: () => pc().id,
     connectFolder, connectDrive, isDrive, useFolder, folderInfo, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, findDocById, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
 })();

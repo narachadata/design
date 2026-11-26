@@ -269,6 +269,7 @@ NC.gdrive = (function () {
         else if (n.rlm && lmOf(f) !== n.rlm && /\.design\.json$/i.test(n.name) && await mergeUp(n, f, c, pid)) { return; }  /* 'later'(그사이 또 저장)도 여기서 끝 — 줄에 있는 새 올리기가 다시 합침 */  /* 같이 작업: 합친 판을 올림(충돌 사본 없음) */
         else if (n.rlm && lmOf(f) !== n.rlm) {
           const nm = n.name.replace(/(\.design\.json|\.[^.]+)?$/, m => ` (충돌 사본 ${stamp()} ${String(st().pcName()).replace(/[\\/:*?"<>|]/g, '_')})${m}`);
+          try { st().noteCopy && st().noteCopy(n.name, /\.design\.json$/i.test(n.name) ? '드라이브 올리기: 합치지 못함(문서 번호 다름·읽기 실패)' : '드라이브 올리기: 문서 아닌 파일이 갈라짐'); } catch (e) {}
           const cf = await upload('', { name: nm, parents: [pid], appProperties: { lm: String(lm) } }, body, typeOf(n.name)); S.nodes.set(cf.id, { k: cf.id, id: cf.id, name: nm, parent: n.parent, folder: false, size: Number(cf.size) || 0, lm: lmOf(cf), rlm: lmOf(cf), rparent: pid }); cSet(cf.id, { lm: lmOf(cf), data: c.data }).catch(() => {});
           const c2 = await cGet(n.k); if (c2 && c2.lm !== lm) { n.rlm = lmOf(f); S.conflicts++; return; }  /* 사본을 올리는 사이 또 저장함 → 새 저장은 남기고 다음 올리기에서 다시 따짐 */
           Object.assign(n, { lm: lmOf(f), rlm: lmOf(f), size: Number(f.size) || 0 }); cDel(n.k); S.conflicts++; return;
