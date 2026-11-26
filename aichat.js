@@ -112,7 +112,7 @@ ${manualText()}`;
     if (px) o.px_per_mm = r1(96 / 25.4 * 100) / 100;
     if (d.cert) o.kind = '상장 문서(나라차 → 상장 메뉴로 만든 것 — 명단은 그 메뉴에서)';
     if (d.att) o.kind = '출석부 문서(나라차 → 출석부 메뉴)';
-    const dj = B.dojang(); if (dj && (dj.name || dj.phone)) o.dojang = { name: dj.name || '', phone: dj.phone || '', addr: dj.addr || dj.address || '' };
+    const dj = B.dojang(); { const v = {}; if (dj) Object.keys(dj).forEach(k => { if (typeof dj[k] === 'string' && dj[k].trim()) v[k] = dj[k].trim(); }); o.dojang = Object.keys(v).length ? v : '설정 안 됨 — 지어내지 말고 ○○로 비운 뒤 「도장 정보」(open_tool dojang_info)를 열어 넣게 안내'; }  /* 11/26 AI 조: 이름·전화만 보거나 빈 때 아예 안 보내던 것 */
     return o;
   }
   function findEl(id) { const d = B.doc; for (let i = 0; i < d.pages.length; i++) { const e = d.pages[i].els.find(x => x.id === id); if (e) return { e, i, p: d.pages[i] }; } return null; }
@@ -195,7 +195,7 @@ ${manualText()}`;
     if (name === 'generate_image') {
       if (!cfg().geminiKey) throw new Error('Gemini API 키가 없어 그림을 만들 수 없습니다. 채팅창 ⚙에서 Gemini 키를 넣거나, 「AI 그림 스튜디오」(내 채팅 요금제)로 만들도록 안내하세요.');
       ctx.note('🎨 그림 만드는 중… (10~40초)');
-      const imgs = await window.AI.geminiImage({ prompt: String(a.prompt || ''), aspect: a.aspect || '1:1' });
+      const imgs = await window.AI.geminiImage({ prompt: String(a.prompt || '') + (window.NC && NC.DOBOK_EN ? ' ' + NC.DOBOK_EN : '') + ' No text, letters, logos or flags in the image.', aspect: a.aspect || '1:1' });  /* 도복 원칙·글자 없음은 공방이 늘 붙임 (로고는 공방에서) */
       let u = imgs[0]; if (a.cutout) u = await window.AI.removeWhite(u);
       const id = await B.addImageURL(u, a); ctx.edits++;
       return { ok: true, id, note: '그림을 지금 쪽에 넣었습니다' };

@@ -257,7 +257,7 @@
         } else if (s.sink && pageEmpty()) sink = Number(s.sink) || 0;
         if (p.st === 'h1' && kind === 'body' && !(s.start && s.start !== 'none')) { chap = p.plain; sec = ''; if (pageEmpty()) { pg.chap = chap; pg.sec = ''; pg.label = chap; } }
         if (p.st === 'h2' && kind === 'body') { sec = p.plain; if (pageEmpty()) pg.sec = sec; }
-        let chapNo = null; if (p.st === 'h1' && numOn && p.chapNo !== false) { chapN++; chapNo = `제${chapN}장`; }
+        let chapNo = null; if (p.st === 'h1' && numOn && p.chapNo !== false) { chapN++; chapNo = /^\s*(제\s*\d+\s*[장부편]|\d+\s*(장|\.)\s)/.test(p.plain || '') ? null : `제${chapN}장`; }  /* 11/26 편집 조: 제목이 이미 「제1장 …」이면 「제1장 제1장」이 되던 것 */
         let guard = 0;
         while (runs && guard++ < 400) {
           const first = !content.length, o = { first, cont, noIndent, sink: first ? sink : 0, toc: p.toc, chapNo, tocNo: p.tocNo, noLeader: p.noLeader };
