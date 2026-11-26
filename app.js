@@ -6344,7 +6344,9 @@ async function printVector(pages, opt) {
 $('#btnExport').onclick = () => openDownload();
 
 /* ---- 복사·붙여넣기 (단축키·우클릭 메뉴 공용) ---- */
+let tblCopy = null;  /* 표에서 여러 칸을 고르고 복사한 글(탭·줄 바꿈 — 엑셀·한글·이 공방 표에 붙여 넣기) */
 function doCopy(cut) {
+  { const se = selEls(), tb = !cut && se.length === 1 && se[0].type === 'tbl' && tblSel && tblSel.id === se[0].id ? se[0] : null, rg = tb && tblRange(tblNorm(tb)); if (rg && (rg.r1 > rg.r0 || rg.c1 > rg.c0)) { const q = v => /[\t\n"]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; const txt = tb.rows.slice(rg.r0, rg.r1 + 1).map(r => r.slice(rg.c0, rg.c1 + 1).map(q).join('\t')).join('\n'); tblCopy = { t: Date.now(), txt }; try { navigator.clipboard.writeText(txt).catch(() => {}); } catch (e) {} toast(`표 ${rg.r1 - rg.r0 + 1}줄 × ${rg.c1 - rg.c0 + 1}칸을 복사했습니다 — 엑셀·한글이나 다른 표에 붙여 넣을 수 있어요`); return; } }
   const els = clone(selEls().filter(x => !cut || !x.locked)); if (!els.length) return;
   const assets = {}; const walk = v => { if (typeof v === 'string' && v.startsWith('a:') && doc.assets[v.slice(2)]) assets[v] = doc.assets[v.slice(2)]; else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(els);
   clip = { els, assets, page: cur, n: 0, mark: 'nc-clip:' + uid(), t: Date.now() }; { const c_ = clip; try { navigator.clipboard.writeText(c_.mark).catch(() => { c_.ctx = true; }); } catch (e) { c_.ctx = true; } } // 표식을 못 쓰면(권한 없음) 다음 붙여넣기는 앱 안 복사본으로 // 시스템 클립보드에 표식: 붙여넣을 때 바깥 복사본과 구분
@@ -8669,7 +8671,7 @@ function renderBulk() {
 
 let pasteShift = false, pasteFallback = null;
 // Ctrl+C: 시스템 클립보드에도 표식을 넣어 둠 (권한이 없어도 동작)
-document.addEventListener('copy', e => { if (editing || (e.target.matches && e.target.matches('input,textarea,[contenteditable="true"]')) || !clip || Date.now() - clip.t > 1500) return; e.clipboardData.setData('text/plain', clip.mark); e.preventDefault(); });
+document.addEventListener('copy', e => { if (tblCopy && Date.now() - tblCopy.t < 1500 && !editing) { e.clipboardData.setData('text/plain', tblCopy.txt); e.preventDefault(); return; } if (editing || (e.target.matches && e.target.matches('input,textarea,[contenteditable="true"]')) || !clip || Date.now() - clip.t > 1500) return; e.clipboardData.setData('text/plain', clip.mark); e.preventDefault(); });
 document.addEventListener('cut', e => { if (editing || (e.target.matches && e.target.matches('input,textarea,[contenteditable="true"]')) || !clip || Date.now() - clip.t > 1500) return; e.clipboardData.setData('text/plain', clip.mark); e.preventDefault(); });
 /* ---- 바깥에서 복사한 것 붙여넣기: 화면 캡처·사진 파일은 그림으로, 글자는 새 글 상자로 ---- */
 document.addEventListener('paste', async e => {
