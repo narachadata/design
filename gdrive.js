@@ -96,7 +96,7 @@ NC.gdrive = (function () {
     if (S.fake) { S.token = 'fake'; S.exp = now() + 3600e3; S.need = false; emit(); return Promise.resolve(true); }
     if (logging) return logging;
     const open = () => new Promise((res, rej) => {
-      const tc = google.accounts.oauth2.initTokenClient({ client_id: CID, scope: SCOPE, hint: hint(), callback: r => { if (r && r.access_token) { S.token = r.access_token; S.exp = now() + ((Number(r.expires_in) || 3600) - 60) * 1000; saveTok(); S.need = false; S.err = ''; S.autoTries = 0; emit(); res(true); kick(); } else rej(new Error('구글 로그인이 취소되었습니다')); },
+      const tc = google.accounts.oauth2.initTokenClient({ client_id: CID, scope: SCOPE, hint: hint(), login_hint: hint(), prompt: '', callback: r => { if (r && r.access_token) { S.token = r.access_token; S.exp = now() + ((Number(r.expires_in) || 3600) - 60) * 1000; saveTok(); S.need = false; S.err = ''; S.autoTries = 0; emit(); res(true); kick(); } else rej(new Error('구글 로그인이 취소되었습니다')); },
         error_callback: e => rej(new Error(e && e.type === 'popup_closed' ? '로그인 창이 닫혔습니다' : e && e.type === 'popup_failed_to_open' ? '로그인 창이 막혔습니다 — 주소창 오른쪽의 팝업 차단을 풀어 주세요' : '구글 로그인이 되지 않았습니다')) });
       tc.requestAccessToken();
     });
@@ -105,6 +105,9 @@ NC.gdrive = (function () {
     return logging;
   }
   /* 한 시간쯤 지나 로그인이 끝나면: 다음에 화면을 누를 때 로그인 창을 잠깐 띄워 이어 감(브라우저는 누를 때만 창을 허락). 두 번 안 되면 단추로 */
+  /* 11/26 팀장님 「로그인 된 상태로 두면 안 될까」: 구글은 웹 프로그램에 허락을 1시간만 줌(서버 없이 늘릴 수 없음) → 끝나기 15분 전부터 화면을 누를 때
+     조용히 새 허락을 받아 둠(prompt '' + 계정 힌트: 한 번 허락한 계정이면 작은 창이 저절로 닫힘, 입력 없음). 새로 고침·새 버전 뒤에도 남은 시간이 있으면 그대로 */
+  document.addEventListener('pointerdown', () => { if (!S.rootK || S.fake || logging || !S.token || !tokOK() || S.exp - now() > 15 * 60e3) return; if (now() - (S.lastRenew || 0) < 5 * 60e3) return; S.lastRenew = now(); login().catch(() => {}); }, true);
   document.addEventListener('pointerdown', () => { if (!S.rootK || tokOK() || S.fake || logging || S.autoTries >= 2 || !(S.queue.length || now() - S.listedAt > FRESH)) return; if (now() - (S.lastAuto || 0) < 120000) return; S.lastAuto = now(); S.autoTries++; login().catch(() => { S.need = true; emit(); }); }, true);
 
   /* ---------- 드라이브 요청 ---------- */

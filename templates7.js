@@ -272,3 +272,30 @@
   if (Array.isArray(NC.tpl.cats) && !NC.tpl.cats.some(c => c[0] === 'pres')) NC.tpl.cats.splice(1, 0, ['pres', '📊 프레젠테이션']);
   if (NC.tpl.facets && !NC.tpl.facets.format.includes('프레젠테이션')) NC.tpl.facets.format.push('프레젠테이션');
 })();
+
+/* SNS 글자 바닥값 (11/26 팀장님 「24px로」): SNS·카드뉴스 템플릿은 휴대폰에서 보므로 1080px 그림 기준 24px(정사각 285.75mm 기준 약 18pt)보다 작은 글을
+   24px까지 키움 — 칸 폭·높이 안에서만(넘치지 않게, 모양 그대로). 장식 글자는 그대로. 인쇄물 크기로 바꿔 만들 때(sz && !sz.screen)는 건드리지 않음 */
+(function () {
+  const MIN_PX = 24;
+  const emW = ch => /[ㄱ-힣一-鿿]/.test(ch) ? 0.95 : /[A-Z0-9]/.test(ch) ? 0.66 : ch === ' ' ? 0.3 : 0.52;
+  function snsFloor(pages, W, H, fill) {
+    fill = fill || 0.98;
+    const minPt = MIN_PX * Math.min(W, H) / (0.3528 * 1080);
+    [].concat(pages).forEach(pg => (pg && pg.els || []).forEach(e => {
+      if (e.type !== 'text' || !e.size || e.name === '장식' || e.size >= minPt) return;
+      let f = minPt / e.size; const mm = e.size * 0.3528, lines = String(e.text || '').split('\n');
+      const longest = Math.max(...lines.map(l => [...l].reduce((a, ch) => a + emW(ch), 0) + (e.ls || 0) * l.length)) * mm;
+      if (longest > 0 && e.w) f = Math.min(f, (e.w * fill) / longest);
+      const tall = lines.length * mm * (e.lh || 1.35); if (tall > 0 && e.h) f = Math.min(f, Math.max(1, (e.h * 1.05) / tall));
+      if (f > 1.02) { e.size = Math.round(e.size * f * 10) / 10; if (e.fitText) e.fitMax = e.size; }
+    }));
+    return pages;
+  }
+  NC.tpl.snsFloor = snsFloor;
+  (NC.tpl.list || []).forEach(t => {
+    const fmt = t.tags && t.tags.format;
+    if (t._snsFloor || !(t.cat === 'sns' || fmt === 'SNS' || fmt === '카드뉴스') || typeof t.build !== 'function') return;
+    const orig = t.build; t._snsFloor = true; t._buildRaw = orig;
+    t.build = function (uid, a2) { const pages = orig.apply(this, arguments), sz = t.responsive && a2 && a2.w ? a2 : null; if (sz && !sz.screen) return pages;  /* 반응형만 둘째 값이 크기(sz), 나머지는 색 묶음(pal) */ return snsFloor(pages, sz && sz.w ? sz.w : t.w, sz && sz.h ? sz.h : t.h); };
+  });
+})();
