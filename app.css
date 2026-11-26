@@ -4,14 +4,11 @@
   --ui-accent:#2f5bea; --ui-accent-soft:#e9eefc; --ui-accent-fg:#ffffff; --ui-stage:#e4e7ee; --ui-danger:#d13b3b; --ui-ai:#6b3fd1; --ui-ai-soft:#f0ebfb;
   --brand:#1e2b5a; --r:8px; --sh:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
   --side-w:300px; --insp-w:320px;
-  --font-ui:"Pretendard","Noto Sans KR",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --font-ui:"Nanum Gothic","나눔고딕","Apple SD Gothic Neo","Malgun Gothic",sans-serif;  /* 11/26 팀장님 「맥·PC 모두 나눔고딕」 — 작은 글자 힌팅이 있어 또렷함(예전 Pretendard 가변 글꼴은 힌팅 없음) */
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%}
-/* 11/26 팀장님 「설명 글씨가 다른 프로그램보다 흐릿」: Pretendard 가변 글꼴은 작은 글자 힌팅이 없어 Windows·일반 모니터(배율 2 미만)에서 번져 보임
-   → 그런 화면에서는 운영체제 글꼴(Windows 맑은 고딕 · 맥 애플 SD 산돌고딕 Neo)로 (html.sysui — app.js 맨 앞). 디자인 글꼴은 그대로 */
-html.sysui{--font-ui:"Malgun Gothic","맑은 고딕",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI","Noto Sans KR",sans-serif}
 body{margin:0;background:var(--ui-bg);color:var(--ui-fg);font-family:var(--font-ui);font-size:14px;line-height:1.45;overflow:hidden;-webkit-font-smoothing:auto} /* 2026-11-18: antialiased는 맥에서 글자를 가늘고 흐릿하게 만들어(팀장님 "글자가 모두 흐릿") 기본값으로 */
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--ui-accent);outline-offset:1px}
@@ -2152,8 +2149,9 @@ dialog.asktext{width:min(480px,92vw)}
 .ecard .ebox{position:relative}.ecard .ebadge{position:absolute;right:4px;bottom:4px;font-style:normal;font-size:10px;font-weight:700;line-height:1;color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:3px 6px;pointer-events:none}
 .ecard .ebox{position:relative}.ecard .ebadge{position:absolute;right:4px;bottom:4px;font-style:normal;font-size:10px;font-weight:700;line-height:1;color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:3px 6px;pointer-events:none}
 .ecard .etag{display:inline-block;margin-left:3px;font-style:normal;font-size:9.5px;font-weight:700;color:#5a4a00;background:#fff3c4;border:1px solid #f0d77a;border-radius:4px;padding:0 3px;vertical-align:1px}
-.ecard .ebg{position:absolute;left:4px;top:4px;z-index:2;font-style:normal;font-size:10px;font-weight:700;line-height:1.5;color:#5a4a00;background:#fff3c4;border:1px solid #f0d77a;border-radius:4px;padding:0 4px;pointer-events:auto}
+.ecard .ebg{display:block;align-self:center;margin:0 auto;font-style:normal;font-size:8.5px;font-weight:700;line-height:1.35;color:#5a4a00;background:#fff3c4;border:1px solid #f0d77a;border-radius:3px;padding:0 3px;letter-spacing:-.02em}
 .ecard .ebg.wb{color:#1E2B5A;background:#fff;border-color:#b9c2d4}
+.ecard .ebg.dk{color:#fff;background:rgba(20,26,40,.78);border-color:rgba(255,255,255,.35)}
 .dlpurp{display:grid;grid-template-columns:1fr 1fr;gap:6px}.dlpurp button{display:flex;align-items:center;gap:6px;padding:8px 9px;border:1.5px solid var(--ui-line,#e2e5eb);border-radius:10px;background:#fff;font-weight:600;font-size:12.5px;text-align:left;position:relative}.dlpurp button i{font-style:normal;font-size:17px}.dlpurp button.on{border-color:var(--ui-accent,#2f5bea);background:var(--ui-accent-soft,#e9eefc)}.dlpurp button em{position:absolute;top:-7px;right:6px;font-style:normal;font-size:9.5px;background:#1f7a45;color:#fff;border-radius:999px;padding:1px 5px}
 .dlcur{margin:6px 0 4px!important}.dlmore{margin:4px 0 8px}.dlmore .dlfmts{margin-top:6px}
 .presmood{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:6px}.presmood .pm-b{display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 3px;border:1.5px solid var(--ui-line,#e2e5eb);border-radius:8px;background:#fff;font-size:11px}.presmood .pm-b.on{border-color:var(--ui-accent,#2f5bea);background:var(--ui-accent-soft,#e9eefc)}.presmood i{display:block;width:44px;height:26px;border-radius:4px;position:relative;border:1px solid rgba(0,0,0,.1)}.presmood i b{position:absolute;left:6px;bottom:5px;width:18px;height:4px;border-radius:2px}
@@ -2295,3 +2293,21 @@ dialog.nd.drive nav .dvnav-end{position:sticky;bottom:-16px;background:var(--ui-
 .fmenu.ctx button{padding:5px 10px;font-size:13px;gap:8px}.fmenu.ctx hr{margin:3px 4px}.fmenu.ctx button .ic{width:15px;height:15px}
 
 .el-text span.nobr{white-space:nowrap}
+
+/* ===== 11/26 팀장님 「대화창을 지저분하지 않고 깔끔하게」 — 모든 대화창 공통 다듬기 =====
+   글자 크기 단계를 줄이고(본문 13.5 · 보조 12.5 · 아주 작은 글도 12px 이상), 회색은 한 가지, 점선 상자는 실선, 제목의 이모지는 뺌(app.js dlgTidy) */
+dialog{font-size:13.5px;line-height:1.6;border-radius:12px}
+dialog .dhead{padding:15px 20px}
+dialog .dhead h2{font-size:16.5px;font-weight:700;letter-spacing:-.01em}
+dialog .dhead h2 small{font-weight:400;font-size:12.5px;color:#667085;margin-left:8px}
+dialog .dbody{padding:18px 22px}
+dialog h3{font-size:13px;letter-spacing:0;color:#344054;margin:18px 0 8px}
+dialog .dbody > h3:first-child, dialog .dbody > :first-child h3:first-child{margin-top:2px}
+dialog small, dialog .hint{font-size:max(12px, .86em);color:#5b6475}
+dialog .hint{line-height:1.6}
+dialog details > summary{font-weight:600;color:#344054}
+dialog [class*="svstep"], dialog .bk-more{border-style:solid!important}
+dialog p{margin-top:0}
+dialog summary:focus{outline:none}
+dialog summary:focus-visible{box-shadow:0 0 0 2px #c7d7fe;border-radius:4px}
+dialog [data-tidy]{text-wrap:pretty}
