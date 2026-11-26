@@ -2329,3 +2329,7 @@ dialog [data-tidy]{text-wrap:pretty}
 table.dvinfo th{font-weight:700}
 .f>span{color:var(--ui-fg,#1b2130)}
 .fmenu .fstate,#dvPop .dvph{font-weight:400}
+.nd .fcard .ori{display:inline-flex;margin-top:2px;border:1px solid var(--ui-line2);border-radius:999px;overflow:hidden;font-size:11.5px}
+.nd .fcard .ori i{font-style:normal;padding:2px 9px;color:var(--ui-muted);background:#fff}
+.nd .fcard .ori i.on{background:var(--ui-accent-soft,#e8eefc);color:var(--ui-accent,#2f5bea);font-weight:700}
+.nd .fcard .ori i:hover{background:var(--ui-accent,#2f5bea);color:#fff}
