@@ -452,7 +452,7 @@ function renderCanvas() {
   c.style.setProperty('--pw', doc.w); c.style.setProperty('--ph', doc.h); c.style.setProperty('--b', '0mm');
   c.innerHTML = bookTokens(pg, `<div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, 'edit')).join('')}${masterHTML(pg)}</div>`);
   textOver.clear();
-  pg.els.forEach(el => { if (el.type === 'text' && !isWarp(el)) { let d = c.querySelector(`[data-id="${el.id}"]`); if (!d) return; if (el.sizing === 'autow') autoWidth(d, el); if (el.fitText && el.sizing === 'fixed') d = autoFitText(d, el) || d; const hh = fitTextH(d, el, true); if (hh != null) el.h = hh; if (el.sizing === 'fixed' && textOverflows(d, el)) textOver.add(el.id); } });
+  pg.els.forEach(el => { if (el.type === 'text' && !isWarp(el)) { let d = c.querySelector(`[data-id="${el.id}"]`); if (!d) return; if (el.sizing === 'autow') autoWidth(d, el); if (el.fitText && el.sizing === 'fixed') d = autoFitText(d, el) || d; const hh = fitTextH(d, el, true); if (hh != null) el.h = hh; if (el.sizing === 'fixed' && !(el.flowFrame && el.flowFrame !== 'body') && textOverflows(d, el)) textOver.add(el.id); } });  /* 차례·찾아보기 흐름 상자는 다음 쪽으로 이어지므로 넘침 표시 안 함 (11/26 편집 조) */
   if (pg.certTpl) { pg.els.forEach(el => { if (el.tplField) { const d9 = c.querySelector(`[data-id="${el.id}"]`); if (d9) d9.classList.add('tplf'); } }); }  /* 상장 양식: 사람마다 바뀌는 자리 */
   c.querySelectorAll('.el-cal .cell[data-day]').forEach(x => { const n = x.dataset.day && x.scrollHeight > x.clientHeight + 1; x.classList.toggle('ovf', !!n); if (n) x.title = '일정이 칸을 넘쳐 아래가 잘립니다 — 글자를 줄이거나 칸 높이를 늘리세요'; });  /* 달력 칸 넘침 표시(편집 화면에만) */
   renderFacing(); renderGhost(); fitCanvas(); renderOverlay(); NC.live.paint(); viewBtns();
@@ -5955,7 +5955,8 @@ async function runDownload() {
         else pdf.addImage(c.toDataURL('image/jpeg', cfg.q), 'JPEG', u(slug), u(slug), u(doc.w + 2 * bleed), u(doc.h + 2 * bleed), `p${i}`, 'NONE');
         free(c);
         if (slug) { try { pdf.setDrawColor(1, 1, 1, 1); } catch (e) { pdf.setDrawColor(0); } pdf.setLineWidth(u(0.09)); const x0 = u(slug + bleed), y0 = u(slug + bleed), x1 = x0 + u(doc.w), y1 = y0 + u(doc.h), L = u(slug - 1), gap = u(bleed + 1);
-          [[x0, y0, -1, -1], [x1, y0, 1, -1], [x0, y1, -1, 1], [x1, y1, 1, 1]].forEach(([x, y, sx, sy]) => { pdf.line(x + sx * gap, y, x + sx * (gap + L), y); pdf.line(x, y + sy * gap, x, y + sy * (gap + L)); }); }
+          [[x0, y0, -1, -1], [x1, y0, 1, -1], [x0, y1, -1, 1], [x1, y1, 1, 1]].forEach(([x, y, sx, sy]) => { pdf.line(x + sx * gap, y, x + sx * (gap + L), y); pdf.line(x, y + sy * gap, x, y + sy * (gap + L)); });
+          if (doc.bookCover && BK() && BK().coverSnapX) { try { const zx = BK().coverSnapX(), folds = new Set(); for (let k = 0; k + 2 < zx.length; k += 3) { folds.add(Math.round(zx[k] * 100) / 100); folds.add(Math.round(zx[k + 2] * 100) / 100); } [...folds].filter(f => f > 0.5 && f < doc.w - 0.5).forEach(f => { const fx = x0 + u(f); pdf.line(fx, y0 - gap, fx, y0 - gap - L); pdf.line(fx, y1 + gap, fx, y1 + gap + L); }); } catch (e) {} }  /* 11/26 편집 조: 표지 펼침면 — 책등·날개 접는 자리 표시 (재단선 옆 슬러그에) */ }
         // 인쇄소 프로그램이 읽는 재단·도련 영역 (pt, 왼쪽 아래 기준)
         try { const pc = pdf.internal.getCurrentPageInfo().pageContext; if (bleed || slug) { pc.trimBox = { bottomLeftX: pt(u(slug + bleed)), bottomLeftY: pt(u(slug + bleed)), topRightX: pt(u(slug + bleed + doc.w)), topRightY: pt(u(slug + bleed + doc.h)) }; pc.bleedBox = { bottomLeftX: pt(u(slug)), bottomLeftY: pt(u(slug)), topRightX: pt(u(slug + 2 * bleed + doc.w)), topRightY: pt(u(slug + 2 * bleed + doc.h)) }; } } catch (e) {}
       }

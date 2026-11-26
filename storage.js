@@ -257,6 +257,7 @@ NC.store = (function () {
   async function openHandle(h) { state.handle = h; state.fileName = h.name; await idbSet('fileHandle', h); return readFile(); }
   // 현재 문서를 폴더에 새 파일로 저장하고 연결 (이름이 겹치면 번호를 붙임)
   async function uniqueName(title, dir) {
+    if (isDrive() && window.NC && NC.gdrive && NC.gdrive.fresh) { try { await NC.gdrive.fresh(); } catch (e) {} }  /* 11/26 데이터 조: 다른 PC가 몇 초 전에 만든 같은 이름을 못 보던 것 — 새 이름 정하기 직전에 드라이브 목록을 새로 */
     const base = (title || 'design').replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 80) || 'design';
     const names = new Set(); for await (const [n] of (dir || state.dir).entries()) names.add(n);
     let name = base + '.design.json'; for (let i = 2; names.has(name); i++) name = `${base} (${i}).design.json`;
