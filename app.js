@@ -7979,6 +7979,7 @@ function openCtx(ev, items) {
 }
 function ctxDo(k) {
   if (k.startsWith('pg-')) { pageCmd(k.slice(3)); return; } /* 페이지 목록의 오른쪽 버튼 메뉴 */
+  if (k.startsWith('tb-')) { const t9 = selEls()[0]; if (t9 && t9.type === 'tbl') tblAct(t9, k.slice(3)); return; }  /* 표 칸 메뉴 */
   const els = selEls(), el = els[0];
   ({ saveblock: saveMyBlock, copy: () => doCopy(false), cut: () => doCopy(true), paste: () => doPaste(false), pastein: () => doPaste(true), dup: duplicate, del: removeSel, ungroup: ungroupSel, cstyle: copyStyle, pstyle: pasteStyle,
     front: () => reorder('front'), up: () => reorder('up'), down: () => reorder('down'), back: () => reorder('back'), group: groupSel,
@@ -8196,6 +8197,7 @@ $('#scroller').addEventListener('contextmenu', e => {
   if (e.target.closest('#cellEd') || editing) return; e.preventDefault();
   const d = (document.elementsFromPoint(e.clientX, e.clientY).map(n => { const g = n.closest && n.closest('#ghost .el'); return g ? $(`#canvas [data-id="${g.dataset.id}"]`) : n.closest && n.closest('#canvas .el'); }).filter(Boolean)).find(x => { const el = find(x.dataset.id); return el && (!el.locked || sel.includes(el.id) || !lockedBg(el)); });
   if (d && !sel.includes(d.dataset.id)) select(groupOf(d.dataset.id));
+  { const td = document.elementsFromPoint(e.clientX, e.clientY).map(n => n.closest && n.closest('#canvas .el-tbl td')).find(Boolean); if (td && d && td.closest('.el-tbl') === d) { const id = d.dataset.id, r = +td.dataset.r, c = +td.dataset.c, el9 = find(id), rg = el9 && tblSel && tblSel.id === id ? tblRange(el9) : null; if (!(rg && r >= rg.r0 && r <= rg.r1 && c >= rg.c0 && c <= rg.c1)) { tblCell = { id, r, c }; tblSel = null; tblPaintSel(id); } } }  /* 표 칸에서 오른쪽 버튼: 그 칸 기준 (Shift로 고른 범위 안이면 범위 그대로) */
   if (!d) { if (sel.length) select([]); openCtx(e, [['paste', '붙여넣기', 'Ctrl+V', !clip], ['pastein', '같은 자리에 붙여넣기', 'Ctrl+Shift+V', !clip], '-', ['all', '모두 선택', 'Ctrl+A'], ['find', '찾아 바꾸기…', 'Ctrl+F'], '-', ['rulers', showRulers() ? '눈금자 끄기' : '눈금자 보이기', 'Shift+R'], ...(doc.guides && (doc.guides.x.length || doc.guides.y.length) ? [['clrguides', '안내선 모두 지우기', '']] : [])]); return; }
   elCtx(e);
 });
@@ -8227,7 +8229,9 @@ function elCtx(e) {
       + tile('al-t', PG(14, 4), '위', '쪽 위에 (' + keyLabel('Alt+W') + ')') + tile('al-m', PG(14, 10), '중간', '쪽 세로 가운데에 (' + keyLabel('Alt+V') + ')') + tile('al-b', PG(14, 16), '아래', '쪽 아래에 (' + keyLabel('Alt+S') + ')')
       + `</div>` }, '-'] : [];
   const wrapRow = els.length === 1 && canWrap(els[0]) && !locked ? [{ html: `<div class="ctx-h">글 배치</div><div class="ctgrid wr">${WRAP_OPTS.map(([k, t, tip]) => `<button class="ct${(els[0].wrap || 'none') === k ? ' on' : ''}" data-ctx="wrap-${k}" title="${tip}" aria-label="${tip}"><span class="wpic">${wrapPic(k)}</span><span>${t}</span></button>`).join('')}</div>` }, '-'] : [];
-  openCtx(e, [...arrRows, ...pageRow, ...wrapRow, ['copy', '복사', 'Ctrl+C'], ['cut', '잘라내기', 'Ctrl+X'], ['paste', '붙여넣기', 'Ctrl+V', !clip], ['dup', '복제', 'Ctrl+D'], ['del', '삭제', 'Delete'], '-', ['cstyle', '스타일 복사', 'Ctrl+Alt+C'], ['pstyle', '스타일 붙여넣기', 'Ctrl+Alt+V', !styleClip], '-',
+  const tbl = els.length === 1 && els[0].type === 'tbl' && !locked ? els[0] : null, trg = tbl ? tblRange(tblNorm(tbl)) : null, tMulti = trg && (trg.r1 > trg.r0 || trg.c1 > trg.c0), tMerged = trg && (tbl.merges || []).some(m => !(m.r > trg.r1 || m.r + m.rs - 1 < trg.r0 || m.c > trg.c1 || m.c + m.cs - 1 < trg.c0));
+  const tblRows = tbl ? [{ html: `<div class="ctx-h">표 · ${trg ? (tMulti ? `${trg.r1 - trg.r0 + 1}줄 × ${trg.c1 - trg.c0 + 1}칸` : `${trg.r0 + 1}줄 ${trg.c0 + 1}칸`) : ''}</div>` }, ['tb-rowUp', '위에 줄 넣기'], ['tb-rowDn', '아래에 줄 넣기'], ['tb-rowDel', '줄 빼기'], ['tb-colL', '왼쪽에 칸 넣기'], ['tb-colR', '오른쪽에 칸 넣기'], ['tb-colDel', '칸 빼기'], ['tb-merge', '칸 합치기', tMulti ? '' : '여러 칸을 먼저 고르기', !tMulti], ...(tMerged ? [['tb-split', '합친 칸 나누기']] : []), ['tb-bold', '굵게'], '-'] : [];  /* 11/26 표 칸 오른쪽 버튼 메뉴 */
+  openCtx(e, [...tblRows, ...arrRows, ...pageRow, ...wrapRow, ['copy', '복사', 'Ctrl+C'], ['cut', '잘라내기', 'Ctrl+X'], ['paste', '붙여넣기', 'Ctrl+V', !clip], ['dup', '복제', 'Ctrl+D'], ['del', '삭제', 'Delete'], '-', ['cstyle', '스타일 복사', 'Ctrl+Alt+C'], ['pstyle', '스타일 붙여넣기', 'Ctrl+Alt+V', !styleClip], '-',
     ['front', '맨 앞으로', 'Ctrl+Shift+]'], ['up', '앞으로', 'Ctrl+]'], ['down', '뒤로', 'Ctrl+['], ['back', '맨 뒤로', 'Ctrl+Shift+['], '-',
     ...(selUnitCount() >= 2 ? [['group', '그룹으로 묶기', 'Ctrl+G']] : []), ...(els.some(x => x.group) ? [['ungroup', '그룹 해제', 'Ctrl+Shift+G']] : []), ['lock', locked ? '잠금 풀기' : '잠그기', 'Ctrl+L'],
     ...(locked ? [] : [['fitpage', '쪽에 맞추기 (비율 유지)', ''], ['fillpage', img ? '쪽 꽉 채우기' : '쪽 꽉 채우기 (넘치는 곳 잘림)', '']]),
