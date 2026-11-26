@@ -350,7 +350,7 @@ function elHTML(el, mode, ext) {
     let bs = base; if (sx !== 1 || sy !== 1 || sk) { /* 장평(가로 비율)·세로 비율·기울기 (인디자인 문자 패널) — 상자는 보이는 크기 그대로, 안쪽 글자만 눌리고 늘어남. 줄바꿈은 바뀐 폭에 맞춰 다시 */
       const W = w / sx, H = h / sy; bs = base.replace(/width:[^;]+;/, el.sizing === 'autow' ? 'width:max-content;' : `width:${Math.round(W * 100) / 100}mm;`).replace(/(min-height|height):[^;]+;/, `$1:${Math.round(H * 100) / 100}mm;`).replace(/transform:rotate\(([^)]*)\);/, `transform:rotate($1) translate(${Math.round((sx - 1) * w / 2 * 100) / 100}mm,${Math.round((sy - 1) * h / 2 * 100) / 100}mm) scale(${sx},${sy}) skewX(${-sk}deg);transform-origin:${Math.round(w / 2 * 100) / 100}mm ${Math.round(h / 2 * 100) / 100}mm;`); }
     const wf = wrapFloats(el), tst = wf ? FX.textStyle(el).replace(/display:flex;flex-direction:column;justify-content:[^;]+;/, '') : FX.textStyle(el);  /* 그림 둘레 글 배치가 있으면 위에서부터 흐름 */
-    return `<div class="el el-text${lock}${wf ? ' wrapped' : ''}" data-id="${el.id}" style="${bs}${tst}">${wf}${el.html && el.htmlFor === el.text ? (el.valign && el.valign !== 'top' && !wf ? `<div class="txw">${el.html}</div>` : el.html) : nobrPhone(esc(el.text))}</div>`;
+    return `<div class="el el-text${lock}${wf ? ' wrapped' : ''}" data-id="${el.id}" style="${bs}${tst}">${wf}${el.html && el.htmlFor === el.text ? (el.valign && el.valign !== 'top' && !wf ? `<div class="txw">${el.html}</div>` : el.html) : paraHTML(el, nobrPhone(esc(el.text)))}</div>`;
   }
   if (el.type === 'image') {
     const s = elSrcOv.get(el.id) || viewSrc(el, mode); const clip = FX.clipPath(el.clip, el.w * MM, el.h * MM); const z = el.zoom || 1;
@@ -828,6 +828,7 @@ wrap.addEventListener('pointerdown', e => {
     if (imgPan && imgPan === id && !el.locked) { drag = { kind: 'imgpan', el, start: p, o: { panX: el.panX || 0, panY: el.panY || 0, pos: String(el.pos || '50% 50%') }, moved: false }; e.preventDefault(); return; }
     if (imgPan) endImgPan(true);
     if (el.type === 'image' && el.flowImg && was && sel.length === 1 && lastClick && lastClick.id === id && Date.now() - lastClick.t < 450) { lastClick = null; e.preventDefault(); openImgEditor(el); return; } /* 도서 편집 사진: 두 번 누르면 사진 편집기 (자리 조정 대신) */
+    if (el.type === 'text' && was && !el.locked && !isWarp(el) && !e.altKey && !e.shiftKey && !(e.ctrlKey || e.metaKey) && sel.length === 1 && lastClick && lastClick.id === id && Date.now() - lastClick.t < 450 && !(el.flowFrame && BK())) { const dom = $(`#canvas [data-id="${id}"]`); if (dom && dom !== editing) { lastClick = null; e.preventDefault(); startEdit(dom, e); return; } }  /* 11/26: 누를 때 글 상자를 다시 그려 브라우저 dblclick이 가끔 안 생기던 것 — 그림처럼 시간으로 두 번 누름을 직접 알아봄 */
     if (el.type === 'image' && was && !el.locked && !e.altKey && !e.shiftKey && sel.length === 1 && lastClick && lastClick.id === id && Date.now() - lastClick.t < 450) { lastClick = null; imgPan = id; renderOverlay(); toast('그림 자리 조정 — 끌어서 틀 안의 그림을 옮기고 휠로 확대합니다 · Esc나 다른 곳을 누르면 끝'); e.preventDefault(); return; }
     // 고른 달력의 칸 위를 누르면 칸 선택 (요일 줄을 누르면 달력 이동)
     if (el.type === 'cal' && was && !el.locked && hitNode.closest('.cell')) { const cellNode = hitNode.closest('.cell'); const c = Number(cellNode.dataset.c); if (e.shiftKey && cellSel && cellSel.id === id) cellSel.b = c; else cellSel = { id, a: c, b: c }; const dd = cellNode.dataset.day; selDay = dd ? Number(dd) : null; drag = { kind: 'cells', start: p, moved: false }; renderOverlay(); renderInspector(); e.preventDefault(); return; }
@@ -1009,13 +1010,15 @@ wrap.addEventListener('dblclick', e => {
 });
 wrap.addEventListener('dblclick', e => { const dom = e.target.closest('.el-text'); const fe = dom && find(dom.dataset.id); if (fe && fe.flowFrame && BK()) { BK().onFrameDbl(fe); return; } /* 도서 편집 본문 상자 → 원고 편집기 (인디자인 스토리 편집기) */ if (dom && dom !== editing && !find(dom.dataset.id).locked && !dom.classList.contains('warp')) startEdit(dom, e); });
 /* 11/26 포스터·자료실 조: 전화번호가 「010-」/「0000-0000」으로 끊기던 것 — 그릴 때만 한 덩어리(줄 안 바꿈), 글 고치기를 시작하면 풂(저장 글에는 안 들어감) */
+/* 단락 뒤 간격 (11/26 편집 조: 가정통신문 단락 사이를 빈 줄로 띄우던 것) — 그릴 때만 단락마다 칸, 글 고치기를 시작하면 원래 글로 */
+function paraHTML(el, h) { const g = Number(el.paraGap) || 0; if (!(g > 0) || !/\n/.test(el.text || '')) return h; const ps = h.split('\n'); return ps.map((x, i) => `<div class="pgp" style="margin-bottom:${i < ps.length - 1 ? g : 0}mm">${x || '&#8203;'}</div>`).join(''); }
 function nobrPhone(h) { return /\d-\d/.test(h) ? h.replace(/(\d{2,4}-\d{3,4}-\d{4})/g, '<span class="nobr">$1</span>') : h; }
 function startEdit(dom, ev) {
-  if (editing === dom) return; { const nb = dom.querySelectorAll('span.nobr'); if (nb.length) { nb.forEach(s => s.replaceWith(document.createTextNode(s.textContent))); dom.normalize(); } }
+  if (editing === dom) return; let preset = null; { const el9 = find(dom.dataset.id); if (dom.querySelector('div.pgp') && el9 && !(el9.html && el9.htmlFor === el9.text)) { let off = -1; try { const r0 = ev && document.caretRangeFromPoint ? document.caretRangeFromPoint(ev.clientX, ev.clientY) : null; const pgs = [...dom.querySelectorAll('div.pgp')], pi = r0 ? pgs.findIndex(d => d.contains(r0.startContainer)) : -1; if (pi >= 0) { const rr = document.createRange(); rr.selectNodeContents(pgs[pi]); rr.setEnd(r0.startContainer, r0.startOffset); off = pgs.slice(0, pi).reduce((a, d) => a + d.textContent.replace(/\u200b/g, '').length + 1, 0) + rr.toString().replace(/\u200b/g, '').length; } } catch (e) {} dom.textContent = el9.text || ''; if (off >= 0 && dom.firstChild) { preset = document.createRange(); preset.setStart(dom.firstChild, Math.min(off, dom.firstChild.length)); preset.collapse(true); } } const nb = dom.querySelectorAll('span.nobr'); if (nb.length) { nb.forEach(s => s.replaceWith(document.createTextNode(s.textContent))); dom.normalize(); } }  /* 그릴 때 넣은 단락 칸·전화 칸은 고칠 때 풂 */
   { const el0 = find(dom.dataset.id); if (el0 && /\{(쪽|전체쪽|디데이:|남은날:)/.test(el0.text || '')) dom.innerHTML = el0.html && el0.htmlFor === el0.text ? el0.html : esc(el0.text); } /* 쪽 번호·D-day 자리는 원문으로 편집 */
   editing = dom; dom.contentEditable = 'true'; dom.classList.add('editing'); dom.focus(); try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
   // 누른 자리에 커서 (새 글 상자처럼 위치가 없으면 전체 선택)
-  let r = ev && document.caretRangeFromPoint ? document.caretRangeFromPoint(ev.clientX, ev.clientY) : null;
+  let r = preset || (ev && document.caretRangeFromPoint ? document.caretRangeFromPoint(ev.clientX, ev.clientY) : null);  /* 단락 칸을 풀었으면 미리 계산한 자리 */
   if (!r || !dom.contains(r.startContainer)) { r = document.createRange(); r.selectNodeContents(dom); }
   const s = getSelection(); s.removeAllRanges(); s.addRange(r); renderOverlay(); showTextBar();
 }
@@ -3916,6 +3919,7 @@ function renderInspector() {
     <p class="hint" style="margin:2px 0 8px">글자를 두 번 눌러 편집하면서 일부만 드래그하면, 위에 뜨는 작은 도구 막대(또는 여기 B·I·U·S)로 <b>고른 글자만</b> 굵게·기울임·밑줄·색·크기를 바꿀 수 있습니다.</p>
     ${tboxHTML(el)}
     <div class="grid2">${F('줄 간격', 'lh', el.lh, { type: 'slider', min: 0.6, max: 3, step: 0.05, def: 1.35 })}${F('자간', 'ls', el.ls, { type: 'slider', min: -0.2, max: 1, step: 0.01, unit: 'em', def: 0 })}</div>
+    ${el.html && el.htmlFor === el.text ? '' : `<div class="grid2">${F('단락 뒤 간격', 'paraGap', el.paraGap || 0, { type: 'slider', min: 0, max: 10, step: 0.5, unit: 'mm', def: 0 })}<div class="hint" style="align-self:end;margin:0 0 6px;font-size:11.5px">Enter로 나눈 단락 사이를 띄움 (빈 줄 없이)</div></div>`}
     <div class="grid2">${F('장평', 'sx', el.sx || 100, { type: 'slider', min: 50, max: 200, step: 1, unit: '%', def: 100 })}${F('세로 비율', 'sy', el.sy || 100, { type: 'slider', min: 50, max: 200, step: 1, unit: '%', def: 100 })}</div>
     <div class="tfq"><span>장평</span>${[[80, '80%'], [90, '90%'], [95, '95%'], [100, '100%'], [110, '110%']].map(([v, t]) => `<button type="button" data-set="sx:${v}" class="${Math.round(el.sx || 100) === v ? 'on' : ''}" title="글자 폭 ${t}${v < 100 ? ' — 좁게 (제목·표에 많이 씀)' : v > 100 ? ' — 넓게' : ' — 원래대로'}">${t}</button>`).join('')}</div>
     <details class="fx" ${el.skew || el.ws || el.ti || el.kern || el.smallcaps ? 'open' : ''}><summary>글자 서식 더 보기 <small>기울기·낱말 간격·들여쓰기·커닝</small></summary>
