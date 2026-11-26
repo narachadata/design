@@ -2283,3 +2283,6 @@ dialog.nd.drive nav .dvnav-end{position:sticky;bottom:-16px;background:var(--ui-
 
 /* 요소 카드 빼기(×): 작게 모서리 바깥에 — 작은 아이콘 카드 가운데를 누르면 넣기 대신 빼지던 것 (11/26 포스터 조) */
 .ecard{overflow:visible}.ecard .edel{width:15px!important;height:15px!important;line-height:13px!important;font-size:11px!important;top:-6px!important;right:-6px!important}
+
+/* 내 드라이브 빈 화면 (11/26) */
+.drive .dvempty2{display:flex;flex-direction:column;align-items:center;gap:10px;margin:40px auto;color:var(--ui-muted);text-align:center;max-width:360px}.drive .dvempty2 svg{width:44px;height:44px;fill:none;stroke:currentColor;stroke-width:1.4;opacity:.55}.drive .dvempty2 p{margin:0;font-size:14px}

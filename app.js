@@ -814,7 +814,7 @@ wrap.addEventListener('pointerdown', e => {
   let hitNode = e.target; const dom = (() => { const seen = new Set(); for (const n of document.elementsFromPoint(e.clientX, e.clientY)) { let d = n.closest && n.closest('#canvas .el, #ghost .el'); if (d && d.closest('#ghost')) d = $(`#canvas [data-id="${d.dataset.id}"]`) || d; if (!d || seen.has(d)) continue; seen.add(d); const x = find(d.dataset.id); if (x && (!x.locked || sel.includes(x.id) || !lockedBg(x))) { hitNode = n; return d; } } return null; })();
   if (dom) {
     const id = dom.dataset.id, el = find(id); const was = sel.includes(id);
-    if (imgPan && imgPan === id && !el.locked) { drag = { kind: 'imgpan', el, start: p, o: { panX: el.panX || 0, panY: el.panY || 0 }, moved: false }; e.preventDefault(); return; }
+    if (imgPan && imgPan === id && !el.locked) { drag = { kind: 'imgpan', el, start: p, o: { panX: el.panX || 0, panY: el.panY || 0, pos: String(el.pos || '50% 50%') }, moved: false }; e.preventDefault(); return; }
     if (imgPan) endImgPan(true);
     if (el.type === 'image' && el.flowImg && was && sel.length === 1 && lastClick && lastClick.id === id && Date.now() - lastClick.t < 450) { lastClick = null; e.preventDefault(); openImgEditor(el); return; } /* 도서 편집 사진: 두 번 누르면 사진 편집기 (자리 조정 대신) */
     if (el.type === 'image' && was && !el.locked && !e.altKey && !e.shiftKey && sel.length === 1 && lastClick && lastClick.id === id && Date.now() - lastClick.t < 450) { lastClick = null; imgPan = id; renderOverlay(); toast('그림 자리 조정 — 끌어서 틀 안의 그림을 옮기고 휠로 확대합니다 · Esc나 다른 곳을 누르면 끝'); e.preventDefault(); return; }
@@ -855,7 +855,10 @@ function dragMove(e) {
   const p = toMM(e); let dx = p.x - drag.start.x, dy = p.y - drag.start.y;
   if (!drag.moved && Math.hypot(dx, dy) * kScale() * MM >= (drag.kind === 'marq' || drag.kind === 'cells' ? 3 : 4)) drag.moved = true;
   if (!drag.moved) return;
-  if (drag.kind === 'imgpan') { const el = drag.el, a = -(el.rot || 0) * Math.PI / 180, lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a); el.panX = Math.round(clamp(drag.o.panX + lx / el.w * 100, -50, 50)); el.panY = Math.round(clamp(drag.o.panY + ly / el.h * 100, -50, 50)); renderCanvas(); renderOverlay(); dragTip(e, `그림 자리 ${el.panX}, ${el.panY}`); }
+  if (drag.kind === 'imgpan') { const el = drag.el, a = -(el.rot || 0) * Math.PI / 180, lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a); const z = Number(el.zoom) || 1;
+    /* 11/26 포스터 조: 틀이 늘 사진으로 덮이게 — 확대 1배 꽉 채움은 잘리는 자리(object-position)를 옮기고, 확대했으면 넘치는 만큼(±(확대−1)×50%)까지만 */
+    if (z <= 1.001 && el.fit === 'cover') { const m = /(-?[\d.]+)%\s+(-?[\d.]+)%/.exec(drag.o.pos) || [0, 50, 50]; const px = Math.round(clamp(Number(m[1]) - lx / el.w * 100, 0, 100)), py = Math.round(clamp(Number(m[2]) - ly / el.h * 100, 0, 100)); el.pos = `${px}% ${py}%`; el.panX = 0; el.panY = 0; renderCanvas(); renderOverlay(); dragTip(e, `보이는 자리 ${px}%, ${py}%`); return; }
+    const lim = z > 1 ? (z - 1) * 50 : 50; el.panX = Math.round(clamp(drag.o.panX + lx / el.w * 100, -lim, lim)); el.panY = Math.round(clamp(drag.o.panY + ly / el.h * 100, -lim, lim)); renderCanvas(); renderOverlay(); dragTip(e, `그림 자리 ${el.panX}, ${el.panY}`); }
   else if (drag.kind === 'move') {
     let guides = [];
     if (!e.altKey || drag.dup) { const bx = Math.min(...drag.orig.map(o => o.x)) , by = Math.min(...drag.orig.map(o => o.y)); const bw = Math.max(...drag.els.map(el => drag.orig.find(q => q.id === el.id).x + el.w)) - bx, bh = Math.max(...drag.els.map(el => drag.orig.find(q => q.id === el.id).y + el.h)) - by; const sn = snap(bx + dx, by + dy, bw, bh, drag.els.map(el => el.id), e); dx = sn.x - bx; dy = sn.y - by; guides = sn.guides; }
@@ -1125,7 +1128,10 @@ function fitTextH(d, el, growOnly) { if (el.sizing === 'fixed') return null; con
 $('#canvas').addEventListener('input', e => { if (editing && e.target === editing) { const el = find(editing.dataset.id); if (el) { if (el.sizing === 'autow') { autoWidth(editing, el); renderOverlay(); } const hh = fitTextH(editing, el); if (hh != null) { el.h = hh; editing.style.minHeight = hh + 'mm'; renderOverlay(); placeTextBar(); } } } });
 // 붙여넣기는 글자만 (다른 곳 서식·글꼴이 섞여 들어오지 않게)
 $('#canvas').addEventListener('paste', e => { if (!editing || !editing.contains(e.target)) return; e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData('text/plain'); document.execCommand('insertText', false, t); });
-$('#canvas').addEventListener('blur', e => { if (editing && e.target === editing && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#textBar'))) endEdit(); }, true);
+$('#canvas').addEventListener('blur', e => { if (!(editing && e.target === editing && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#textBar')))) return;
+  /* 11/26 포스터 조: 글 고치는 중 오른쪽 패널 단추를 누르면 blur에서 바로 끝내며 패널을 다시 그려 누른 단추가 사라짐(첫 클릭이 먹히지 않음·innerHTML 오류) → 패널 안이면 그 클릭이 끝난 뒤 끝냄 */
+  const rt = e.relatedTarget; if (rt && rt.closest && rt.closest('#inspector, #sidebody')) { let tm = 0; const done = () => { document.removeEventListener('click', done, true); clearTimeout(tm); setTimeout(() => { if (editing) endEdit(); }, 0); }; document.addEventListener('click', done, true); tm = setTimeout(done, 500); return; }
+  endEdit(); }, true);
 // 확대·축소는 마우스 위치를 기준으로 (그 점이 화면에서 움직이지 않게)
 function zoomAt(nk, cx, cy) {
   const sc = $('#scroller'), cr = $('#canvas').getBoundingClientRect(), k0 = kScale();
@@ -3462,7 +3468,7 @@ function libPhotoHTML() {
    ④ 상장의 '(인)' 옆 → 육각 엠블럼을 직인처럼
    로고는 배경 없는 판을 쓰고, 그 자리 바탕색에 따라 원래 색 / 흰색(빨간 점 유지) / 전부 흰색을 고름 */
 const NAME_ONLY = /^(나라차\s*태권도|NARACHA(\s+TAEKWONDO)?)$/i, NAME_LEAD = /^나라차\s*태권도\s*[·|,]\s*/;
-const isLogoRef = s => /^asset:(brand-|logo-wordmark|backcover-logo|footer-wordmark)|^lib:brand\//.test(s || '');
+const isLogoRef = s => /^asset:(brand-|logo-wordmark|backcover-logo|footer-wordmark|swoosh)|^lib:brand\//.test(s || '');  /* 11/26 포스터 조: 스우시 로고가 있는데 로고를 하나 더 넣던 것(27개) */
 const LOGO_AR = { 'brand-horizontal': 5.19, 'brand-korean': 1.98, 'brand-hex': 0.867, 'backcover-logo': 0.957 };
 function logoRef(base, bg) { return NC.logoFor ? NC.logoFor(base, bg) : 'asset:' + base; }
 function elExtent(e) { // 요소가 실제로 차지하는 범위 (글 상자는 글자 폭으로)
@@ -3602,7 +3608,7 @@ function openTplPreview(t) {
     $('#tplBody').innerHTML = `<div class="tprev" id="tprev" data-w="${S.w}" data-h="${S.h}" data-n="${n}">${pages.slice(0, n).map(pg => tplSheet(Object.assign({}, t, { w: S.w, h: S.h }), [pg])).join('')}</div>
     ${t.theme ? '' : `<div class="row tsize"><label class="f" style="flex:1;margin:0"><span>만들 크기 (문서 형식에 맞춰 다시 배치${t.responsive ? ' · 이 템플릿은 크기마다 새로 짭니다' : ''})</span><select id="tplSize"><option value="doc" ${choice === 'doc' ? 'selected' : ''}>지금 문서 크기 · ${label(docS)}</option><option value="orig" ${choice === 'orig' ? 'selected' : ''}>템플릿 원래 크기 · ${label(origS)}</option>${ND_GROUPS.filter(g => g[0] !== 'rec').map(([g, tt]) => `<optgroup label="${tt}">${FORMATS.filter(f => f[2] === g).map(f => `<option value="${f[0]}" ${choice === f[0] ? 'selected' : ''}>${esc(f[1])} · ${fmtLabel(f)}</option>`).join('')}</optgroup>`).join('')}</select></label></div>`}
     <div class="row" style="margin-top:10px;justify-content:flex-end"><span class="hint" style="margin:0;flex:1">${t.theme ? '테마는 표지·이미지면·달력면·뒷표지 전체 디자인입니다. 이미 만든 캘린더에 적용하면 문구·일정·그림은 그대로 두고 디자인만 바뀝니다.' : t.holiday ? '날짜 칸은 다가오는 휴일(대체 휴일 포함)로 자동으로 채워집니다. 글자·그림·색은 자유롭게 바꿀 수 있습니다.' : '만든 뒤 글자·그림·색을 자유롭게 바꿀 수 있습니다. 로고와 연락처는 도장 정보로 고쳐 주세요.'}</span>
-    ${t.theme ? `<button class="btn" id="tplRetheme" ${hasCal ? '' : 'disabled title="현재 문서에 캘린더 페이지가 없습니다"'}>현재 캘린더에 적용</button><button class="btn primary" id="tplWizard">이 테마로 캘린더 만들기</button>` : (choice === 'doc' ? `<button class="btn ${empty ? 'primary' : ''}" id="tplHere">${empty ? '이 쪽에 적용' : '현재 쪽 뒤에 추가'}</button><button class="btn ${empty ? '' : 'primary'}" id="tplNew">이 크기로 새 문서</button>` : `<button class="btn" id="tplHere" title="지금 문서 크기(${label(docS)})에 맞춰 넣습니다">${empty ? '지금 문서에 맞춰 적용' : '지금 문서 뒤에 추가 (문서 크기)'}</button><button class="btn primary" id="tplNew">${label(S)} 새 문서</button>`)}</div>`;
+    ${t.theme ? `<button class="btn" id="tplRetheme" ${hasCal ? '' : 'disabled title="현재 문서에 캘린더 페이지가 없습니다"'}>현재 캘린더에 적용</button><button class="btn primary" id="tplWizard">이 테마로 캘린더 만들기</button>` : (choice === 'doc' ? `<button class="btn ${empty ? 'primary' : ''}" id="tplHere">${pages.length > 1 ? (empty ? `이 문서에 ${pages.length}쪽 넣기` : `현재 쪽 뒤에 ${pages.length}쪽 추가`) : (empty ? '이 쪽에 적용' : '현재 쪽 뒤에 추가')}</button><button class="btn ${empty ? '' : 'primary'}" id="tplNew">이 크기로 새 문서</button>` : `<button class="btn" id="tplHere" title="지금 문서 크기(${label(docS)})에 맞춰 넣습니다">${empty ? (pages.length > 1 ? `지금 문서에 ${pages.length}쪽 넣기` : '지금 문서에 맞춰 적용') : (pages.length > 1 ? `지금 문서 뒤에 ${pages.length}쪽 추가` : '지금 문서 뒤에 추가 (문서 크기)')}</button><button class="btn primary" id="tplNew">${label(S)} 새 문서</button>`)}</div>`;
     requestAnimationFrame(() => fitBoxes($('#tplBody'), '.tprev', Math.min(500, window.innerHeight * 0.5)));
     tplFitThen(pages.slice(0, n), () => { const tp = $('#tprev'); if (!tp) return; tp.innerHTML = pages.slice(0, n).map(pg => tplSheet(Object.assign({}, t, { w: S.w, h: S.h }), [pg])).join(''); fitBoxes($('#tplBody'), '.tprev', Math.min(500, window.innerHeight * 0.5)); });
     const ss = $('#tplSize'); if (ss) ss.onchange = () => { choice = ss.value; draw(); };
@@ -4167,7 +4173,7 @@ $('#inspector').addEventListener('change', e => {
   if (t.id === 'daySel') { selDay = t.value ? Number(t.value) : null; rerender(); return; }
   if (t.dataset.ev != null && el) { el.events[Number(t.dataset.ev)].text = t.value; commit(); rerender({ noPanel: true }); return; }
   if (t.dataset.evc != null && el) { el.events[Number(t.dataset.evc)].color = t.value; commit(); rerender(); return; }
-  if (t.id === 'imgReplace' && el) { const f = t.files[0]; if (!f) return; fileToDataURL(f).then(d => { el.src = addAsset(d); delete el.srcOrig; commit(); rerender(); }); return; }
+  if (t.id === 'imgReplace' && el) { const f = t.files[0]; if (!f) return; (typeof imageFileToURL === 'function' ? imageFileToURL(f) : fileToDataURL(f)).then(d => { if (!d) return; el.src = addAsset(d); delete el.srcOrig; delete el.zoom; delete el.panX; delete el.panY; el.pos = '50% 50%'; commit(); rerender(); }).catch(er => toast(er.message || String(er), true)); return; }  /* 11/26 포스터 조: 앞 사진의 확대·이동이 남아 새 사진이 엉뚱하게 잘리던 것 */
   if ((t.dataset.k === 'month' || t.dataset.k === 'year') && el && el.type === 'cal' && el.role === 'cal' && page().kind === 'cal') {
     const m = Number(el.month), y = Number(el.year); ensureHolidays(y); let np = null;
     try { np = CAL.buildPages(doc, uid, { year: y, kind: 'cal', month: m })[0]; } catch (e2) { np = null; }
@@ -4649,7 +4655,7 @@ async function renderDrive() {
   ${trash ? '<p class="hint">오른쪽 클릭 → <b>원래 자리로 되살리기</b>(휴지통에 넣은 그 폴더로 — 다른 PC가 넣은 것은 내 드라이브 맨 위로). <b>영구 삭제</b>하면 되돌릴 수 없습니다.</p>' : drv.view === 'drive' && !q ? `<p class="hint"><b>오른쪽 클릭</b> = 파일 메뉴 · <b>${isMac ? '⌘' : 'Ctrl'}/Shift+클릭</b> = 여러 개 · <b>끌어서</b> 폴더·왼쪽 메뉴(종류·휴지통)로 옮기기</p>` : ''}
   ${drv.view === 'drive' && drv.path.length && !q ? `<div class="dvfolder up" data-crumb="${drv.path.length - 1}" data-dropdir="${esc(JSON.stringify(drv.path.slice(0, -1)))}"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/></svg><div><b>상위 폴더로</b><small>${esc(drv.path.length > 1 ? drv.path[drv.path.length - 2] : '내 드라이브')}</small></div></div>` : ''}
   ${folders.length ? `<div class="dvfolders">${folders.map(fcardH).join('')}</div>` : ''}
-  ${docs.length ? `<div class="dvdocs">${docs.map(dcardH).join('')}</div>` : !folders.length ? `<p class="hint" style="margin-top:30px;text-align:center">${trash ? '휴지통이 비어 있습니다.' : q ? '맞는 디자인이 없습니다.' : '아직 디자인이 없습니다. 오른쪽 위 "새 디자인 만들기"로 시작하세요.'}</p>` : ''}`;
+  ${docs.length ? `<div class="dvdocs">${docs.map(dcardH).join('')}</div>` : !folders.length ? `<div class="dvempty2"><svg viewBox="0 0 24 24"><path d="${trash ? 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13' : 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'}"/></svg><p>${trash ? '휴지통이 비어 있습니다.' : q ? `「${esc(drv.q)}」에 맞는 디자인이 없습니다.` : drv.path.length ? '이 폴더는 비어 있습니다 — 디자인을 끌어다 놓아 옮기거나, 여기에 새로 만드세요.' : '아직 디자인이 없습니다.'}</p>${trash ? '' : q ? '<button class="btn" data-dvact="clearq">검색 지우기</button>' : '<button class="btn primary" data-dvact="newhere">여기에 새 디자인</button>'}</div>` : ''}`;
   if (drv.view === 'kind' && !q) { const K = kindInfo(drv.kind), sz = n => n > 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB';
     main.insertAdjacentHTML('beforeend', `${drv.stray.length ? `<div class="dvgather"><span>${K[2]} 이 종류인데 「${esc(K[1])}」 폴더 밖에 있는 문서가 <b>${drv.stray.length}개</b> 있습니다.</span><button class="btn sm" data-dvgather="1">「${esc(K[1])}」 폴더로 모으기</button></div>` : ''}
       <h3 style="margin:18px 0 6px">내보낸 파일 <small class="hint" style="font-weight:400">— 내 드라이브 › ${esc(K[1])} › ${EXPORT_DIR} (PNG·JPG·PDF·영상)</small></h3>
@@ -4691,6 +4697,8 @@ async function driveClick(e) {
   const act = t.closest('[data-dvact]'); if (act) {
     const a = act.dataset.dvact;
     if (a === 'other') { $('#dlgDrive').close(); openOtherFile(); }
+    if (a === 'clearq') { drv.q = ''; renderDrive(); }
+    if (a === 'newhere') { $('#dlgDrive').close(); openNewDesign(); }  /* 빈 폴더 화면 (11/26 UI·UX 조) */
     if (a === 'mkdir') { const n = window.prompt('새 폴더 이름', '새 폴더'); if (n) { try { await store.makeFolder(drv.path, n); renderDrive(); } catch (err) { toast(err.message, true); } } }
     if (a === 'empty' && window.confirm('휴지통을 비울까요? 안의 디자인과 폴더가 영구히 삭제됩니다.')) { for (const x of drv.folders.concat(drv.docs)) await store.emptyEntry(x.name); toast('휴지통을 비웠습니다'); renderDrive(); }
     return;
