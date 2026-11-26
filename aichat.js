@@ -273,14 +273,14 @@ ${manualText()}`;
   const sleep = ms => new Promise((res, rej) => { const t = setTimeout(res, ms); aborter.signal.addEventListener('abort', () => { clearTimeout(t); rej(new DOMException('중지', 'AbortError')); }, { once: true }); });
   /* 바쁨(5xx·529)이면 1.5초·4초 쉬고 다시, 그래도 바쁘면 (자동 고르기일 때·이 대화에 그 모델 답이 아직 없을 때) 다음 후보 모델로 */
   async function gemPost(ctx, body) {
-    const cands = await geminiCands(); let i = Math.max(0, cands.indexOf(ctx.gemModel || cands[0]));
+    const cands = await geminiCands(); if (!ctx.gemModel && apiGemModel && cands.includes(apiGemModel)) ctx.gemModel = apiGemModel; let i = Math.max(0, cands.indexOf(ctx.gemModel || cands[0]));  /* 11/26 AI 조: 이 대화에서 실제로 답한 모델을 다음 차례에도 (생각 서명이 그 모델 것) */
     for (;;) {
       const model = cands[i];
       for (const wait of [0, 1500, 4000]) {
         if (wait) await sleep(wait);
         const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': cfg().geminiKey }, body: JSON.stringify(body), signal: aborter.signal });
         const j = await r.json().catch(() => ({}));
-        if (r.ok) { if (ctx.gemModel && ctx.gemModel !== model) ctx.say(`(${ctx.gemModel} 모델이 바빠서 ${model} 모델로 보냈습니다)`); ctx.gemModel = model; return j; }
+        if (r.ok) { if (ctx.gemModel && ctx.gemModel !== model) ctx.say(`(${ctx.gemModel} 모델이 바빠서 ${model} 모델로 보냈습니다)`); ctx.gemModel = model; apiGemModel = model; return j; }
         if (!(r.status >= 500 || r.status === 529)) throw new Error(errKo('gemini', r.status, j.error && j.error.message));
         ctx.lastErr = errKo('gemini', r.status, j.error && j.error.message);
       }
@@ -295,7 +295,7 @@ ${manualText()}`;
       const body = { systemInstruction: { parts: [{ text: system() }] }, contents: api, tools: [{ functionDeclarations: decl }] };
       const j = await gemPost(ctx, body);
       const c = (j.candidates || [])[0];
-      if (!c || !c.content) { const why = (j.promptFeedback && j.promptFeedback.blockReason) || (c && c.finishReason) || ''; ctx.say(why ? `Gemini가 답하지 않았습니다(${why}). 다르게 말해 보세요.` : 'Gemini가 빈 답을 보냈습니다. 다시 보내 주세요.'); return; }
+      if (!c || !c.content) { const why = (j.promptFeedback && j.promptFeedback.blockReason) || (c && c.finishReason) || ''; while (api.length && !(api[api.length - 1].role === 'model' && !(api[api.length - 1].parts || []).some(p => p.functionCall))) api.pop();  /* 빈 답이면 이번 차례를 되감음 (user>user 남지 않게, 11/26 AI 조) */ ctx.say(why ? `Gemini가 답하지 않았습니다(${why}). 다르게 말해 보세요.` : 'Gemini가 빈 답을 보냈습니다. 다시 보내 주세요.'); return; }
       const content = { role: 'model', parts: c.content.parts || [] };
       api.push(content);
       const text = content.parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
@@ -364,7 +364,7 @@ ${manualText()}`;
   function needKey() { return `${S.prov === 'gemini' ? 'Gemini' : 'Claude'} API 키가 아직 없습니다. 위 ⚙ 설정 칸에 키를 넣고 「저장」을 눌러 주세요. 키는 ${S.prov === 'gemini' ? 'aistudio.google.com → Get API key' : 'console.anthropic.com → API Keys'}에서 팀장님이 직접 만듭니다.`; }
 
   function push(m) { S.log.push(m); if (S.log.length > 120) S.log.splice(0, S.log.length - 120); save(); renderLog(); }
-  function newChat(silent) { api = []; apiProv = null; if (!silent) { push({ r: 'n', t: '— 새 대화 —' }); } }
+  function newChat(silent) { api = []; apiProv = null; apiGemModel = ''; if (!silent) { push({ r: 'n', t: '— 새 대화 —' }); } }
 
   async function send(text) {
     text = String(text || '').trim(); if (!text || busy) return;
@@ -403,11 +403,11 @@ ${manualText()}`;
     const m = S.log[k]; if (!m || m.undone) return;
     if (!xOk(m)) { B.toast('다른 문서이거나 새로 고친 뒤라 여기서는 되돌릴 수 없습니다 — 그 문서를 열고 Ctrl+Z로 되돌려 주세요.', true); renderLog(); return; }  /* 11/26 AI 조: 다른 문서에서 사용자 작업을 되돌리던 것 */
     if (B.hptr !== m.h1) { B.toast('그 뒤에 다른 것을 고쳐서 여기서는 되돌릴 수 없습니다. Ctrl+Z로 하나씩 되돌려 주세요.', true); return; }
-    while (B.hptr > m.h0) B.undo();
+    for (let g = 0; g < 600 && B.hptr > m.h0; g++) { const b0 = B.hptr; B.undo(); if (B.hptr === b0) { B.toast('오래된 기록이라 일부만 되돌렸습니다 — 나머지는 Ctrl+Z로', true); break; } }
     m.undone = true; save(); renderLog();
     if (api.length) pendingNote = '[알림] 사용자가 앞에서 AI가 고친 것을 「되돌리기」로 모두 되돌렸습니다(문서가 그 전으로 돌아감).\n';
   }
-  let pendingNote = '', lastDoc = null;
+  let pendingNote = '', lastDoc = null, apiGemModel = '';
   function updBtn() { const b = $('#achSend'); if (b) { b.textContent = busy ? '■ 멈춤' : '보내기'; b.classList.toggle('stop', busy); } }
   function openSet(on) { const s = $('#achSet'); if (!s) return; s.hidden = on === undefined ? !s.hidden : !on; if (!s.hidden) renderSet(); }
 

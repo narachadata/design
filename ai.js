@@ -11,17 +11,18 @@ window.AI = (function () {
   function saveCfg() { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} }
 
   /* ---------- Claude ---------- */
+  const FB = m => /^claude-(fable-5-[12]|opus-5-5|opus-5|sonnet-5-5)$/.test(String(m || ''));
   async function claudeRequest(body) {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         'x-api-key': cfg.anthropicKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'server-side-fallback-2026-07-01',
+        'anthropic-version': '2026-10-21',  /* 11/26 AI 조: 채팅창(aichat)과 같은 판으로 */
+        ...(FB(cfg.claudeModel) ? { 'anthropic-beta': 'server-side-fallback-2026-07-01' } : {}),
         'anthropic-dangerous-direct-browser-access': 'true',
       },
-      body: JSON.stringify(Object.assign({ model: cfg.claudeModel, max_tokens: 16000, fallbacks: 'default' }, body)),
+      body: JSON.stringify(Object.assign({ model: cfg.claudeModel, max_tokens: 16000 }, FB(cfg.claudeModel) ? { fallbacks: 'default' } : {}, body)),  /* 대체 모델은 받는 모델에만 (그 밖에 보내면 400) */
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error((j.error && j.error.message) || ('Claude 오류 ' + r.status));
@@ -59,12 +60,12 @@ window.AI = (function () {
     type: 'object', additionalProperties: false,
     properties: {
       virtue: { type: 'string' }, en: { type: 'string' }, quote: { type: 'string' },
-      practice: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 2 },
+      practice: { type: 'array', items: { type: 'string' } },  /* 개수 제한은 형식에서 빼고(지원 안 됨) 지시문·코드로 */
       idiom: { type: 'string' }, hanja: { type: 'string' }, meaning: { type: 'string' },
     },
     required: ['virtue', 'en', 'quote', 'practice', 'idiom', 'hanja', 'meaning'],
   };
-  const YEAR_SCHEMA = { type: 'object', additionalProperties: false, properties: { months: { type: 'array', items: VIRTUE_SCHEMA, minItems: 12, maxItems: 12 } }, required: ['months'] };
+  const YEAR_SCHEMA = { type: 'object', additionalProperties: false, properties: { months: { type: 'array', items: VIRTUE_SCHEMA } }, required: ['months'] };
 
   const SYSTEM_COPY = `당신은 태권도장 어린이·청소년 인성교육 캘린더의 카피라이터입니다.
 초등학생이 바로 이해할 수 있는 쉬운 한국어로, 따뜻하고 힘 있는 어조로 씁니다. 태권도 수련 장면(기합, 띠, 품새, 겨루기, 도장, 사범님)을 자연스럽게 녹입니다.
@@ -89,7 +90,7 @@ ${EXAMPLE}
 ${EXAMPLE}
 {"months":[...12개...]} 형식의 JSON을 만들어 주세요. 배열 순서가 1월부터 12월입니다.`;
   }
-  async function suggestYear(a) { const j = await claudeJSON({ system: SYSTEM_COPY, user: yearMsg(a), schema: YEAR_SCHEMA }); return j.months; }
+  async function suggestYear(a) { const j = await claudeJSON({ system: SYSTEM_COPY, user: yearMsg(a), schema: YEAR_SCHEMA }); if (!Array.isArray(j.months) || j.months.length < 12) throw new Error(`AI 답에 달이 ${Array.isArray(j.months) ? j.months.length : 0}개뿐입니다 — 다시 눌러 주세요`); return j.months.slice(0, 12); }
 
   const STYLE_GUIDE = `Style: flat vector children's-book illustration, bold clean black outlines, soft cel shading, bright and cheerful, no gradients, no text, no letters, no watermark, no logo. Subject centered, full body visible, generous margin around the subject. PURE WHITE background (#FFFFFF), nothing else in the background.
 Characters available: (1) the dojang mascot: a cute round penguin (dark gray head and back, white face and belly, orange beak and feet, small gray mitten hands) wearing a white taekwondo dobok with a black belt and a small red-and-blue emblem on the chest; (2) Korean elementary-school children in white doboks with colored belts (yellow, green, blue, red, black), neat black hair, friendly faces.`;
