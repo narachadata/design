@@ -137,6 +137,11 @@ NC.elems = (function () {
   add('badge', 'bd-quote', '인용 따옴표', 20, 20, (uid) => { const { T } = H(uid); return [T('“', 0, 0, 20, 20, { font: 'Gowun Batang', size: 70, weight: 700, color: YEL, lh: 1 })]; }, '따옴표 인용');
 
   /* 표·목록 */
+  /* 진짜 표 (11/26): 칸을 두 번 눌러 바로 쓰고, 오른쪽에서 줄·칸 넣기·빼기, 줄 높이는 글에 맞춰 저절로 (app.js tblHTML) */
+  const realTbl = (id, name, w, rows, colW, kw, o) => add('table', id, name, w, Math.max(12, rows.length * 7), (uid) => [Object.assign({ id: uid(), type: 'tbl', x: 0, y: 0, w, h: rows.length * 7, rot: 0, opacity: 1, name: '', rows: rows.map(r => r.slice()), colW: colW.slice(), head: 1 }, o || {})], '표 테이블 진짜 칸 줄 추가 ' + kw);
+  realTbl('tbr-3x4', '표 (칸에 바로 쓰기) 3×4', 120, [['항목', '내용', '비고'], ['', '', ''], ['', '', ''], ['', '', '']], [1, 2, 1], '기본');
+  realTbl('tbr-time', '시간표 (칸에 바로 쓰기)', 150, [['시간', '월', '화', '수', '목', '금'], ['14:00', '', '', '', '', ''], ['15:00', '', '', '', '', ''], ['16:00', '', '', '', '', ''], ['17:00', '', '', '', '', '']], [1.2, 1, 1, 1, 1, 1], '시간표 수련 시간', { align: 'center' });
+  realTbl('tbr-list', '명단표 (칸에 바로 쓰기)', 140, [['번호', '이름', '띠', '연락처'], ['1', '', '', ''], ['2', '', '', ''], ['3', '', '', '']], [0.6, 1.4, 1, 2], '명단 이름 연락처', { zebra: '#F3F4F7' });
   add('table', 'tb-3x4', '표 3×4', 90, 40, (uid, ctx) => mkTable(uid, ctx && ctx.rows || 4, ctx && ctx.cols || 3), '표 테이블');
   add('table', 'tb-2x6', '표 2×6', 80, 60, (uid) => mkTable(uid, 6, 2), '표 테이블');
   add('table', 'tb-schedule', '시간표 6×5', 120, 70, (uid) => mkTable(uid, 5, 6, ['시간', '월', '화', '수', '목', '금']), '시간표');
@@ -299,7 +304,7 @@ NC.elems = (function () {
     'il-': 'old', 'fr-polaroid': 'one', 'fr-circle': 'one', 'fr-rounded': 'one', 'fr-hex': 'one', 'fr-heart': 'one', 'fr-film': 'one', 'al-arch': 'one', 'fr-belt-': 'one', 'fr-id': 'one', 'fr-grid': 'multi', 'al-4cut': 'multi', 'al-film': 'multi', 'al-flower-': 'season', 'al-clip': 'clip', 'al-pin': 'clip', 'al-stack': 'clip', 'al-': 'album',
     'bd-new': 'emph', 'bd-hot': 'emph', 'bd-burst': 'emph', 'bd-open': 'emph', 'bd-first': 'emph', 'bd-soon': 'emph', 'bd-ribbon': 'ribbon', 'bd-rosette': 'ribbon', 'bd-laurel': 'award', 'bd-stamp': 'award', 'bd-medal': 'award', 'bd-tag': 'label', 'bd-bubble': 'label', 'bd-check': 'label', 'bd-quote': 'label', 'bd-date': 'date', 'bd-dday': 'date',
     'bk-info': 'info', 'bk-title': 'info', 'bk-letter': 'info', 'bk-event': 'event', 'bk-steps': 'event', 'bk-exam': 'event', 'bk-contact': 'contact', 'bk-price': 'contact', 'bk-cert': 'cert', 'bk-diploma': 'cert', 'bk-profile': 'intro', 'bk-quote': 'intro',
-    'tb-schedule': 'time', 'tb-bus': 'time', 'tb-class': 'time', 'tb-check': 'check', 'tb-numbered': 'check', 'tb-gear': 'check', 'tb-': 'table',
+    'tbr-time': 'time', 'tbr-': 'table', 'tb-schedule': 'time', 'tb-bus': 'time', 'tb-class': 'time', 'tb-check': 'check', 'tb-numbered': 'check', 'tb-gear': 'check', 'tb-': 'table',
     'dc-dots': 'pattern', 'dc-stripes': 'pattern', 'dc-grid': 'pattern', 'dc-circleset': 'pattern', 'dc-focus': 'pattern', 'dc-stars': 'scatter', 'dc-confetti': 'scatter', 'dc-band': 'band', 'dc-brush': 'band', 'dc-bunting': 'band', 'dc-corner': 'border', 'dc-cert': 'border',
     'tk-belt': 'belt', 'tk-dan': 'belt', 'tk-poom': 'belt', 'tk-trophy': 'award', 'tk-medal': 'award', 'tk-board': 'gear', 'tk-poomsae': 'gear',
     'tk-taegeuk': 'gear', 'tk-mitt': 'gear', 'tk-court': 'gear', 'bd-flag1': 'award', 'bd-stars3': 'emph', 'bd-coupon': 'label', 'bk-virtue': 'info', 'bk-star': 'intro', 'bk-result': 'intro', 'bk-closed': 'info', 'tb-sticker': 'check', 'tb-poomsae': 'time', 'dc-sakura': 'scatter', 'dc-leaves': 'scatter', 'dc-snow': 'scatter', 'dc-beltband': 'band', 'fr-medal': 'one', 'fr-phone': 'one', 'tk-hogu': 'gear', 'dc-halftone': 'pattern', 'bd-virtues': 'award', 'tb-gauge': 'chart', 'tb-bracket': 'table',

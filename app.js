@@ -220,6 +220,7 @@ function sanitizeDoc(d) {
   d.pages.forEach(p => { if (!DOC_ID.test(String(p.id || ''))) p.id = uid(); if (DOC_BAD.test(String(p.bg || ''))) p.bg = '#ffffff';
     p.els = (Array.isArray(p.els) ? p.els : []).filter(e => e && typeof e === 'object');
     p.els.forEach(e => { if (!DOC_ID.test(String(e.id || ''))) e.id = uid();
+      if (e.type === 'tbl') { tblNorm(e); ['size', 'lh', 'pad', 'lineW', 'head'].forEach(k => { e[k] = Number(e[k]); if (!isFinite(e[k])) e[k] = TBL_DEF[k]; }); ['color', 'line', 'headBg', 'headColor', 'zebra', 'cellBg'].forEach(k => { if (e[k] && !/^#[0-9a-f]{3,8}$/i.test(String(e[k]))) e[k] = TBL_DEF[k]; }); if (!/^(left|center|right)$/.test(e.align)) e.align = 'left'; if (!/^(top|middle|bottom)$/.test(e.valign)) e.valign = 'middle'; if (!/^(left|center|right)$/.test(e.headAlign)) e.headAlign = 'center'; e.font = String(e.font || TBL_DEF.font).replace(/[^\w\s가-힣-]/g, '').slice(0, 60); }
       if (e.type === 'text') { for (const k in TEXT_DEF) if (e[k] === undefined) e[k] = TEXT_DEF[k]; if (e.html && e.flowFrame && BK()) e.html = BK().sanitize(e.html); /* 도서 편집 본문 상자: 단락 서식을 지키는 전용 정리 */ else if (e.html) { const box = document.implementation.createHTMLDocument('').createElement('div'); box.innerHTML = String(e.html); e.html = richHTML(box) || undefined; if (!e.html) delete e.htmlFor; } }
       cleanVals(e, 0); }); });
   (d.tracks || []).forEach(t => { if (t && typeof t === 'object') { if (!DOC_ID.test(String(t.id || ''))) t.id = uid(); (t.items || []).forEach(it => { if (it && typeof it === 'object') { if (!DOC_ID.test(String(it.id || ''))) it.id = uid(); cleanVals(it, 0); } }); } });
@@ -359,6 +360,26 @@ function ensureAllHolidays(keep) { let n = 0; const ys = new Set(); doc.pages.fo
 /* ---------- 요소 HTML ---------- */
 const elSrcOv = new Map(), elVisOv = new Map(); /* 내보내기·출력 중에만 쓰는 임시 덮어쓰기 (문서를 고치지 않아 그사이 자동 저장돼도 안전) */
 const elHidden = el => elVisOv.has(el.id) ? !elVisOv.get(el.id) : !!el.hidden;
+/* ---------- 진짜 표 (11/26 남은 일 ③): 줄·칸을 넣고 빼고, 칸에 바로 쓰고, 글에 맞춰 줄 높이가 저절로 ----------
+   el.type 'tbl' · rows: [[칸 글…]…] · colW: 칸 너비 비율 · head: 머리 줄 수(0·1) · 그 밖 모양은 TBL_DEF */
+const TBL_DEF = { font: 'Nanum Gothic', size: 10, color: '#1a1a1a', lh: 1.4, pad: 1.6, line: '#9AA3B2', lineW: 0.3, head: 1, headBg: '#1E2B5A', headColor: '#FFFFFF', zebra: '', cellBg: '#FFFFFF', align: 'left', valign: 'middle', headAlign: 'center' };
+function tblNorm(el) {
+  for (const k in TBL_DEF) if (el[k] === undefined) el[k] = TBL_DEF[k];
+  let R = Array.isArray(el.rows) ? el.rows.filter(Array.isArray).slice(0, 200) : []; if (!R.length) R = [['', ''], ['', '']];
+  const C = Math.max(1, Math.min(40, Math.max(...R.map(r => r.length))));
+  el.rows = R.map(r => Array.from({ length: C }, (_, i) => String(r[i] == null ? '' : r[i]).slice(0, 4000)));
+  let W = Array.isArray(el.colW) ? el.colW.map(Number).filter(v => v > 0).slice(0, C) : []; while (W.length < C) W.push(1); el.colW = W;
+  el.head = Math.max(0, Math.min(el.rows.length, Number(el.head) || 0)); return el;
+}
+function tblSafe(el) { const C = v => /^#[0-9a-f]{3,8}$/i.test(String(v || '')) ? v : '', N = (v, d) => { v = Number(v); return isFinite(v) ? v : d; }, A = (v, ok, d) => ok.includes(v) ? v : d;  /* 실시간·파일로 온 값도 그리기 전에 걸러 냄 (보안) */
+  return { color: C(el.color) || '#1a1a1a', line: C(el.line) || '#9AA3B2', headBg: C(el.headBg) || '#1E2B5A', headColor: C(el.headColor) || '#FFFFFF', zebra: C(el.zebra), cellBg: C(el.cellBg), size: Math.max(3, Math.min(200, N(el.size, 10))), lh: Math.max(0.8, Math.min(4, N(el.lh, 1.4))), pad: Math.max(0, Math.min(30, N(el.pad, 1.6))), lineW: Math.max(0, Math.min(10, N(el.lineW, 0.3))), align: A(el.align, ['left', 'center', 'right'], 'left'), headAlign: A(el.headAlign, ['left', 'center', 'right'], 'center'), valign: A(el.valign, ['top', 'middle', 'bottom'], 'middle'), font: String(el.font || 'Nanum Gothic').replace(/[^\w\s가-힣-]/g, '').slice(0, 60) }; }
+function tblHTML(el0) {
+  tblNorm(el0); const el = Object.assign({}, el0, tblSafe(el0)); const tot = el.colW.reduce((a, b) => a + b, 0), lw = Math.max(0, Number(el.lineW) || 0), bd = lw ? `${lw}mm solid ${el.line}` : '0';
+  const cg = el.colW.map(v => `<col style="width:${(v / tot * 100).toFixed(3)}%">`).join('');
+  const body = el.rows.map((r, ri) => { const hd = ri < el.head, zb = !hd && el.zebra && (ri - el.head) % 2 === 1;
+    return `<tr>${r.map((t, ci) => `<td data-r="${ri}" data-c="${ci}" style="border:${bd};padding:${el.pad * 0.6}mm ${el.pad}mm;vertical-align:${el.valign};text-align:${hd ? el.headAlign : el.align};${hd ? `background:${el.headBg};color:${el.headColor};font-weight:700;` : zb ? `background:${el.zebra};` : el.cellBg ? `background:${el.cellBg};` : ''}">${esc(t) || '&#8203;'}</td>`).join('')}</tr>`; }).join('');
+  return `<table class="tbl" style="font-family:'${el.font}',var(--font-ui),sans-serif;font-size:${el.size}pt;line-height:${el.lh};color:${el.color};border-collapse:collapse;width:100%;table-layout:fixed"><colgroup>${cg}</colgroup>${body}</table>`;
+}
 function elHTML(el, mode, ext) {
   if (elHidden(el)) return '';
   if (el.attKey && doc.att && ((el.attKey !== 'photo' && doc.att.photoOnly) || (el.attKey === 'photo' && doc.att.textOnly))) { if (mode !== 'edit') return ''; el = Object.assign({}, el, { opacity: (el.opacity == null ? 1 : el.opacity) * 0.3 }); }  /* 📷 사진만이면 글자를, ✍ 글자만이면 사진을 출력에서 뺌(편집 화면엔 흐리게) */  /* 출석부 📷 사진만: 출력·PDF·미리 보기엔 사진만, 편집 화면엔 글자를 흐리게 (11/19 팀장님 — 사진을 늦게 찍어 사진만 따로 찍을 때) */
@@ -385,6 +406,7 @@ function elHTML(el, mode, ext) {
   }
   if (el.type === 'video' && NC.media.isLocal(el.src) && mediaMissing.has(el.src.slice(2))) return `<div class="el el-video vmiss${lock}" data-id="${el.id}" style="${base}">${mode === 'edit' ? `<div class="vmiss-in"><b>원본 영상 없음</b><span>${esc(el.name || '')}</span><small>속성에서 '원본 다시 연결'</small></div>` : ''}</div>`;
   if (el.type === 'video') { const ps = el.poster ? src(el.poster) : ''; const len = Math.max(0, Number(el.tout || el.dur || 0) - Number(el.tin || 0)); return `<div class="el el-video${lock}" data-id="${el.id}" style="${base}${blend}"><div class="imgclip" style="border-radius:${el.radius || 0}mm;background:#1b1f2a">${ps && el.fit === 'blur' ? `<img src="${ps}" alt="" draggable="false" style="object-fit:cover;filter:blur(2mm) brightness(.72)">` : ''}${ps ? `<img src="${ps}" alt="" draggable="false" style="object-fit:${el.fit === 'contain' || el.fit === 'blur' ? 'contain' : 'cover'};${el.fit === 'blur' ? 'position:absolute;inset:0;' : ''}${FX.imageFilter(el).replace(/^filter:/, 'filter:')}">` : ''}${mode === 'edit' ? `<span class="vbadge">▶ ${(len / Math.max(0.1, Number(el.speed || 1))).toFixed(1)}초${Number(el.speed || 1) !== 1 ? ` · ${el.speed}배` : ''}</span>` : ''}</div></div>`; }
+  if (el.type === 'tbl') return `<div class="el el-tbl${lock}" data-id="${el.id}" style="${base.replace(/(^|;)height:[^;]+;/, '$1height:auto;')}${blend}">${tblHTML(el)}</div>`;  /* 높이는 글에 맞춰 저절로 — 화면에서 잰 높이를 el.h로 */
   if (el.type === 'shape') return `<div class="el el-shape${lock}" data-id="${el.id}" style="${base}${blend}">${FX.shapeSVG(el)}</div>`;
   if (el.type === 'path' && el.attIcon === 'bus') return `<div class="el el-path${lock}" data-id="${el.id}" style="${base}">${ATT_BUS_SVG}</div>`;
   if (el.type === 'path' && el.attSvg) return `<div class="el el-path${lock}" data-id="${el.id}" style="${base}${mode === 'edit' && doc.att && !doc.att.printFrame ? 'opacity:.28;' : ''}">${attFrameSVG()}</div>`;  /* 편집 화면: ✍ 글자만이면 흐리게(맞춰 보기용), 🖼 틀까지면 진하게 */  /* 출석부 틀 */
@@ -480,6 +502,7 @@ function renderCanvas() {
   c.innerHTML = bookTokens(pg, `<div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, 'edit')).join('')}${masterHTML(pg)}</div>`);
   textOver.clear();
   pg.els.forEach(el => { if (el.type === 'text' && !isWarp(el)) { let d = c.querySelector(`[data-id="${el.id}"]`); if (!d) return; if (el.sizing === 'autow') autoWidth(d, el); if (el.fitText && el.sizing === 'fixed') d = autoFitText(d, el) || d; const hh = fitTextH(d, el, true); if (hh != null) el.h = hh; if (el.sizing === 'fixed' && !(el.flowFrame && el.flowFrame !== 'body') && textOverflows(d, el)) textOver.add(el.id); } });  /* 차례·찾아보기 흐름 상자는 다음 쪽으로 이어지므로 넘침 표시 안 함 (11/26 편집 조) */
+  pg.els.forEach(el => { if (el.type !== 'tbl') return; const d = c.querySelector(`[data-id="${el.id}"]`); if (!d) return; const hh = Math.round(d.offsetHeight / MM * 100) / 100; if (hh > 0 && Math.abs(hh - el.h) > 0.05) el.h = hh; });  /* 표: 줄 높이는 글에 맞춰 — 선택 상자도 같게 */
   if (pg.certTpl) { pg.els.forEach(el => { if (el.tplField) { const d9 = c.querySelector(`[data-id="${el.id}"]`); if (d9) d9.classList.add('tplf'); } }); }  /* 상장 양식: 사람마다 바뀌는 자리 */
   c.querySelectorAll('.el-cal .cell[data-day]').forEach(x => { const n = x.dataset.day && x.scrollHeight > x.clientHeight + 1; x.classList.toggle('ovf', !!n); if (n) x.title = '일정이 칸을 넘쳐 아래가 잘립니다 — 글자를 줄이거나 칸 높이를 늘리세요'; });  /* 달력 칸 넘침 표시(편집 화면에만) */
   renderFacing(); renderGhost(); fitCanvas(); renderOverlay(); NC.live.paint(); viewBtns();
@@ -793,8 +816,24 @@ function openCellEditor(c, append) {
   ta.addEventListener('keydown', e => { if (e.isComposing || e.keyCode === 229) { e.stopPropagation(); return; } /* 한글 조합 중 Esc·Enter는 조합만 끝냄 */ if (e.key === 'Escape') { e.preventDefault(); closeCellEditor(false); } if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); closeCellEditor(true); } e.stopPropagation(); });
   ta.addEventListener('blur', () => closeCellEditor(true));
 }
+function openTblEditor(el, r, c) {
+  closeCellEditor(true); tblNorm(el); const cv = $('#canvas'), dom = cv && cv.querySelector(`[data-id="${el.id}"]`), td = dom && dom.querySelector(`td[data-r="${r}"][data-c="${c}"]`); if (!td) return;
+  const pr = dom.getBoundingClientRect(), k = pr.width / (el.w * MM) || 1, tr = td.getBoundingClientRect();
+  const ta = document.createElement('textarea'); ta.id = 'cellEd'; ta.className = 'celled'; ta.value = el.rows[r][c]; ta.placeholder = '칸에 넣을 글 — Tab 다음 칸 · Esc 끝';
+  Object.assign(ta.dataset, { tbl: '1', id: el.id, r, c });
+  ta.style.cssText = `left:${el.x + (tr.left - pr.left) / k / MM}mm;top:${el.y + (tr.top - pr.top) / k / MM}mm;width:${tr.width / k / MM}mm;height:${Math.max(tr.height / k / MM, el.size * 0.3528 * 2)}mm;font-size:${tblSafe(el).size}pt;font-family:'${tblSafe(el).font}'`;
+  cv.appendChild(ta); ta.focus(); ta.select(); tblCell = { id: el.id, r, c };
+  ta.addEventListener('keydown', e => { if (e.isComposing || e.keyCode === 229) { e.stopPropagation(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); closeCellEditor(true); }
+    else if (e.key === 'Tab') { e.preventDefault(); closeCellEditor(true); const R = el.rows.length, C = el.rows[0].length; let n = r * C + c + (e.shiftKey ? -1 : 1); if (n >= R * C) { el.rows.push(Array(C).fill('')); commit(); renderCanvas(); } n = Math.max(0, n); setTimeout(() => openTblEditor(find(el.id) || el, Math.floor(n / C), n % C), 0); }
+    else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); closeCellEditor(true); }
+    e.stopPropagation(); });
+  ta.addEventListener('blur', () => closeCellEditor(true));
+}
+let tblCell = null;  /* 표에서 마지막으로 고른 칸 — 줄·칸 넣기·빼기의 기준 */
 function closeCellEditor(save) {
   const ta = $('#cellEd'); if (!ta) return; ta.id = ''; const el = find(ta.dataset.id); const v = ta.value.replace(/\s+$/, ''); ta.remove(); if (!save || !el) return;
+  if (ta.dataset.tbl) { tblNorm(el); const r = Number(ta.dataset.r), c = Number(ta.dataset.c); if (el.rows[r] && el.rows[r][c] !== v) { el.rows[r][c] = v; commit(); } renderCanvas(); renderOverlay(); return; }
   const c = Number(ta.dataset.c), d = Number(ta.dataset.day);
   if (d) { const old = (el.events || []).filter(e => e.d === d); const lines = v ? v.split('\n').map(x => x.trim()).filter(Boolean) : []; el.events = (el.events || []).filter(e => e.d !== d).concat(lines.map((t, i) => ({ d, text: t, color: (old[i] || {}).color || '' }))); }
   else { el.cells = el.cells || {}; const kk = CAL.cellKey(el, c); el.cells[kk] = Object.assign({}, el.cells[kk] || {}, { text: v || undefined }); if (!v) delete el.cells[kk].text; if (!Object.keys(el.cells[kk]).length) delete el.cells[kk]; }
@@ -1034,6 +1073,8 @@ wrap.addEventListener('dblclick', e => {
   const gl = e.target.closest('.ovl .cgl'); if (gl) { const el = selEls()[0]; if (el) { if (gl.dataset.cgl[0] === 'c') delete el.colW; else delete el.rowH; commit(); rerender(); toast(gl.dataset.cgl[0] === 'c' ? '모든 열 너비를 같게 했습니다' : '모든 행 높이를 같게 했습니다'); } return; }
   const cell = (document.elementsFromPoint(e.clientX, e.clientY).find(n => n.closest && n.closest('.el-cal .cell')) || e.target).closest('.el-cal .cell'); if (cell && sel.length === 1 && find(sel[0]).type === 'cal') { const c = Number(cell.dataset.c); cellSel = { id: sel[0], a: c, b: c }; renderOverlay(); openCellEditor(c); return; }
 });
+wrap.addEventListener('dblclick', e => { const td = e.target.closest('.el-tbl td'); if (!td) return; const el = find(td.closest('.el-tbl').dataset.id); if (!el || el.locked) return; e.stopImmediatePropagation(); e.preventDefault(); if (!sel.includes(el.id)) select([el.id]); openTblEditor(el, Number(td.dataset.r), Number(td.dataset.c)); }, true);  /* 표 칸: 두 번 누르면 바로 쓰기 */
+wrap.addEventListener('pointerdown', e => { const td = e.target.closest && e.target.closest('.el-tbl td'); if (!td) return; const id = td.closest('.el-tbl').dataset.id, was = tblCell && tblCell.id === id ? tblCell.r + ',' + tblCell.c : ''; tblCell = { id, r: Number(td.dataset.r), c: Number(td.dataset.c) }; if (was !== tblCell.r + ',' + tblCell.c) setTimeout(() => { if (sel.includes(id)) renderInspector(); }, 0); }, true);
 wrap.addEventListener('dblclick', e => { const dom = e.target.closest('.el-text'); const fe = dom && find(dom.dataset.id); if (fe && fe.flowFrame && BK()) { BK().onFrameDbl(fe); return; } /* 도서 편집 본문 상자 → 원고 편집기 (인디자인 스토리 편집기) */ if (dom && dom !== editing && !find(dom.dataset.id).locked && !dom.classList.contains('warp')) startEdit(dom, e); });
 /* 11/26 포스터·자료실 조: 전화번호가 「010-」/「0000-0000」으로 끊기던 것 — 그릴 때만 한 덩어리(줄 안 바꿈), 글 고치기를 시작하면 풂(저장 글에는 안 들어감) */
 /* 단락 뒤 간격 (11/26 편집 조: 가정통신문 단락 사이를 빈 줄로 띄우던 것) — 그릴 때만 단락마다 칸, 글 고치기를 시작하면 원래 글로 */
@@ -3487,7 +3528,7 @@ function presRetheme(nk) {
 /* 쪽 번호 표시: 상장의 0쪽 양식(출력 안 됨)은 빼고 세어 아래 쪽 넘김과 같게 (11/24 검토) */
 function pgLabelNo(i) { const p = doc.pages[i]; if (p && p.certTpl) return '양식 쪽'; const skip = doc.pages.slice(0, i).filter(x => x.certTpl).length; return (i + 1 - skip) + '쪽'; }
 function imgNameOf(src0) { const src = String(src0 || ''); if (!src || /^(a:|data:|blob:)/.test(src)) return ''; let b = src.replace(/^(asset|lib):/, '').split(/[\/]/).pop().replace(/\.(png|jpe?g|webp|svg|gif)$/i, '').replace(/^(kg|hi|illu|brand|ms)-\d*-?/, ''); const ko = Object.keys(IMG_KO).find(k => b.includes(k)); if (ko) b = IMG_KO[ko] + (/\d/.test(b) && ko === 'mascot' ? ' ' + b.replace(/\D/g, '') : ''); return '그림 · ' + b.replace(/[-_]+/g, ' ').slice(0, 24); }
-function elName(el) { if (el.name) return el.name; if (el.type === 'text') return (el.text || '글자').split('\n')[0].slice(0, 20); if (el.type === 'image') return imgNameOf(el.src) || '이미지'; if (el.type === 'shape') return (FX.SHAPES.find(s => s[0] === el.kind) || [])[1] || '도형'; if (el.type === 'path') return el.d ? '벡터 모양' : '펜 선'; if (el.type === 'video') return '동영상'; if (el.type === 'chart') return '차트'; if (el.type === 'cal') return `${el.year}년 ${el.month}월 달력`; if (el.type === 'mini') return `미니 달력 ${el.month}월`; return el.type; }
+function elName(el) { if (el.name) return el.name; if (el.type === 'tbl') return `표 ${(el.rows || []).length}×${((el.rows || [])[0] || []).length}`; if (el.type === 'text') return (el.text || '글자').split('\n')[0].slice(0, 20); if (el.type === 'image') return imgNameOf(el.src) || '이미지'; if (el.type === 'shape') return (FX.SHAPES.find(s => s[0] === el.kind) || [])[1] || '도형'; if (el.type === 'path') return el.d ? '벡터 모양' : '펜 선'; if (el.type === 'video') return '동영상'; if (el.type === 'chart') return '차트'; if (el.type === 'cal') return `${el.year}년 ${el.month}월 달력`; if (el.type === 'mini') return `미니 달력 ${el.month}월`; return el.type; }
 
 /* ---- 사진: 나라차 자료실 ---- */
 let photoCat = '', photoQ = '';
@@ -4013,6 +4054,19 @@ function renderInspector() {
     <div class="grid3">${F('부드럽게', 'smooth', el.smooth !== false, { type: 'check' })}${F('닫힌 모양', 'closed', el.closed, { type: 'check' })}${F('선 끝', 'cap', el.cap || 'round', { type: 'select', options: [['round', '둥글게'], ['butt', '각지게'], ['square', '네모']] })}</div>
     ${el.closed ? `<h3>채우기</h3>${fillBlock}${(el.fillType || 'solid') === 'solid' ? `${F('채우기 색', 'fill', el.fill || '#FFE89A', { type: 'color' })}<button class="btn sm" data-set="fill:">채우기 없음</button>` : ''}` : ''}
     ${shadowBlock()}<p class="hint">점 ${(el.pts || []).length}개. 크기를 바꾸면 선도 함께 늘어납니다. 다시 그리려면 P 키로 펜을 켜세요.</p>` + geo;
+  } else if (el.type === 'tbl') {
+    tblNorm(el); const cc = tblCell && tblCell.id === el.id ? tblCell : null, R = el.rows.length, C = el.rows[0].length;
+    const TB = (a, t, tip) => `<button class="btn sm" data-tb="${a}" title="${tip || t}">${t}</button>`;
+    h += `<h3>표 — ${R}줄 × ${C}칸</h3><p class="hint" style="margin:0 0 6px">칸을 <b>두 번 누르면</b> 바로 씁니다 (Tab 다음 칸 · 마지막 칸에서 Tab은 새 줄 · Esc 끝). 줄 높이는 글에 맞춰 저절로 늘어납니다.${cc ? ` 지금 고른 칸: <b>${cc.r + 1}줄 ${cc.c + 1}칸</b>` : ' 칸을 한 번 누르면 그 칸 기준으로 줄·칸을 넣고 뺍니다.'}</p>
+    <div class="pk-lb">줄</div><div class="row" style="flex-wrap:wrap;gap:4px">${TB('rowUp', '위에 줄 넣기')}${TB('rowDn', '아래에 줄 넣기')}${TB('rowDel', '줄 빼기', '고른 칸의 줄을 뺌')}</div>
+    <div class="pk-lb" style="margin-top:6px">칸</div><div class="row" style="flex-wrap:wrap;gap:4px">${TB('colL', '왼쪽에 칸 넣기')}${TB('colR', '오른쪽에 칸 넣기')}${TB('colDel', '칸 빼기', '고른 칸의 세로 칸을 뺌')}${TB('eqW', '칸 너비 같게')}${TB('wPlus', '고른 칸 넓게', '고른 칸을 넓히고 나머지를 줄임')}${TB('wMinus', '고른 칸 좁게')}</div>
+    <h3>모양</h3><div class="grid2">${F('첫 줄을 머리로', 'head', el.head > 0, { type: 'check' })}${F('줄무늬', 'tblZebra', !!el.zebra, { type: 'check' })}</div>
+    ${F('글자 크기', 'size', el.size, { type: 'slider', min: 6, max: 40, step: 0.5, unit: 'pt', def: 10 })}${F('줄 간격', 'lh', el.lh, { type: 'slider', min: 1, max: 2.2, step: 0.05, def: 1.4 })}${F('칸 안 여백', 'pad', el.pad, { type: 'slider', min: 0, max: 6, step: 0.1, unit: 'mm', def: 1.6 })}
+    <div class="grid2">${F('글꼴', 'font', el.font, { type: 'select', options: [['Nanum Gothic', '나눔고딕'], ['Noto Sans KR', '본고딕(Noto Sans)'], ['Pretendard', '프리텐다드'], ['Nanum Myeongjo', '나눔명조'], ['Noto Serif KR', '본명조(Noto Serif)'], ['Jua', '주아'], ['Gowun Dodum', '고운돋움']] })}${F('정렬', 'align', el.align, { type: 'select', options: [['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']] })}</div>
+    <div class="grid2">${F('글자 색', 'color', el.color, { type: 'color' })}${F('선 색', 'line', el.line, { type: 'color' })}</div>
+    <div class="row" style="gap:6px;align-items:flex-end">${F('칸 바탕', 'cellBg', el.cellBg || '#ffffff', { type: 'color' })}<button class="btn sm" data-set="cellBg:" title="칸 바탕 없이(뒤 배경이 비침)">바탕 없음</button></div>
+    ${F('선 굵기', 'lineW', el.lineW, { type: 'slider', min: 0, max: 1.5, step: 0.05, unit: 'mm', def: 0.3 })}
+    ${el.head ? `<div class="grid2">${F('머리 바탕', 'headBg', el.headBg, { type: 'color' })}${F('머리 글자', 'headColor', el.headColor, { type: 'color' })}</div>` : ''}${el.zebra ? F('줄무늬 색', 'zebra', el.zebra, { type: 'color' }) : ''}` + geo;
   } else if (el.type === 'chart') {
     h += `<h3>차트</h3>${vpick('kind', el.kind, [['bar', VIC.chart('bar'), '막대'], ['hbar', VIC.chart('hbar'), '가로 막대'], ['line', VIC.chart('line'), '꺾은선'], ['pie', VIC.chart('pie'), '원형'], ['donut', VIC.chart('donut'), '도넛']])}${F('제목', 'title', el.title)}
     <label class="f"><span>항목과 값 (한 줄에 "이름, 값")</span><textarea data-k="chartData" rows="6">${esc((el.data || []).map(d => `${d.l}, ${d.v}`).join('\n'))}</textarea></label>
@@ -4079,6 +4133,7 @@ function renderInspector() {
     if (b.dataset.calln) { const [a, c] = b.dataset.calln.split(',').map(Number); selEls().filter(x => x.type === 'cal').forEach(x => { x.s = Object.assign({}, x.s || {}, { lineW: a, outerW: c }); }); commit(); rerender(); return; } /* 달력 선 굵기 한 번에 */
     if (b.dataset.arw) { const [a0, e0] = b.dataset.arw; selEls().filter(x => x.type === 'shape').forEach(x => { x.arrowStart = a0 === '1'; x.arrowEnd = e0 === '1'; }); commit(); rerender(); return; }
     if (b.dataset.setv != null) { const i = b.dataset.setv.indexOf(':'), k = b.dataset.setv.slice(0, i); let v; try { v = JSON.parse(b.dataset.setv.slice(i + 1)); } catch (er) { v = b.dataset.setv.slice(i + 1); } if (k === 'wrap') { setImgWrap(selEls().filter(x => canWrap(x) && !x.locked), v); return; } selEls().filter(x => x.type === el.type).forEach(x => setK(x, k, v)); if (k === 'speed' && el.type === 'video' && page() && page().vdur) { const was = page().vdur, nd = Math.max(0.5, Math.round(((Number(el.tout || el.dur || 0) - Number(el.tin || 0)) / Math.max(0.1, Number(v) || 1) + (el.anim ? Number(el.anim.d || 0) : 0)) * 10) / 10); if (Math.abs(nd - was) > 0.05) { page().vdur = nd; toast(`속도 ${v}배 — 장면 길이를 ${was}초 → ${nd}초로 맞췄습니다 (파이널컷처럼)${Number(v) !== 1 ? ' · 속도를 바꾼 동영상의 원래 소리는 빠집니다' : ''}`); } }  /* 11/26 영상 조: 속도만 바뀌고 장면 길이는 그대로라 뒤가 멈춘 화면이 되던 것 */ commit(); rerender(); return; } /* 그림 고르기 단추 — 같은 종류를 여럿 골랐으면 모두 */
+    if (b.dataset.tb) { tblAct(el, b.dataset.tb); return; }
     if (b.dataset.set != null) { const i = b.dataset.set.indexOf(':'); const k = b.dataset.set.slice(0, i), v = b.dataset.set.slice(i + 1); if (k === 'chartColors') el.colors = v.split(',').map(s => s.trim()); else setK(el, k, v); commit(); rerender(); return; }
     if (b.dataset.preset) { const p = FX.TEXT_PRESETS.find(x => x.id === b.dataset.preset); Object.assign(el, p.st); if (p.id === 'plain') { el.warp = 'none'; el.vertical = false; } commit(); rerender(); return; }
     if (b.dataset.imgpreset) { const p = FX.IMG_PRESETS.find(x => x[0] === b.dataset.imgpreset); el.fx = Object.assign({}, p[2]); commit(); rerender(); return; }
@@ -4145,7 +4200,17 @@ const RS_IC = (() => { const fr = '<rect x="2" y="7" width="36" height="20" rx="
 function proxyPick(sel, cur, items, cls) { return `<div class="pk${cls ? ' ' + cls : ''}">${items.map(([v, ic, t, tip]) => { const on = String(cur) === String(v); return `<button type="button" class="pk-b${on ? ' on' : ''}" data-proxy="${esc(sel)}" data-val="${esc(String(v))}" title="${esc(tip || t)}" aria-pressed="${on}">${ic ? `<span class="pk-ic">${ic}</span>` : ''}${t ? `<span class="pk-t">${t}</span>` : ''}</button>`; }).join('')}</div>`; }
 window.proxyPick = proxyPick; /* aichat.js 등 다른 파일에서도 그림 단추를 씀 */
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-proxy]'); if (!b) return; const root = b.closest('dialog') || b.closest('.inspector') || document; const t = root.querySelector(b.dataset.proxy); if (!t) return; t.value = b.dataset.val; t.dispatchEvent(new Event('input', { bubbles: true })); t.dispatchEvent(new Event('change', { bubbles: true })); b.parentElement.querySelectorAll('.pk-b').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); }); });
-function setK(obj, k, v) { if (obj && (obj.type === 'cal' || obj.type === 'mini') && /^s\./.test(k)) obj.sUser = Object.assign({}, obj.sUser, { [k.slice(2)]: 1 });  /* 달력 모양 중 사용자가 바꾼 것 — 테마·달을 바꿔도 남김 */ if (k === 'size' && obj && obj.fitText && Number(v) > 0) { obj.fitMax = Number(v); fitCache.delete(obj.id); } /* 자동 맞춤 글자: 고른 크기가 새 최대 */ const ks = k.split('.'); let a = obj; for (let i = 0; i < ks.length - 1; i++) { if (a[ks[i]] == null) a[ks[i]] = ks[i + 1].match(/^\d+$/) ? [] : {}; a = a[ks[i]]; } a[ks[ks.length - 1]] = v; }
+function tblAct(el, a) {
+  tblNorm(el); const R = el.rows.length, C = el.rows[0].length; let { r, c } = tblCell && tblCell.id === el.id ? tblCell : { r: R - 1, c: C - 1 }; r = Math.min(r, R - 1); c = Math.min(c, C - 1);
+  if (a === 'rowUp' || a === 'rowDn') { const at = a === 'rowUp' ? r : r + 1; el.rows.splice(at, 0, Array(C).fill('')); if (at < el.head) el.head++; tblCell = { id: el.id, r: at, c }; }
+  else if (a === 'rowDel') { if (R <= 1) { toast('표에는 줄이 하나는 있어야 합니다'); return; } el.rows.splice(r, 1); if (r < el.head) el.head--; tblCell = { id: el.id, r: Math.min(r, R - 2), c }; }
+  else if (a === 'colL' || a === 'colR') { const at = a === 'colL' ? c : c + 1; el.rows.forEach(x => x.splice(at, 0, '')); el.colW.splice(at, 0, el.colW[c] || 1); tblCell = { id: el.id, r, c: at }; }
+  else if (a === 'colDel') { if (C <= 1) { toast('표에는 칸이 하나는 있어야 합니다'); return; } el.rows.forEach(x => x.splice(c, 1)); el.colW.splice(c, 1); tblCell = { id: el.id, r, c: Math.min(c, C - 2) }; }
+  else if (a === 'eqW') el.colW = el.colW.map(() => 1);
+  else if (a === 'wPlus' || a === 'wMinus') { const tot = el.colW.reduce((x, y) => x + y, 0), d = tot * 0.06 * (a === 'wPlus' ? 1 : -1), nw = el.colW[c] + d; if (nw < tot * 0.05 || C < 2) return; el.colW = el.colW.map((v, i) => i === c ? nw : Math.max(tot * 0.04, v - d / (C - 1))); }
+  commit(); renderCanvas(); renderOverlay(); renderInspector();
+}
+function setK(obj, k, v) { if (obj && obj.type === 'tbl' && (k === 'head' || k === 'tblZebra')) { if (k === 'head') obj.head = v === true || v === 'true' || v === 'on' || v === 1 ? 1 : 0; else obj.zebra = v === true || v === 'true' || v === 'on' ? (obj.zebraC || '#F3F4F7') : ''; return; } if (obj && obj.type === 'tbl' && k === 'zebra') obj.zebraC = v; if (obj && (obj.type === 'cal' || obj.type === 'mini') && /^s\./.test(k)) obj.sUser = Object.assign({}, obj.sUser, { [k.slice(2)]: 1 });  /* 달력 모양 중 사용자가 바꾼 것 — 테마·달을 바꿔도 남김 */ if (k === 'size' && obj && obj.fitText && Number(v) > 0) { obj.fitMax = Number(v); fitCache.delete(obj.id); } /* 자동 맞춤 글자: 고른 크기가 새 최대 */ const ks = k.split('.'); let a = obj; for (let i = 0; i < ks.length - 1; i++) { if (a[ks[i]] == null) a[ks[i]] = ks[i + 1].match(/^\d+$/) ? [] : {}; a = a[ks[i]]; } a[ks[ks.length - 1]] = v; }
 $('#inspector').addEventListener('change', e => { const k = e.target.dataset.k; if (k === 'grp.w' || k === 'grp.h') { const ev = new Event('input', { bubbles: true }); ev.__apply = true; e.target.dispatchEvent(ev); } }, true);
 $('#inspector').addEventListener('input', e => {
   const t = e.target, k = t.dataset.k; if (!k) return;
@@ -5920,7 +5985,7 @@ async function renderPageCanvas(pg, dpi, mode, bg) {
    양끝 맞춤은 문단 끝 줄만 빼고 줄마다 양끝(text-align-last). 서식(굵게·색)은 Range로 잘라 그대로 */
 function freezeLines(root) {
   const rg = document.createRange(), blockOf = (n, E) => { let x = n.parentNode; while (x && x !== E) { const d = getComputedStyle(x).display; if (d === 'block' || d === 'flex' || d === 'list-item' || d === 'grid') return x; x = x.parentNode; } return E; };
-  root.querySelectorAll('.el-text').forEach(E => {
+  root.querySelectorAll('.el-text, .el-tbl td').forEach(E => {
     const cs = getComputedStyle(E);
     if (E.classList.contains('wrapped') || E.querySelector('svg, .wrapf') || /^vertical/.test(cs.writingMode || '') || (E.textContent || '').length > 20000) return;
     const tol = (parseFloat(cs.fontSize) || 12) * 0.4, just = cs.textAlign === 'justify';
@@ -6152,11 +6217,14 @@ async function exportPPTX(pages, say, base, asImg, keepFonts) {
   await loadScript('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js', () => window.PptxGenJS, 'sha384-Cck14aA9cifjYolcnjebXRfWGkz5ltHMBiG4px/j8GS+xQcb7OhNQWZYyWjQ+UwQ');
   const pptx = new window.PptxGenJS(), iw = doc.w / 25.4, ih = doc.h / 25.4; pptx.defineLayout({ name: 'NC', width: iw, height: ih }); pptx.layout = 'NC'; pptx.title = doc.name || '발표자료'; pptx.author = '나라차 디자인 공방';
   const dpi = Math.min(220, Math.max(96, 1920 / iw)); /* 가로 1920px 안팎 */ let nText = 0, nKeep = 0; const fonts = new Set();
-  for (let i = 0; i < pages.length; i++) { say(`${i + 1}/${pages.length} 쪽 그리는 중…`); const pg = doc.pages[pages[i]], tx = asImg ? [] : pg.els.filter(pptEditable), set = new Set(tx);
+  for (let i = 0; i < pages.length; i++) { say(`${i + 1}/${pages.length} 쪽 그리는 중…`); const pg = doc.pages[pages[i]], tx = asImg ? [] : pg.els.filter(pptEditable), tbs = asImg ? [] : pg.els.filter(e => e.type === 'tbl' && !elHidden(e) && !e.rot), set = new Set(tx.concat(tbs));
     nKeep += asImg ? 0 : pg.els.filter(e => e.type === 'text' && !elHidden(e) && String(e.text || '').trim() && !set.has(e)).length;
     const c = await renderPageCanvas(tx.length ? Object.assign({}, pg, { els: pg.els.filter(e => !set.has(e)) }) : pg, dpi, 'thumb', '#ffffff'); const data = c.toDataURL('image/jpeg', 0.92); c.width = c.height = 0;
     const s = pptx.addSlide(); s.addImage({ data, x: 0, y: 0, w: iw, h: ih, altText: '바탕(도형·그림)' });
     for (const e of tx) { const runs = pptRuns(e); pptLineSp(runs, Number(e.lh) || 1.3); runs.forEach(r => { if (embed) { const f = faceOf.get(r.options.fontFace + '|' + (Number(r.options._w) || (r.options.bold ? 700 : 400))); if (f) { r.options.fontFace = f.name; r.options.bold = f.bold || (!!r.options.bold && !/thin|light|medium|semibold|extrabold|black|heavy/i.test(f.name)); } else r.options.fontFace = PPT_SERIF.test(r.options.fontFace || '') ? 'Batang' : 'Malgun Gothic'; } else if (!keepFonts) r.options.fontFace = PPT_SERIF.test(r.options.fontFace || '') ? 'Batang' : 'Malgun Gothic'; fonts.add(r.options.fontFace); }); s.addText(runs, pptTextOpts(e)); nText++; }
+    for (const e of tbs) { tblNorm(e); const PT = 72 / 25.4, tot = e.colW.reduce((a, b) => a + b, 0), hex = c => String(c || '#000000').replace('#', '').slice(0, 6), face = keepFonts ? e.font : (PPT_SERIF.test(e.font || '') ? 'Batang' : 'Malgun Gothic');  /* 표는 PowerPoint 표로 (칸 글을 고칠 수 있게) */
+      const rows = e.rows.map((r, ri) => r.map(t => ({ text: t, options: ri < e.head ? { bold: true, color: hex(e.headColor), fill: { color: hex(e.headBg) }, align: e.headAlign } : (e.zebra && (ri - e.head) % 2 === 1 ? { fill: { color: hex(e.zebra) } } : e.cellBg ? { fill: { color: hex(e.cellBg) } } : {}) })));
+      try { s.addTable(rows, { x: e.x / 25.4, y: e.y / 25.4, w: e.w / 25.4, colW: e.colW.map(v => e.w / 25.4 * v / tot), fontFace: face, fontSize: e.size, color: hex(e.color), align: e.align, valign: e.valign === 'middle' ? 'middle' : e.valign, margin: e.pad * PT * 0.6, border: { type: e.lineW ? 'solid' : 'none', pt: Math.max(0.25, e.lineW * PT), color: hex(e.line) } }); nText++; } catch (er) { console.warn('표 내보내기 실패', er); } }
     if (pg.notes) s.addNotes(String(pg.notes)); }
   say('파일 만드는 중…'); let blob = await pptx.write({ outputType: 'blob' }); if (embFaces.length) { say(`글꼴 ${embFaces.length}개 넣는 중…`); blob = await pptEmbed(blob, embFaces); } saveBlob(blob, `${base}.pptx`);
   if (embed && !asImg) { const sk = [...skipped].map(([f, w]) => `${f} — ${w}`); toast(`PowerPoint 파일로 저장했습니다 — ${pages.length}쪽 · 글 상자 ${nText}개 · 📦 글꼴 ${embFaces.length ? [...new Set(embFaces.map(f => f.name))].join(', ') + ` 넣음` : '넣은 것 없음'} · 파일 ${(blob.size / 1048576).toFixed(1)}MB${sk.length ? ` · 못 넣은 글꼴(맑은 고딕·바탕으로): ${sk.join(' / ')}` : ''}`); return; }
@@ -6236,6 +6304,7 @@ function textSlots() {
     if (el.locked) return; // 잠긴 요소는 바꾸지 않음 (Canva와 같음)
     if (el.type === 'text') out.push({ pi, el, get: () => el.text, set: v => { if (el.html && el.htmlFor === el.text) { const d = document.createElement('div'); d.innerHTML = el.html; const tw = document.createTreeWalker(d, NodeFilter.SHOW_TEXT); let n; while ((n = tw.nextNode())) n.nodeValue = n.nodeValue.split(findState.q).join(findState.r); if (domText(d) === v) { const h = richHTML(d); if (h) { el.html = h; el.htmlFor = v; } else { delete el.html; delete el.htmlFor; } } else { delete el.html; delete el.htmlFor; } } else if (el.html) { delete el.html; delete el.htmlFor; } el.text = v; }, label: elName(el) });
     if (el.type === 'chart' && el.title) out.push({ pi, el, get: () => el.title, set: v => { el.title = v; }, label: '차트 제목' });
+    if (el.type === 'tbl') { tblNorm(el); el.rows.forEach((r, ri) => r.forEach((t, ci) => { if (t) out.push({ pi, el, get: () => el.rows[ri][ci], set: v => { el.rows[ri][ci] = v; }, label: `표 ${ri + 1}줄 ${ci + 1}칸` }); })); }
     if (el.type === 'cal') { (el.events || []).forEach(ev => out.push({ pi, el, get: () => ev.text, set: v => { ev.text = v; }, label: `달력 ${el.month}월 ${ev.d}일 일정` })); (el.notes || []).forEach((t, i) => out.push({ pi, el, get: () => el.notes[i], set: v => { el.notes[i] = v; }, label: `달력 ${el.month}월 메모` })); Object.values(el.cells || {}).forEach(c => { if (c.text) out.push({ pi, el, get: () => c.text, set: v => { c.text = v; }, label: `달력 ${el.month}월 칸 글자` }); }); }
   }));
   return out;

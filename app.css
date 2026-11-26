@@ -2311,3 +2311,7 @@ dialog p{margin-top:0}
 dialog summary:focus{outline:none}
 dialog summary:focus-visible{box-shadow:0 0 0 2px #c7d7fe;border-radius:4px}
 dialog [data-tidy]{text-wrap:pretty}
+/* 진짜 표 (11/26) */
+.el-tbl table.tbl{border-collapse:collapse;width:100%;table-layout:fixed;margin:0}
+.el-tbl td{white-space:pre-wrap;overflow-wrap:anywhere;word-break:keep-all;line-break:strict;box-sizing:border-box}
+.el-tbl{cursor:default}
