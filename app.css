@@ -614,14 +614,14 @@ dialog.nd.drive .ndhead .btn.primary{margin-right:4px}
 .stage .ruler.rh{left:0;top:0;cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M1 12h22' stroke='%23fff' stroke-width='4'/%3E%3Cpath d='M1 12h22' stroke='%23e0369a' stroke-width='2' stroke-dasharray='3 2'/%3E%3Cpath d='M9 15l3 4 3-4' fill='none' stroke='%23e0369a' stroke-width='2'/%3E%3C/svg%3E") 12 12,s-resize}
 .stage .ruler.rv{left:0;top:18px;cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M12 1v22' stroke='%23fff' stroke-width='4'/%3E%3Cpath d='M12 1v22' stroke='%23e0369a' stroke-width='2' stroke-dasharray='3 2'/%3E%3Cpath d='M15 9l4 3-4 3' fill='none' stroke='%23e0369a' stroke-width='2'/%3E%3C/svg%3E") 12 12,e-resize}
 .stage .ruler.rh:hover{box-shadow:inset 0 -2px 0 #e0369a}.stage .ruler.rv:hover{box-shadow:inset -2px 0 0 #e0369a}
-.stage .ruler.rc{left:0;top:0;width:18px;height:18px;z-index:7;background:#e9ebef;font:600 7px/18px system-ui,sans-serif;color:#6b7280;cursor:pointer;border-right:1px solid #d6d9e0;border-bottom:1px solid #d6d9e0}
+.stage .ruler.rc{left:0;top:0;width:18px;height:18px;z-index:7;background:#e9ebef;font:600 7px/18px var(--font-ui);color:#6b7280;cursor:pointer;border-right:1px solid #d6d9e0;border-bottom:1px solid #d6d9e0}
 .stage .ruler[hidden]{display:none}
 .stage.rulers .toolbar{top:28px}
 .stage.rulers .scroller{left:18px;top:18px}
 .ovl .uguide{position:absolute;pointer-events:auto;z-index:3}
 .ovl .uguide.ugv{width:calc(9px / var(--k,1));margin-left:calc(-4.5px / var(--k,1));cursor:col-resize;background:linear-gradient(90deg,transparent 44%,#e0369a 44%,#e0369a 56%,transparent 56%)}
 .ovl .uguide.ugh{height:calc(9px / var(--k,1));margin-top:calc(-4.5px / var(--k,1));cursor:row-resize;background:linear-gradient(180deg,transparent 44%,#e0369a 44%,#e0369a 56%,transparent 56%)}
-#guideTip{position:fixed;z-index:200;background:#1f2430;color:#fff;font:600 11px/1 system-ui,sans-serif;padding:4px 6px;border-radius:4px;pointer-events:none}
+#guideTip{position:fixed;z-index:200;background:#1f2430;color:#fff;font:600 11px/1 var(--font-ui);padding:4px 6px;border-radius:4px;pointer-events:none}
 /* 쪽 모아 보기 */
 #dlgGrid{width:min(1180px,96vw)}
 #dlgGrid .dhead{gap:10px;flex-wrap:wrap}
@@ -996,7 +996,7 @@ body.tl-wide .tl-grip{display:block}
 .tl-vk .hit{fill:none;stroke:transparent;stroke-width:12;vector-effect:non-scaling-stroke;pointer-events:stroke;cursor:ns-resize}
 .tl-vk i{position:absolute;width:9px;height:9px;margin:-5px 0 0 -5px;border-radius:50%;background:#ffd34d;border:1.5px solid #3a2a00;pointer-events:auto;cursor:move;box-shadow:0 0 0 2px rgba(0,0,0,.25)}
 .tl-vk i:hover{transform:scale(1.3)}
-#vkTip{position:fixed;z-index:9999;pointer-events:none;background:#111;color:#fff;font:600 11px/1 system-ui,sans-serif;padding:5px 7px;border-radius:5px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+#vkTip{position:fixed;z-index:9999;pointer-events:none;background:#111;color:#fff;font:600 11px/1 var(--font-ui);padding:5px 7px;border-radius:5px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
 
 /* 로고 = 메인 화면 단추 */
 #brandHome{cursor:pointer;border-radius:10px;padding:3px 6px 3px 3px;margin-left:-3px;transition:background .15s}
@@ -2232,7 +2232,7 @@ dialog.nd.drive nav button.over,dialog.nd.drive .dvfolder.over{background:var(--
 dialog.nd.drive nav button[data-droptrash].over{background:#fdecea!important;color:var(--ui-danger);box-shadow:inset 0 0 0 2px var(--ui-danger)}
 dialog.nd.drive.dvdragging nav [data-dropdir],dialog.nd.drive.dvdragging nav [data-droptrash]{box-shadow:inset 0 0 0 1.5px var(--ui-line2);background:#fafbfc}
 dialog.nd.drive.dvdragging nav{background:linear-gradient(#fff,#fff)}
-.dvghost{position:fixed;top:-100px;left:-100px;padding:7px 12px;border-radius:9px;background:var(--ui-accent);color:#fff;font:600 13px/1 system-ui,sans-serif}
+.dvghost{position:fixed;top:-100px;left:-100px;padding:7px 12px;border-radius:9px;background:var(--ui-accent);color:#fff;font:600 13px/1 var(--font-ui)}
 dialog.nd.drive nav .dvk-ic{width:19px;flex:none;display:inline-grid;place-items:center}dialog.nd.drive nav .dvk-ic svg{width:18px;height:18px}
 
 /* 위 막대 「열기」: 아이콘 크게 · 마우스 올리면 폴더가 열리는 움직임 (11/26 팀장님) */
@@ -2261,7 +2261,7 @@ dialog.mandlg .mankeys.on{background:var(--ui-accent-soft);color:var(--ui-accent
 #manMain table.mkeys td{padding:6px 4px;border-top:1px solid var(--ui-line);vertical-align:middle}
 #manMain table.mkeys tr:first-child td{border-top:0}
 #manMain table.mkeys{table-layout:auto}#manMain table.mkeys td:first-child{width:48%;padding-right:12px;line-height:2}#manMain table.mkeys td:first-child kbd{white-space:nowrap}#manMain table.mkeys td:last-child{line-height:1.45;color:var(--ui-fg2)}
-#manMain table.mkeys kbd{display:inline-block;min-width:22px;padding:2px 7px;border:1px solid var(--ui-line2);border-bottom-width:2px;border-radius:6px;background:#f8f9fb;font:600 12px/1.5 system-ui,-apple-system,sans-serif;text-align:center;color:var(--ui-fg)}
+#manMain table.mkeys kbd{display:inline-block;min-width:22px;padding:2px 7px;border:1px solid var(--ui-line2);border-bottom-width:2px;border-radius:6px;background:#f8f9fb;font:600 12px/1.5 var(--font-ui);text-align:center;color:var(--ui-fg)}
 #manMain table.mkeys i{font-style:normal;color:var(--ui-muted);margin:0 3px;font-size:11.5px}
 #manMain table.mkeys i.or{margin:0 6px}
 #manMain table.mkeys .kw{font-size:12.5px;color:var(--ui-fg2);font-weight:600}
@@ -2315,3 +2315,5 @@ dialog [data-tidy]{text-wrap:pretty}
 .el-tbl table.tbl{border-collapse:collapse;width:100%;table-layout:fixed;margin:0}
 .el-tbl td{white-space:pre-wrap;overflow-wrap:anywhere;word-break:keep-all;line-break:strict;box-sizing:border-box}
 .el-tbl{cursor:default}
+.el-tbl td.tsel{box-shadow:inset 0 0 0 9999px rgba(47,91,234,.16),inset 0 0 0 1.5px #2f5bea}
+#inspector .tbsel{background:var(--ui-field,#f5f7fb);border:1px solid var(--ui-line);border-radius:8px;padding:8px 10px;margin:0 0 10px}
