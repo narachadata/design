@@ -16,7 +16,7 @@ const SWATCH = ['#1a1a1a', '#ffffff', '#1E2B5A', '#2F5BEA', '#E0564B', '#FFE89A'
 /* ---------- 문서 모델 ---------- */
 let doc, cur = 0, sel = [], zoom = 0, hist = [], hptr = -1, editing = null, selDay = null, clip = null, lastTextStyle = null, tool = 'select';
 function newPage(bg) { return { id: uid(), bg: bg || '#ffffff', els: [], label: '' }; }
-function newDoc(sz) { sz = sz || SIZES[0]; return { v: 2, name: '새 디자인', w: sz[2], h: sz[3], bleed: 0, cropMarks: false, pages: [newPage()], assets: {}, fonts: [], holidays: {}, showHolidays: true, calendar: Object.assign(clone(window.NARACAL_DEFAULTS), { theme: Object.assign({ id: 'classic' }, window.NARACAL_DEFAULTS.theme) }), rules: clone(savedRules() || window.NARACAL_DEFAULTS.rules), updatedAt: Date.now() }; }
+function newDoc(sz) { sz = sz || SIZES[0]; return { v: 2, name: '새 문서', w: sz[2], h: sz[3], bleed: 0, cropMarks: false, pages: [newPage()], assets: {}, fonts: [], holidays: {}, showHolidays: true, calendar: Object.assign(clone(window.NARACAL_DEFAULTS), { theme: Object.assign({ id: 'classic' }, window.NARACAL_DEFAULTS.theme) }), rules: clone(savedRules() || window.NARACAL_DEFAULTS.rules), updatedAt: Date.now() }; }
 /* 도장 기본 행사 목록(반복 일정 규칙): 한 번 저장하면 새 문서·다음 해 달력에 그대로 (두 PC 설정 동기화) */
 function savedRules() { try { const v = JSON.parse(localStorage.getItem('naracal-rules-saved') || 'null'); return Array.isArray(v) && v.length ? v : null; } catch (e) { return null; } }
 let BKm = null; /* 도서 편집 모듈 (BK()) — commit에서도 보므로 맨 위에 */
@@ -189,7 +189,7 @@ document.addEventListener('click', e => {
   if (open && !(e.target.closest && e.target.closest('#tbMenu'))) open.remove();
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#tbMenu')) $('#tbMenu').remove(); });
-function updDocBadge() { const pn = $('#pname'); if (pn) { pn.title = doc && doc.name ? doc.name : ''; let vb = document.getElementById('vcopyBadge'); const isCopy = !!(doc && doc.video && doc.video.isCopy); if (isCopy && !vb) { vb = document.createElement('span'); vb.id = 'vcopyBadge'; vb.className = 'vcopy-badge'; vb.textContent = '🎬 영상 사본'; vb.title = '영상용 사본입니다 — 원본 디자인은 그대로 남아 있습니다'; pn.after(vb); } if (vb) vb.hidden = !isCopy; } }
+function updDocBadge() { const pn = $('#pname'); if (pn) { pn.title = doc && doc.name ? doc.name : ''; let vb = document.getElementById('vcopyBadge'); const isCopy = !!(doc && doc.video && doc.video.isCopy); if (isCopy && !vb) { vb = document.createElement('span'); vb.id = 'vcopyBadge'; vb.className = 'vcopy-badge'; vb.textContent = '🎬 영상 사본'; vb.title = '영상용 사본입니다 — 원본 문서는 그대로 남아 있습니다'; pn.after(vb); } if (vb) vb.hidden = !isCopy; } }
 function updateSaveBadge() { updDocSize(); updDocBadge(); /* 이름이 길어도 전체 이름(마우스 올림)·영상 사본 딱지 (11/24 검토) */ const b = $('#btnSave'); if (!b) return; const st = store.state; b.querySelector('span').textContent = '저장'; b.title = st.handle ? `저장 (Ctrl+S) · ${st.dir ? '동기화 폴더' : '파일'}: ${st.fileName}` : '저장 (Ctrl+S) · 아직 파일로 저장하지 않음'; b.classList.toggle('on', !!st.handle); gdChip(); }
 // 이 PC에 원본이 없는 동영상·소리(내 PC 원본 'm:'만 해당 — 공방 그림·기본 소리·공유 자료는 온라인에 있으므로 늘 열림)
 const mediaMissing = new Set();
@@ -309,17 +309,17 @@ async function afterFolderReady(opts) {
   gcAssets();
   if (docs.length) {
     const nm = docs[0].name.replace(/\.design\.json$/i, '');
-    if (!freshDraft && doc.pages.some(p => p.els.length)) {  /* 빈 문서는 폴더에 따로 저장하지 않음 (11/25 — 빈 「새 디자인」 파일이 쌓였음) */
+    if (!freshDraft && doc.pages.some(p => p.els.length)) {  /* 빈 문서는 폴더에 따로 저장하지 않음 (11/25 — 빈 「새 문서」 파일이 쌓였음) */
       if (!window.confirm(`동기화 폴더에 문서가 ${docs.length}개 있습니다.\n\n확인: 가장 최근 문서 "${nm}"를 엽니다 (지금 화면의 문서도 폴더에 따로 저장해 둡니다)\n취소: 지금 문서를 계속 쓰고 폴더에 저장합니다`)) { await store.saveIntoFolder(doc); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); return; }
       await store.saveIntoFolder(doc); store.state.dirty = false;
     }
     await openFolderDoc(docs[0].handle, `동기화 폴더의 최근 문서 "${nm}"를 열었습니다`); return;
   }
-  setTimeout(updateSaveBadge, 0); if (freshDraft || !doc.pages.some(p => p.els.length)) { setStatus('저장 곳에 연결했습니다 · 새 디자인을 만들거나 저장(Ctrl+S)하면 파일로 저장됩니다'); return; }  /* 빈 문서는 파일로 만들지 않음 */
+  setTimeout(updateSaveBadge, 0); if (freshDraft || !doc.pages.some(p => p.els.length)) { setStatus('저장 곳에 연결했습니다 · 새 문서를 만들거나 저장(Ctrl+S)하면 파일로 저장됩니다'); return; }  /* 빈 문서는 파일로 만들지 않음 */
   await store.saveIntoFolder(doc); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`);
 }
 async function openFolderDoc(h, msg) {
-  keepCurrentDoc.kept = ''; if (!(await keepCurrentDoc())) return; const kept = keepCurrentDoc.kept; /* 파일에 저장하거나(실패하면) 직전 문서로 보관 — 저장하지 않은 새 디자인이 말없이 사라지지 않게 */
+  keepCurrentDoc.kept = ''; if (!(await keepCurrentDoc())) return; const kept = keepCurrentDoc.kept; /* 파일에 저장하거나(실패하면) 직전 문서로 보관 — 저장하지 않은 새 문서가 말없이 사라지지 않게 */
   const j = await store.openHandle(h); await loadDoc(j, (msg || `"${h.name}"를 열었습니다`) + (kept ? ` — 저장하지 않은 "${kept}"는 저장 ▾ → 직전 문서 되살리기에 보관했습니다` : '')); warnIfRecentOther(j); updateSaveBadge(); setStatus(`연결된 파일: ${store.state.fileName}`);
 }
 async function registerDocFonts() { for (const f of doc.fonts) { try { const ff = new FontFace(f.family, `url(${f.data})`); await ff.load(); document.fonts.add(ff); } catch (e) {} } }
@@ -493,8 +493,8 @@ function renderCanvas() {
 // 크기 글: 화면용(px) 형식이거나 px 단위로 넣었으면 px, 아니면 mm
 /* 을/를: 마지막 한글 글자의 받침으로 고름 ('퍽 (발차기)'를 · '기합'을) */
 function eul(v) { const m = String(v == null ? '' : v).match(/[가-힣](?=[^가-힣]*$)/); if (!m) return '을(를)'; return (m[0].charCodeAt(0) - 0xAC00) % 28 ? '을' : '를'; }
-/* 저장 파일 이름: 문서 이름이 크기 이름('스토리 · 릴스', 'A4 세로')이나 '새 디자인' 그대로면 첫 쪽의 가장 큰 글(제목)로 */
-function docFileName(fb) { const nm = String(doc.name || '').trim(), def = !nm || nm === '새 디자인' || FORMATS.some(f => f[1] === nm);
+/* 저장 파일 이름: 문서 이름이 크기 이름('스토리 · 릴스', 'A4 세로')이나 '새 문서' 그대로면 첫 쪽의 가장 큰 글(제목)로 */
+function docFileName(fb) { const nm = String(doc.name || '').trim(), def = !nm || (nm === '새 문서' || nm === '새 디자인') || FORMATS.some(f => f[1] === nm);
   let out = nm; if (def) { const pg = doc.pages.find(p => !p.dlOff && !p.vOff) || doc.pages[0], t = pg && pg.els.filter(e => e.type === 'text' && !e.hidden && String(e.text || '').trim()).sort((a, b) => (b.size || 0) - (a.size || 0))[0]; out = t ? String(t.text).split('\n').map(x => x.trim()).filter(Boolean)[0] || '' : ''; if (!out) out = nm || fb; }
   return out.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/[. ]+$/, '').slice(0, 60) || fb; }
 function sizeLabelFor(W, H, fmtId, unit) { const f = FORMATS.find(x => x[0] === fmtId), px = (f && f[5] === 'px') || unit === 'px'; return px ? `${Math.round(W * 96 / 25.4)} × ${Math.round(H * 96 / 25.4)} px` : W >= 1000 || H >= 1000 ? `${Math.round(W) / 10} × ${Math.round(H) / 10} cm` : `${Math.round(W * 10) / 10} × ${Math.round(H * 10) / 10} mm`; }
@@ -1573,7 +1573,7 @@ async function newsTplSend() {
   let w; try { w = await newsEngine(); } catch (e) { return; }
   if (typeof w.nlAddTemplate !== 'function') { toast('소식지 프로그램이 예전 판입니다. 새로 고친 뒤 다시 해 주세요', true); return; }
   const ratio = (w.S && w.S.ratio) || '45', G = newsGeom(ratio), want = 1080 / G.H, have = doc.w / doc.h;
-  if (Math.abs(want - have) > 0.03 && !window.confirm(`이 디자인 비율(${doc.w.toFixed(0)}×${doc.h.toFixed(0)}mm)이 소식지 비율(1080×${G.H})과 달라 가장자리가 잘릴 수 있습니다. 그래도 보낼까요?`)) return;
+  if (Math.abs(want - have) > 0.03 && !window.confirm(`이 문서 비율(${doc.w.toFixed(0)}×${doc.h.toFixed(0)}mm)이 소식지 비율(1080×${G.H})과 달라 가장자리가 잘릴 수 있습니다. 그래도 보낼까요?`)) return;
   const name = window.prompt('소식지 템플릿 이름', (doc.name || '공방 템플릿').replace(/^소식지 템플릿\s*/, '') || '공방 템플릿'); if (name == null) return;
   const panel = window.confirm('본문 바탕 위에 흰 판을 깔아 글씨가 잘 보이게 할까요?\n(확인 = 흰 판 깔기 · 취소 = 바탕 그림 위에 바로 글씨)');
   setStatus('소식지 템플릿 그림을 만드는 중…');
@@ -1581,7 +1581,7 @@ async function newsTplSend() {
     const strip = pg => Object.assign({}, pg, { els: pg.els.filter(e => e.role !== 'nlguide') });
     const dpi = 1080 * 25.4 / doc.w, toURL = async pg => { const c = await renderPageCanvas(strip(pg), dpi, 'thumb', '#ffffff'); const u = c.toDataURL('image/jpeg', 0.9); c.width = c.height = 0; return u; };
     const cover = await toURL(doc.pages[0]), bg = await toURL(doc.pages[1] || doc.pages[0]);
-    await w.nlAddTemplate({ name, cover, bg, panel, coverText: true, desc: '공방에서 만든 디자인 · ' + new Date().toLocaleDateString('ko-KR') });
+    await w.nlAddTemplate({ name, cover, bg, panel, coverText: true, desc: '공방에서 만든 문서 · ' + new Date().toLocaleDateString('ko-KR') });
     toast(`소식지 템플릿 「${name}」을 넣고 골랐습니다 — 내용 채우기에서 미리보기를 다시 만들면 적용됩니다`);
     newsGo('tplGrid');
   } catch (e) { toast('템플릿을 보내지 못했습니다: ' + e.message, true); } finally { setStatus(''); }
@@ -1593,9 +1593,9 @@ async function newsSync(auto) {
   const S = w.S, ym = `${S.year}-${String(S.month).padStart(2, '0')}`, tv = !!doc.news.tv;
   const R = { '45': '4:5', '11': '1:1', '916': '9:16' };
   if (doc.news.ym !== ym || (!tv && doc.news.ratio !== S.ratio)) {
-    const msg = `소식지 엔진에 열린 호(${S.year}년 ${S.month}월호 · ${R[S.ratio] || S.ratio})가 이 디자인(${doc.news.ym.replace('-', '년 ')}월호 · ${tv ? 'TV' : R[doc.news.ratio] || doc.news.ratio})과 달라`;
+    const msg = `소식지 엔진에 열린 호(${S.year}년 ${S.month}월호 · ${R[S.ratio] || S.ratio})가 이 문서(${doc.news.ym.replace('-', '년 ')}월호 · ${tv ? 'TV' : R[doc.news.ratio] || doc.news.ratio})과 달라`;
     if (auto) { setStatus(msg + ' 자동 반영하지 않았습니다'); return; }
-    if (!window.confirm(msg + '요. 그래도 이 디자인에 반영할까요?\n(다른 호의 내용이 들어갑니다)')) return;
+    if (!window.confirm(msg + '요. 그래도 이 문서에 반영할까요?\n(다른 호의 내용이 들어갑니다)')) return;
   }
   newsSyncing = true; setStatus('소식지 내용 변경을 디자인에 반영하는 중…');
   try {
@@ -1966,17 +1966,17 @@ async function placeAudio(m) {
 // 동영상 크기·길이·첫 장면(편집 화면·썸네일용 작은 그림)
 function videoInfo(url) { return new Promise((res, rej) => { const v = document.createElement('video'); v.muted = true; v.preload = 'auto'; v.src = url; v.onerror = () => rej(new Error('이 동영상 형식은 브라우저에서 열 수 없습니다 (MP4·H.264로 바꿔 넣어 주세요)')); let probe = false, realDur = 0; v.onloadedmetadata = () => { if (!isFinite(v.duration)) { probe = true; v.currentTime = 1e9; return; } v.currentTime = Math.min(0.5, v.duration / 3 || 0); }; v.onseeked = () => { if (probe) { probe = false; realDur = isFinite(v.duration) ? v.duration : (v.currentTime || 0); if (!(realDur > 0)) { rej(new Error('이 동영상은 길이를 알 수 없습니다 (화면 녹화 webm 등) — MP4로 바꿔 넣어 주세요')); return; } v.currentTime = Math.min(0.5, realDur / 3); return; } /* 11/26 영상 조: 브라우저 녹화 webm은 길이가 Infinity — 끝으로 한 번 밀어 길이를 읽음 */ const W = v.videoWidth, H = v.videoHeight, k = Math.min(1, 640 / Math.max(W, H)), c = document.createElement('canvas'); c.width = Math.round(W * k); c.height = Math.round(H * k); let poster = ''; try { c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); poster = c.toDataURL('image/jpeg', 0.8); } catch (e) {} res({ w: W, h: H, dur: realDur || (isFinite(v.duration) ? v.duration : 0), poster }); }; }); }
 
-/* ---- 영상 편집은 '영상용 사본'에서 (원본 디자인 보호) ---- */
+/* ---- 영상 편집은 '영상용 사본'에서 (원본 문서 보호) ---- */
 function videoNeedsGate() { const empty = !doc.pages.some(p => p.els && p.els.length); if (empty || ['story', 'video', 'shorts'].includes(doc.fmt)) { if (!(doc.video && doc.video.born)) doc.video = Object.assign(vset(), { born: 'video' }); return false; } /* 빈 문서·영상용 크기로 시작한 문서는 '처음부터 영상' — 나중에 장면을 넣어도 사본 안내 없음 */ return !(doc.video && (doc.video.isCopy || doc.video.born)) && !(doc.news && doc.news.tv); }
 function videoGate(then) { if (!videoNeedsGate()) { if (then) then(); return true; } openVideoGate(then); return false; }
 function openVideoGate(then) {
   let d = $('#dlgVgate');
   if (!d) { d = document.createElement('dialog'); d.id = 'dlgVgate'; d.innerHTML = `<div class="dhead"><h2>영상 편집은 영상용 사본에서</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" id="vgBody"></div>`; document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close(); }
-  $('#vgBody').innerHTML = `<p>타임라인에서 장면을 <b>지우거나 자르면 이 디자인의 쪽이 함께 바뀝니다.</b> 인쇄·이미지용 원본 디자인은 그대로 두고, <b>영상용 사본</b>을 따로 저장해 편집하는 것이 안전합니다.</p>
+  $('#vgBody').innerHTML = `<p>타임라인에서 장면을 <b>지우거나 자르면 이 문서의 쪽이 함께 바뀝니다.</b> 인쇄·이미지용 원본 문서는 그대로 두고, <b>영상용 사본</b>을 따로 저장해 편집하는 것이 안전합니다.</p>
   <ul class="hint" style="margin:6px 0 12px 18px;line-height:1.7"><li>사본 이름은 <b>"${esc(doc.name || '디자인')} 영상"</b>이 되고, 저장 위치를 고른 뒤 그 파일에서 작업합니다.</li><li>원본은 마지막으로 저장된 상태로 남고 언제든 다시 열 수 있습니다.</li><li>원본을 고친 뒤 사본에도 반영하려면 사본에서 "원본 장면 다시 가져오기"(영상 패널 위)를 누릅니다.</li></ul>
-  <div class="row" style="justify-content:flex-end"><button class="btn" id="vgCancel">취소</button><button class="btn" id="vgDirect" title="권장하지 않음">이 디자인에서 바로 편집</button><button class="btn primary" id="vgCopy">영상용 사본 만들기 (권장)</button></div>`;
+  <div class="row" style="justify-content:flex-end"><button class="btn" id="vgCancel">취소</button><button class="btn" id="vgDirect" title="권장하지 않음">이 문서에서 바로 편집</button><button class="btn primary" id="vgCopy">영상용 사본 만들기 (권장)</button></div>`;
   $('#vgCancel').onclick = () => d.close();
-  $('#vgDirect').onclick = () => { if (!window.confirm('원본 디자인이 영상 편집으로 바뀔 수 있습니다. 그래도 이 문서에서 바로 편집할까요?')) return; doc.video = Object.assign(vset(), { born: 'design' }); commit(); d.close(); if (then) then(); sideTab = 'video'; renderRail(); renderSide(); };
+  $('#vgDirect').onclick = () => { if (!window.confirm('원본 문서가 영상 편집으로 바뀔 수 있습니다. 그래도 이 문서에서 바로 편집할까요?')) return; doc.video = Object.assign(vset(), { born: 'design' }); commit(); d.close(); if (then) then(); sideTab = 'video'; renderRail(); renderSide(); };
   $('#vgCopy').onclick = async () => { d.close(); await makeVideoCopy(then); };
   d.showModal();
 }
@@ -1994,12 +1994,12 @@ async function makeVideoCopy(then) {
   else { setStatus('영상용 사본을 만들었습니다 · 저장(Ctrl+S)을 눌러 저장 위치를 고르세요 (그 전까지는 이 브라우저에 임시 저장)'); toast(`영상용 사본 "${doc.name}"을 만들었습니다. 원본은 그대로 남습니다. 저장(Ctrl+S)으로 위치를 골라 두세요.`); }
   if (then) then(); else tlShow(true);
 }
-// 사본에서: 원본 디자인의 쪽을 다시 가져오기(장면 내용만 바꾸고 소리·자막 트랙은 유지)
+// 사본에서: 원본 문서의 쪽을 다시 가져오기(장면 내용만 바꾸고 소리·자막 트랙은 유지)
 async function reimportFromSource() {
   const v = doc.video || {}; if (!v.isCopy) return;
   let pages = null;
   try { if (v.fromId && await store.folderReady()) { const h = await store.findDocById(v.fromId); if (h) { const f = await h.getFile(); pages = JSON.parse(await f.text()).pages; } } } catch (e) {}
-  if (!pages) { toast('원본 문서를 찾지 못했습니다 — 저장해 둔 원본 디자인 파일(.design.json)을 직접 골라 주세요'); const j = await store.pickLocal().catch(() => null); if (!j || !j.pages) { toast('원본을 고르지 않아 그대로 둡니다 (원본이 \'직전 문서\'에만 있으면 저장 ▾ → 직전 문서 되살리기로 열어 파일로 저장한 뒤 다시 해 보세요)', true); return; } pages = j.pages; }
+  if (!pages) { toast('원본 문서를 찾지 못했습니다 — 저장해 둔 원본 문서 파일(.design.json)을 직접 골라 주세요'); const j = await store.pickLocal().catch(() => null); if (!j || !j.pages) { toast('원본을 고르지 않아 그대로 둡니다 (원본이 \'직전 문서\'에만 있으면 저장 ▾ → 직전 문서 되살리기로 열어 파일로 저장한 뒤 다시 해 보세요)', true); return; } pages = j.pages; }
   if (!window.confirm(`원본의 ${pages.length}쪽을 이 사본의 장면으로 다시 가져옵니다. 지금 장면의 내용은 원본 내용으로 바뀝니다 (소리·자막 트랙은 유지). 계속할까요?`)) return;
   const old = doc.pages; doc.pages = clone(pages).map((pg, i) => { const o = old[i]; if (o) { ['vdur', 'vtrans', 'vturn', 'anim', 'vcam', 'vkb'].forEach(k => { if (o[k] != null && pg[k] == null) pg[k] = o[k]; }); } return pg; });
   commit(); goto(0); toast('원본 장면을 다시 가져왔습니다');
@@ -3161,9 +3161,9 @@ function renderSide0() {
   } else if (sideTab === 'book') {
     if (BK()) BK().renderSide(body); else body.innerHTML = '<p class="hint">도서 편집을 불러오지 못했습니다 — 새로 고침(F5)</p>';
   } else if (sideTab === 'video') {
-    if (videoNeedsGate()) { body.innerHTML = `<div class="wz-card"><b style="font-size:14px">영상 편집은 영상용 사본에서</b><p class="hint" style="margin:6px 0 10px">타임라인에서 장면을 지우거나 자르면 이 디자인의 쪽이 함께 바뀝니다. 원본은 그대로 두고 "${esc(doc.name || '디자인')} 영상" 사본을 만들어 편집하세요.</p><button class="btn primary full" id="vgOpen">영상용 사본 만들기</button><button class="btn full" id="vgDirect2" style="margin-top:6px">이 디자인에서 바로 편집 (원본이 바뀜)</button></div>`; $('#vgOpen').onclick = () => makeVideoCopy(); $('#vgDirect2').onclick = () => openVideoGate(); return; }
+    if (videoNeedsGate()) { body.innerHTML = `<div class="wz-card"><b style="font-size:14px">영상 편집은 영상용 사본에서</b><p class="hint" style="margin:6px 0 10px">타임라인에서 장면을 지우거나 자르면 이 문서의 쪽이 함께 바뀝니다. 원본은 그대로 두고 "${esc(doc.name || '디자인')} 영상" 사본을 만들어 편집하세요.</p><button class="btn primary full" id="vgOpen">영상용 사본 만들기</button><button class="btn full" id="vgDirect2" style="margin-top:6px">이 문서에서 바로 편집 (원본이 바뀜)</button></div>`; $('#vgOpen').onclick = () => makeVideoCopy(); $('#vgDirect2').onclick = () => openVideoGate(); return; }
     renderVideoSide(body);
-    if (doc.video && doc.video.isCopy) body.insertAdjacentHTML('afterbegin', `<div class="vg-badge">영상용 사본 · 원본: <b>${esc(doc.video.fromName || '')}</b> (원본 디자인은 바뀌지 않습니다) <button class="btn sm" id="vgReimport">원본 장면 다시 가져오기</button></div>`), ($('#vgReimport').onclick = reimportFromSource);
+    if (doc.video && doc.video.isCopy) body.insertAdjacentHTML('afterbegin', `<div class="vg-badge">영상용 사본 · 원본: <b>${esc(doc.video.fromName || '')}</b> (원본 문서는 바뀌지 않습니다) <button class="btn sm" id="vgReimport">원본 장면 다시 가져오기</button></div>`), ($('#vgReimport').onclick = reimportFromSource);
   } else if (sideTab === 'tpl') {
     const filt = tplFiltered();
     body.innerHTML = `${filt ? tplNavHTML() : ''}
@@ -3659,7 +3659,7 @@ function openTplPreview(t) {
     const ready = async pgs => { if (!t.lib) return true; try { setStatus('자료실 그림을 넣는 중…'); await NC.lib.materialize(pgs, addAsset); return true; } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return false; } finally { setStatus(''); } };
     $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm(`현재 문서를 닫고 새 문서를 만들까요? (${keepNote()})`)) return; await keepCurrentDoc(); const pgs = tplPagesFor(t, S); fillDojang(pgs); const keepAssets = doc.assets; doc.assets = {}; if (!(await ready(pgs))) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = S.w; nd.h = S.h; nd.fmt = S.fmt || ''; nd.name = (Math.abs(S.w - t.w) > 1 || Math.abs(S.h - t.h) > 1) ? String(t.name).replace(/\s*\(\s*[\d.]+\s*(m|mm|cm)?\s*[×x]\s*[\d.]+\s*(m|mm|cm)?\s*\)/i, '').trim() : t.name;  /* 다른 크기로 만들면 이름 속 옛 크기(「(3m × 0.7m)」)는 뺌 — 인쇄소 착각 방지 (11/26 편집 조) */ nd.pages = pgs; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; nd.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); if (!S.screen && ['print', 'doc', 'cal', 'sign'].includes((FORMATS.find(f => f[0] === S.fmt) || [])[2])) nd.bleed = 3; else if (!S.screen && !S.fmt && !isScreenSize(nd.w, nd.h)) nd.bleed = Math.min(nd.w, nd.h) < 60 ? 1 : 3;  /* 템플릿 원래 크기의 인쇄물도 도련 (11/26 편집 조: 0mm로 시작하던 것) */ doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)'); zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다 (${label(S)})`); };
     // 지금 문서에 넣기: 늘 지금 문서 크기로 다시 짜서 넣음. 지금 쪽이 비어 있으면 그 쪽을 바꿈
-    $('#tplHere').onclick = async () => { const pg = tplPagesFor(t, docS); if (!(await ready(pg))) return; const nDj = fillDojang(pg); const emp = !page().els.length, only = emp && doc.pages.length === 1, defName = !doc.name || doc.name === '새 디자인' || FORMATS.some(f => f[1] === doc.name); doc.pages.splice(emp ? cur : cur + 1, emp ? 1 : 0, ...pg); const at = emp ? cur : cur + 1; if (only && defName && t.name) { doc.name = t.name; $('#pname').value = doc.name; }  /* 빈 새 문서에 넣으면 문서 이름도 템플릿 이름으로 */ commit(); goto(at); d.close(); toastUndo((emp ? `"${t.name}"${eul(t.name)} 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`) + (nDj ? ` · 도장 정보 ${nDj}곳 채움` : '') + ((() => { const h = []; pg.forEach(p => (p.els || []).forEach(e => { if (e.type === 'text' && !e.hidden) { const m = String(e.text || '').match(/○○|○월|○일|010-0000-0000|0000-0000/); if (m) h.push(m[0]); } })); return h.length ? ` · 아직 고칠 자리 ${h.length}곳(「${h[0]}」 등 — 날짜·연락처를 바꿔 주세요)` : ''; })())); };
+    $('#tplHere').onclick = async () => { const pg = tplPagesFor(t, docS); if (!(await ready(pg))) return; const nDj = fillDojang(pg); const emp = !page().els.length, only = emp && doc.pages.length === 1, defName = !doc.name || (doc.name === '새 문서' || doc.name === '새 디자인') || FORMATS.some(f => f[1] === doc.name); doc.pages.splice(emp ? cur : cur + 1, emp ? 1 : 0, ...pg); const at = emp ? cur : cur + 1; if (only && defName && t.name) { doc.name = t.name; $('#pname').value = doc.name; }  /* 빈 새 문서에 넣으면 문서 이름도 템플릿 이름으로 */ commit(); goto(at); d.close(); toastUndo((emp ? `"${t.name}"${eul(t.name)} 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`) + (nDj ? ` · 도장 정보 ${nDj}곳 채움` : '') + ((() => { const h = []; pg.forEach(p => (p.els || []).forEach(e => { if (e.type === 'text' && !e.hidden) { const m = String(e.text || '').match(/○○|○월|○일|010-0000-0000|0000-0000/); if (m) h.push(m[0]); } })); return h.length ? ` · 아직 고칠 자리 ${h.length}곳(「${h[0]}」 등 — 날짜·연락처를 바꿔 주세요)` : ''; })())); };
   };
   draw(); d.showModal();
 }
@@ -4239,8 +4239,8 @@ $('#pname').addEventListener('change', async () => {
 });
 $('#btnNew').onclick = openNewDesign;
 $('#btnOpen').onclick = () => openDrive();
-// 왼쪽 위 로고 = 메인 화면(내 드라이브: 내 디자인 목록·새 디자인 만들기). 지금 문서는 자동 저장 그대로
-$('#brandHome').onclick = () => { if (typeof tlPause === 'function' && tl.playing) tlPause(); document.querySelectorAll('dialog[open]').forEach(d => d.close()); openDrive(null, 'home'); };  /* 11/24 팀장님 「로고를 누르면 '열기'가 아니라 다른 동작」 → 홈(무엇을 만들까 · 최근 디자인 · 지금 작업으로) */
+// 왼쪽 위 로고 = 메인 화면(내 드라이브: 내 문서 목록·새 문서 만들기). 지금 문서는 자동 저장 그대로
+$('#brandHome').onclick = () => { if (typeof tlPause === 'function' && tl.playing) tlPause(); document.querySelectorAll('dialog[open]').forEach(d => d.close()); openDrive(null, 'home'); };  /* 11/24 팀장님 「로고를 누르면 '열기'가 아니라 다른 동작」 → 홈(무엇을 만들까 · 최근 문서 · 지금 작업으로) */
 $('#brandHome').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#brandHome').click(); } };
 async function openOtherFile() { try { if (!(await keepCurrentDoc())) return; let j = null; if (store.state.supported) j = await store.openExisting(); else j = await store.pickLocal(); if (j) { await loadDoc(j, '불러왔습니다'); updateSaveBadge(); } } catch (e) { if (e.name !== 'AbortError') toast('열 수 없습니다: ' + e.message, true); } }
 $('#btnSave').onclick = saveNow;
@@ -4345,8 +4345,8 @@ function gdChip() { clearTimeout(gdChipT); gdChipT = setTimeout(() => { const b 
   { const on = store.isDrive && store.isDrive(); let sb = $('#btnSync'); const sp = b.closest('.split') || b;
     if (!on) { if (sb) sb.remove(); } else { if (!sb) { sb = document.createElement('button'); sb.className = 'btn'; sb.id = 'btnSync'; sb.onclick = gdSyncNow; sp.after(sb); }
       const g = NC.gdrive.status(); const st2 = g.need ? ['🔑', '동기화', '구글 로그인이 끝났습니다 — 눌러서 로그인하고 동기화'] : g.failed ? ['⚠️', '동기화', `올리지 못한 것 ${g.failed}개 — 눌러서 다시 올리기·받기`] : g.pendDocs ? ['⏫', '동기화 ' + g.pendDocs, `문서·설정 ${g.pendDocs}개를 구글 드라이브에 올리는 중${g.pendOther ? ` (자료실 그림 등 ${g.pendOther}개는 그다음 뒤에서)` : ''} — 눌러서 바로 올리기·받기`] : ['☁', '동기화', `문서는 모두 올림${g.pendOther ? ` · 자료실 그림·내보낸 파일 등 ${g.pendOther}개는 뒤에서 올리는 중` : ''} — 눌러서 다른 PC에서 고친 것 받기·다시 맞추기`];
-      const badge = g.need ? '<b class="sbadge warn">!</b>' : g.failed ? '<b class="sbadge warn">!</b>' : g.pendDocs ? `<b class="sbadge">${g.pendDocs > 99 ? '99+' : g.pendDocs}</b>` : '';  /* 11/25 위 막대 정리: 글자 없이 구름 그림 — 올릴 문서 수·문제(!)만 배지 */
-      sb.className = 'btn icon'; sb.innerHTML = `<svg class="ic sic" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.9-3.5M4 4v3.5h3.5M4 13a8 8 0 0 0 14.9 3.5M20 20v-3.5h-3.5"/></svg>${badge}`; sb.title = '동기화 — ' + st2[2]; sb.setAttribute('aria-label', '동기화'); sb.classList.toggle('warn', !!(g.need || g.failed)); } } { const c = b.querySelector('.gdchip'); if (c) c.remove(); } const gs = store.isDrive && store.isDrive() ? NC.gdrive.status() : null;
+      const badge = g.need ? '<b class="sbadge warn">!</b>' : g.failed ? '<b class="sbadge warn">!</b>' : g.pendDocs ? `<b class="sbadge">${g.pendDocs > 99 ? '99+' : g.pendDocs}</b>` : '';  /* 11/25 위 막대 정리: 글자 없이 그림 — 올릴 문서 수·문제(!)만 배지 · 11/26 팀장님 의견: 화살표만 있던 그림을 구름 안 동기화 화살표로 */
+      sb.className = 'btn icon'; sb.innerHTML = `<svg class="ic sic" viewBox="0 0 24 24"><path d="M7 19a4.6 4.6 0 0 1-.7-9.15A6.2 6.2 0 0 1 18.3 10.6 3.9 3.9 0 0 1 17.6 19z"/><path d="M9.6 14.2a2.5 2.5 0 0 1 4.3-1.6M14.4 14.6a2.5 2.5 0 0 1-4.3 1.6M14.1 11.3v1.5h-1.5M9.9 17.5V16h1.5"/></svg>${badge}`; sb.title = '동기화 — ' + st2[2]; sb.setAttribute('aria-label', '동기화'); sb.classList.toggle('warn', !!(g.need || g.failed)); } } { const c = b.querySelector('.gdchip'); if (c) c.remove(); } const gs = store.isDrive && store.isDrive() ? NC.gdrive.status() : null;
   const s = $('#status'); if (gs && gs.need && s && !s.querySelector('#gdRe')) { s.innerHTML = `<button class="btn sm primary" id="gdRe">🔑 구글 다시 로그인${gs.pending ? ` — 올릴 것 ${gs.pending}개 (이 PC에는 저장됨)` : ' — 다른 PC에서 고친 것 받기'}</button>`; $('#gdRe').onclick = async () => { try { await NC.gdrive.login(); NC.gdrive.run(); setStatus('구글 드라이브에 다시 연결했습니다'); } catch (e) { toast(e.message, true); } }; }
   else if (gs && !gs.need && s && s.querySelector('#gdRe')) setStatus('구글 드라이브에 다시 연결했습니다'); }, 200); }
 if (window.NC && NC.gdrive) NC.gdrive.onChange(gdChip);
@@ -4496,7 +4496,7 @@ async function renderSaveDialog() {
   NC.live.bindSettings(d, () => { if (d.open) renderSaveDialog(); });
 }
 
-/* ---- 새 디자인 만들기 (미리캔버스식) ---- */
+/* ---- 새 문서 만들기 (미리캔버스식) ---- */
 const PX = v => Math.round(v * 25.4 / 96 * 100) / 100;
 // [id, 이름, 묶음, 가로, 세로, 단위('mm'|'px'), 검색어]
 const FORMATS = [
@@ -4538,12 +4538,12 @@ function openNewDesign() {
     $('#ndQ').oninput = e => { ndState.q = e.target.value; renderNewDesign(); };
     d.addEventListener('click', async e => { const n = e.target.closest('[data-ndnav]'); if (n) { ndState.nav = n.dataset.ndnav; ndState.q = ''; $('#ndQ').value = ''; renderNewDesign(); return; }
       const c = e.target.closest('[data-fmt]'); if (c) { const f = FORMATS.find(x => x[0] === c.dataset.fmt); const [w, h] = fmtMM(f); d.close(); await createDesign(w, h, f[1], f[0]); return; }
-      if (e.target.id === 'ndMake') { const u = $('#ndU').value, w = Number($('#ndW').value), h = Number($('#ndH').value); if (!(w > 0 && h > 0)) { toast('가로·세로 크기를 넣어 주세요', true); return; } const k = u === 'px' ? 25.4 / 96 : u === 'cm' ? 10 : 1; d.close(); await createDesign(Math.round(w * k * 100) / 100, Math.round(h * k * 100) / 100, '새 디자인'); } }); }
+      if (e.target.id === 'ndMake') { const u = $('#ndU').value, w = Number($('#ndW').value), h = Number($('#ndH').value); if (!(w > 0 && h > 0)) { toast('가로·세로 크기를 넣어 주세요', true); return; } const k = u === 'px' ? 25.4 / 96 : u === 'cm' ? 10 : 1; d.close(); await createDesign(Math.round(w * k * 100) / 100, Math.round(h * k * 100) / 100, '새 문서'); } }); }
   ndState.q = ''; $('#ndQ').value = ''; renderNewDesign(); d.showModal(); setTimeout(() => $('#ndQ').focus(), 50);
 }
 function renderNewDesign() {
   $('#ndNav').innerHTML = ND_GROUPS.map(([k, t, ic]) => `<button data-ndnav="${k}" class="${ndState.nav === k && !ndState.q ? 'on' : ''}"><svg viewBox="0 0 24 24">${ic}</svg>${t}</button>`).join('') + `<hr><button data-ndnav="custom" class="${ndState.nav === 'custom' && !ndState.q ? 'on' : ''}"><svg viewBox="0 0 24 24"><path d="m4 20 16-16M7 17l2 2M10 14l2 2M13 11l2 2M16 8l2 2"/></svg>직접 입력</button>`;
-  const custom = `<h3>직접 입력</h3><div class="custom"><label>가로<input type="number" id="ndW" min="1" value="210"></label><label>세로<input type="number" id="ndH" min="1" value="297"></label><label>단위<select id="ndU"><option value="mm">mm</option><option value="cm">cm</option><option value="px">px</option></select></label><button class="btn primary" id="ndMake">새 디자인 만들기</button></div><p class="hint">인쇄물은 mm·cm, 화면용(SNS·웹·영상)은 px로 넣으면 편합니다. px는 96dpi 기준으로 바꿉니다.</p>`;
+  const custom = `<h3>직접 입력</h3><div class="custom"><label>가로<input type="number" id="ndW" min="1" value="210"></label><label>세로<input type="number" id="ndH" min="1" value="297"></label><label>단위<select id="ndU"><option value="mm">mm</option><option value="cm">cm</option><option value="px">px</option></select></label><button class="btn primary" id="ndMake">새 문서 만들기</button></div><p class="hint">인쇄물은 mm·cm, 화면용(SNS·웹·영상)은 px로 넣으면 편합니다. px는 96dpi 기준으로 바꿉니다.</p>`;
   const q = ndState.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   let h = '';
   if (q.length) { const list = FORMATS.filter(f => q.every(w => koHas(f[1] + ' ' + f[6], w))); h = `<h3>검색 결과 <small>${list.length}</small></h3><div class="fgrid">${list.map(fcard).join('') || '<p class="hint">맞는 크기가 없습니다. 직접 입력으로 만들어 보세요.</p>'}</div>` + custom; }
@@ -4614,7 +4614,7 @@ async function createDesign(w, h, name, fmtId) {
   else setStatus('브라우저에 저장됩니다 · 파일로 저장하려면 저장(Ctrl+S)');
   tplQ = ''; tplCat = 'all'; Object.keys(tplF).forEach(k => { tplF[k] = ''; });
   renderAll(); updateSaveBadge(); sideTab = 'tpl'; renderRail(); renderSide(); fitCanvas && fitCanvas();
-  { const Fm = FORMATS.find(x => x[0] === fmtId), lab = Fm ? fmtLabel(Fm) : fmtLabel(['', '', '', w, h, 'mm']); toast(name === '새 디자인' ? `새 디자인(${lab})을 만들었습니다` : `${name}(${lab}) 새 디자인을 만들었습니다`); }
+  { const Fm = FORMATS.find(x => x[0] === fmtId), lab = Fm ? fmtLabel(Fm) : fmtLabel(['', '', '', w, h, 'mm']); toast(name === '새 문서' ? `새 문서(${lab})을 만들었습니다` : `${name}(${lab}) 새 문서를 만들었습니다`); }
 }
 
 /* ---- 내 드라이브: 폴더로 디자인 관리 (미리캔버스식) ---- */
@@ -4626,7 +4626,7 @@ function openDrive(path, view) {
   let d = $('#dlgDrive');
   if (!d) {
     d = document.createElement('dialog'); d.id = 'dlgDrive'; d.className = 'nd drive';
-    d.innerHTML = `<div class="ndhead"><h2>내 드라이브</h2><button class="btn" id="dvImport" title="포토샵 PSD · 인디자인 IDML · 일러스트 AI · PDF"><svg class="ic"><use href="#i-upload"/></svg>다른 프로그램 파일 가져오기</button><button class="btn primary" id="dvNew"><svg class="ic"><use href="#i-new"/></svg>새 디자인 만들기</button><button class="btn sm" data-close>닫기</button></div>
+    d.innerHTML = `<div class="ndhead"><h2>내 드라이브</h2><button class="btn" id="dvImport" title="포토샵 PSD · 인디자인 IDML · 일러스트 AI · PDF"><svg class="ic"><use href="#i-upload"/></svg>다른 프로그램 파일 가져오기</button><button class="btn primary" id="dvNew"><svg class="ic"><use href="#i-new"/></svg>새 문서 만들기</button><button class="btn sm" data-close>닫기</button></div>
     <div class="ndbody"><nav id="dvNav"></nav><div class="ndmain" id="dvMain"></div></div>`;
     document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close();
     $('#dvNew').onclick = () => { d.close(); openNewDesign(); }; $('#dvImport').onclick = () => { d.close(); openImport(); };
@@ -4646,7 +4646,7 @@ async function renderDriveNav(ready) {
     const has = p => all.some(q => q.length > p.length && p.every((x, i) => q[i] === x));
     tree = all.filter(open).map(p => { const on = drv.view === 'drive' && here.join('/') === p.join('/'); return `<button class="dvtf ${on ? 'on' : ''}" data-dvpath="${esc(JSON.stringify(p))}" ${dd(p)} style="padding-left:${18 + p.length * 14}px" title="${esc(p.join(' › '))}"><svg viewBox="0 0 24 24">${NAV_IC.fold}</svg><span>${esc(p[p.length - 1])}</span>${has(p) ? '<i class="dvtw">›</i>' : ''}</button>`; }).join(''); }
   const btn = (k, t, extra) => `<button data-dvnav="${k}" class="${drv.view === k && !(k === 'drive' && drv.path.length) ? 'on' : drv.view === k ? 'half' : ''}" ${extra || ''}><svg viewBox="0 0 24 24">${NAV_IC[k]}</svg><span>${t}</span></button>`;
-  nav.innerHTML = btn('home', '홈') + btn('drive', '내 드라이브', dd([])) + (tree ? `<div class="dvtree-nav">${tree}</div>` : '') + btn('recent', '최근 디자인') + btn('local', '이 브라우저에만')
+  nav.innerHTML = btn('home', '홈') + btn('drive', '내 드라이브', dd([])) + (tree ? `<div class="dvtree-nav">${tree}</div>` : '') + btn('recent', '최근 문서') + btn('local', '이 브라우저에만')
     + `<div class="dvkinds"><small>종류별</small>${DOC_KINDS.map(([k, t, ic]) => `<button data-dvkind="${k}" class="${drv.view === 'kind' && drv.kind === k ? 'on' : ''}" ${ready ? dd([t]) : ''} title="${esc(t)} — 끌어 놓으면 「${esc(t)}」 폴더로"><span class="dvk-ic">${DOC_KIND_SVG[k] ? `<svg viewBox="0 0 24 24">${DOC_KIND_SVG[k]}</svg>` : ic}</span><span>${esc(t)}</span></button>`).join('')}</div>`
     + `<div class="dvnav-end">${btn('trash', '휴지통', ready ? 'data-droptrash="1" title="끌어 놓으면 휴지통으로"' : '')}<hr>${btn('sync', '저장·동기화 설정')}</div>`;
 }
@@ -4657,15 +4657,15 @@ async function renderDrive() {
   await renderDriveNav(ready);
   const main = $('#dvMain');
   const homeTop = () => { const HK = ['print', 'sns', 'pres', 'video', 'sign', 'cal', 'news', 'doc'].map(k => ND_GROUPS.find(g => g[0] === k)).filter(Boolean);
-    const blankNow = !doc.pages.some(p => p.els.length);  /* 빈 문서(닫은 뒤 등)면 「지금 작업 중」 칸을 감춤 */  /* 문서를 닫은 뒤(빈 새 디자인)에는 「지금 작업 중」 칸을 감춤 (11/25) */
-    return `<div class="dvhome">${blankNow ? '' : `<div class="dvh-back"><div><small>지금 작업 중</small><b>${esc(doc.name || '이름 없는 디자인')}</b><small>${doc.pages.length}쪽 · ${esc(fmtLabel(FORMATS.find(x => x[0] === doc.fmt) || ['', '', '', doc.w, doc.h, isPxDoc() ? 'px' : 'mm']))}</small></div><button class="btn primary" data-dvhome="back">작업으로 돌아가기</button></div>`}
+    const blankNow = !doc.pages.some(p => p.els.length);  /* 빈 문서(닫은 뒤 등)면 「지금 작업 중」 칸을 감춤 */  /* 문서를 닫은 뒤(빈 새 문서)에는 「지금 작업 중」 칸을 감춤 (11/25) */
+    return `<div class="dvhome">${blankNow ? '' : `<div class="dvh-back"><div><small>지금 작업 중</small><b>${esc(doc.name || '이름 없는 문서')}</b><small>${doc.pages.length}쪽 · ${esc(fmtLabel(FORMATS.find(x => x[0] === doc.fmt) || ['', '', '', doc.w, doc.h, isPxDoc() ? 'px' : 'mm']))}</small></div><button class="btn primary" data-dvhome="back">작업으로 돌아가기</button></div>`}
       <h3>무엇을 만들어 볼까요?</h3><div class="dvh-kinds">${HK.map(([k, t, ic]) => `<button data-dvhome="new:${k}"><span class="dvh-ic"><svg viewBox="0 0 24 24">${ic}</svg></span><span>${t}</span></button>`).join('')}<button data-dvhome="new:rec"><span class="dvh-ic"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span>모든 크기 보기</span></button></div>
       <div class="dvh-tools"><button class="btn" data-dvhome="tpl"><svg class="ic"><use href="#i-tpl"/></svg>템플릿에서 고르기</button><button class="btn" data-dvnav="drive"><svg class="ic"><use href="#i-folder"/></svg>내 드라이브 열기</button></div></div>`; };
   if (drv.view === 'local') { const L = await prevDocList(); const tm = x => x._keptAt ? new Date(x._keptAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
     main.innerHTML = `<h3 style="margin:0 0 4px">이 브라우저에만 있는 문서</h3><p class="hint">파일·드라이브에 저장하지 않은 채 다른 문서로 넘어간 문서와, 같은 브라우저의 다른 탭에서 쓰던 문서입니다. 열어서 <b>저장</b>하면 드라이브에 들어갑니다. (이 PC 브라우저에만 있으므로 다른 PC에서는 보이지 않습니다)</p>${L.length ? `<div class="dvlocal">${L.map((x, i) => `<button class="btn full" data-dvlocal="${i}" style="justify-content:space-between;margin-bottom:6px"><span>${esc(x.name || '디자인')} <small>${x.pages.length}쪽${x._tab ? ' · 다른 탭에서 쓰던 문서' : x.docId && x.docId === doc.docId ? ' · 지금 연 문서의 예전 상태' : ''}</small></span><small>${tm(x)}</small></button>`).join('')}</div>` : '<div class="dvempty"><p class="hint">없습니다 — 모든 문서가 파일·드라이브에 저장되어 있습니다.</p></div>'}`; return; }
   if (!ready && drv.view === 'home') { const L = await prevDocList().catch(() => []); const tm = x => x._keptAt ? new Date(x._keptAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
     /* 폴더를 연결하지 않았으면 이 브라우저에 남아 있는 문서를 바로 보여 줌 (눌러서 열기) */
-    main.innerHTML = homeTop() + `<h3 style="margin-top:22px">최근 디자인 <small class="hint" style="font-weight:400">— 이 브라우저에 있는 문서</small></h3>${L.length ? `<div class="dvlocal">${L.slice(0, 6).map((x, i) => `<button class="btn full" data-dvlocal="${i}" style="justify-content:space-between;margin-bottom:6px"><span>${esc(x.name || '디자인')} <small>${x.pages.length}쪽${x._tab ? ' · 다른 탭에서 쓰던 문서' : x.docId && x.docId === doc.docId ? ' · 지금 연 문서의 예전 상태' : ''}</small></span><small>${tm(x)}</small></button>`).join('')}</div>` : ''}<p class="hint">동기화 폴더(구글 드라이브)를 연결하면 저장한 디자인이 모두 여기 보이고 두 PC에서 같이 씁니다. <button class="btn sm" data-dvnav="sync">동기화 폴더 연결</button>${L.length > 6 ? ` <button class="btn sm" data-dvnav="local">이 브라우저 문서 모두 보기 (${L.length})</button>` : ''}</p>`; return; }
+    main.innerHTML = homeTop() + `<h3 style="margin-top:22px">최근 문서 <small class="hint" style="font-weight:400">— 이 브라우저에 있는 문서</small></h3>${L.length ? `<div class="dvlocal">${L.slice(0, 6).map((x, i) => `<button class="btn full" data-dvlocal="${i}" style="justify-content:space-between;margin-bottom:6px"><span>${esc(x.name || '디자인')} <small>${x.pages.length}쪽${x._tab ? ' · 다른 탭에서 쓰던 문서' : x.docId && x.docId === doc.docId ? ' · 지금 연 문서의 예전 상태' : ''}</small></span><small>${tm(x)}</small></button>`).join('')}</div>` : ''}<p class="hint">동기화 폴더(구글 드라이브)를 연결하면 저장한 디자인이 모두 여기 보이고 두 PC에서 같이 씁니다. <button class="btn sm" data-dvnav="sync">동기화 폴더 연결</button>${L.length > 6 ? ` <button class="btn sm" data-dvnav="local">이 브라우저 문서 모두 보기 (${L.length})</button>` : ''}</p>`; return; }
   if (!ready) { main.innerHTML = `<div class="dvempty"><h3>동기화 폴더가 연결되어 있지 않습니다</h3><p class="hint">구글 드라이브의 나라차디자인공방 폴더를 연결하면 폴더별로 디자인을 정리할 수 있습니다.</p><button class="btn primary" data-dvnav="sync">동기화 폴더 연결</button> <button class="btn" data-dvact="other">다른 위치의 파일 열기</button></div>`; return; }
   main.innerHTML = '<p class="hint"><span class="spin"></span> 불러오는 중…</p>';
   const cur = store.state.handle ? store.state.fileName : null, curPath = await curDocPath();
@@ -4675,7 +4675,7 @@ async function renderDrive() {
   if (drv.view === 'home') { docs = (await store.walkDocs().catch(() => [])).sort((a, b) => b.lastModified - a.lastModified).slice(0, 8); }
   else if (drv.view === 'trash') { const r = await store.listDir([store.TRASH]).catch(() => ({ folders: [], docs: [] })); folders = r.folders; docs = r.docs; title = '휴지통'; }
   else if (drv.view === 'kind' && !q) { const all = await store.walkDocs(), ks = await Promise.all(all.map(kindOfEntry)), K = kindInfo(drv.kind); docs = all.filter((x, i) => ks[i] === drv.kind).sort((a, b) => b.lastModified - a.lastModified); title = `<span class="dvk-ic" style="display:inline-grid;vertical-align:-3px">${DOC_KIND_SVG[drv.kind] ? `<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round">${DOC_KIND_SVG[drv.kind]}</svg>` : K[2]}</span> ${esc(K[1])} <small class="hint" style="font-weight:400">— 모든 폴더에서 이 종류 문서를 모았습니다</small>`; drv.exp = await store.listFiles([K[1], EXPORT_DIR]); drv.stray = docs.filter(x => kindOfPath(x.path) !== drv.kind); }
-  else if (drv.view === 'recent' || q) { docs = (await store.walkDocs()).sort((a, b) => b.lastModified - a.lastModified); if (!q) docs = docs.slice(0, 30); title = q ? `"${esc(drv.q)}" 검색 결과` : '최근 디자인'; }
+  else if (drv.view === 'recent' || q) { docs = (await store.walkDocs()).sort((a, b) => b.lastModified - a.lastModified); if (!q) docs = docs.slice(0, 30); title = q ? `"${esc(drv.q)}" 검색 결과` : '최근 문서'; }
   else { const r = await store.listDir(drv.path).catch(() => { drv.path = []; return store.listDir([]); }); folders = r.folders; docs = r.docs;
     crumbs = [`<button data-crumb="0">내 드라이브</button>`].concat(drv.path.map((p, i) => `<button data-crumb="${i + 1}">${esc(p)}</button>`)).join('<span>›</span>'); }
   if (q) { docs = docs.filter(x => x.name.toLowerCase().includes(q)); folders = []; }
@@ -4688,7 +4688,7 @@ async function renderDrive() {
   const dcardH = (x, i) => `<div class="dvdoc ${isCur(x) ? 'cur' : ''}" data-dvdoc="${i}" draggable="${trash ? 'false' : 'true'}"><div class="dvthumb" data-thumb="${i}"></div><div class="dvmeta"><b title="${nm(x)}">${nm(x)}</b><small>${when(x.lastModified)}${drv.view !== 'drive' && x.path.length ? ' · ' + esc(x.path.join(' › ')) : ''}${isCur(x) ? ' · <em>작업 중</em>' : ''}</small></div><button class="dvmore" data-dvmenu="doc:${i}" title="더보기">⋯</button></div>`;
   for (const x of docs) x._cur = await isCurDoc(x);
   drv.docs = docs; drv.folders = folders;
-  if (drv.view === 'home') { main.innerHTML = homeTop() + `<h3 style="margin-top:22px">최근 디자인</h3>${docs.length ? `<div class="dvdocs">${docs.map(dcardH).join('')}</div>` : '<p class="hint">아직 디자인이 없습니다.</p>'}`;
+  if (drv.view === 'home') { main.innerHTML = homeTop() + `<h3 style="margin-top:22px">최근 문서</h3>${docs.length ? `<div class="dvdocs">${docs.map(dcardH).join('')}</div>` : '<p class="hint">아직 문서가 없습니다.</p>'}`;
     const ob = new IntersectionObserver(ents => ents.forEach(en => { if (!en.isIntersecting) return; ob.unobserve(en.target); fillThumb(en.target, docs[Number(en.target.dataset.thumb)]); }), { root: main, rootMargin: '200px' }); main.querySelectorAll('[data-thumb]').forEach(t => ob.observe(t)); return; }
   main.innerHTML = `${crumbs ? `<div class="crumbs">${crumbs}</div>` : `<h3 style="margin-top:4px">${title}</h3>`}
   <div class="dvbar"><div class="chips">${[['all', '전체'], ['folder', '폴더'], ['design', '디자인']].map(([k, t]) => `<button data-dvtab="${k}" class="${drv.tab === k ? 'on' : ''}">${t}</button>`).join('')}</div>
@@ -4699,7 +4699,7 @@ async function renderDrive() {
   ${trash ? '<p class="hint">오른쪽 클릭 → <b>원래 자리로 되살리기</b>(휴지통에 넣은 그 폴더로 — 다른 PC가 넣은 것은 내 드라이브 맨 위로). <b>영구 삭제</b>하면 되돌릴 수 없습니다.</p>' : drv.view === 'drive' && !q ? `<p class="hint"><b>오른쪽 클릭</b> = 파일 메뉴 · <b>${isMac ? '⌘' : 'Ctrl'}/Shift+클릭</b> = 여러 개 · <b>끌어서</b> 폴더·왼쪽 메뉴(종류·휴지통)로 옮기기</p>` : ''}
   ${drv.view === 'drive' && drv.path.length && !q ? `<div class="dvfolder up" data-crumb="${drv.path.length - 1}" data-dropdir="${esc(JSON.stringify(drv.path.slice(0, -1)))}"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/></svg><div><b>상위 폴더로</b><small>${esc(drv.path.length > 1 ? drv.path[drv.path.length - 2] : '내 드라이브')}</small></div></div>` : ''}
   ${folders.length ? `<div class="dvfolders">${folders.map(fcardH).join('')}</div>` : ''}
-  ${docs.length ? `<div class="dvdocs">${docs.map(dcardH).join('')}</div>` : !folders.length ? `<div class="dvempty2"><svg viewBox="0 0 24 24"><path d="${trash ? 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13' : 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'}"/></svg><p>${trash ? '휴지통이 비어 있습니다.' : q ? `「${esc(drv.q)}」에 맞는 디자인이 없습니다.` : drv.path.length ? '이 폴더는 비어 있습니다 — 디자인을 끌어다 놓아 옮기거나, 여기에 새로 만드세요.' : '아직 디자인이 없습니다.'}</p>${trash ? '' : q ? '<button class="btn" data-dvact="clearq">검색 지우기</button>' : '<button class="btn primary" data-dvact="newhere">여기에 새 디자인</button>'}</div>` : ''}`;
+  ${docs.length ? `<div class="dvdocs">${docs.map(dcardH).join('')}</div>` : !folders.length ? `<div class="dvempty2"><svg viewBox="0 0 24 24"><path d="${trash ? 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13' : 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'}"/></svg><p>${trash ? '휴지통이 비어 있습니다.' : q ? `「${esc(drv.q)}」에 맞는 디자인이 없습니다.` : drv.path.length ? '이 폴더는 비어 있습니다 — 디자인을 끌어다 놓아 옮기거나, 여기에 새로 만드세요.' : '아직 문서가 없습니다.'}</p>${trash ? '' : q ? '<button class="btn" data-dvact="clearq">검색 지우기</button>' : '<button class="btn primary" data-dvact="newhere">여기에 새 문서</button>'}</div>` : ''}`;
   if (drv.view === 'kind' && !q) { const K = kindInfo(drv.kind), sz = n => n > 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB';
     main.insertAdjacentHTML('beforeend', `${drv.stray.length ? `<div class="dvgather"><span>${K[2]} 이 종류인데 「${esc(K[1])}」 폴더 밖에 있는 문서가 <b>${drv.stray.length}개</b> 있습니다.</span><button class="btn sm" data-dvgather="1">「${esc(K[1])}」 폴더로 모으기</button></div>` : ''}
       <h3 style="margin:18px 0 6px">내보낸 파일 <small class="hint" style="font-weight:400">— 내 드라이브 › ${esc(K[1])} › ${EXPORT_DIR} (PNG·JPG·PDF·영상)</small></h3>
@@ -4744,7 +4744,7 @@ async function driveClick(e) {
     if (a === 'clearq') { drv.q = ''; renderDrive(); }
     if (a === 'newhere') { $('#dlgDrive').close(); openNewDesign(); }  /* 빈 폴더 화면 (11/26 UI·UX 조) */
     if (a === 'mkdir') { const n = window.prompt('새 폴더 이름', '새 폴더'); if (n) { try { await store.makeFolder(drv.path, n); renderDrive(); } catch (err) { toast(err.message, true); } } }
-    if (a === 'empty' && window.confirm('휴지통을 비울까요? 안의 디자인과 폴더가 영구히 삭제됩니다.')) { let kept = 0; for (const x of drv.folders.concat(drv.docs)) { if (x._cur) { kept++; continue; } await store.emptyEntry(x.name); } toast(kept ? '휴지통을 비웠습니다 — 지금 작업 중인 디자인 1개는 남겨 두었습니다' : '휴지통을 비웠습니다'); renderDrive(); }
+    if (a === 'empty' && window.confirm('휴지통을 비울까요? 안의 문서와 폴더가 영구히 삭제됩니다.')) { let kept = 0; for (const x of drv.folders.concat(drv.docs)) { if (x._cur) { kept++; continue; } await store.emptyEntry(x.name); } toast(kept ? '휴지통을 비웠습니다 — 지금 작업 중인 문서 1개는 남겨 두었습니다' : '휴지통을 비웠습니다'); renderDrive(); }
     return;
   }
   const mm = t.closest('[data-dvmenu]'); if (mm) { e.stopPropagation(); driveMenu(mm, mm.dataset.dvmenu); return; }
@@ -4796,7 +4796,7 @@ function dvItems(kind, key) {
   const trash = drv.view === 'trash', mi = op => `${kind}|${esc(key)}|${op}`;
   const head = { head: kind === 'folder' ? key : ((drv.docs[Number(key)] || {}).name || '').replace(/\.design\.json$/i, '') };
   if (trash) return [head, { ic: 'restore', t: '원래 자리로 되살리기', mi: mi('restore') }, '-', { ic: 'purge', t: '영구 삭제', mi: mi('purge'), danger: true, k: isMac ? '⌫' : 'Del' }];
-  if (kind === 'folder') return [head, { ic: 'open', t: '열기', mi: mi('open'), k: '↵' }, { ic: 'newdoc', t: '이 폴더에 새 디자인', mi: mi('newdoc') }, '-', { ic: 'rename', t: '이름 바꾸기', mi: mi('rename'), k: 'F2' }, { ic: 'move', t: '다른 폴더로 이동…', mi: mi('move') }, '-', { ic: 'trash', t: '휴지통으로', mi: mi('trash'), danger: true, k: isMac ? '⌫' : 'Del' }];
+  if (kind === 'folder') return [head, { ic: 'open', t: '열기', mi: mi('open'), k: '↵' }, { ic: 'newdoc', t: '이 폴더에 새 문서', mi: mi('newdoc') }, '-', { ic: 'rename', t: '이름 바꾸기', mi: mi('rename'), k: 'F2' }, { ic: 'move', t: '다른 폴더로 이동…', mi: mi('move') }, '-', { ic: 'trash', t: '휴지통으로', mi: mi('trash'), danger: true, k: isMac ? '⌫' : 'Del' }];
   const x = drv.docs[Number(key)], cur = x && drvIsCur(x);
   return [{ head: x ? x.name.replace(/\.design\.json$/i, '') : '' }, { ic: 'open', t: cur ? '작업으로 돌아가기' : '열기', mi: mi('open'), k: '↵' }, '-', { ic: 'rename', t: '이름 바꾸기', mi: mi('rename'), k: 'F2' }, { ic: 'dup', t: '사본 만들기', mi: mi('dup') }, { ic: 'move', t: '다른 폴더로 이동…', mi: mi('move') }, '-', { ic: 'down', t: '백업 파일로 저장 (.design.json)', mi: mi('down') }, { ic: 'info', t: '정보 보기', mi: mi('info') }, '-', { ic: 'trash', t: '휴지통으로', mi: mi('trash'), danger: true, off: cur, k: isMac ? '⌫' : 'Del' }];
 }
@@ -4818,7 +4818,7 @@ function driveContext(e) {
     const k = dvKey(card).split(':'); dvPop(dvItems(k[0], k.slice(1).join(':')), e.clientX, e.clientY, null, back); return; }
   drv.sel = new Set(); dvSelShow(); const trash = drv.view === 'trash', inDrive = drv.view === 'drive' && !drv.q;
   const items = trash ? [{ ic: 'refresh', t: '새로 고침', mi: 'bg||refresh' }, '-', { ic: 'empty', t: '휴지통 비우기', mi: 'bg||empty', danger: true, off: !(drv.docs.length || drv.folders.length) }]
-    : [...(inDrive ? [{ head: drv.path.length ? drv.path.join(' › ') : '내 드라이브' }, { ic: 'newdoc', t: '여기에 새 디자인', mi: 'bg||newdoc' }, { ic: 'mkdir', t: '새 폴더', mi: 'bg||mkdir' }, '-'] : []),
+    : [...(inDrive ? [{ head: drv.path.length ? drv.path.join(' › ') : '내 드라이브' }, { ic: 'newdoc', t: '여기에 새 문서', mi: 'bg||newdoc' }, { ic: 'mkdir', t: '새 폴더', mi: 'bg||mkdir' }, '-'] : []),
       { ic: 'import', t: '다른 프로그램 파일 가져오기', mi: 'bg||import' }, { ic: 'sort', t: drv.sort === 'name' ? '수정한 날짜로 정렬' : '이름으로 정렬', mi: 'bg||sort' }, { ic: 'all', t: '모두 고르기', mi: 'bg||all', k: isMac ? '⌘A' : 'Ctrl+A', off: !dvCards().length }, { ic: 'refresh', t: '새로 고침', mi: 'bg||refresh' }];
   dvPop(items, e.clientX, e.clientY);
 }
@@ -4829,7 +4829,7 @@ async function driveBg(op) {
   if (op === 'newdoc') { $('#dlgDrive').close(); return openNewDesign(); }
   if (op === 'import') { $('#dlgDrive').close(); return openImport(); }
   if (op === 'mkdir') { const n = await dvAsk('새 폴더', '폴더 이름', '새 폴더'); if (n) { try { await store.makeFolder(drv.path, n); renderDrive(); toast(`「${n}」 폴더를 만들었습니다`); } catch (err) { toast(err.message, true); } } return; }
-  if (op === 'empty' && window.confirm('휴지통을 비울까요? 안의 디자인과 폴더가 영구히 삭제됩니다.')) { let kept = 0; for (const x of drv.folders.concat(drv.docs)) { if (x._cur) { kept++; continue; } await store.emptyEntry(x.name); } toast(kept ? '휴지통을 비웠습니다 — 지금 작업 중인 디자인 1개는 남겨 두었습니다' : '휴지통을 비웠습니다'); renderDrive(); }
+  if (op === 'empty' && window.confirm('휴지통을 비울까요? 안의 문서와 폴더가 영구히 삭제됩니다.')) { let kept = 0; for (const x of drv.folders.concat(drv.docs)) { if (x._cur) { kept++; continue; } await store.emptyEntry(x.name); } toast(kept ? '휴지통을 비웠습니다 — 지금 작업 중인 문서 1개는 남겨 두었습니다' : '휴지통을 비웠습니다'); renderDrive(); }
 }
 function dvAsk(title, label, val) {  /* 작은 입력 창 (window.prompt 대신 — 한글 입력·Enter·Esc) */
   return new Promise(res => { const d = document.createElement('dialog'); d.className = 'dvask'; let done = false; const fin = v => { if (done) return; done = true; res(v); d.close(); };
@@ -4884,7 +4884,7 @@ async function driveOp(kind, key, op, o) {
       if (op === 'newdoc') { drv.path = f.path; drv.view = 'drive'; $('#dlgDrive').close(); openNewDesign(); return true; }
       if (op === 'rename') { const n = o.name || await dvAsk('폴더 이름 바꾸기', '폴더 이름', f.name); if (!n || n === f.name) return false; const cp = await curDocPath(); await store.moveEntry(f.handle, from, from, n.replace(/[\\/:*?"<>|]/g, '_').trim()); if (cp && f.path.every((x, i) => cp[i] === x)) await dvRelinkCur(); }
       if (op === 'move') { const to = o.to || await pickFolder([f.path]); if (!to) return false; if (to.length >= f.path.length && f.path.every((x, i) => to[i] === x)) throw new Error('폴더를 자기 안으로 옮길 수 없습니다'); const cp = await curDocPath(); await store.moveEntry(f.handle, from, to); if (cp && f.path.every((x, i) => cp[i] === x)) await dvRelinkCur(); }
-      if (op === 'trash') { const cp = await curDocPath(); if (cp && f.path.every((x, i) => cp[i] === x)) throw new Error(`「${f.name}」 폴더 안에 지금 작업 중인 디자인이 있습니다. 다른 디자인을 먼저 여세요.`); if (!quiet && !window.confirm(`"${f.name}" 폴더를 안의 디자인과 함께 휴지통으로 옮길까요?`)) return false; const th = await store.toTrash(f.handle, from); (o.trashed || (o.trashed = [])).push(th); if (!quiet) dvTrashToast([th], f.name); }
+      if (op === 'trash') { const cp = await curDocPath(); if (cp && f.path.every((x, i) => cp[i] === x)) throw new Error(`「${f.name}」 폴더 안에 지금 작업 중인 문서가 있습니다. 다른 문서를 먼저 여세요.`); if (!quiet && !window.confirm(`"${f.name}" 폴더를 안의 문서와 함께 휴지통으로 옮길까요?`)) return false; const th = await store.toTrash(f.handle, from); (o.trashed || (o.trashed = [])).push(th); if (!quiet) dvTrashToast([th], f.name); }
       if (op === 'restore') { const to = (store.trashFrom && store.trashFrom(f.name)) || []; await store.ensureDir(to); await store.moveEntry(f.handle, [store.TRASH], to); if (!quiet) toast(`「${f.name}」 폴더를 「${to.length ? to.join(' › ') : '내 드라이브'}」로 되살렸습니다`); }
       if (op === 'purge') { if (!quiet && !window.confirm(`"${f.name}" 폴더를 영구 삭제할까요? 되돌릴 수 없습니다.`)) return false; await store.emptyEntry(f.name); }
     } else {
@@ -4903,9 +4903,9 @@ async function driveOp(kind, key, op, o) {
       }
       if (op === 'dup') { const j = JSON.parse(await (await x.handle.getFile()).text()); j.name = (j.name || label) + ' 사본'; const d = await store.dirAt(x.path); const h = await d.getFileHandle(await store.uniqueNameIn(j.name, d), { create: true }); const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign(j, { saveId: '', lineage: [], docId: Date.now().toString(36) + Math.random().toString(36).slice(2, 8) }))); await w.close(); toast('사본을 만들었습니다'); }
       if (op === 'move') { const to = o.to || await pickFolder(); if (!to) return false; if (to.join('/') === x.path.join('/')) return false; if (isCur && st.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const nh = await store.moveEntry(x.handle, x.path, to); if (isCur) { st.handle = nh; st.fileName = nh.name; st.lastMod = (await nh.getFile()).lastModified; await store.idbSet('fileHandle', nh); updateSaveBadge(); } if (!quiet) toast(`"${label}"${eul(label)} ${to.length ? to.join(' › ') : '내 드라이브'}로 옮겼습니다`); }
-      if (op === 'trash') { if (isCur) throw new Error('지금 작업 중인 디자인은 휴지통으로 보낼 수 없습니다. 다른 디자인을 먼저 여세요.'); const th = await store.toTrash(x.handle, x.path); (o.trashed || (o.trashed = [])).push(th); if (!quiet) dvTrashToast([th], label); }
+      if (op === 'trash') { if (isCur) throw new Error('지금 작업 중인 문서는 휴지통으로 보낼 수 없습니다. 다른 문서를 먼저 여세요.'); const th = await store.toTrash(x.handle, x.path); (o.trashed || (o.trashed = [])).push(th); if (!quiet) dvTrashToast([th], label); }
       if (op === 'restore') { const to = (store.trashFrom && store.trashFrom(x.name)) || []; await store.ensureDir(to); await store.moveEntry(x.handle, [store.TRASH], to); if (!quiet) toast(`「${label}」${eul(label)} 「${to.length ? to.join(' › ') : '내 드라이브'}」로 되살렸습니다`); }
-      if (op === 'purge') { if (isCur) throw new Error('지금 작업 중인 디자인은 영구 삭제할 수 없습니다 — 먼저 되살리거나 다른 디자인을 여세요.'); if (!quiet && !window.confirm(`"${label}"${eul(label)} 영구 삭제할까요? 되돌릴 수 없습니다.`)) return false; await store.emptyEntry(x.name); }
+      if (op === 'purge') { if (isCur) throw new Error('지금 작업 중인 문서는 영구 삭제할 수 없습니다 — 먼저 되살리거나 다른 문서를 여세요.'); if (!quiet && !window.confirm(`"${label}"${eul(label)} 영구 삭제할까요? 되돌릴 수 없습니다.`)) return false; await store.emptyEntry(x.name); }
     }
     if (!quiet) renderDrive(); return true;
   } catch (err) { if (quiet) throw err; toast(err.message, true); return false; }
@@ -4924,7 +4924,7 @@ async function driveMulti(op, to, mo) {
   if (op === 'move') { to = to || await pickFolder(keys.filter(k => k.startsWith('folder:')).map(k => (drv.folders.find(f => f.name === k.slice(7)) || {}).path), `${n}개를 어느 폴더로 옮길까요?`); if (!to) return; }
   const tro = { quiet: true, to, trashed: [] };
   if (op === 'purge' && !window.confirm(`고른 ${n}개를 영구 삭제할까요? 되돌릴 수 없습니다.`)) return;
-  if (op === 'trash' && mo && mo.noAsk && keys.some(k => k.startsWith('folder:')) && !window.confirm(`폴더를 안의 디자인과 함께 휴지통으로 옮길까요?`)) return;
+  if (op === 'trash' && mo && mo.noAsk && keys.some(k => k.startsWith('folder:')) && !window.confirm(`폴더를 안의 문서와 함께 휴지통으로 옮길까요?`)) return;
   let ok = 0; const bad = [];
   for (const k of keys) { const i = k.indexOf(':'), kind = k.slice(0, i), key = k.slice(i + 1); try { if (await driveOp(kind, key, op, tro)) ok++; } catch (err) { bad.push(err.message); } }
   drv.docs0 = drv.docs; drv.sel = new Set(); await renderDrive();
@@ -5023,7 +5023,7 @@ async function saveNow() {
   gcAssets();
   try {
     if (store.state.handle) { clearTimeout(fileTimer); if (store.state.needPerm) { if (!(await store.requestPermission())) { toast('파일 권한을 허락하지 않아 저장하지 못했습니다 (작업은 이 브라우저에 남아 있습니다)', true); return; } store.state.needPerm = false; } if (await saveFileNow()) toast('저장했습니다'); else if (!store.state.conflict) toast('아직 저장하지 못했습니다 — 파일 권한이나 동기화 상태를 확인해 주세요(위 저장 표시를 누르면 다시 시도)', true); return; }  /* 실패했는데 '저장했습니다'가 뜨던 것 */
-    if (await store.folderReady()) { const loc = await pickSaveLocation({ title: '저장', name: doc.name || '새 디자인', ok: '여기에 저장', def: prefOn('naracal-kind-folders') ? kindPath() : null }); if (!loc) return; doc.name = loc.name; $('#pname').value = doc.name; await store.saveIntoFolder(doc, loc.path); rememberLoc(loc.path); setStatus(`${locLabel(loc.path)}에 저장됨 ${tnow()} · ${store.state.fileName}`); updateSaveBadge(); toast(`${locLabel(loc.path)}에 저장했습니다. 이제 바뀔 때마다 자동 저장됩니다.`); return; }
+    if (await store.folderReady()) { const loc = await pickSaveLocation({ title: '저장', name: doc.name || '새 문서', ok: '여기에 저장', def: prefOn('naracal-kind-folders') ? kindPath() : null }); if (!loc) return; doc.name = loc.name; $('#pname').value = doc.name; await store.saveIntoFolder(doc, loc.path); rememberLoc(loc.path); setStatus(`${locLabel(loc.path)}에 저장됨 ${tnow()} · ${store.state.fileName}`); updateSaveBadge(); toast(`${locLabel(loc.path)}에 저장했습니다. 이제 바뀔 때마다 자동 저장됩니다.`); return; }
     if (store.state.supported) { await store.connectNew(doc); updateSaveBadge(); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`); toast('저장했습니다. 이제 바뀔 때마다 자동 저장됩니다.'); return; }
     store.download(doc); toast('이 브라우저는 파일 저장을 지원하지 않아 내려받았습니다');
   } catch (e) { if (e.name !== 'AbortError') toast('저장하지 못했습니다: ' + e.message, true); }
@@ -5031,8 +5031,8 @@ async function saveNow() {
 async function saveAs() {
   const inDir = await store.folderReady();
   let nm, loc = null;
-  if (inDir) { loc = await pickSaveLocation({ title: '새 이름으로 저장', name: (doc.name || '새 디자인'), ok: '새 이름으로 저장', def: prefOn('naracal-kind-folders') ? kindPath() : null, note: '지금 파일은 마지막으로 저장된 상태로 그대로 남고, 이제부터 새 파일에서 작업합니다.' }); if (!loc) return; nm = loc.name; }
-  else { nm = window.prompt('새 이름으로 저장합니다. 문서 이름을 입력하세요.\n(지금 파일은 마지막으로 저장된 상태로 그대로 남습니다)', doc.name || '새 디자인'); if (nm == null || !nm.trim()) return; }
+  if (inDir) { loc = await pickSaveLocation({ title: '새 이름으로 저장', name: (doc.name || '새 문서'), ok: '새 이름으로 저장', def: prefOn('naracal-kind-folders') ? kindPath() : null, note: '지금 파일은 마지막으로 저장된 상태로 그대로 남고, 이제부터 새 파일에서 작업합니다.' }); if (!loc) return; nm = loc.name; }
+  else { nm = window.prompt('새 이름으로 저장합니다. 문서 이름을 입력하세요.\n(지금 파일은 마지막으로 저장된 상태로 그대로 남습니다)', doc.name || '새 문서'); if (nm == null || !nm.trim()) return; }
   gcAssets();
   try {
     if (store.state.handle && store.state.dirty) { clearTimeout(fileTimer); await saveFileNow(); }
@@ -5045,7 +5045,7 @@ async function saveAs() {
 }
 async function duplicateDoc() {
   gcAssets();
-  const copy = Object.assign(clone(doc), { name: (doc.name || '새 디자인') + ' 사본' });
+  const copy = Object.assign(clone(doc), { name: (doc.name || '새 문서') + ' 사본' });
   try {
     if (await store.folderReady()) {
       const h = await store.copyIntoFolder(copy);
@@ -5067,7 +5067,7 @@ function openFileMenu() {
   <button data-fm="resize"><svg class="ic"><use href="#i-pages"/></svg>크기 조정… (다른 크기로 사본)</button>
   <button data-fm="rename"><svg class="ic"><use href="#i-text"/></svg>이름 바꾸기</button>
   <button data-fm="close"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>문서 닫기 (저장하고 홈으로)</button><hr>
-  <button data-fm="new"><svg class="ic"><use href="#i-new"/></svg>새 디자인…</button>
+  <button data-fm="new"><svg class="ic"><use href="#i-new"/></svg>새 문서…</button>
   <button data-fm="open"><svg class="ic"><use href="#i-folder"/></svg>내 드라이브 (열기)…<kbd>Ctrl+O</kbd></button>
   <button data-fm="import"><svg class="ic"><use href="#i-upload"/></svg>다른 프로그램 파일 가져오기… (포토샵·인디자인·일러스트·PDF)</button>
   <button data-fm="prev"><svg class="ic"><use href="#i-open"/></svg>직전 문서 되살리기 (파일로 저장 안 한 문서)</button>
@@ -5915,11 +5915,33 @@ async function renderPageCanvas(pg, dpi, mode, bg) {
   }
   return c;
 }
+/* 그림(PNG·그림 PDF·PPT 그림)의 줄바꿈을 화면과 같게 (11/26 남은 일 ④): 그림으로 그릴 때는 글자 폭을 화면보다 아주 조금 좁게 재서(14글자에 약 2px)
+   줄 끝 낱말이 윗줄로 올라가 줄 수가 달라짐 → 그리기 직전, 화면에 놓인 글 상자에서 줄마다 나뉜 자리를 재고 줄마다 따로 칸(display:block)으로 나눔.
+   양끝 맞춤은 문단 끝 줄만 빼고 줄마다 양끝(text-align-last). 서식(굵게·색)은 Range로 잘라 그대로 */
+function freezeLines(root) {
+  const rg = document.createRange(), blockOf = (n, E) => { let x = n.parentNode; while (x && x !== E) { const d = getComputedStyle(x).display; if (d === 'block' || d === 'flex' || d === 'list-item' || d === 'grid') return x; x = x.parentNode; } return E; };
+  root.querySelectorAll('.el-text').forEach(E => {
+    const cs = getComputedStyle(E);
+    if (E.classList.contains('wrapped') || E.querySelector('svg, .wrapf') || /^vertical/.test(cs.writingMode || '') || (E.textContent || '').length > 20000) return;
+    const tol = (parseFloat(cs.fontSize) || 12) * 0.4, just = cs.textAlign === 'justify';
+    const tw = document.createTreeWalker(E, NodeFilter.SHOW_TEXT), nodes = []; let t; while ((t = tw.nextNode())) if (t.textContent.length) nodes.push(t);
+    const L = []; let top = null;  /* 줄마다 { s:[노드,위치], e:[노드,위치], last:마지막 글자 } — 빈칸은 앞 줄에 붙음 */
+    nodes.forEach(n => { const s = n.textContent; for (let i = 0; i < s.length; i++) { if (!/\s/.test(s[i])) { rg.setStart(n, i); rg.setEnd(n, i + 1); const rc = rg.getClientRects()[0]; if (rc) { if (top == null || Math.abs(rc.top - top) > tol) L.push({ s: [n, i] }); top = rc.top; } } if (L.length) { L[L.length - 1].e = [n, i + 1]; L[L.length - 1].last = s[i]; } } });
+    if (L.length < 2) return;  /* 한 줄이면 그대로 */
+    L.forEach((l, i) => { const nx = L[i + 1]; l.fin = !nx || l.last === '\n' || blockOf(l.s[0], E) !== blockOf(nx.s[0], E); });
+    if (!L[0].s || L.some(l => !l.e)) return;
+    for (let i = L.length - 1; i >= 0; i--) { const l = L[i];
+      rg.setStart(l.s[0], l.s[1]); rg.setEnd(l.e[0], l.e[1]); const f = rg.extractContents(), sp = document.createElement('span');
+      sp.style.cssText = 'display:block' + (just ? (l.fin ? ';text-align-last:auto' : ';text-align-last:justify') : ''); sp.appendChild(f); rg.insertNode(sp); }
+    if (nodes.length && L[0].s[1] > 0) { /* 첫 줄 앞 빈칸(들여쓰기)은 그대로 남아 있음 */ }
+  });
+}
 async function renderPageCanvas0(pg, dpi, mode, bg) {
   const keepMarks = doc.cropMarks; doc.cropMarks = false;  // 재단선은 PDF 단계에서 도련 바깥에 따로 그림
   const tmp = document.createElement('div'); tmp.style.cssText = 'position:fixed;left:-99999px;top:0'; try { tmp.innerHTML = sheetHTML(pg, mode); } finally { doc.cropMarks = keepMarks; } if (pg.transp) tmp.firstElementChild.classList.add('transp'); document.body.appendChild(tmp);
   try {
     await Promise.all(Array.from(tmp.querySelectorAll('img')).map(i => i.complete ? null : new Promise(r => { i.onload = i.onerror = r; })));
+    try { freezeLines(tmp); } catch (e) { console.warn('줄 고정 실패', e); }
     const node = tmp.firstElementChild;
     try {
       await loadScript('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js', () => window.htmlToImage, 'sha384-UbfRVKN3/elS1r7JcK2FhmPP+KlJ4CvYwbyYD7tH+uTkbT9bNJr9eJeQ0FoFbAgz');
@@ -6686,7 +6708,7 @@ function certSaveLayout() {
 /* 상장·출석부 패널에 들어오면 바로 그 용지의 편집 화면으로 (11/19 팀장님): 지금 문서에 다른 작업(그림·영상 등)이 있으면 먼저 저장(파일 또는 직전 문서)하고 알림.
    상장 = A4(상장 쪽·양식 쪽만), 출석부 = 209×150(출석부 쪽만) — 아니면 새 문서로 (명단·양식 설정은 가지고 감) */
 let docEntering = false;
-/* 상장·출석부 패널이 열린 채로 다른 문서(새 디자인·열기)로 바뀌면 저절로 상장·출석부 문서로 되돌리지 않고 물음 (11/24 검토: 가정통신문 A4를 만들었는데 빈 출석부로 바뀜) */
+/* 상장·출석부 패널이 열린 채로 다른 문서(새 문서·열기)로 바뀌면 저절로 상장·출석부 문서로 되돌리지 않고 물음 (11/24 검토: 가정통신문 A4를 만들었는데 빈 출석부로 바뀜) */
 function docSwitchCard(kind) { const nm = kind === 'cert' ? '상장' : '출석부'; return `<div class="wz-card" style="margin:8px 0"><b>지금 문서는 ${nm} 문서가 아닙니다</b><p class="hint" style="margin:4px 0 10px">「${esc(doc.name || '디자인')}」을 편집 중입니다. ${nm}를 만들려면 ${nm} 편집 화면으로 옮기세요 — 지금 문서는 직전 문서로 보관됩니다.</p><button class="btn primary full" data-docsw="${kind}">${kind === 'cert' ? '🏅' : '📋'} ${nm} 편집 화면으로</button><button class="btn full" data-docsw="pages" style="margin-top:6px">지금 문서 계속 편집 (페이지 패널)</button></div>`; }
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-docsw]'); if (!b) return; const k = b.dataset.docsw; if (k === 'pages') { sideTab = 'pages'; renderRail(); renderSide(); return; } renderSide._tab = ''; renderSide(); });
 function noticeDlg(title, html) { let d = $('#dlgNotice'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgNotice'; document.body.appendChild(d); } d.style.maxWidth = '520px'; d.innerHTML = `<div class="dhead"><h2>${title}</h2></div><div class="dbody"><p style="margin-top:0;line-height:1.6">${html}</p><div class="row" style="justify-content:flex-end"><button class="btn primary" data-close>확인</button></div></div>`; d.querySelector('[data-close]').onclick = () => d.close(); if (!d.open) d.showModal(); }
@@ -8317,7 +8339,7 @@ $('#scroller').addEventListener('drop', async e => {
   commit(); select(ids); rerender(); if (sideTab === 'upload' || sideTab === 'photo') renderSide();
 });
 
-/* ---- 크기 조정 (Canva '크기 조정'): 새 크기에 맞춰 내용을 다시 배치. 이 디자인을 바꾸거나 새 크기로 사본을 만듦 ----
+/* ---- 크기 조정 (Canva '크기 조정'): 새 크기에 맞춰 내용을 다시 배치. 이 문서를 바꾸거나 새 크기로 사본을 만듦 ----
    fit: 비율을 지키며 줄이고 늘림. 쪽 가장자리에 가까운 요소는 그 가장자리 기준, 가운데 요소는 가운데 기준. 배경·띠는 새 쪽을 꽉 채움
    stretch: 가로·세로를 따로 늘림 / keep: 크기는 그대로 두고 가운데로 옮김 */
 const MM_KEYS = ['strokeW', 'shX', 'shY', 'shB', 'glowB', 'd3X', 'd3Y', 'pad', 'bgR', 'borderW', 'radius'];
@@ -8396,7 +8418,7 @@ function renderResize() {
     ${['contain', 'cover', 'keep'].includes(S.mode) ? `<div class="row" style="align-items:center;gap:10px;margin-top:8px"><span class="hint" style="margin:0">기준 위치</span><div class="rsanchor">${[0, 0.5, 1].map(y => [0, 0.5, 1].map(x => `<button type="button" data-rsa="${x},${y}" class="${S.A[0] === x && S.A[1] === y ? 'on' : ''}" title="${['위', '가운데', '아래'][y * 2]}${['왼쪽', '가운데', '오른쪽'][x * 2] === '가운데' && y === 0.5 ? '' : ' ' + ['왼쪽', '가운데', '오른쪽'][x * 2]}"></button>`).join('')).join('')}</div><span class="hint" style="margin:0">${S.mode === 'cover' ? '이 쪽은 남기고 반대쪽이 잘립니다' : '남는 곳이 반대쪽에 생깁니다'}</span></div>` : ''}
   </div><div class="rsprev"><span class="hint">미리보기${doc.pages.length > 1 ? '' : ' (1쪽)'}</span>${doc.pages.length > 1 ? pagerHTML('resize', S.pi, doc.pages.length, { sm: true }) : ''}<div class="rsbox" style="width:${ok ? W * k : box}px;height:${ok ? H * k : box}px">${ok ? `<div style="transform:scale(${k * 25.4 / 96});transform-origin:0 0;position:absolute;left:0;top:0">${tmpSheet(W, H, prevPage.els, srcPg.bg)}</div>` : ''}</div>
   <p class="hint" style="text-align:center">${ok ? sizeLabelFor(W, H, S.fmt, S.unit) : '크기를 확인해 주세요'}</p></div></div>
-  <div class="rsfoot">${(() => { const f0 = FORMATS.find(x => x[0] === doc.fmt), fromPx = !!(f0 && f0[5] === 'px'), cross = fromPx !== (S.unit === 'px'); /* 인쇄물 ↔ SNS·화면처럼 종류가 바뀌면 원본을 두고 사본이 기본 (11/24 검토) */ return `<small class="hint" style="margin:0;flex:1">${cross ? '종류가 달라지면(인쇄 ↔ 화면) 원본은 두고 <b>사본</b>을 권합니다' : '사본은 원본을 그대로 두고 새 디자인으로'}</small><button class="btn ${cross ? 'primary' : ''}" id="rsCopy" ${ok ? '' : 'disabled'}>새 크기로 사본 만들기</button><button class="btn ${cross ? '' : 'primary'}" id="rsApply" ${ok ? '' : 'disabled'}>이 디자인 크기 바꾸기</button>`; })()}</div>`;
+  <div class="rsfoot">${(() => { const f0 = FORMATS.find(x => x[0] === doc.fmt), fromPx = !!(f0 && f0[5] === 'px'), cross = fromPx !== (S.unit === 'px'); /* 인쇄물 ↔ SNS·화면처럼 종류가 바뀌면 원본을 두고 사본이 기본 (11/24 검토) */ return `<small class="hint" style="margin:0;flex:1">${cross ? '종류가 달라지면(인쇄 ↔ 화면) 원본은 두고 <b>사본</b>을 권합니다' : '사본은 원본을 그대로 두고 새 문서로'}</small><button class="btn ${cross ? 'primary' : ''}" id="rsCopy" ${ok ? '' : 'disabled'}>새 크기로 사본 만들기</button><button class="btn ${cross ? '' : 'primary'}" id="rsApply" ${ok ? '' : 'disabled'}>이 문서 크기 바꾸기</button>`; })()}</div>`;
   const B = $('#rsBody');
   $('#rsFmt').onchange = e => { const f = FORMATS.find(x => x[0] === e.target.value); S.fmt = e.target.value; if (f) { S.w = f[3]; S.h = f[4]; S.unit = f[5]; } renderResize(); };
   $('#rsW').onchange = e => { S.w = Number(e.target.value); S.fmt = ''; renderResize(); }; $('#rsH').onchange = e => { S.h = Number(e.target.value); S.fmt = ''; renderResize(); };
@@ -8407,12 +8429,12 @@ function renderResize() {
   PAGER_GO.resize = t => { S.pi = t; renderResize(); };
   $('#rsApply').onclick = () => { const nd = resizedDoc({ w: doc.w, h: doc.h, pages: doc.pages }, W, H, S.mode, S.A); doc.pages = nd.pages; doc.w = W; doc.h = H; doc.fmt = S.fmt || ''; { const f = FORMATS.find(x => x[0] === S.fmt); if (f) doc.bleed = bleedFor(f); } commit();  /* 인쇄물↔SNS로 바꾸면 도련도 맞춤 */ zoom = 0; $('#dlgResize').close(); renderAll(); fitCanvas && fitCanvas(); toastUndo(`크기를 ${sizeLabelFor(W, H, S.fmt, S.unit)}로 바꿨습니다`, () => { zoom = 0; fitCanvas(); }); };
   $('#rsCopy').onclick = async () => {
-    const f = FORMATS.find(x => x[0] === S.fmt); const nd = resizedDoc(doc, W, H, S.mode, S.A); nd.fmt = S.fmt || ''; nd.name = `${doc.name || '새 디자인'} (${f ? f[1] : `${Math.round(W)}×${Math.round(H)}`})`;
+    const f = FORMATS.find(x => x[0] === S.fmt); const nd = resizedDoc(doc, W, H, S.mode, S.A); nd.fmt = S.fmt || ''; nd.name = `${doc.name || '새 문서'} (${f ? f[1] : `${Math.round(W)}×${Math.round(H)}`})`;
     if (f) nd.bleed = bleedFor(f);
     $('#dlgResize').close(); gcAssets();
     try {
-      if (await store.folderReady()) { const h = await store.copyIntoFolder(nd); if (window.confirm(`"${h.name.replace(/\.design\.json$/i, '')}"${eul(h.name.replace(/\.design\.json$/i, ''))} 만들었습니다.\n\n확인: 새 크기 디자인을 열어 다듬기\n취소: 지금 문서에서 계속`)) await openFolderDoc(h, '새 크기 디자인을 열었습니다'); else toast('새 크기 사본을 만들었습니다 (열기 목록에 있습니다)'); }
-      else if (await confirmBtns(`새 크기 디자인 "${nd.name}"을 만들었습니다.\n\n확인: 바로 열어 다듬기 — 지금 문서는 저장 ▾ → 직전 문서 되살리기에 보관\n취소: 파일로만 내려받기`)) { keepCurrentDoc.kept = ''; if (!(await keepCurrentDoc())) return; await store.disconnect(); nd.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); delete nd.saveId; delete nd.lineage; await loadDoc(nd, `새 크기 디자인을 열었습니다 — 원래 문서는 저장 ▾ → 직전 문서 되살리기${keepCurrentDoc.kept ? `(「${keepCurrentDoc.kept}」)` : ''}`); zoom = 0; renderAll(); updateSaveBadge(); }  /* 폴더가 없을 때도 결과를 바로 보이게 (11/24 검토: 파일만 내려받아지고 화면엔 안 보였음) */
+      if (await store.folderReady()) { const h = await store.copyIntoFolder(nd); if (window.confirm(`"${h.name.replace(/\.design\.json$/i, '')}"${eul(h.name.replace(/\.design\.json$/i, ''))} 만들었습니다.\n\n확인: 새 크기 문서를 열어 다듬기\n취소: 지금 문서에서 계속`)) await openFolderDoc(h, '새 크기 문서를 열었습니다'); else toast('새 크기 사본을 만들었습니다 (열기 목록에 있습니다)'); }
+      else if (await confirmBtns(`새 크기 문서 "${nd.name}"을 만들었습니다.\n\n확인: 바로 열어 다듬기 — 지금 문서는 저장 ▾ → 직전 문서 되살리기에 보관\n취소: 파일로만 내려받기`)) { keepCurrentDoc.kept = ''; if (!(await keepCurrentDoc())) return; await store.disconnect(); nd.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); delete nd.saveId; delete nd.lineage; await loadDoc(nd, `새 크기 문서를 열었습니다 — 원래 문서는 저장 ▾ → 직전 문서 되살리기${keepCurrentDoc.kept ? `(「${keepCurrentDoc.kept}」)` : ''}`); zoom = 0; renderAll(); updateSaveBadge(); }  /* 폴더가 없을 때도 결과를 바로 보이게 (11/24 검토: 파일만 내려받아지고 화면엔 안 보였음) */
       else { store.download(nd); toast('새 크기 사본을 파일로 내려받았습니다 — 열기(📂)로 열 수 있습니다'); }
     } catch (e) { toast('사본을 만들지 못했습니다: ' + e.message, true); }
   };
