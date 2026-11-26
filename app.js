@@ -854,7 +854,13 @@ function openTblEditor(el, r, c) {
     else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); closeCellEditor(true); }
     e.stopPropagation(); });
   ta.addEventListener('blur', () => closeCellEditor(true));
+  ta.addEventListener('paste', e => { const t = (e.clipboardData || window.clipboardData).getData('text/plain') || ''; if (!/\t/.test(t) && !/\n./.test(t.replace(/\r/g, '').trim())) return; const g = tblParseGrid(t); if (!g || (g.length < 2 && g[0].length < 2)) return; e.preventDefault(); ta.id = ''; ta.remove(); tblPasteGrid(find(el.id) || el, r, c, g); });  /* 엑셀·한글 표를 붙여 넣으면 여러 칸에 */
 }
+/* 붙여 넣은 표 글(탭으로 칸, 줄 바꿈으로 줄 — 엑셀·한글·구글 시트) → 2차 배열. 따옴표로 묶인 칸 안 줄 바꿈도 */
+function tblParseGrid(t) { t = String(t).replace(/\r\n?/g, '\n').replace(/\n+$/, ''); const rows = [[]]; let cell = '', q = false; for (let i = 0; i < t.length; i++) { const ch = t[i]; if (q) { if (ch === '"' && t[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch; continue; } if (ch === '"' && cell === '') { q = true; continue; } if (ch === '\t') { rows[rows.length - 1].push(cell); cell = ''; } else if (ch === '\n') { rows[rows.length - 1].push(cell); cell = ''; rows.push([]); } else cell += ch; } rows[rows.length - 1].push(cell); return rows.slice(0, 200).map(r => r.slice(0, 40)); }
+function tblPasteGrid(el, r0, c0, g) { tblNorm(el); const needR = r0 + g.length, needC = c0 + Math.max(...g.map(x => x.length)); let C = el.rows[0].length; while (C < Math.min(40, needC)) { el.rows.forEach(x => x.push('')); el.colW.push(el.colW[el.colW.length - 1] || 1); C++; } while (el.rows.length < Math.min(200, needR)) el.rows.push(Array(C).fill(''));
+  g.forEach((row, i) => row.forEach((v, j) => { const R = r0 + i, CC = c0 + j; if (el.rows[R] && CC < C) { const m = tblMergeAt(el, R, CC); if (!m || (m.r === R && m.c === CC)) el.rows[R][CC] = String(v).trim(); } }));
+  commit(); renderCanvas(); renderOverlay(); renderInspector(); toast(`표에 ${g.length}줄 × ${Math.max(...g.map(x => x.length))}칸을 붙여 넣었습니다${needR > r0 + 1 || needC > c0 + 1 ? ' (모자란 줄·칸은 더함)' : ''}`); }
 let tblCell = null;  /* 표에서 마지막으로 고른 칸 — 줄·칸 넣기·빼기의 기준 */
 function closeCellEditor(save) {
   const ta = $('#cellEd'); if (!ta) return; ta.id = ''; const el = find(ta.dataset.id); const v = ta.value.replace(/\s+$/, ''); ta.remove(); if (!save || !el) return;
@@ -8671,6 +8677,7 @@ document.addEventListener('paste', async e => {
   const cd = e.clipboardData; if (!cd) return;
   const files = [...cd.files].filter(f => /^image\//.test(f.type));
   if (files.length) { e.preventDefault(); for (const f of files) addImage(addAsset(await fileToDataURL(f))); toast('붙여 넣은 그림을 넣었습니다'); return; }
+  { const se = selEls(), tb = se.length === 1 && se[0].type === 'tbl' && !se[0].locked ? se[0] : null, raw = cd.getData('text/plain') || ''; if (tb && (/\t/.test(raw) || /\n./.test(raw.replace(/\r/g, '').trim()))) { const g = tblParseGrid(raw), at = tblCell && tblCell.id === tb.id ? tblCell : { r: 0, c: 0 }; if (g && g.length) { e.preventDefault(); tblPasteGrid(tb, at.r, at.c, g); return; } } }  /* 표를 고른 채 엑셀·한글 표 붙여 넣기 → 고른 칸부터 */
   const t = (cd.getData('text/plain') || '').trim();
   clearTimeout(pasteFallback);
   if (clip && clip.els && (t === clip.mark || !t || (clip.ctx && !files.length))) { e.preventDefault(); doPaste(pasteShift); pasteShift = false; return; } // 앱 안에서 복사한 요소
