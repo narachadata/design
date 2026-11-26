@@ -501,7 +501,7 @@ NC.cal = (function () {
       if (L === 'sports') {
         /* 라차 스포츠: 달마다 다른 운동 — 사선 스포츠 띠, 운동 아이콘 배지, 전광판 월 숫자 (그림은 NARACAL_SPORTS_ART가 있으면 그 달 운동 그림) */
         const SP = (window.NARACAL_SPORTS || [])[m - 1] || ['🏅', '운동', 'SPORTS'], art = (window.NARACAL_SPORTS_ART || [])[m - 1];
-        const emo = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u' + [...SP[0]].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f').join('_') + '.svg';
+        const emo = (window.NC_EMO_URL || (x => x))('https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u' + [...SP[0]].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f').join('_') + '.svg');
         const mo2 = art ? Object.assign({}, mo, { image: art }) : mo, s2 = T.stripe2 || t.accent;
         return pg(bg, [
           T.court ? S_('rect', 112, 10, 104, 134, { fill: '', stroke: 'rgba(255,255,255,0.55)', strokeW: 0.7, name: '코트 선' }) : null,

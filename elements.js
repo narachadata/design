@@ -46,7 +46,7 @@ NC.elems = (function () {
   add('line', 'ln-vert', '세로 선', 6, 60, (uid) => { const { S } = H(uid); return [S('rect', 2.5, 0, 1, 60, { fill: NAVY, name: '세로 선' })]; }, '세로선');
 
   /* 아이콘 (이모지) — Noto Emoji 벡터 그림(Apache 2.0)으로 넣어 어느 PC에서나 같은 모양, 크게 인쇄해도 선명 */
-  const emojiSVG = ch => 'https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u' + [...ch].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f').join('_') + '.svg';
+  const emojiSVG = ch => (window.NC_EMO_URL || (x => x))('https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u' + [...ch].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f').join('_') + '.svg');
   const EMOJI = { '태권도·운동': '🥋🥇🥈🥉🏆🎖️🏅🥊⚽🏀⚾🎯🏃‍♂️🤸‍♀️💪🔥⭐🌟✨', '학교·공부': '📚✏️📝🎒🏫🧑‍🏫👩‍🎓📖🖍️📌📎🔔⏰📅', '축하·행사': '🎉🎊🎈🎂🎁🎀🎵🎶🎤🎬🥳🙌👏💐', '마음·날씨': '❤️💛💙💚🧡💜🌈☀️🌙⛅🌸🍀🌻🍁❄️', '표시·화살표': '✅❌⭕❗❓➡️⬅️⬆️⬇️↗️🔁📍💡✔️➕', '음식·생활': '🍎🥛🍚🍱🚌🏠📞📱💬🕐🧼🩹🧴' };
   /* 11/26 자료실 조: 이모지마다 한글 이름 (「축구」「케이크」「경고」로 찾게) */
   const EMO_KO = { '🥋': '도복 태권도', '🥇': '금메달 1등 우승', '🥈': '은메달 2등', '🥉': '동메달 3등', '🏆': '트로피 우승 대회', '🎖️': '훈장 메달', '🏅': '메달 수상', '🥊': '권투 글러브', '⚽': '축구 공', '🏀': '농구 공', '⚾': '야구 공', '🎯': '과녁 목표', '🏃‍♂️': '달리기 운동', '🤸‍♀️': '체조 운동', '💪': '힘 근육 화이팅', '🔥': '불꽃 불 열정', '⭐': '별', '🌟': '반짝 별', '✨': '반짝 빛',
@@ -76,7 +76,7 @@ NC.elems = (function () {
   const corners4 = (S, kind, x, y, w, h, s, st, inset) => { const k = inset == null ? s * 0.35 : inset; return [[x - k, y - k, 0, '왼쪽 위'], [x + w - s + k, y - k, 90, '오른쪽 위'], [x + w - s + k, y + h - s + k, 180, '오른쪽 아래'], [x - k, y + h - s + k, 270, '왼쪽 아래']].map(([cx, cy, r, n]) => S(kind, cx, cy, s, s, Object.assign({ rot: r, name: '모서리 ' + n }, st))); };
   const tape = (S, x, y, w, h, r, c, n) => S('rect', x, y, w, h, { fill: c, opacity: 0.72, rot: r, name: n || '마스킹테이프' });
   const decoAt = (I, m, x, y, w, h, fl, fv, n) => I(`assets/deco/season-${m}.svg`, x, y, w, h, { flip: !!fl, flipV: !!fv, name: n || '꽃 모서리' });
-  const pin = ch => 'https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u' + ch.codePointAt(0).toString(16) + '.svg';
+  const pin = ch => (window.NC_EMO_URL || (x => x))('https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u' + ch.codePointAt(0).toString(16) + '.svg');
   [['black', '앨범 포토 코너 · 검정', '#1E1E1E', null], ['gold', '앨범 포토 코너 · 금색', '#C9A24A', { fillType: 'gradient', g1: '#F3DB8B', g2: '#B8862B', gAngle: 135 }], ['white', '앨범 포토 코너 · 흰색', '#FFFFFF', { stroke: '#CFCFCF', strokeW: 0.25 }], ['navy', '앨범 포토 코너 · 남색', '#1E2B5A', null]].forEach(([k, n, c, ex]) => {
     add('album', 'al-corner-' + k, n, 64, 50, (uid) => { const { S, I } = H(uid); return [S('rect', 0, 0, 64, 50, { fill: k === 'white' ? '#3A3A3A' : '#F6F1E7', name: '앨범 바탕' }), AL.photo(I, 5, 5, 54, 40)].concat(corners4(S, 'corner', 5, 5, 54, 40, 9, Object.assign({ fill: c }, ex || {}))); }, '앨범 프레임 사진 코너 모서리 포토코너 스크랩북 ' + n);
     add('album', 'al-only-' + k, '모서리만 · ' + n.replace('앨범 포토 코너 · ', ''), 60, 45, (uid) => { const { S } = H(uid); return corners4(S, 'corner', 0, 0, 60, 45, 9, Object.assign({ fill: c }, ex || {}), 0); }, '앨범 프레임 모서리만 사진 코너 4개 ' + n);

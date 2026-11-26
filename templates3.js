@@ -171,7 +171,7 @@ const fitT = (txt, bh, lh) => { const sz = Math.max(8, Math.round(bh / (String(t
     return pg;
   }
   // 이모지 → Noto Emoji 벡터 그림 주소 (Apache 2.0). 기기마다 모양이 달라지거나 크게 인쇄할 때 깨지지 않게
-  const emojiSVG = ch => 'https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u' + [...ch].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f').join('_') + '.svg';
+  const emojiSVG = ch => (window.NC_EMO_URL || (x => x))('https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u' + [...ch].map(c => c.codePointAt(0).toString(16)).filter(c => c !== 'fe0f').join('_') + '.svg');
   NC.emojiSVG = emojiSVG;
   // 글자색 대비 자동: 원하는 색이 바탕과 대비가 모자라면 흰색·먹색 중 더 잘 보이는 쪽 (WCAG 대비)
   function lumOf(hex) { if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return 1; const c = [1, 3, 5].map(i => { const v = parseInt(hex.substr(i, 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }

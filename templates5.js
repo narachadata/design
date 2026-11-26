@@ -117,7 +117,7 @@
      '결제' 같은 글은 넣지 않고 도장 CI·라차만 · 인성덕목 24개(극기 12 + 홍익 12)는 덕목·사자성어·라차 그림
      크기: 800×1280px = 211.67×338.67mm(96dpi) → 내려받기 PNG가 정확히 800×1280 */
   const DW = 800 * 25.4 / 96, DH = 1280 * 25.4 / 96, cx = w => (DW - w) / 2;
-  const EMO = cp => `https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u${cp}.svg`;
+  const EMO = cp => (window.NC_EMO_URL || (x => x))(`https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u${cp}.svg`);
   const KICK = 'assets/virtue/racha-kick.webp';
   const NAVY = '#14213D', GOLD = '#C9A227';
   const frame2 = (S, c) => [S('rect', 8, 8, DW - 16, DH - 16, { fill: 'rgba(0,0,0,0)', stroke: c, strokeW: 0.7, name: '테두리' }), S('rect', 11.5, 11.5, DW - 23, DH - 23, { fill: 'rgba(0,0,0,0)', stroke: c, strokeW: 0.3, opacity: 0.8, name: '안쪽 테두리' })];

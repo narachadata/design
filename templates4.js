@@ -11,7 +11,7 @@
   });
   const NAME = '나라차태권도';
   const svg = (vb, body) => 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}">${body}</svg>`);
-  const EMO = cp => `https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u${cp}.svg`;
+  const EMO = cp => (window.NC_EMO_URL || (x => x))(`https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/svg/emoji_u${cp}.svg`);
   const r2 = v => Math.round(v * 100) / 100;
 
   /* ===== 벡터 그림 소재 ===== */
@@ -40,7 +40,7 @@
     stars: (W, Hh, c = '#FFF3C4', n = 26) => { let s = 7; const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280; return svg(`0 0 ${r2(W)} ${r2(Hh)}`, Array.from({ length: n }, () => `<circle cx="${r2(rnd() * W)}" cy="${r2(rnd() * Hh)}" r="${r2((0.4 + rnd() * 0.9) * Math.min(W, Hh) / 160)}" fill="${c}" opacity="${r2(0.4 + rnd() * 0.6)}"/>`).join('')); },
     dots: (W, Hh, c = '#000000', o = 0.06) => { const g = Math.min(W, Hh) / 14; let d = ''; for (let y = g / 2; y < Hh; y += g) for (let x = ((y / g) % 2 ? g : g / 2); x < W; x += g) d += `<circle cx="${r2(x)}" cy="${r2(y)}" r="${r2(g * 0.09)}"/>`; return svg(`0 0 ${r2(W)} ${r2(Hh)}`, `<g fill="${c}" opacity="${o}">${d}</g>`); },
   };
-  const FLAG = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/third_party/region-flags/waved-svg/emoji_u1f1f0_1f1f7.svg'; // 태극기
+  const FLAG = (window.NC_EMO_URL || (x => x))('https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/third_party/region-flags/waved-svg/emoji_u1f1f0_1f1f7.svg'); // 태극기
   const ZODIAC = ['1f400', '1f402', '1f405', '1f407', '1f409', '1f40d', '1f40e', '1f411', '1f412', '1f413', '1f415', '1f416']; // 자축인묘진사오미신유술해
   const zodiac = y => EMO(ZODIAC[((y - 4) % 12 + 12) % 12]);
   const GANJI = y => '갑을병정무기경신임계'[((y - 4) % 10 + 10) % 10] + '자축인묘진사오미신유술해'[((y - 4) % 12 + 12) % 12] + '년';
