@@ -53,7 +53,7 @@ function viewSrc(el, mode) {
 }
 /* 공방 그림(assets/virtue …)은 같은 이름으로 고쳐 올리므로 배포 버전을 붙여 브라우저·GitHub 캐시의 예전 그림이 안 나오게 (팀장님 11/20 — 단말기 템플릿에 예전 도복이 보였음) */
 const vref = r => /^assets\/[^?#]+\.(webp|png|jpe?g)$/i.test(r || '') ? r + '?v=' + (window.NARACAL_VER || '') : r;
-function src(ref) { if (!ref) return ''; if (/^assets\//.test(ref)) return vref(ref); if (ref.startsWith('asset:')) return blobURL(ref, ASSETS[ref.slice(6)]); if (ref.startsWith('a:')) return blobURL(ref, doc.assets[ref.slice(2)]); if (ref.startsWith('lib:')) return NC.lib.url(ref.slice(4)); return ref; }
+function src(ref) { if (!ref) return ''; if (/^assets\//.test(ref)) return vref(ref); if (ref.startsWith('asset:')) { const v = ASSETS[ref.slice(6)]; return /^assets\//.test(v || '') ? vref(v) : blobURL(ref, v); } if (ref.startsWith('a:')) return blobURL(ref, doc.assets[ref.slice(2)]); if (ref.startsWith('lib:')) return NC.lib.url(ref.slice(4)); return ref; }
 function addAsset(dataURL) { for (const k in doc.assets) if (doc.assets[k] === dataURL) return 'a:' + k; const id = uid(); doc.assets[id] = dataURL; return 'a:' + id; }
 function gcAssets() { const used = new Set(); const walk = v => { if (typeof v === 'string' && v.startsWith('a:')) used.add(v.slice(2)); else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(doc.pages); walk(doc.calendar); walk(doc.audio); walk(doc.cert); hist.forEach(h => { for (const m of h.matchAll(/"a:([^"]+)"/g)) used.add(m[1]); }); for (const k in doc.assets) if (!used.has(k)) delete doc.assets[k]; } // 실행 취소 기록에 남은 그림도 지키기 (저장 뒤 Ctrl+Z로 지운 사진 되살리기)
 
@@ -421,7 +421,7 @@ function marks(b) { const L = Math.max(0, b - 0.5), t = 0.15; return `<div class
 /* ---------- 캔버스 ---------- */
 /* ---- 글 상자 고도화 (Figma 크기 방식·인디자인 넘침 표시·파워포인트 자동 맞춤) ---- */
 const textOver = new Set(); /* 고정 크기 상자에서 글이 넘친 요소 (인디자인 빨간 + 표시) */
-function textContentH(d) { const h0 = d.style.height, m0 = d.style.minHeight, o0 = d.style.overflow; d.style.height = 'auto'; d.style.minHeight = '0'; const ch = d.offsetHeight / MM, cw = d.scrollWidth / MM; d.style.height = h0; d.style.minHeight = m0; d.style.overflow = o0; return { ch, cw }; }
+function textContentH(d) { const h0 = d.style.height, m0 = d.style.minHeight, o0 = d.style.overflow; d.style.height = 'auto'; d.style.minHeight = '0'; const ch = d.offsetHeight / MM; let cw = d.scrollWidth / MM - 0.58; try { const rg = document.createRange(); rg.selectNodeContents(d); const rr = rg.getBoundingClientRect(), dr = d.getBoundingClientRect(); if (dr.width > 0 && rr.width > 0) { const wmm = /mm$/.test(d.style.width) ? parseFloat(d.style.width) : d.offsetWidth / MM; cw = wmm * (Math.max(rr.right, dr.right) - Math.min(rr.left, dr.left)) / dr.width; } } catch (e) {}  /* 넘치지 않으면 상자 폭 그대로, 왼쪽·오른쪽 밖으로 나간 만큼만 더함 (오른쪽 정렬도) */  /* 11/26 자료실 조: 안쪽 칸에서 옆으로 넘친 글을 못 재어 「축하합니/다」처럼 넘치던 것 — 글 내용의 실제 범위로도 잼 */ d.style.height = h0; d.style.minHeight = m0; d.style.overflow = o0; return { ch, cw }; }
 function textOverflows(d, el) { if (Number(el.maxLines) > 0 && !(Number(el.cols) > 1)) return d.scrollHeight > d.clientHeight + 2; const { ch, cw } = textContentH(d), kx = el.sx && Number(el.sx) !== 100 ? Number(el.sx) / 100 : 1, ky = el.sy && Number(el.sy) !== 100 ? Number(el.sy) / 100 : 1; return ch > el.h / ky + 0.3 || cw > el.w / kx + 0.6; } /* 장평·세로 비율: 상자 안쪽은 늘어난 폭·높이로 잼 */
 function autoWidth(d, el) { const nw = r1(d.offsetWidth / MM * (el.sx && Number(el.sx) !== 100 ? Number(el.sx) / 100 : 1)); if (Math.abs(nw - el.w) < 0.05) return; if (el.align === 'center') el.x = r1(el.x + (el.w - nw) / 2); else if (el.align === 'right') el.x = r1(el.x + el.w - nw); el.w = nw; d.style.left = el.x + 'mm'; }
 /* 글자 크기 자동 맞춤: 고정 상자 안에 들어가는 가장 큰 글자 크기(최대 = 켤 때 크기 fitMax)를 찾아 el.size(부분 서식 크기도)에 씀 → 내보내기도 같음 */
@@ -430,7 +430,7 @@ function autoFitText(d, el) {
   if (!(Number(el.fitMax) > 0)) el.fitMax = el.size;  /* 11/26 포스터 조: 최대 크기가 없으면 지금 크기를 최대로 기억 (줄어든 뒤 다시 커지게) */
   const key = [el.text, el.html, el.w, el.h, el.fitMax, el.font, el.lh, el.ls, el.weight, el.pad, el.cols, el.colGap].join('|'); if (fitCache.get(el.id) === key) return null;
   const max = Number(el.fitMax) || el.size, base = clone(el), node = () => { const t = document.createElement('div'); t.innerHTML = bookTokens(page(), elHTML(el, 'edit')); const n = t.firstElementChild; d.replaceWith(n); d = n; return n; };
-  let strict = true; const fits = sz => { scaleTextBy(el, base, sz / base.size); el.fitMax = max; node(); if (strict) [d, ...d.querySelectorAll('*')].forEach(x => { x.style.overflowWrap = 'normal'; }); const { ch, cw } = textContentH(d); return ch <= el.h + 0.2 && cw <= el.w + 0.6; };
+  let strict = true; const fits = sz => { scaleTextBy(el, base, sz / base.size); el.fitMax = max; node(); if (strict) [d, ...d.querySelectorAll('*')].forEach(x => { x.style.overflowWrap = 'normal'; }); const { ch, cw } = textContentH(d); return ch <= el.h + 0.2 && cw <= el.w + 0.02; };  /* 폭은 여유 없이 — 0.1mm만 넘어도 화면에선 끝 글자가 다음 줄로 (11/26 「축하합니/다」) */
   const search = () => { let best = 4; if (fits(max)) best = max; else { let lo = 4, hi = max; for (let i = 0; i < 9; i++) { const mid = (lo + hi) / 2; if (fits(mid)) { best = mid; lo = mid; } else hi = mid; } } return best; };
   let best = search(); if (best < max * 0.5) { strict = false; best = Math.max(best, search()); } /* 낱말을 쪼개지 않는 크기를 먼저 찾고(가족/운/동회 방지), 너무 작아지면(띄어쓰기 없는 긴 글) 예전처럼 쪼개서 맞춤 */
   best = Math.floor(best * 2) / 2; scaleTextBy(el, base, Math.max(1, best) / base.size); el.fitMax = max; node(); fitCache.set(el.id, [el.text, el.html, el.w, el.h, el.fitMax, el.font, el.lh, el.ls, el.weight, el.pad, el.cols, el.colGap].join('|')); return d;
@@ -653,9 +653,13 @@ function renderThumbs() {
   const box = $('#thumbs'); if (!box) return;
   const tw = box.clientWidth - 12 || 200; const k = tw / (doc.w * MM);
   pgSel = new Set([...pgSel].filter(i => i < doc.pages.length)); if (cur !== pgSelCur || !pgSel.size) { pgSel = new Set([cur]); pgSelCur = cur; pgAnchor = cur; }
-  box.innerHTML = doc.pages.map((pg, i) => `<button class="thumb ${i === cur ? 'active' : ''} ${pgSel.has(i) ? 'picked' : ''}" data-i="${i}" draggable="true" title="누르면 이 쪽으로 · Ctrl/⌘·Shift로 여러 쪽 고르기 · 끌어서 순서 바꾸기 · 오른쪽 버튼: 메뉴"><div class="tbox" style="height:${doc.h * MM * k}px">${sheetHTML(pg, 'thumb')}</div><div class="tlabel"><b>${pgNo(i)}</b><span>${esc(pg.label || '')}${pg.pgLock ? '<i class="tbadge" title="쪽 잠금 (오른쪽 버튼 → 잠금 풀기)">🔒</i>' : ''}${pg.dlOff ? '<i class="tbadge" title="숨긴 쪽: 다운로드·인쇄에서 빠짐">숨김</i>' : ''}</span></div></button>`).join('');
-  box.querySelectorAll('.thumb').forEach(t => { if (doc.pages[Number(t.dataset.i)].dlOff) t.classList.add('dloff'); });
-  box.querySelectorAll('.tbox .sheet').forEach(s => { s.style.transform = `scale(${k})`; });
+  /* 11/26 성능 조: 고칠 때마다 쪽 전부를 다시 그려 200쪽이면 느린 PC에서 1초 가까이 멈추던 것 → 내용·문서 공통 설정·쪽 번호가 같은 쪽은 예전 썸네일을 그대로 씀 */
+  const dsig = JSON.stringify([doc.w, doc.h, doc.bleed, doc.calendar, doc.holidays, doc.showHolidays, doc.book, doc.rules, doc.fonts && doc.fonts.length, Object.keys(doc.assets || {}).length, doc.pages.length]);
+  const old = new Map(); [...box.children].forEach(t => { if (t._pid) old.set(t._pid, t); });
+  const lab = (pg, i) => `<b>${pgNo(i)}</b><span>${esc(pg.label || '')}${pg.pgLock ? '<i class="tbadge" title="쪽 잠금 (오른쪽 버튼 → 잠금 풀기)">🔒</i>' : ''}${pg.dlOff ? '<i class="tbadge" title="숨긴 쪽: 다운로드·인쇄에서 빠짐">숨김</i>' : ''}</span>`;
+  const out = doc.pages.map((pg, i) => { const key = dsig + '|' + i + '|' + JSON.stringify(pg); let t = old.get(pg.id); if (!t || t._key !== key) { const w = document.createElement('div'); w.innerHTML = `<button class="thumb" draggable="true" title="누르면 이 쪽으로 · Ctrl/⌘·Shift로 여러 쪽 고르기 · 끌어서 순서 바꾸기 · 오른쪽 버튼: 메뉴"><div class="tbox" style="height:${doc.h * MM * k}px">${sheetHTML(pg, 'thumb')}</div><div class="tlabel"></div></button>`; t = w.firstElementChild; t._key = key; t._pid = pg.id; const sh = t.querySelector('.tbox .sheet'); if (sh) sh.style.transform = `scale(${k})`; } old.delete(pg.id);
+    t.dataset.i = i; t.className = `thumb${i === cur ? ' active' : ''}${pgSel.has(i) ? ' picked' : ''}${pg.dlOff ? ' dloff' : ''}`; const lh = lab(pg, i); if (t._lab !== lh) { t.querySelector('.tlabel').innerHTML = lh; t._lab = lh; } return t; });
+  box.replaceChildren(...out);
   rescaleThumbs();  /* 실제 칸 너비로 다시 맞춤 (테두리·안쪽 여백만큼 오른쪽이 잘리던 것) */
   const info = $('#pgSelInfo'); if (info) info.textContent = pgSel.size > 1 ? `${pgSel.size}쪽 고름 — Ctrl+C 복사 · Ctrl+V 붙여넣기 · Delete 삭제` : '';
 }
@@ -3516,6 +3520,9 @@ function brandize(pages, W, H, t) {
 /* ---- 템플릿 패널 이동 기록: 들어갈 때마다 남기고 '‹ 뒤로'·브라우저 뒤로로 한 단계씩 돌아감 ---- */
 let tplHist = [];
 const TPLF0 = () => ({ format: '', season: '', age: '', occasion: '', biz: '' });
+/* 11/26 자료실 조: 템플릿 검색 — 흔한 말 동의어 · 크기 말(정사각·세로 4:5·스토리·가로) */
+const TPL_SYN = { 새해: ['신정', '설날', '연하'], 신년: ['신정', '설날'], 한가위: ['추석'], 표창장: ['상장'], 표창: ['상장'], 위촉장: ['상장', '임명'], 임명장: ['상장'], 수료증: ['상장', '수료'], 승단: ['승급', '심사', '승품'], 승품: ['승급', '심사'], 단증: ['승급', '심사'], 벨트: ['띠'], 띠: ['벨트'], 도복: ['태권도'], 겨루기: ['대회', '시합'], 시합: ['대회'], 줄넘기: ['향상왕', '체력'], 개강: ['모집', '입관', '개학'], 입관: ['모집'], 상담: ['체험', '모집', '문의'], 개관: ['오픈', '모집', '개업'], 방과후: ['모집', '방학'], 셔틀: ['차량', '운행', '버스'], 차량: ['운행', '버스'], 출석부: ['출석'], 접수: ['모집', '신청'], 마감: ['모집'], 우승: ['대회', '축하', '수상'], 트로피: ['대회', '상장', '수상'], 후원: ['감사'], 봉사: ['감사', '행사'], 응원: ['대회', '축하'], 휴원: ['휴관'], 임시휴관: ['휴관'], 어버이날: ['가정의달', '어버이', '감사'], 스승의날: ['스승', '감사'], 크리스마스: ['성탄'], 성탄절: ['성탄'], 할로윈: ['핼러윈'], 운동회: ['가족', '행사', '체육'], 공지: ['안내'], 안내: ['공지'] };
+function tplShapeWords(t) { const w = Number(t.w) || 0, h = Number(t.h) || 0; if (!w || !h) return ''; const r = w / h; return Math.abs(r - 1) < 0.03 ? '정사각 1:1 1080' : Math.abs(r - 0.8) < 0.03 ? '세로 4:5 피드' : Math.abs(r - 0.5625) < 0.03 ? '스토리 세로 9:16 릴스 숏츠' : Math.abs(r - 1.7778) < 0.03 ? '가로 16:9 와이드' : r < 1 ? '세로' : '가로'; }
 function tplFiltered() { return tplCat !== 'all' || !!tplQ.trim() || Object.values(tplF).some(Boolean); }
 function tplPush() { tplHist.push({ c: tplCat, f: Object.assign({}, tplF), q: tplQ, sc: ($('#sidebody') || {}).scrollTop || 0 }); if (tplHist.length > 40) tplHist.shift(); try { history.pushState({ ncPanel: tplHist.length }, ''); } catch (e) {} }
 function tplGo(mut) { tplPush(); mut(); renderSide(); const b = $('#sidebody'); if (b) b.scrollTop = 0; }
@@ -3541,7 +3548,7 @@ function tplItems() {
   themeItems.concat(calItems).forEach(t => { t.tags = { format: '달력', season: '사계절', age: '전체', occasion: '안내', biz: '태권도장' }; t.kw = t.name + ' 달력 캘린더 ' + (t.desc || ''); });
   const q = (tplQ || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
   if (tplCat === 'holiday') { const order = NC.tpl.nextHolidays ? NC.tpl.nextHolidays() : []; const rank = t => { const i = order.indexOf(t.holiday); return i < 0 ? 99 : i; }; items.sort((a, b) => (a.holiday ? 0 : 1) - (b.holiday ? 0 : 1) || rank(a) - rank(b)); }
-  return items.filter(t => (tplCat === 'all' || (tplCat === 'holiday' ? !!t.holiday : t.cat === tplCat)) && (tplCat !== 'pres' || !tplMood || t.mood === tplMood) && Object.keys(tplF).every(k => !tplF[k] || (t.tags && t.tags[k] === tplF[k])) && (!q.length || q.every(w => koHas(t.name + ' ' + (t.kw || ''), w))));
+  return items.filter(t => (tplCat === 'all' || (tplCat === 'holiday' ? !!t.holiday : t.cat === tplCat)) && (tplCat !== 'pres' || !tplMood || t.mood === tplMood) && Object.keys(tplF).every(k => !tplF[k] || (t.tags && t.tags[k] === tplF[k])) && (!q.length || q.every(w => { const hay = t.name + ' ' + (t.kw || '') + ' ' + tplShapeWords(t); return koHas(hay, w) || (TPL_SYN[w] || []).some(x => koHas(hay, x)); })));
 }
 function tplSheet(t, pages) { const tmp = Object.assign({}, doc, { w: t.w, h: t.h, bleed: 0, cropMarks: false }); const saved = doc; doc = tmp; try { return sheetHTML(pages[0], 'thumb'); } finally { doc = saved; } }
 function recentTpls() { try { return JSON.parse(localStorage.getItem('naracal-recent-tpls') || '[]'); } catch (e) { return []; } }
@@ -5832,7 +5839,8 @@ async function fontCSSFor(node) {
   const keepW = new Map(); used.forEach(fam => { const have = [...new Set(blocks.filter(b => famOf(b) === fam).map(b => wOf(b).join('-')))].map(k => k.split('-').map(Number)); if (!have.length) return; const need = new Set(); (wts.get(fam) || [400]).forEach(w => { const r = have.find(([a1, b1]) => w >= a1 && w <= b1); if (r) { need.add(r.join('-')); return; } let best = have[0], bd = Infinity; have.forEach(h => { const d = Math.abs(h[0] - w) - (h[0] > w && w >= 500 ? 0.5 : 0); if (d < bd) { bd = d; best = h; } }); need.add(best.join('-')); }); keepW.set(fam, need); });
   for (const block of blocks) {
     const fam = famOf(block); if (!fam || !used.has(fam)) continue; const kw = keepW.get(fam); if (kw && !kw.has(wOf(block).join('-'))) continue;
-    let css = block; for (const m of block.matchAll(/url\(['"]?([^'")]+)['"]?\)/g)) { const u = new URL(m[1], new URL('fonts/fonts.css', location.href)).href; try { css = css.replace(m[0], `url(${await toData(u)})`); } catch (e) {} }
+    let css = /\.woff2/.test(block) ? block.replace(/,\s*url\([^)]*\.ttf['"]?\)\s*format\(['"]truetype['"]\)/g, '') : block;  /* 11/26: WOFF2가 있으면 그것만 넣음 (TTF까지 두 번 받지 않게, 파일도 작게) */
+    for (const m of css.matchAll(/url\(['"]?([^'")]+)['"]?\)/g)) { const u = new URL(m[1], new URL('fonts/fonts.css', location.href)).href; try { css = css.replace(m[0], `url(${await toData(u)})`); } catch (e) {} }
     out.push(css);
   }
   doc.fonts.forEach(f => { if (used.has(f.family)) out.push(`@font-face{font-family:'${f.family}';src:url(${f.data})}`); });
@@ -8699,7 +8707,7 @@ if (NC.aichat) NC.aichat.init({ openAIPanel, chatMode,
     if (!F[k]) return false; const r = F[k](); return r !== false;
   },
 });
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { setStatus, sanitizeDoc, tplItems, openSaveDialog, openAcctGuide, connectDriveChecked, gdMigrate, cleanConflictCopies, afterFolderReady, saveFileNow: () => saveFileNow(), attFrontParts, attBackParts, attState, resizedDoc, bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { setStatus, sanitizeDoc, tplItems, fitTextOffscreen, textContentH, autoFitText, elHTML: (e, m) => elHTML(e, m), openSaveDialog, openAcctGuide, connectDriveChecked, gdMigrate, cleanConflictCopies, afterFolderReady, saveFileNow: () => saveFileNow(), attFrontParts, attBackParts, attState, resizedDoc, bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
 
 /* ---- 도구 막대 한 줄 (팀장님 11/24 「도구 막대 한 줄도 정리」) ----
    넘치면 덜 쓰는 묶음(정렬 → 순서 → 펜·그룹)부터 「⋯」 펼침 창으로 옮김(단추를 그대로 옮겨 동작 같음), 자리가 나면 제자리로. 세로 도구 막대는 그대로 */
@@ -8851,7 +8859,9 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
   try { if (store.isDrive()) NC.gdrive.preload(); } catch (e) {}
   updateSaveBadge(); updateToolbarState();
   NC.live.attach({ canSave: () => !!(store.state.handle && !store.state.needPerm), doc: () => doc, state: () => ({ cur, sel, drag: !!drag, dragKind: drag && drag.kind, editing: !!editing || !!$('#cellEd') }), afterRemote: liveAfterRemote, saveSoon: () => { if (store.state.dirty) markDirty(); }, openSettings: openSaveDialog, toast });
-  document.fonts && document.fonts.ready.then(() => renderAll());
+  document.fonts && document.fonts.ready.then(() => { fitCache.clear(); renderAll(); });
+  /* 11/26 자료실 조: 글꼴이 늦게 도착하면 대체 글꼴 폭으로 맞춘 글이 넘쳤음(「축하합니/다」) — 글꼴이 새로 도착할 때마다 다시 맞춤 */
+  if (document.fonts && document.fonts.addEventListener) { let ft = 0; document.fonts.addEventListener('loadingdone', () => { clearTimeout(ft); ft = setTimeout(() => { if (editing || drag) return; fitCache.clear(); try { renderCanvas(); renderOverlay(); } catch (e) {} }, 250); }); }
   /* [11/2] 소식지 프로그램의 [🎨 디자인 공방으로 보내기] — 주소에 nlimport=연-월 이 있으면 그 호를 가져온다(같은 호 디자인이 열려 있으면 내용만 반영) */
   const nlm = /[?&]nlimport=(\d{4}-\d{2})/.exec(location.search);
   if (nlm) { try { history.replaceState(null, '', location.pathname + (location.search.replace(/[?&]nlimport=[^&]*/, '').replace(/^&/, '?') || '')); } catch (e) {} setTimeout(() => newsFromProgram(nlm[1]), 700); }

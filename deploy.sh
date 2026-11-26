@@ -7,6 +7,7 @@ echo "window.NARACAL_VER = \"$VER\";" > version.js
 echo "{\"ver\":\"$VER\"}" > version.json
 sed -i '' -E "s/(app\.(js|css)\?v=)[0-9a-z.]+/\1$VER/g; s/(version|effects|imgedit|elements|templates|templates2|templates3|templates4|templates5|templates6|templates7|book|import|calendar|storage|lib|ai|defaults|webfonts|fonts|news|video|media|vtemplates|astream|live|manual|attend|aichat|aistudio|gdrive)\.js\?v=[0-9a-z.]+/\1.js?v=$VER/g" index.html
 # 큰 그림 묶음(assets.js 11MB 등)은 내용이 바뀔 때만 번호를 바꿈 — 배포마다 다시 받지 않게 (11/26 성능 조)
+H=$(md5 -q fonts/fonts.css | cut -c1-10); sed -i '' -E "s/(fonts\/fonts\.css\?v=)[0-9a-z.]+/\1$H/g" index.html  # 글꼴 설정도 바뀔 때만 번호 (11/26 WOFF2)
 for A in assets assets-brand; do if [ -f "$A.js" ]; then H=$(md5 -q "$A.js" | cut -c1-10); sed -i '' -E "s/($A)\.js\?v=[0-9a-z.]+/\1.js?v=$H/g" index.html; fi; done
 # 새 파일 검사 (11/26 보안 조): 허용한 종류가 아닌 새 파일(명단 엑셀·한글·문서·사진 등)이 있으면 멈춤 — 실수로 공개되지 않게
 BAD=$(git ls-files --others --exclude-standard -z | tr '\0' '\n' | grep -v -E '^(assets/.+\.(png|jpe?g|webp|svg|gif|pdf|md)|fonts/.+\.(woff2?|ttf|otf|css|js|md)|[^/]+\.(js|css|html|md|sh)|version\.json|manifest\.json)$' || true)
