@@ -275,7 +275,8 @@ NC.elems = (function () {
     if (it.cat === 'chart') { it.cat = 'table'; it.g = 'chart'; }
     if (/^ms-/.test(it.id)) { it.name = MASCOT[it.id.slice(3)] || it.name; it.kw += ' 라차 마스코트 ' + it.name; }
     if (it.id === 'il-logo' || it.id === 'il-swoosh' || it.id === 'il-illu-backcover-logo' || it.id === 'il-backcover-logo') { it.cat = 'naracha'; it.sub = 'brand'; }
-    if (/^nlogo-(naracha-square|demo-team-)/.test(it.id)) it.sub = 'brand';  /* 11/26 사각·시범단 로고도 「로고 · 심볼」 칸에 (「그 밖」 아래에 있어 못 찾던 것) */
+    if (/^nlogo-naracha-square/.test(it.id)) it.sub = 'brand';  /* 11/26 사각 로고는 「로고 · 심볼」 칸에 (「그 밖」 아래에 있어 못 찾던 것) */
+    if (/^nlogo-demo-team-/.test(it.id)) it.sub = 'emblem';  /* 시범단 패치(사각·육각 흰 바탕·배경 없음)는 「엠블럼·패치」 칸에 (팀장님 11/26) */
     if (it.id === 'il-target') { it.cat = 'icon'; it.g = '태권도·운동'; }
     if (it.id === 'il-cover-group') it.name = '수련생 단체 · 뒷모습';
     if (/^kg-/.test(it.id)) it.name = it.name.replace('인성 · ', '') + ' · 캐릭터';

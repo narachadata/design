@@ -122,6 +122,27 @@ NC.live = (function () {
     }
     return touched;
   }
+  /* ---------- 파일로 온 다른 PC 판과 합치기 (11/26 팀장님 「같은 파일을 여러 곳에서 열면 충돌 사본이 자꾸 — 같이 작업하는 것으로」) ----------
+     base(두 판이 함께 가졌던 판) → mine(이 PC) 변경을 theirs(다른 PC) 위에 요소·속성 단위로 얹음. 같은 속성을 둘 다 고쳤으면 이 PC 것. 그림·글꼴은 합집합 */
+  function mergeDocs(baseD, mineD, theirsD) {
+    const out = JSON.parse(J(Object.assign({}, theirsD, { assets: undefined })));
+    out.assets = Object.assign({}, theirsD.assets || {}, mineD.assets || {});
+    const ops = diff(scan(baseD), scan(mineD), mineD);
+    const was = applying; applying = true; try { apply(ops, out); } finally { applying = was; }
+    if (J(baseD.media) !== J(mineD.media) && mineD.media !== undefined) out.media = JSON.parse(J(mineD.media));
+    if (Array.isArray(theirsD.fonts) || Array.isArray(mineD.fonts)) { const seen = new Set(), f = []; [].concat(theirsD.fonts || [], mineD.fonts || []).forEach(x => { const k = J(x); if (!seen.has(k)) { seen.add(k); f.push(x); } }); out.fonts = f; }
+    return out;
+  }
+  /* 지금 열린 문서 d를 target과 같게 — 통째로 바꾸지 않고 달라진 요소만(보던 쪽·선택·되돌리기가 그대로) */
+  function patchTo(d, target) {
+    const ops = diff(scan(d), scan(target), target);
+    const was = applying; applying = true; try { apply(ops, d); } finally { applying = was; }
+    if (target.assets) { d.assets = d.assets || {}; for (const k in target.assets) if (!(k in d.assets)) d.assets[k] = target.assets[k]; }
+    if (J(d.media) !== J(target.media) && target.media !== undefined) d.media = JSON.parse(J(target.media));
+    if (Array.isArray(target.fonts)) d.fonts = target.fonts.slice();
+    if (room && room.docId === d.docId) base = scan(d);  /* 파일로 받은 것은 실시간으로 다시 보내지 않음 */
+    return ops.length;
+  }
   // 편집·끌기 중이 아니면 바로, 아니면 잠시 뒤에
   function busy() { if (!api) return true; const s = api.state(); if (s.drag || s.editing) return true; const a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.closest('#inspector') && Date.now() - queuedAt < 3000) return true; return false; }
   function receiveOps(ops) { if (!ops || !ops.length) return; if (!queue.length) queuedAt = Date.now(); queue.push(...ops); flush(); }
@@ -427,5 +448,5 @@ NC.live = (function () {
   }
 
   function attach(a) { api = a; ensureUI(); if (cfg().fb) loadFb(); sync(); }
-  return { attach, changed, step, peers, deferSave, fromFile, paint, settingsHTML, bindSettings, cfg, setCfg, rulesText, parseFbConfig, login, logout, onChange: f => listeners.add(f), get rn() { return rn; }, active: () => !!room, me, debug: () => ({ room: room && { docId: room.docId, peers: Array.from(room.peers.values()), fb: !!room.fb }, fb: { ready: fb.ready, user: fb.user && fb.user.email, connected: fb.connected, err: fb.err }, pending: Array.from(pending), rn, queue: queue.length }) };
+  return { attach, changed, step, peers, deferSave, fromFile, merge: mergeDocs, patchTo, paint, settingsHTML, bindSettings, cfg, setCfg, rulesText, parseFbConfig, login, logout, onChange: f => listeners.add(f), get rn() { return rn; }, active: () => !!room, me, debug: () => ({ room: room && { docId: room.docId, peers: Array.from(room.peers.values()), fb: !!room.fb }, fb: { ready: fb.ready, user: fb.user && fb.user.email, connected: fb.connected, err: fb.err }, pending: Array.from(pending), rn, queue: queue.length }) };
 })();

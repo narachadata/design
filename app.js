@@ -1,5 +1,7 @@
 (function () {
 'use strict';
+/* 화면 글자 또렷하게: Windows이거나 배율 2 미만 화면이면 운영체제 글꼴 (app.css html.sysui) — 창을 다른 모니터로 옮기면 다시 판단 */
+(function sysUI() { const set = () => { const win = /Windows/i.test(navigator.userAgent || ''); document.documentElement.classList.toggle('sysui', win || (window.devicePixelRatio || 1) < 1.5); }; set(); try { matchMedia('(min-resolution: 1.5dppx)').addEventListener('change', set); } catch (e) {} })();
 const $ = s => document.querySelector(s), $$ = s => Array.from(document.querySelectorAll(s));
 const MM = 96 / 25.4;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -121,8 +123,28 @@ function confirmBtns(msg) {
   return new Promise(res => { const d = document.createElement('dialog'); d.className = 'nw-dlg askdlg'; d.innerHTML = `<div class="dbody" style="max-width:520px"><p style="white-space:pre-line;margin:0 0 14px">${esc(body)}</p><div style="display:flex;flex-direction:column;gap:8px"><button class="btn primary full" data-a="1" style="flex-direction:column;align-items:flex-start;text-align:left;padding:10px 14px"><b>${esc(y1)}</b>${y2 ? `<small style="opacity:.85;font-weight:400">${esc(y2)}</small>` : ''}</button><button class="btn full" data-a="0" style="flex-direction:column;align-items:flex-start;text-align:left;padding:10px 14px"><b>${esc(n1)}</b>${n2 ? `<small style="font-weight:400;color:var(--ui-muted)">${esc(n2)}</small>` : ''}</button></div></div>`;
     document.body.appendChild(d); d.addEventListener('cancel', e => e.preventDefault()); d.onclick = e => { const b = e.target.closest('[data-a]'); if (!b) return; d.close(); d.remove(); res(b.dataset.a === '1'); }; d.showModal(); d.querySelector('[data-a="1"]').focus(); });
 }
+/* 11/26 팀장님 「같은 파일을 여러 곳에서 열면 충돌 사본이 자꾸 — 따로 저장한 게 아니면 같이 작업」: 두 판이 함께 가졌던 판(store.baseFor)을 찾으면
+   묻지 않고 요소·속성 단위로 합침(같은 속성을 둘 다 고쳤으면 이 PC 것) → 합친 판을 다른 PC 판의 다음 판으로 저장. 못 찾을 때만 예전처럼 묻고 사본 */
+let mergeToastAt = 0;
+function refreshAfterFile() { cur = clamp(cur, 0, doc.pages.length - 1); sel = sel.filter(id => find(id)); if (cellSel && !find(cellSel.id)) cellSel = null; renderAll(); if (hptr >= 0) { hist[hptr] = snapshot(); histMeta[hptr].rn = NC.live.rn; } updateSaveBadge(); }
+async function mergeTheirs(theirs, file) {
+  const st = store.state; if (!theirs || !theirs.pages || !sameDoc(theirs, doc)) return false;
+  const base = await store.baseFor(theirs); if (!base) return false;
+  if (editing || drag || $('#cellEd')) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 2000); return true; }  /* 글 고치는 중·끄는 중이면 끝난 뒤에 */
+  flushNudge();
+  const myLin = st.lineage.slice(), merged = NC.live.merge(base, doc, theirs);
+  NC.live.patchTo(doc, merged); sanitizeDoc(doc);
+  st.lastMod = file && file.lastModified || st.lastMod; store.adopt(theirs); st.lineage = [...new Set(st.lineage.concat(myLin))].slice(0, 60);
+  Object.keys(doc.assets || {}).forEach(k => liveAssetKeys.add(k));
+  refreshAfterFile(); markDirty();
+  const who = theirs.savedBy && theirs.savedBy !== store.pcName() ? theirs.savedBy : '다른 PC';
+  if (Date.now() - mergeToastAt > 60000) { mergeToastAt = Date.now(); toast(`${who}에서 고친 것과 합쳤습니다 — 같이 작업 중 (충돌 사본 없음 · 같은 곳을 둘 다 고쳤으면 이 PC 것)`); }
+  setStatus(`${who}와 합침 ${tnow()}`);
+  return true;
+}
 async function resolveConflict(theirs, file) {
   const st = store.state; if (st.conflict) return;
+  try { if (await mergeTheirs(theirs, file)) return; } catch (e) { console.warn('합치기 실패 — 예전처럼 묻기', e); }
   st.conflict = true; clearTimeout(fileTimer);
   try {
     const who = theirs.savedBy || '다른 PC', at = theirs.savedAt ? new Date(theirs.savedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -250,6 +272,7 @@ async function checkExternalChange() {
   // 여기 저장 안 한 변경이 있거나, 상대가 내 마지막 저장을 못 보고 저장했으면 충돌
   if (st.dirty || !store.descends(j)) { await resolveConflict(j, ch.file); return; }
   st.lastMod = ch.file.lastModified; store.adopt(j);
+  if (sameDoc(j, doc)) { NC.live.patchTo(doc, j); sanitizeDoc(doc); Object.keys(doc.assets || {}).forEach(k => liveAssetKeys.add(k)); st.dirty = false; refreshAfterFile(); setStatus(`${j.savedBy || '다른 PC'}에서 고친 것을 받음 ${tnow()}`); return; }  /* 같은 문서: 통째로 다시 열지 않고 달라진 요소만(보던 쪽·선택 그대로) */
   await loadDoc(j, `${j.savedBy || '다른 PC'}에서 바뀐 내용을 불러왔습니다`, true);
 }
 // 동기화 폴더의 설정값(API 키·모델·최근 사용 목록): 다른 PC가 바꾼 건 가져오고, 여기서 바뀐 건 올림
@@ -8861,7 +8884,12 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
   let loaded = false;
   try {
     const p = await store.reconnect();
-    if (p === 'granted') { const base = await store.idbGet('docBase').catch(() => null), meta = await store.idbGet('docMeta').catch(() => null); const j = await store.readFile(); const dr = await store.idbGet('doc').catch(() => null); const moved = !!dr && sameDoc(dr, j) && fileMovedOn(j, base), newer = !!dr && sameDoc(dr, j) && browserNewer(dr, j, meta); if (newer && await confirmBtns(`이 브라우저에 파일보다 나중에 고친 작업이 있습니다 (파일에 저장되지 못한 작업).\n\n확인: 브라우저 작업으로 열어 파일에 저장 (권장)\n취소: 파일 내용으로 열기 (브라우저 작업은 충돌 사본으로 보관)${moved ? movedNote(j) : ''}`)) { if (moved) await keepFileCopy(j); await loadDoc(dr); loaded = true; markDirty(); setStatus(`연결된 파일: ${store.state.fileName} · 브라우저 작업을 이어서 저장합니다`); } else { if (newer) { try { await store.writeCopy(dr, '브라우저 작업'); } catch (e) {} } await loadDoc(j); loaded = true; setStatus(`연결된 파일: ${store.state.fileName}`); setTimeout(() => warnIfRecentOther(j), 1500); } }
+    if (p === 'granted') { const base = await store.idbGet('docBase').catch(() => null), meta = await store.idbGet('docMeta').catch(() => null); const j = await store.readFile(); const dr = await store.idbGet('doc').catch(() => null); const moved = !!dr && sameDoc(dr, j) && fileMovedOn(j, base), newer = !!dr && sameDoc(dr, j) && browserNewer(dr, j, meta);
+      /* 11/26 같이 작업: 그사이 다른 PC가 저장했어도 함께 가졌던 판을 알면 묻지 않고 합쳐 열고, 다른 PC가 안 바꿨으면 브라우저 작업으로 바로 */
+      const mbase = newer && moved && base && base.saveId ? await store.verById(base.saveId) : null;
+      if (newer && mbase) { const merged = NC.live.merge(mbase, dr, j); await loadDoc(merged); loaded = true; markDirty(); setStatus(`연결된 파일: ${store.state.fileName} · ${j.savedBy || '다른 PC'}가 고친 것과 이 브라우저 작업을 합쳤습니다`); }
+      else if (newer && !moved) { await loadDoc(dr); loaded = true; markDirty(); setStatus(`연결된 파일: ${store.state.fileName} · 브라우저 작업을 이어서 저장합니다`); }
+      else if (newer && await confirmBtns(`이 브라우저에 파일보다 나중에 고친 작업이 있습니다 (파일에 저장되지 못한 작업).\n\n확인: 브라우저 작업으로 열어 파일에 저장 (권장)\n취소: 파일 내용으로 열기 (브라우저 작업은 충돌 사본으로 보관)${moved ? movedNote(j) : ''}`)) { if (moved) await keepFileCopy(j); await loadDoc(dr); loaded = true; markDirty(); setStatus(`연결된 파일: ${store.state.fileName} · 브라우저 작업을 이어서 저장합니다`); } else { if (newer) { try { await store.writeCopy(dr, '브라우저 작업'); } catch (e) {} } await loadDoc(j); loaded = true; setStatus(`연결된 파일: ${store.state.fileName}`); setTimeout(() => warnIfRecentOther(j), 1500); } }
     else if (p === 'prompt') { const saved = await store.idbGet('doc'); if (saved) { await loadDoc(saved); loaded = true; } const st = $('#status'); st.innerHTML = `<button class="btn sm" id="reconn">연결된 파일 "${esc(store.state.fileName)}" 다시 열기</button>`; store.state.needPerm = true;
       $('#reconn').onclick = async () => {
         if (!(await store.requestPermission())) return; store.state.needPerm = false;

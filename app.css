@@ -9,6 +9,9 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%}
+/* 11/26 팀장님 「설명 글씨가 다른 프로그램보다 흐릿」: Pretendard 가변 글꼴은 작은 글자 힌팅이 없어 Windows·일반 모니터(배율 2 미만)에서 번져 보임
+   → 그런 화면에서는 운영체제 글꼴(Windows 맑은 고딕 · 맥 애플 SD 산돌고딕 Neo)로 (html.sysui — app.js 맨 앞). 디자인 글꼴은 그대로 */
+html.sysui{--font-ui:"Malgun Gothic","맑은 고딕",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI","Noto Sans KR",sans-serif}
 body{margin:0;background:var(--ui-bg);color:var(--ui-fg);font-family:var(--font-ui);font-size:14px;line-height:1.45;overflow:hidden;-webkit-font-smoothing:auto} /* 2026-11-18: antialiased는 맥에서 글자를 가늘고 흐릿하게 만들어(팀장님 "글자가 모두 흐릿") 기본값으로 */
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--ui-accent);outline-offset:1px}
@@ -1592,7 +1595,7 @@ body.tl-focus .aichat{display:none}
 .nb-kinds,.nb-trims{display:grid;grid-template-columns:1fr 1fr;gap:6px}.nb-kind,.nb-trim{text-align:left;border:1.5px solid var(--ui-line);border-radius:9px;background:var(--ui-bg);padding:7px 9px;cursor:pointer;display:flex;flex-direction:column;gap:2px}.nb-kind b,.nb-trim b{font-size:12.5px}.nb-kind small,.nb-trim small{font-size:10.5px;color:var(--ui-fg2)}.nb-kind.on,.nb-trim.on{border-color:var(--ui-accent);background:var(--ui-accent-soft)}
 .nb-prevwrap{background:var(--ui-stage);border-radius:12px;padding:14px;display:flex;flex-direction:column;align-items:center}.nb-spread{display:flex;box-shadow:0 8px 24px rgba(16,24,40,.2)}.nb-pg{position:relative;background:#fff;box-shadow:inset 0 0 0 1px rgba(16,24,40,.15)}.nb-pg:first-child{box-shadow:inset -6px 0 8px -6px rgba(0,0,0,.25),inset 0 0 0 1px rgba(16,24,40,.15)}.nb-pg:last-child{box-shadow:inset 6px 0 8px -6px rgba(0,0,0,.25),inset 0 0 0 1px rgba(16,24,40,.15)}.nb-tb{position:absolute;background:rgba(47,111,228,.12);outline:1px dashed rgba(47,111,228,.6)}.nb-no{position:absolute;font-size:8px;color:#888}
 .st-ed{display:flex;flex-direction:column;height:78vh}.st-bar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:8px}.st-sep{width:1px;height:20px;background:var(--ui-line);margin:0 4px}
-.st-body{flex:1;display:grid;grid-template-columns:1fr 230px;gap:12px;min-height:0}.st-body textarea{width:100%;height:100%;resize:none;font:15px/1.8 'Pretendard','Noto Sans KR',sans-serif;padding:14px 16px;border:1px solid var(--ui-line);border-radius:10px;background:var(--ui-bg);color:var(--ui-fg)}
+.st-body{flex:1;display:grid;grid-template-columns:1fr 230px;gap:12px;min-height:0}.st-body textarea{width:100%;height:100%;resize:none;font:15px/1.8 var(--font-ui);padding:14px 16px;border:1px solid var(--ui-line);border-radius:10px;background:var(--ui-bg);color:var(--ui-fg)}
 .st-side{overflow:auto;display:flex;flex-direction:column;gap:6px;font-size:12.5px}.st-ol{display:block;width:100%;text-align:left;border:0;background:none;padding:4px 6px;border-radius:6px;cursor:pointer;color:var(--ui-fg)}.st-ol:hover{background:var(--ui-field)}.st-ol.h1{font-weight:700}.st-ol.h2{padding-left:16px;color:var(--ui-fg2)}
 .st-help{margin-top:8px;padding:8px;border-radius:8px;background:var(--ui-field);line-height:1.75;font-size:11.5px}.st-help code{background:var(--ui-bg);padding:0 4px;border-radius:4px}
 @media (max-width:900px){.nb{grid-template-columns:1fr}.st-body{grid-template-columns:1fr}}
@@ -1620,7 +1623,7 @@ dialog.st-dlg{max-width:1280px;width:96vw}
 .st-ed2{display:flex;flex-direction:column;height:80vh;gap:8px}
 .st-ed2 .st-bar .btn.on{background:var(--ui-accent);color:#fff;border-color:var(--ui-accent)}
 .st-main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;min-height:0}
-.st-main textarea{width:100%;height:100%;resize:none;font:15px/1.8 'Pretendard','Noto Sans KR',sans-serif;padding:14px 16px;border:1px solid var(--ui-line);border-radius:10px;background:var(--ui-bg);color:var(--ui-fg)}
+.st-main textarea{width:100%;height:100%;resize:none;font:15px/1.8 var(--font-ui);padding:14px 16px;border:1px solid var(--ui-line);border-radius:10px;background:var(--ui-bg);color:var(--ui-fg)}
 .be{overflow:auto;border:1px solid var(--ui-line);border-radius:10px;background:var(--ui-bg);padding:14px 18px 60px}
 .be-b{display:grid;grid-template-columns:92px 1fr;gap:10px;align-items:start;padding:3px 0;border-radius:6px}
 .be-b:focus-within{background:var(--ui-accent-soft)}

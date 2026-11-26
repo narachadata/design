@@ -54,7 +54,12 @@ NC.store = (function () {
   const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   // 저장본 계보: saveId(이번 저장) + lineage(최근 저장 id들). 다른 PC가 내 마지막 저장을 이어받았는지 판단에 씀
   Object.assign(state, { lastSaveId: '', lineage: [], seq: 0, conflict: false, retries: 0 });
-  function adopt(j) { state.lastSnap = 0; state.lastSaveId = (j && j.saveId) || ''; state.lineage = (j && j.lineage) || (state.lastSaveId ? [state.lastSaveId] : []); keepBase(j && j.docId); }
+  function adopt(j) { state.lastSnap = 0; state.lastSaveId = (j && j.saveId) || ''; state.lineage = (j && j.lineage) || (state.lastSaveId ? [state.lastSaveId] : []); keepBase(j && j.docId); remember(j); }
+  /* 최근 판 기억(그림 빼고 8개, 이 브라우저): 다른 PC 판과 갈라졌을 때 「둘 다 가졌던 판」을 찾아 합치는 데 씀 (11/26 팀장님 「충돌 사본 대신 같이 작업」) */
+  let VERS = null; const versLoad = () => VERS ? Promise.resolve(VERS) : idbGet('docVers').then(v => (VERS = Array.isArray(VERS) ? VERS : Array.isArray(v) ? v : [])).catch(() => (VERS = VERS || []));
+  function remember(j) { if (!j || !j.saveId) return; versLoad().then(L => { if (L.some(v => v.id === j.saveId)) return; let t; try { t = JSON.stringify(Object.assign({}, j, { assets: undefined, _gdA: undefined })); } catch (e) { return; } L.unshift({ id: j.saveId, docId: j.docId || '', t }); L.splice(8); idbSet('docVers', L).catch(() => {}); }); }
+  async function verById(id) { if (!id) return null; const L = await versLoad(); const v = L.find(x => x.id === id); if (!v) return null; try { return JSON.parse(v.t); } catch (e) { return null; } }
+  async function baseFor(theirs) { const L = await versLoad(); if (!theirs) return null; const T = new Set([theirs.saveId].concat(theirs.lineage || []).filter(Boolean)); for (const id of [state.lastSaveId].concat(state.lineage || [])) { if (!id || !T.has(id)) continue; const v = L.find(x => x.id === id && (!theirs.docId || !x.docId || x.docId === theirs.docId)); if (v) { try { return JSON.parse(v.t); } catch (e) { return null; } } } return null; }
   // 이 브라우저 작업의 바탕 판(마지막으로 이어받거나 저장한 saveId) — 다시 열 때 그사이 다른 PC가 저장했는지 알아보는 데 씀
   function keepBase(docId) { if (state.lastSaveId) idbSet('docBase', { saveId: state.lastSaveId, docId: docId || '', t: Date.now() }).catch(() => {}); }
   // 파일 내용 j가 내 마지막 저장본을 이어받은 것인지 (아니면 서로 갈라진 것)
@@ -81,7 +86,7 @@ NC.store = (function () {
           if (++state.retries === 4) { try { await writeCopy(doc, pcName() + ' 저장 대기'); } catch (e) {} }
           return { retry: true, held: state.retries >= 4 }; }
         else state.retries = 0;
-        if (j && (j.saveId || '') !== state.lastSaveId) { if (window.NC && NC.live && NC.live.peers() && j.docId && j.docId === doc.docId) { if (!descends(j) && lostEls(j, doc)) { try { await writeCopy(j, (j.savedBy || '다른 PC') + ' 저장본'); } catch (e) {} } adopt(j); } else return { conflict: true, file: f0, data: j }; } // 실시간으로 같이 고치는 중이면 상대 저장본을 이어받아 그 다음 판으로 저장
+        if (j && (j.saveId || '') !== state.lastSaveId) { if (window.NC && NC.live && NC.live.peers() && j.docId && j.docId === doc.docId) { if (!descends(j) && lostEls(j, doc)) { if (await baseFor(j)) return { conflict: true, file: f0, data: j }; try { await writeCopy(j, (j.savedBy || '다른 PC') + ' 저장본'); } catch (e) {} } adopt(j); } else return { conflict: true, file: f0, data: j }; } // 실시간으로 같이 고치는 중이면 상대 저장본을 이어받아 그 다음 판으로 저장
       }
       const seq = state.seq, saveId = rid(), lineage = [saveId].concat(state.lineage).slice(0, 60);
       if (!doc.docId) doc.docId = rid(); // 버전 기록을 묶는 문서 번호 (이름을 바꾸거나 옮겨도 그대로)
@@ -90,7 +95,7 @@ NC.store = (function () {
       await w.write(text);
       await w.close();
       if (Date.now() - (state.lastSnap || 0) > SNAP_EVERY) { state.lastSnap = Date.now(); snapshot(doc.docId, text).catch(() => {}); }
-      state.lastSaveId = saveId; state.lineage = lineage; state.retries = 0; keepBase(doc.docId);
+      state.lastSaveId = saveId; state.lineage = lineage; state.retries = 0; keepBase(doc.docId); remember(Object.assign({}, doc, { saveId, lineage, assets: undefined }));
       const f = await state.handle.getFile(); state.lastMod = f.lastModified; if (state.seq === seq) state.dirty = false;
       return true;
     } finally { state.saving = false; }
@@ -353,6 +358,6 @@ NC.store = (function () {
   async function emptyEntry(name) { const t = await state.dir.getDirectoryHandle(TRASH); await t.removeEntry(name, { recursive: true }); }
 
   return { ensureDir, writeBlobAt, listFiles, snapshot, listSnapshots, readSnapshot, state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, trashFrom, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
-    writeCopy, pcName, setPcName, adopt, descends, pcId: () => pc().id,
+    writeCopy, pcName, setPcName, adopt, descends, baseFor, verById, remember, pcId: () => pc().id,
     connectFolder, connectDrive, isDrive, useFolder, folderInfo, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, findDocById, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
 })();

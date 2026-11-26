@@ -266,6 +266,7 @@ NC.gdrive = (function () {
         }
         else if (n.rlm && lmOf(f) !== n.rlm && await sameLine(n, f, c.data)) { /* 때만 다르고 내용은 이어진 판(같은 판·이 PC가 이어 고친 판) → 사본 없이 그대로 올림 */ }
         else if (n.rlm && lmOf(f) !== n.rlm && n.newer) { delete n.newer; const c3 = await cGet(n.k); if (c3 && c3.lm !== lm) return;  /* 그사이 또 저장 → 다음 올리기에서 다시 따짐 */ Object.assign(n, { lm: lmOf(f), rlm: lmOf(f), size: Number(f.size) || 0 }); cDel(n.k); return; }  /* 드라이브 것이 이 PC 것을 이어 고친 판 → 이 PC 옛 판은 올리지 않음 */
+        else if (n.rlm && lmOf(f) !== n.rlm && /\.design\.json$/i.test(n.name) && await mergeUp(n, f, c, pid)) { return; }  /* 'later'(그사이 또 저장)도 여기서 끝 — 줄에 있는 새 올리기가 다시 합침 */  /* 같이 작업: 합친 판을 올림(충돌 사본 없음) */
         else if (n.rlm && lmOf(f) !== n.rlm) {
           const nm = n.name.replace(/(\.design\.json|\.[^.]+)?$/, m => ` (충돌 사본 ${stamp()} ${String(st().pcName()).replace(/[\\/:*?"<>|]/g, '_')})${m}`);
           const cf = await upload('', { name: nm, parents: [pid], appProperties: { lm: String(lm) } }, body, typeOf(n.name)); S.nodes.set(cf.id, { k: cf.id, id: cf.id, name: nm, parent: n.parent, folder: false, size: Number(cf.size) || 0, lm: lmOf(cf), rlm: lmOf(cf), rparent: pid }); cSet(cf.id, { lm: lmOf(cf), data: c.data }).catch(() => {});
@@ -278,6 +279,7 @@ NC.gdrive = (function () {
       if (!n.id && n.pid && !n.sent) { n.sent = 1; await persist(); }  /* 한 번 보낸 뒤에만 「이미 만들어졌나」 물음 */
       let f; try { f = await upload(n.id, meta, body, typeOf(n.name)); } catch (e) { if (n.pid && e.status === 400) { delete n.pid; delete n.sent; S.ids = []; } if (!(e.status === 409 && n.pid)) throw e; const ex = await existing(n.pid); if (!ex || ex.trashed) { delete n.pid; delete n.sent; throw e; } n.id = ex.id; f = await upload(n.id, { name: n.name, appProperties: { lm: String(lm) } }, body, typeOf(n.name)); }
       delete n.pid; delete n.sent;
+      if (typeof c.data === 'string' && /\.design\.json$/i.test(n.name)) keepB(n.k, c.data);
       Object.assign(n, { id: f.id, rparent: pid, rlm: lm, upAt: now() }); if (n.k !== f.id && S.nodes.get(f.id) && S.nodes.get(f.id) !== n) S.nodes.delete(f.id);
     }
   }
@@ -312,6 +314,22 @@ NC.gdrive = (function () {
     } finally { await persist(); saveQ(); emit(); }
   }
 
+  /* 문서의 기준판(gd-b): 이 PC가 드라이브와 마지막으로 주고받은 판(그림 빼고) — 두 PC가 거의 같이 올려 갈라지면 이 판을 기준으로 합침 (11/26 팀장님 「충돌 사본 대신 같이 작업」) */
+  function stripDoc(t) { try { const j = JSON.parse(t); delete j.assets; delete j._gdA; return JSON.stringify(j); } catch (e) { return ''; } }
+  function keepB(k, t) { if (typeof t !== 'string') return; const b = stripDoc(t); if (b) st().idbSet('gd-b:' + k, b).catch(() => {}); }
+  async function mergeUp(n, f, c, pid) {  /* 성공하면 true: 합친 판을 올리고 이 PC 판도 합친 판으로 */
+    if (!window.NC || !NC.live || !NC.live.merge || typeof c.data !== 'string') return false;
+    const bt = await st().idbGet('gd-b:' + n.k).catch(() => null); if (!bt) return false;
+    let T, M, B; try { B = JSON.parse(bt); M = JSON.parse(c.data); T = JSON.parse(await unpackDoc(await (await call(`${API}/files/${f.id}?alt=media`, {}, true)).text())); } catch (e) { if (e && e.name === 'SyntaxError') return false; throw e; }
+    if (!T || !T.pages || !M || !M.pages || (T.docId && M.docId && T.docId !== M.docId)) return false;
+    const out = NC.live.merge(B, M, T), sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    Object.assign(out, { docId: M.docId || T.docId, name: T.name || M.name, saveId: sid, lineage: [...new Set([sid].concat(M.lineage || [], T.lineage || []))].slice(0, 60), savedBy: T.savedBy || M.savedBy, pcId: T.pcId || M.pcId, savedAt: now() });
+    const text = JSON.stringify(out), c3 = await cGet(n.k); if (c3 && c3.lm !== c.lm) return 'later';  /* 그사이 또 저장 → 다음 올리기에서 다시 합침 */
+    const lm2 = Math.max(now(), (n.lm || 0) + 1), body = await packDoc(text);
+    const f2 = await upload(n.id, { appProperties: { lm: String(lm2) } }, body, typeOf(n.name));
+    await cSet(n.k, { lm: lm2, data: text }); keepB(n.k, text);
+    Object.assign(n, { lm: lm2, rlm: lmOf(f2), size: text.length, rparent: pid, upAt: now() }); S.merged = (S.merged || 0) + 1; return true;
+  }
   /* ---------- 내용 읽기 (이 PC에 있으면 바로, 없으면 내려받기) ---------- */
   async function content(n) {
     const c = await cGet(n.k); if (c && c.lm === n.lm) return c.data;
@@ -319,7 +337,7 @@ NC.gdrive = (function () {
     if (!n.id) { if (c) return c.data; return ''; }
     const r = await call(`${API}/files/${n.id}?alt=media`, {}, true);
     let data = /\.(json|txt)$/i.test(n.name) ? await r.text() : await r.blob();
-    if (typeof data === 'string' && /\.design\.json$/i.test(n.name)) data = await unpackDoc(data);
+    if (typeof data === 'string' && /\.design\.json$/i.test(n.name)) { data = await unpackDoc(data); keepB(n.k, data); }
     cSet(n.k, { lm: n.lm, data }).catch(() => {}); return data;
   }
   async function checkOne(n) {  /* 지금 연 문서 — 20초 넘게 지났으면 그 파일만 드라이브에 물어봄 (다른 PC에서 고쳤는지) */
