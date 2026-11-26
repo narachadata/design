@@ -67,12 +67,14 @@
   }
   const fileToURL = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
   document.addEventListener('paste', async e => {
-    if (!S.jobs.some(j => j.status === 'wait')) return; const t = e.target; if (t && t.closest && (t.closest('input,textarea,[contenteditable="true"]') || t.isContentEditable)) return; if (document.querySelector('dialog[open] .chatzone')) return;
-    const cd = e.clipboardData; if (!cd) return; const files = [...(cd.files || [])].filter(f => /^image\//.test(f.type)), text = cd.getData('text/plain');
+    if (!S.jobs.some(j => j.status === 'wait')) return; const cd = e.clipboardData; if (!cd) return; const files = [...(cd.files || [])].filter(f => /^image\//.test(f.type)), text = cd.getData('text/plain');
+    const t = e.target, inField = t && t.closest && (t.closest('input,textarea,[contenteditable="true"]') || t.isContentEditable), aiAns = !files.length && /\{\s*"nc"|```json/.test(text || '');  /* 11/26 AI 조: 입력 칸에 커서가 있어도 AI 답(JSON)이면 기다리는 작업으로 */
+    if (inField && !aiAns) return; if (document.querySelector('dialog[open] .chatzone')) return;
     if (!files.length && !(text && /\{/.test(text))) return;
     e.preventDefault(); e.stopImmediatePropagation(); const images = []; for (const f of files) images.push(await fileToURL(f));
-    if (!(await ingest({ images, text }))) B.toast('기다리는 AI 작업과 맞지 않는 답입니다 — 그림은 그림 작업, 글(JSON)은 글 작업에 붙여 넣으세요', true);
+    if (!(await ingest({ images, text }))) B.toast(truncAns(text) ? '답이 다 복사되지 않았어요 — 채팅 답의 코드 상자 오른쪽 위 「복사」 단추로 통째로 복사해 주세요' : '기다리는 AI 작업과 맞지 않는 답입니다 — 그림은 그림 작업, 글(JSON)은 글 작업에 붙여 넣으세요', true);
   }, true);
+  function truncAns(t) { t = String(t || ''); const o = (t.match(/\{/g) || []).length, c = (t.match(/\}/g) || []).length; return o > 0 && o > c; }  /* 여는 괄호가 더 많으면 답이 잘린 것 */
 
   /* 11/24 ⌘V 없이 (전문가 [중] 「클립보드 자동 읽기」): 기다리는 AI 작업이 있을 때
      · 작업 칸 「복사한 답 넣기」 단추 → 브라우저가 한 번 허용을 물음
@@ -86,7 +88,7 @@
     if (!images.length && !(text && /\{/.test(text))) { if (byUser) B.toast('복사한 답이 없습니다 — 채팅에서 그림(오른쪽 단추 → 이미지 복사)이나 답 글 전체를 복사해 주세요', true); return; }
     if (text && !images.length && S.jobs.some(j => j.status === 'wait' && j.prompt && text.includes(String(j.prompt).slice(0, 60)))) { if (byUser) B.toast('아직 공방이 복사한 지시문이 클립보드에 있어요 — 채팅의 답을 복사한 뒤 눌러 주세요', true); return; }  /* 지시문을 답으로 잘못 읽지 않게 */
     if (!byUser && clipSeen.has(sig)) return; clipSeen.add(sig);
-    const ok = await ingest({ images, text }); if (!ok && byUser) B.toast('기다리는 AI 작업과 맞지 않는 답입니다 — 그림은 그림 작업, 글(JSON)은 글 작업의 답을 복사해 주세요', true);
+    const ok = await ingest({ images, text }); if (!ok && byUser) B.toast(truncAns(text) ? '답이 다 복사되지 않았어요 — 채팅 답의 코드 상자 오른쪽 위 「복사」 단추로 통째로 복사해 주세요' : '기다리는 AI 작업과 맞지 않는 답입니다 — 그림은 그림 작업, 글(JSON)은 글 작업의 답을 복사해 주세요', true);
   }
   async function clipAuto() { if (!S.jobs.some(j => j.status === 'wait') || document.visibilityState !== 'visible') return; try { const p = await navigator.permissions.query({ name: 'clipboard-read' }); if (p.state !== 'granted') return; } catch (e) { return; } clipTake(false); }
   window.addEventListener('focus', () => setTimeout(clipAuto, 150)); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(clipAuto, 150); });
