@@ -2183,11 +2183,11 @@ function tlVolStep(db) {
   toast(`${nm} 음량 ${vkDb(o.vk && o.vk.length ? o.vk[0][1] : o.vol)}`); if (tl.playing) { tlPause(); tlPlay(); }
 }
 // 길이를 숫자로 (Control+D): 고른 클립, 없으면 지금 장면
-function tlSetDuration() {
+async function tlSetDuration() {
   let it = null, tr = null; if (tl.selIt) for (const t of tracks()) { const q = (t.items || []).find(z => z.id === tl.selIt); if (q) { it = q; tr = t; } }
   const { list } = tlScenes(), x = it ? null : (list.find(s2 => s2.i === cur) || list.find(s2 => tl.T >= s2.t0 && tl.T < s2.t0 + s2.dur + s2.turn)); if (!it && !x) return;
   const d0 = it ? (tr.type === 'audio' ? itemDur(it) : Number(it.dur || 3)) : x.dur;
-  const v = window.prompt(`${it ? `'${it.name || (it.text ? String(it.text).slice(0, 12) : '') || '클립'}'` : `${x.i + 1}번 장면`}의 길이(초)를 넣으세요 — 지금 ${d0}초`, String(d0)); if (v == null) return;
+  const v = await dvAsk('길이 (초)', `${it ? `「${it.name || (it.text ? String(it.text).slice(0, 12) : '') || '클립'}」` : `${x.i + 1}번 장면`}의 길이 — 지금 ${d0}초`, String(d0)); if (v == null) return;  /* 11/26 영상 조: 브라우저 기본 입력 창 대신 공방 입력 창 */
   let n = tlFrame(Number(String(v).trim().replace(',', '.'))); if (!(n >= 0.2)) { toast('0.2초보다 긴 숫자를 넣으세요', true); return; }
   if (it) { if (tr.type === 'audio' && Number(it.full) > 0) n = Math.min(n, Math.round((Number(it.full) - Number(it.off || 0)) * 100) / 100); it.dur = n; }
   else { tlRipple(x.t0 + x.dur, n - x.dur); x.pg.vdur = n; }
