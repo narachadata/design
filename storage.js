@@ -222,7 +222,8 @@ NC.store = (function () {
     let L = localSettings(), merged = false;
     if (!force && SYNC_KEYS.every(k => L[k] === state.setBase[k])) return false;
     const r = await readRemote();
-    if (r && r.f.lastModified !== state.setMod) { const B = Object.keys(state.setBase || {}).length ? state.setBase : (loadBase() || state.setBase); const m = mergeAll(L, B, r.vals); merged = SYNC_KEYS.some(k => m[k] !== L[k]); L = m; applyVals(L); }
+    let B1 = state.setBase; if (r && r.f.lastModified !== state.setMod) { const B = Object.keys(state.setBase || {}).length ? state.setBase : (loadBase() || state.setBase); const m = mergeAll(L, B, r.vals); merged = SYNC_KEYS.some(k => m[k] !== L[k]); L = m; applyVals(L); B1 = r.vals; }
+    if (isDrive()) state.setUnsent = { base: Object.assign({}, B1 || {}), at: Date.now() };  /* 11/26 데이터 조: 드라이브가 이 올리기를 충돌로 거절하면 이 기준으로 다시 합침 (내가 바꾼 칸이 사라지던 것) */
     const h = await state.dir.getFileHandle(SET_FILE, { create: true });
     const w = await h.createWritable(); await w.write(JSON.stringify({ v: 1, updatedAt: Date.now(), savedBy: pcName(), values: L }, null, 1)); await w.close();
     state.setBase = L; state.setMod = (await h.getFile()).lastModified; saveBase();
@@ -236,7 +237,8 @@ NC.store = (function () {
     if (state.setMod && (isDrive() ? r.f.lastModified === state.setMod : r.f.lastModified <= state.setMod + 500)) return false;
     const first = !state.setMod, L = localSettings(), B0 = first ? loadBase() : null;
     /* 처음(창을 연 뒤 첫 가져오기): 지난번 맞춘 값을 기억하고 있으면 그걸 기준으로 합침 → 이 PC에서 그사이 바꾼 값을 지키고 다른 PC 값도 받음. 기억이 없으면 예전처럼 폴더 값 */
-    applyVals(first ? (B0 ? mergeAll(L, B0, r.vals) : Object.assign({}, L, r.vals)) : mergeAll(L, state.setBase, r.vals));
+    const U = state.setUnsent && Date.now() - state.setUnsent.at < 90000 ? state.setUnsent.base : null; state.setUnsent = null;
+    applyVals(first ? (B0 ? mergeAll(L, B0, r.vals) : Object.assign({}, L, r.vals)) : mergeAll(L, U || state.setBase, r.vals));
     state.setBase = Object.assign({}, r.vals); state.setMod = r.f.lastModified; saveBase(); // 폴더에 없는 이 PC 값은 다음 올리기 때 올라감
     return true;
   }
@@ -338,8 +340,10 @@ NC.store = (function () {
     const t = await state.dir.getDirectoryHandle(TRASH, { create: true });
     let name = entry.name, taken = false; try { entry.kind === 'file' ? await t.getFileHandle(name) : await t.getDirectoryHandle(name); taken = true; } catch (e) {}
     if (taken) name = entry.kind === 'file' ? await uniqueName(name.replace(/\.design\.json$/i, ''), t) : `${name} (${Date.now() % 100000})`;
+    try { const M = JSON.parse(localStorage.getItem('naracal-trash-from') || '{}'); M[name] = (fromPath || []).filter(x => x !== TRASH); const ks = Object.keys(M); if (ks.length > 400) ks.slice(0, ks.length - 400).forEach(k => delete M[k]); localStorage.setItem('naracal-trash-from', JSON.stringify(M)); } catch (e) {}  /* 11/26 UI·UX 조: 되살리기가 늘 맨 위로 가던 것 → 원래 폴더로 */
     return moveEntry(entry, fromPath, [TRASH], name);
   }
+  function trashFrom(name) { try { const p = JSON.parse(localStorage.getItem('naracal-trash-from') || '{}')[name]; return Array.isArray(p) ? p : null; } catch (e) { return null; } }
   /* 종류별 폴더 (팀장님 11/21): 폴더 만들기(없으면) · 아무 파일(PNG·PDF·영상) 쓰기 · 파일 목록 */
   async function ensureDir(path) { let d = state.dir; for (const p of path || []) d = await d.getDirectoryHandle(p, { create: true }); return d; }
   async function uniqueFile(name, dir) { const names = new Set(); for await (const [n] of dir.entries()) names.add(n); if (!names.has(name)) return name; const m = name.match(/^(.*?)(\.[^.]+)?$/); for (let i = 2; i < 999; i++) { const c = `${m[1]} (${i})${m[2] || ''}`; if (!names.has(c)) return c; } return Date.now() + '_' + name; }
@@ -347,7 +351,7 @@ NC.store = (function () {
   async function listFiles(path) { let d; try { d = await dirAt(path); } catch (e) { return []; } const out = []; for await (const [n, h] of d.entries()) { if (h.kind !== 'file' || n.startsWith('.')) continue; try { const f = await h.getFile(); out.push({ name: n, handle: h, size: f.size, lastModified: f.lastModified }); } catch (e) {} } return out.sort((a, b) => b.lastModified - a.lastModified); }
   async function emptyEntry(name) { const t = await state.dir.getDirectoryHandle(TRASH); await t.removeEntry(name, { recursive: true }); }
 
-  return { ensureDir, writeBlobAt, listFiles, snapshot, listSnapshots, readSnapshot, state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
+  return { ensureDir, writeBlobAt, listFiles, snapshot, listSnapshots, readSnapshot, state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, trashFrom, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
     writeCopy, pcName, setPcName, adopt, descends, pcId: () => pc().id,
     connectFolder, connectDrive, isDrive, useFolder, folderInfo, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, findDocById, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
 })();

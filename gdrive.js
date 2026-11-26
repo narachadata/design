@@ -247,7 +247,8 @@ NC.gdrive = (function () {
     const pk0 = real(n.parent), pid = pk0 === S.rootK ? S.rootId : (node(pk0) || {}).id; if (!pid) { const e = new Error('윗 폴더가 아직 안 올라감'); e.later = true; throw e; }
     if (o.op === 'mkdir') { if (n.id || n.alias) return; const pre = await newId(n); let f = null; try { f = await call(`${API}/files?fields=${FIELDS}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign(pre ? { id: pre } : {}, { name: n.name, mimeType: FOLDER, parents: [pid], appProperties: { lm: String(n.lm) } })) }); } catch (e) { if (pre && e.status === 400) { delete n.pid; delete n.sent; S.ids = []; } if (!(e.status === 409 && pre)) throw e; f = await existing(pre); if (!f || f.trashed) { delete n.pid; delete n.sent; throw e; } }  /* 409: 지난번 보낸 것이 이미 만들어짐 (휴지통이면 다음에 새로) · 400: 받아 둔 번호가 안 맞음(계정 바뀜 등) → 버리고 다시 */
       Object.assign(n, { id: f.id, rparent: pid, rlm: n.lm, upAt: now() }); delete n.pid; return; }
-    if (o.op === 'mv') { if (!n.id) { const e = new Error('처음 올리기가 끝나면 옮김'); e.later = true; throw e; } await call(`${API}/files/${n.id}?${qs(Object.assign({ fields: 'id' }, n.rparent && n.rparent !== pid ? { addParents: pid, removeParents: n.rparent } : {}))}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n.name }) }); n.rparent = pid; n.upAt = now(); return; }
+    if (o.op === 'mv') { if (!n.id) { const e = new Error('처음 올리기가 끝나면 옮김'); e.later = true; throw e; } let rp = n.rparent; if (rp && rp !== pid) { try { const cur = await call(`${API}/files/${n.id}?${qs({ fields: 'parents' })}`); if (cur && Array.isArray(cur.parents)) rp = cur.parents.filter(x => x !== pid).join(',') || ''; } catch (e) {} }  /* 11/26 데이터 조: 다른 PC가 이미 옮겼으면 옛 부모를 빼려다 실패 반복 — 지금 부모를 받아서 */
+      await call(`${API}/files/${n.id}?${qs(Object.assign({ fields: 'id' }, rp && n.rparent !== pid ? { addParents: pid, removeParents: rp } : (n.rparent && n.rparent !== pid ? { addParents: pid } : {})))}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n.name }) }); n.rparent = pid; n.upAt = now(); return; }
     if (o.op === 'put') {
       if (n.folder) return;
       const c = await cGet(n.k); if (!c) return; if (tooBig(n)) { n.local = true; return; } n.local = false;
@@ -270,7 +271,7 @@ NC.gdrive = (function () {
         }
       }
       if (!n.id) { const pre = await newId(n); if (pre && n.sent) { const ex = await existing(pre); if (ex && !ex.trashed) Object.assign(n, { id: ex.id, rparent: (ex.parents || [])[0] || pid }); else if (ex) { delete n.pid; delete n.sent; await newId(n); } } }  /* 지난번 만들기가 드라이브엔 됐는데 답을 못 받음 → 그 파일을 고쳐 씀 */
-      const meta = n.id ? { name: n.name, appProperties: { lm: String(lm) } } : Object.assign(n.pid ? { id: n.pid } : {}, { name: n.name, parents: [pid], appProperties: { lm: String(lm) } });
+      const meta = n.id ? { appProperties: { lm: String(lm) } } :  /* 11/26 데이터 조: 있는 파일 내용을 올릴 때 이 PC가 알던 옛 이름을 보내 다른 PC가 바꾼 이름이 되돌아가던 것 — 이름은 옮기기(mv)에서만 */ Object.assign(n.pid ? { id: n.pid } : {}, { name: n.name, parents: [pid], appProperties: { lm: String(lm) } });
       if (!n.id && n.pid && !n.sent) { n.sent = 1; await persist(); }  /* 한 번 보낸 뒤에만 「이미 만들어졌나」 물음 */
       let f; try { f = await upload(n.id, meta, body, typeOf(n.name)); } catch (e) { if (n.pid && e.status === 400) { delete n.pid; delete n.sent; S.ids = []; } if (!(e.status === 409 && n.pid)) throw e; const ex = await existing(n.pid); if (!ex || ex.trashed) { delete n.pid; delete n.sent; throw e; } n.id = ex.id; f = await upload(n.id, { name: n.name, appProperties: { lm: String(lm) } }, body, typeOf(n.name)); }
       delete n.pid; delete n.sent;

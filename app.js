@@ -62,7 +62,7 @@ function gcAssets() { const used = new Set(); const walk = v => { if (typeof v =
 const HIST_LIVE = ['assets', 'fonts', 'name', 'docId', 'updatedAt'];
 function snapshot() { const keep = {}; HIST_LIVE.forEach(k => { keep[k] = doc[k]; delete doc[k]; }); const s = JSON.stringify(doc); Object.assign(doc, keep); return s; }
 let histMeta = [];  // 기록마다 그때 보던 쪽·선택
-function commit() { tlTimingSnap = null; if (BKm && doc && doc.book && doc.book.bookMode) { try { BKm.afterCommit(); } catch (e) { console.warn(e); } } /* 도서 편집: 쪽에서 사진 크기를 바꾸거나 지우면 다시 흘림 */ if (!certTplBusy && doc && doc.cert && doc.pages.some(p => p.certTpl)) { certTplBusy = true; try { certTplCommit(); } catch (e) { console.warn('상장 양식 반영 실패', e); } finally { certTplBusy = false; } } const s_ = snapshot(); if (hist[hptr] === s_) return; hist = hist.slice(0, hptr + 1); histMeta = histMeta.slice(0, hptr + 1); hist.push(s_); histMeta.push({ cur, sel: sel.slice(), rn: NC.live.rn }); if (hist.length > 120) { hist.shift(); histMeta.shift(); } hptr = hist.length - 1; markDirty(); if (tl.open && !tl.playing) pgmSoon(); }
+function commit() { tlTimingSnap = null; if (BKm && doc && doc.book && doc.book.bookMode) { try { BKm.afterCommit(); } catch (e) { console.warn(e); } } /* 도서 편집: 쪽에서 사진 크기를 바꾸거나 지우면 다시 흘림 */ if (!certTplBusy && doc && doc.cert && doc.pages.some(p => p.certTpl)) { certTplBusy = true; try { certTplCommit(); } catch (e) { console.warn('상장 양식 반영 실패', e); } finally { certTplBusy = false; } } const s_ = snapshot(); if (hist[hptr] === s_) return; hist = hist.slice(0, hptr + 1); histMeta = histMeta.slice(0, hptr + 1); hist.push(s_); histMeta.push({ cur, sel: sel.slice(), rn: NC.live.rn }); if (hist.length > 120) { hist.shift(); histMeta.shift(); } { let tot = 0; for (const h of hist) tot += h.length; while (hist.length > 15 && tot > 4e7) { tot -= hist[0].length; hist.shift(); histMeta.shift(); } }  /* 11/26 성능 조: 큰 문서(출석부 193쪽 등)는 기록 전체가 4천만 글자를 넘지 않게 — 최소 15번은 되돌림 */ hptr = hist.length - 1; markDirty(); if (tl.open && !tl.playing) pgmSoon(); }
 // 바로 앞 기록을 고쳐 씀 (그림 비율 맞춤처럼 한 동작의 뒷처리)
 function amendCommit() { if (hptr < 0) return commit(); hist[hptr] = snapshot(); histMeta[hptr].rn = NC.live.rn; markDirty(); }
 let nudgeTimer = null; function commitSoon() { clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { nudgeTimer = null; commit(); }, 450); }
@@ -188,8 +188,8 @@ function missingDialog() {
   d.onclick = async e => { const b = e.target.closest('[data-relink]'); if (!b) return; const id = b.dataset.relink; try { const m0 = (doc.media || {})[id] || {}; await NC.media.relink(id, '', nm => !m0.name || nm === m0.name || window.confirm(`고른 파일 이름(${nm})이 원래 이름(${m0.name})과 다릅니다. 이 파일로 연결할까요?`)); mediaMissing.delete(id); b.closest('.miss-it').classList.add('ok'); b.textContent = '연결됨'; b.disabled = true; vEls.clear(); renderCanvas(); if (tlOn()) { tl.Vkey = ''; tl.Vscene = ''; renderTimeline(); } if (!mediaMissing.size) { d.close(); toast('원본을 모두 연결했습니다'); } } catch (err) { if (err.name !== 'AbortError') toast(err.message, true); } };
 }
 // 문서 파일 정리: 남이 준 문서·채팅 답·버전 기록을 열어도 스크립트가 실행되지 않게 (글 상자 html은 서식만 남기고, 화면에 들어가는 값에서 따옴표·꺾쇠를 막음)
-const DOC_BAD = /[<>"`]|javascript:|expression\(/i, DOC_ID = /^[\w-]{1,60}$/, DOC_TEXTISH = ['text', 'html', 'name', 'title', 'label', 'note', 'caption', 'alt', 'rows', 'data', 'labels', 'cells', 'series', 'values', 'kw', 'prompt'];  // 글 내용(화면에 넣을 때 esc 처리됨)은 그대로
-function cleanVals(o, depth) { for (const k in o) { if (DOC_TEXTISH.includes(k)) continue; const v = o[k]; if (typeof v === 'string') { if (DOC_BAD.test(v)) delete o[k]; } else if (Array.isArray(v)) { o[k] = v.map(x => typeof x === 'string' && DOC_BAD.test(x) ? '' : x); if (depth < 2) o[k].forEach(x => { if (x && typeof x === 'object') cleanVals(x, depth + 1); }); } else if (v && typeof v === 'object' && depth < 2) cleanVals(v, depth + 1); } }
+const DOC_BAD0 = /[<>"`]|javascript:|expression\(/i, DOC_CSS = /url\s*\(|@import|;\s*[a-z-]+\s*:/i, DOC_URLISH = /^(data:|blob:|https?:\/\/|a:|asset:|lib:|m:|assets\/)/i, DOC_BAD = { test: v => DOC_BAD0.test(v) || (!DOC_URLISH.test(String(v)) && DOC_CSS.test(v)) }, DOC_ID = /^[\w-]{1,60}$/, DOC_TEXTISH = ['text', 'html', 'name', 'title', 'label', 'note', 'caption', 'alt', 'rows', 'data', 'labels', 'series', 'values', 'kw', 'prompt'];  /* 11/26 보안 조: 'cells'(달력 칸)를 통째로 건너뛰어 칸 그림 주소로 스크립트가 들어가던 것 — 칸 글(text)만 그대로, CSS 끼워 넣기(url(·@import·;속성:)도 막음 */  // 글 내용(화면에 넣을 때 esc 처리됨)은 그대로
+function cleanVals(o, depth) { for (const k in o) { if (k === '__proto__' || k === 'constructor') { delete o[k]; continue; } if (DOC_TEXTISH.includes(k)) continue; if (k === 'cells' && o[k] && typeof o[k] === 'object') { Object.keys(o[k]).forEach(ck => { const c = o[k][ck]; if (!c || typeof c !== 'object') { delete o[k][ck]; return; } cleanVals(c, 2); if (c.img && !/^(a:|asset:|lib:|m:|assets\/|data:image\/|blob:|https:\/\/)/.test(String(c.img))) delete c.img; }); continue; } const v = o[k]; if (typeof v === 'string') { if (DOC_BAD.test(v)) delete o[k]; } else if (Array.isArray(v)) { o[k] = v.map(x => typeof x === 'string' && DOC_BAD.test(x) ? '' : x); if (depth < 2) o[k].forEach(x => { if (x && typeof x === 'object') cleanVals(x, depth + 1); }); } else if (v && typeof v === 'object' && depth < 2) cleanVals(v, depth + 1); } }
 function sanitizeDoc(d) {
   d.pages = (Array.isArray(d.pages) ? d.pages : []).filter(p => p && typeof p === 'object').map(p => Object.assign(newPage(), p)); if (!d.pages.length) d.pages = [newPage()];
   if (!d.calendar || typeof d.calendar !== 'object') d.calendar = newDoc().calendar;
@@ -202,6 +202,9 @@ function sanitizeDoc(d) {
   if (d.audio && typeof d.audio === 'object') cleanVals(d.audio, 0);
   if (d.media && typeof d.media === 'object') Object.keys(d.media).forEach(k => { if (!DOC_ID.test(k)) delete d.media[k]; else if (d.media[k] && typeof d.media[k] === 'object') cleanVals(d.media[k], 0); });
 }
+/* 11/26 보안 조: 실시간으로 받은 변경도 문서를 열 때처럼 정리 (객체는 그대로 두고 제자리에서) */
+function cleanEl(e) { if (!e || typeof e !== 'object') return false; if (!DOC_ID.test(String(e.id || ''))) return false; if (e.type === 'text' && e.html) { if (e.flowFrame && BK()) e.html = BK().sanitize(e.html); else { const box = document.implementation.createHTMLDocument('').createElement('div'); box.innerHTML = String(e.html); e.html = richHTML(box) || undefined; if (!e.html) { delete e.html; delete e.htmlFor; } } } cleanVals(e, 0); return true; }
+(window.NC = window.NC || {}).cleanLive = (d, op) => { const pg = op.pg && (d.pages || []).find(p => p.id === op.pg); if (pg) { if (DOC_BAD.test(String(pg.bg || ''))) pg.bg = '#ffffff'; if (Array.isArray(pg.els)) pg.els = pg.els.filter(e => cleanEl(e)); else pg.els = []; } else if (op.op === 'doc' && op.v && typeof op.v === 'object') cleanVals(op.v, 0); };
 async function loadDoc(j, from, quiet) {
   if (!j || !j.pages) throw new Error('문서 형식이 아닙니다');
   if (j.v !== 2) throw new Error('이 프로그램의 문서 파일이 아닙니다');
@@ -217,10 +220,10 @@ async function loadDoc(j, from, quiet) {
         setTimeout(() => toast(`${y}년 ${tr} 덕목으로 다시 채웠습니다 (글 상자 ${n}곳 · 삽화 ${na}곳) — 저장(Ctrl+S)하세요`), 600); if (store.state) store.state.dirty = true; } } }
   if (doc.cert) certMigrate(doc.cert);  /* 상장 굵기·제목 자리 고침 (한 번만) */  /* 빈 삽화 자리 = 그 해 덕목 그림 */
   cur = 0; sel = []; selDay = null; hist = []; histMeta = []; hptr = -1;
-  await registerDocFonts(); ensureAllHolidays();
+  await registerDocFonts(); ensureAllHolidays(true);  /* 11/26 데이터 조: 열기만 해도 저장되던 것 — 자동 공휴일은 화면에만, 고칠 때 함께 저장 */
   $('#pname').value = doc.name || '';
   hist.push(snapshot()); histMeta = [{ cur: 0, sel: [] }]; hptr = 0;
-  try { fixLunarHolidays(); } catch (e) {}
+  try { fixLunarHolidays(true); } catch (e) {}
   if (doc.book && doc.book.bookMode && BK() && doc.pages.some(p => p.els.some(e => e.flowFrame && !(e.html && e.htmlFor === e.text)))) setTimeout(() => BK().flow({ quiet: true }), 300); /* 도서: 서식이 빠진 본문 상자(예전 저장본)는 원고로 다시 흘림 */
   if ($('#dlPanel')) setTimeout(() => { if ($('#dlPanel')) renderDownload(); }, 0);
   liveAssetKeys.clear(); Object.keys(doc.assets || {}).forEach(k => liveAssetKeys.add(k));
@@ -276,7 +279,7 @@ async function afterFolderReady(opts) {
     }
     await openFolderDoc(docs[0].handle, `동기화 폴더의 최근 문서 "${nm}"를 열었습니다`); return;
   }
-  if (!doc.pages.some(p => p.els.length)) { setStatus('저장 곳에 연결했습니다 · 새 디자인을 만들거나 저장(Ctrl+S)하면 파일로 저장됩니다'); return; }  /* 빈 문서는 파일로 만들지 않음 */
+  setTimeout(updateSaveBadge, 0); if (!doc.pages.some(p => p.els.length)) { setStatus('저장 곳에 연결했습니다 · 새 디자인을 만들거나 저장(Ctrl+S)하면 파일로 저장됩니다'); return; }  /* 빈 문서는 파일로 만들지 않음 */
   await store.saveIntoFolder(doc); setStatus(`파일에 저장됨 ${tnow()} · ${store.state.fileName}`);
 }
 async function openFolderDoc(h, msg) {
@@ -310,12 +313,12 @@ function noteFont(fam) { if (!fam) return; const r = recentFonts().filter(f => f
 /* ---------- 공휴일 자동 적용 ---------- */
 /* 2027·2028 설날이 하루 일렀던 것(옛 공휴일 표)을 이미 만든 문서에서도 바로잡음: 그 설날 묶음(설날·연휴·대체 휴일)만 새 표로 바꾸고 직접 넣은 날은 그대로 */
 const LUNAR_FIX = { 2027: { bad: '2027-02-05', from: '2027-02-01', to: '2027-02-12' }, 2028: { bad: '2028-01-25', from: '2028-01-22', to: '2028-02-02' } };
-function fixLunarHolidays() { let fixed = [];
+function fixLunarHolidays(keep) { let fixed = [];
   Object.entries(LUNAR_FIX).forEach(([y, f]) => { const H = doc.holidays && doc.holidays[y]; if (!Array.isArray(H) || !H.some(h => h && h.date === f.bad && /설날/.test(h.name || ''))) return;
     const inR = h => h && h.date >= f.from && h.date <= f.to && /설날|대체/.test(h.name || ''); doc.holidays[y] = H.filter(h => !inR(h)).concat(CAL.autoHolidays(Number(y)).filter(inR)).sort((a, b) => a.date < b.date ? -1 : 1); fixed.push(y); });
-  if (fixed.length) { markDirty(); setTimeout(() => toast(`${fixed.join('·')}년 설날 날짜를 바로잡았습니다 (한국 음력 기준 — 2027년은 2/6~2/8 + 대체 휴일 2/9)`), 600); } }
-function ensureHolidays(year, silent) { if (!year || doc.holidays[year] || !CAL.canAuto(year)) return false; doc.holidays[year] = CAL.autoHolidays(year); markDirty(); if (!silent) toast(`${year}년 공휴일 ${doc.holidays[year].length}개를 자동으로 넣었습니다 (대체공휴일 포함)`); return true; }
-function ensureAllHolidays() { let n = 0; const ys = new Set(); doc.pages.forEach(p => p.els.forEach(el => { if (el.type === 'cal' || el.type === 'mini') ys.add(el.year); })); if (doc.calendar.year) ys.add(doc.calendar.year); ys.forEach(y => { if (ensureHolidays(y, true)) n++; }); return n; }
+  if (fixed.length) { if (!keep) markDirty(); setTimeout(() => toast(`${fixed.join('·')}년 설날 날짜를 바로잡았습니다 (한국 음력 기준 — 2027년은 2/6~2/8 + 대체 휴일 2/9)`), 600); } }
+function ensureHolidays(year, silent, keep) { if (!year || doc.holidays[year] || !CAL.canAuto(year)) return false; doc.holidays[year] = CAL.autoHolidays(year); if (!keep) markDirty(); if (!silent) toast(`${year}년 공휴일 ${doc.holidays[year].length}개를 자동으로 넣었습니다 (대체공휴일 포함)`); return true; }
+function ensureAllHolidays(keep) { let n = 0; const ys = new Set(); doc.pages.forEach(p => p.els.forEach(el => { if (el.type === 'cal' || el.type === 'mini') ys.add(el.year); })); if (doc.calendar.year) ys.add(doc.calendar.year); ys.forEach(y => { if (ensureHolidays(y, true, keep)) n++; }); return n; }
 
 /* ---------- 요소 HTML ---------- */
 const elSrcOv = new Map(), elVisOv = new Map(); /* 내보내기·출력 중에만 쓰는 임시 덮어쓰기 (문서를 고치지 않아 그사이 자동 저장돼도 안전) */
@@ -424,12 +427,13 @@ function autoWidth(d, el) { const nw = r1(d.offsetWidth / MM * (el.sx && Number(
 /* 글자 크기 자동 맞춤: 고정 상자 안에 들어가는 가장 큰 글자 크기(최대 = 켤 때 크기 fitMax)를 찾아 el.size(부분 서식 크기도)에 씀 → 내보내기도 같음 */
 const fitCache = new Map();
 function autoFitText(d, el) {
+  if (!(Number(el.fitMax) > 0)) el.fitMax = el.size;  /* 11/26 포스터 조: 최대 크기가 없으면 지금 크기를 최대로 기억 (줄어든 뒤 다시 커지게) */
   const key = [el.text, el.html, el.w, el.h, el.fitMax, el.font, el.lh, el.ls, el.weight, el.pad, el.cols, el.colGap].join('|'); if (fitCache.get(el.id) === key) return null;
   const max = Number(el.fitMax) || el.size, base = clone(el), node = () => { const t = document.createElement('div'); t.innerHTML = bookTokens(page(), elHTML(el, 'edit')); const n = t.firstElementChild; d.replaceWith(n); d = n; return n; };
-  let strict = true; const fits = sz => { scaleTextBy(el, base, sz / base.size); node(); if (strict) [d, ...d.querySelectorAll('*')].forEach(x => { x.style.overflowWrap = 'normal'; }); const { ch, cw } = textContentH(d); return ch <= el.h + 0.2 && cw <= el.w + 0.6; };
+  let strict = true; const fits = sz => { scaleTextBy(el, base, sz / base.size); el.fitMax = max; node(); if (strict) [d, ...d.querySelectorAll('*')].forEach(x => { x.style.overflowWrap = 'normal'; }); const { ch, cw } = textContentH(d); return ch <= el.h + 0.2 && cw <= el.w + 0.6; };
   const search = () => { let best = 4; if (fits(max)) best = max; else { let lo = 4, hi = max; for (let i = 0; i < 9; i++) { const mid = (lo + hi) / 2; if (fits(mid)) { best = mid; lo = mid; } else hi = mid; } } return best; };
   let best = search(); if (best < max * 0.5) { strict = false; best = Math.max(best, search()); } /* 낱말을 쪼개지 않는 크기를 먼저 찾고(가족/운/동회 방지), 너무 작아지면(띄어쓰기 없는 긴 글) 예전처럼 쪼개서 맞춤 */
-  best = Math.floor(best * 2) / 2; scaleTextBy(el, base, Math.max(1, best) / base.size); node(); fitCache.set(el.id, [el.text, el.html, el.w, el.h, el.fitMax, el.font, el.lh, el.ls, el.weight, el.pad, el.cols, el.colGap].join('|')); return d;
+  best = Math.floor(best * 2) / 2; scaleTextBy(el, base, Math.max(1, best) / base.size); el.fitMax = max; node(); fitCache.set(el.id, [el.text, el.html, el.w, el.h, el.fitMax, el.font, el.lh, el.ls, el.weight, el.pad, el.cols, el.colGap].join('|')); return d;
 }
 function kScale() { return Number($('#canvas').dataset.k) || 1; }
 function renderCanvas() {
@@ -664,7 +668,7 @@ function goto(i) { endEdit(); cur = clamp(i, 0, doc.pages.length - 1); sel = [];
 function select(ids) { endEdit(); sel = ids.filter(id => find(id)); if (sel.length) { tl.selIt = null; tl.selAu = false; tl.selScene = false; } selDay = null; if (cellSel && !sel.includes(cellSel.id)) cellSel = null; renderOverlay(); renderInspector(); if (sideTab === 'layers' || (sideTab === 'video' && ['text', 'motion', 'trans'].includes(vTab))) renderSide(); updateToolbarState(); }
 let groupTipShown = false;
 function groupOf(id) { const el = find(id); if (!el || !el.group) return [id]; return page().els.filter(e => e.group === el.group).map(e => e.id); }
-function updateToolbarState() { const n = sel.length; const g = selEls().some(e => e.group); const b = $('#btnGroup'); if (b) { b.hidden = n < 2 && !g; b.textContent = g ? '그룹 해제' : '그룹'; } const ds = $('#btnDist'); if (ds) ds.hidden = n < 3; }
+function updateToolbarState() { const n = sel.length; const g = selEls().some(e => e.group); const b = $('#btnGroup'); if (b) { b.hidden = n < 2 && !g; b.textContent = g ? '그룹 해제' : '그룹'; } const ds = $('#btnDist'); if (ds) ds.hidden = n < 3; ['#btnDup', '#btnDel'].forEach(q => { const x = $(q); if (x) { x.disabled = !n; x.title = n ? (q === '#btnDup' ? '복제 (Ctrl+D)' : '삭제 (Delete)') : '요소를 먼저 고르세요'; } }); }
 
 /* ---- 달력 칸 편집 (일러스트레이터·인디자인 표처럼) ----
    달력을 고른 상태에서: 칸 누르기·끌기·Shift+누르기 = 칸 선택 / 칸 경계선 끌기 = 너비·높이 / 두 번 누르기 = 칸에 바로 입력
@@ -770,7 +774,7 @@ function toMM(e) { const r = $('#canvas').getBoundingClientRect(); const k = kSc
 /* 단축키 글자: 한글 입력 상태에서는 e.key가 'ㅋ'처럼 오므로 자판 자리(e.code)를 먼저 봄 */
 function keyOf(e) { return /^Key[A-Z]$/.test(e.code || '') ? e.code.slice(3).toLowerCase() : String(e.key || '').toLowerCase(); }
 /* 창이 아닌 팝업(메뉴·넘김 창·자막 창·다운로드 패널)이 열려 있으면 디자인 단축키를 쉼 */
-function popupOpen() { return !!document.querySelector('dialog[open], .fmenu, [role=menu], #trPop, #itPop, #dlPanel, #tlMenu'); }
+function popupOpen() { return !!document.querySelector('dialog[open], .fmenu, [role=menu], #trPop, #itPop, #dlPanel, #tlMenu, #tbMenu'); }
 /* 창이 열릴 때 첫 초점이 '닫기'면 Enter 한 번에 닫혀 버림 → 창 자체에 초점. 어두운 바깥을 누르면 닫힘(꼭 답해야 하는 확인 창은 빼고) */
 { const sm = HTMLDialogElement.prototype.showModal; HTMLDialogElement.prototype.showModal = function () { const r = sm.apply(this, arguments); try { const a = document.activeElement; if (a && this.contains(a) && a.matches('[data-close]')) { this.tabIndex = -1; this.focus({ preventScroll: true }); } } catch (e) {} return r; };
   let dlgDown = null; const outside = (d, e) => { const r = d.getBoundingClientRect(); return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom; };
@@ -1190,17 +1194,19 @@ document.addEventListener('keydown', e => {
   if (e.key.startsWith('Arrow')) { if (!sel.length) return; e.preventDefault(); const PX = isPxDoc() ? 25.4 / 96 : 0, d = PX ? (e.shiftKey ? 10 : 1) * PX : e.altKey ? 0.1 : e.shiftKey ? 5 : 1, rr = PX ? (v => Math.round(v * 1000) / 1000) : r1; /* px 문서는 1px·Shift 10px */ selEls().forEach(el => { if (el.locked) return; if (e.key === 'ArrowLeft') el.x = rr(el.x - d); if (e.key === 'ArrowRight') el.x = rr(el.x + d); if (e.key === 'ArrowUp') el.y = rr(el.y - d); if (e.key === 'ArrowDown') el.y = rr(el.y + d); }); commitSoon(); rerender(); return; }
   if (e.key === 'PageDown' || e.key === 'PageUp') { e.preventDefault(); goto(pageStep(e.key === 'PageDown' ? 1 : -1)); return; }
   if (e.key === 'Enter' && !mod && !e.altKey && sel.length === 1) { const el9 = find(sel[0]), d9 = el9 && el9.type === 'text' && !el9.locked && !isWarp(el9) ? $(`#canvas [data-id="${el9.id}"]`) : null; if (d9) { e.preventDefault(); startEdit(d9); return; } }
+  if (typeKeyOnText(e)) { const el9 = find(sel[0]), d9 = $(`#canvas [data-id="${el9.id}"]`); if (d9) { startEdit(d9); if (!typeKeyOnText.told) { typeKeyOnText.told = true; toast('글 고치기를 시작했습니다 — 친 글로 바뀝니다 (되돌리기 ⌘Z/Ctrl+Z · 끝내기 Esc)'); } return; } }  /* preventDefault 하지 않음 → 친 글자가 고치기 칸으로 들어감 (달력 칸과 같은 방식) */
   if (e.altKey && !mod && sel.length && !tlOn()) { const AK = { KeyA: 'l', KeyH: 'c', KeyD: 'r', KeyW: 't', KeyV: 'm', KeyS: 'b' }[e.code];
     if (AK && e.shiftKey && (e.code === 'KeyH' || e.code === 'KeyV')) { e.preventDefault(); distUnits(e.code === 'KeyH'); return; }  /* ⌥⇧H / ⌥⇧V : 같은 간격 */
     if (AK && !e.shiftKey) { e.preventDefault(); alignUnits(AK); toast({ l: '왼쪽', c: '가로 가운데', r: '오른쪽', t: '위', m: '세로 가운데', b: '아래' }[AK] + (selUnits().length > 1 ? '로 맞췄습니다' : ' — 쪽에 맞췄습니다')); return; } }
-  if (e.code === 'KeyP' && !mod && !e.altKey) setTool(tool === 'pen' ? 'select' : 'pen');
-  if (e.code === 'KeyT' && !mod && !e.altKey) addText('b');
+  if (e.code === 'KeyP' && !mod && !e.altKey && !e.repeat) setTool(tool === 'pen' ? 'select' : 'pen');
+  if (e.code === 'KeyT' && !mod && !e.altKey && !e.repeat) { pgFocus = false; addText('b'); }
   /* 11/26 더한 단축키 (캔바·피그마와 같은 키) */
   if (!mod && !e.altKey && !e.shiftKey && !e.repeat) { const SK = { KeyR: 'rect', KeyO: 'ellipse', KeyL: 'line' }[e.code]; if (SK) { e.preventDefault(); addShape(SK); return; } }
-  if (mod && !e.altKey && e.key === 'Enter') { e.preventDefault(); endEdit(); const p = e.shiftKey ? dupPage(page()) : newPage(page().bg); doc.pages.splice(cur + 1, 0, p); commit(); goto(cur + 1); toast(e.shiftKey ? `${cur}쪽을 복제했습니다 (${cur + 1}쪽)` : `${cur + 1}쪽에 새 쪽을 넣었습니다`); return; }
+  if (mod && !e.altKey && e.key === 'Enter') { e.preventDefault(); if (e.shiftKey && bookAutoBlock([cur], 'dup')) return; endEdit(); const p = e.shiftKey ? dupPage(page()) : newPage(page().bg); doc.pages.splice(cur + 1, 0, p); commit(); goto(cur + 1); toast(e.shiftKey ? `${cur}쪽을 복제했습니다 (${cur + 1}쪽)` : `${cur + 1}쪽에 새 쪽을 넣었습니다`); return; }
   if ((e.key === 'Home' || e.key === 'End') && !mod && !e.altKey && !sel.length) { e.preventDefault(); goto(e.key === 'Home' ? 0 : doc.pages.length - 1); return; }
   if ((e.key === '?' || (e.shiftKey && (e.code === 'Slash' || e.key === '/'))) && !mod && !e.altKey) { e.preventDefault(); openManual('keys'); return; }
 });
+function typeKeyOnText(e) { if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || editing || cellSel || sel.length !== 1 || tlOn() && sideTab === 'video') return false; if (!(e.key && (e.key.length === 1 || e.key === 'Process')) || e.code === 'Space') return false; const el = find(sel[0]); return !!(el && el.type === 'text' && !el.locked && !isWarp(el)); }
 function removeSel() { const lk = selEls().filter(el => el.locked).length; const keepLk = selEls().filter(el => el.locked).map(el => el.id); page().els = page().els.filter(el => !sel.includes(el.id) || el.locked); commit(); sel = keepLk; histMeta[hptr] && (histMeta[hptr].sel = histMeta[hptr].sel.slice()); rerender(); /* 기록에는 지운 요소의 선택을 남겨 Ctrl+Z 하면 다시 골라진 상태로 */ if (lk) toast(`잠긴 요소 ${lk}개는 지우지 않았습니다 (잠금을 풀고 지우세요)`); }
 function duplicate() { if (!sel.length) return; const gmap = {}; const ids = selEls().map(el => { const n = clone(el); n.id = uid(); delete n.gen; if (n.group) { gmap[n.group] = gmap[n.group] || uid(); n.group = gmap[n.group]; } n.x += 5; n.y += 5; page().els.push(n); return n.id; }); commit(); select(ids); rerender(); }
 // 그룹: 고른 것이 두 묶음 이상이면 (그룹+낱개, 그룹+그룹도) 하나로 묶고, 그룹 하나만 골랐으면 해제
@@ -1246,7 +1252,7 @@ $('#btnUndo').onclick = undo; $('#btnRedo').onclick = redo;
 const TEXT_DEF = Object.assign({ type: 'text', text: '글자를 입력하세요', x: 20, y: 20, w: 80, h: 10, rot: 0, font: 'Pretendard', size: 14, weight: 400, italic: false, color: '#1a1a1a', align: 'left', lh: 1.3, ls: 0, strokeW: 0, strokeC: '#ffffff', shadow: false, shC: '#000000', shA: 0.25, shX: 0.6, shY: 0.7, shB: 0.4, bg: '', pad: 0, opacity: 1, valign: 'top', name: '' }, FX.TEXT_FX_DEF);
 // 같은 자리에 이미 요소가 있으면 조금씩 비켜 놓음 (T를 여러 번·사진 여러 장이 한곳에 겹치던 것)
 function freeSpot(el) { const step = Math.max(2, r1(5 * docK())); for (let n = 0; n < 12 && page().els.some(o => o !== el && Math.abs(o.x - el.x) < 0.6 && Math.abs(o.y - el.y) < 0.6); n++) { el.x = r1(el.x + step); el.y = r1(el.y + step); } }
-function addEl(el, at) { el.id = el.id || uid(); delete el.gen; if (at !== false) { el.x = r1(clamp((doc.w - el.w) / 2, 0, doc.w)); el.y = r1(clamp((doc.h - el.h) / 2, 0, doc.h)); freeSpot(el); } page().els.push(el); commit(); select([el.id]); rerender(); return el; }
+function addEl(el, at) { pgFocus = false; el.id = el.id || uid(); delete el.gen; if (at !== false) { el.x = r1(clamp((doc.w - el.w) / 2, 0, doc.w)); el.y = r1(clamp((doc.h - el.h) / 2, 0, doc.h)); freeSpot(el); } page().els.push(el); commit(); select([el.id]); rerender(); return el; }
 function addEls(els, name, at) { if (!els.length) return; /* at: 끌어다 놓은 자리(mm) — 묶음 가운데를 그곳에 */ els.forEach(e => delete e.gen);
   { /* 문서 크기에 맞춰 요소 크기 조절 (현수막에선 점처럼, 명함에선 넘치던 것) — 묶음 전체를 같은 비율로 */
     const bw0 = Math.max(...els.map(e => e.x + e.w)) - Math.min(...els.map(e => e.x)), bh0 = Math.max(...els.map(e => e.y + e.h)) - Math.min(...els.map(e => e.y));
@@ -1905,7 +1911,7 @@ async function placeAudio(m) {
   toast(`'${m.name}' (${fmtTC(dur || 0).slice(0, 8)})을 ${t.name} 트랙에 넣었습니다 — 원본은 이 PC에만 있고, 필요한 부분만 읽습니다. ✂(Ctrl+B)로 자르세요.`);
 }
 // 동영상 크기·길이·첫 장면(편집 화면·썸네일용 작은 그림)
-function videoInfo(url) { return new Promise((res, rej) => { const v = document.createElement('video'); v.muted = true; v.preload = 'auto'; v.src = url; v.onerror = () => rej(new Error('이 동영상 형식은 브라우저에서 열 수 없습니다 (MP4·H.264로 바꿔 넣어 주세요)')); v.onloadedmetadata = () => { v.currentTime = Math.min(0.5, v.duration / 3 || 0); }; v.onseeked = () => { const W = v.videoWidth, H = v.videoHeight, k = Math.min(1, 640 / Math.max(W, H)), c = document.createElement('canvas'); c.width = Math.round(W * k); c.height = Math.round(H * k); let poster = ''; try { c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); poster = c.toDataURL('image/jpeg', 0.8); } catch (e) {} res({ w: W, h: H, dur: v.duration || 0, poster }); }; }); }
+function videoInfo(url) { return new Promise((res, rej) => { const v = document.createElement('video'); v.muted = true; v.preload = 'auto'; v.src = url; v.onerror = () => rej(new Error('이 동영상 형식은 브라우저에서 열 수 없습니다 (MP4·H.264로 바꿔 넣어 주세요)')); let probe = false, realDur = 0; v.onloadedmetadata = () => { if (!isFinite(v.duration)) { probe = true; v.currentTime = 1e9; return; } v.currentTime = Math.min(0.5, v.duration / 3 || 0); }; v.onseeked = () => { if (probe) { probe = false; realDur = isFinite(v.duration) ? v.duration : (v.currentTime || 0); if (!(realDur > 0)) { rej(new Error('이 동영상은 길이를 알 수 없습니다 (화면 녹화 webm 등) — MP4로 바꿔 넣어 주세요')); return; } v.currentTime = Math.min(0.5, realDur / 3); return; } /* 11/26 영상 조: 브라우저 녹화 webm은 길이가 Infinity — 끝으로 한 번 밀어 길이를 읽음 */ const W = v.videoWidth, H = v.videoHeight, k = Math.min(1, 640 / Math.max(W, H)), c = document.createElement('canvas'); c.width = Math.round(W * k); c.height = Math.round(H * k); let poster = ''; try { c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); poster = c.toDataURL('image/jpeg', 0.8); } catch (e) {} res({ w: W, h: H, dur: realDur || (isFinite(v.duration) ? v.duration : 0), poster }); }; }); }
 
 /* ---- 영상 편집은 '영상용 사본'에서 (원본 디자인 보호) ---- */
 function videoNeedsGate() { const empty = !doc.pages.some(p => p.els && p.els.length); if (empty || ['story', 'video', 'shorts'].includes(doc.fmt)) { if (!(doc.video && doc.video.born)) doc.video = Object.assign(vset(), { born: 'video' }); return false; } /* 빈 문서·영상용 크기로 시작한 문서는 '처음부터 영상' — 나중에 장면을 넣어도 사본 안내 없음 */ return !(doc.video && (doc.video.isCopy || doc.video.born)) && !(doc.news && doc.news.tv); }
@@ -1994,7 +2000,7 @@ function addSfx(ref, name, quiet) {
 
 // 영상 편집 단축키 (프리미어·캡컷·필모라와 같은 키). 타임라인이 열려 있을 때만, 글자 입력 중에는 동작하지 않음
 const TL_KEYS = [['Space', '재생 / 멈춤'], ['K', '멈춤'], ['L', '재생 — 거듭 누르면 2·4·8배(소리 없음)'], ['J', '거꾸로 재생 — 거듭 누르면 2·4·8배'], ['K를 누른 채 J / L', '한 프레임 뒤로 / 앞으로'], ['Shift + X', '가까운 장면 경계를 재생 헤드로 (편집 늘이기 · 전체 길이 그대로)'], ['← →', '한 프레임 뒤로 / 앞으로'], ['Shift + ← →', '1초 뒤로 / 앞으로'], ['↑ ↓', '앞 장면 / 다음 장면으로'], ['Home / End', '처음 / 끝으로'],
-  ['B  /  Ctrl + B', '재생 헤드에서 자르기 (Ctrl + K도 됨)'], ['S', '훑어보기 켬/끔 — 타임라인 위에서 마우스를 움직여 미리 보기'], ['I  /  O  /  X', '범위 시작 / 끝 / 지금 장면(고른 클립)을 범위로 — Alt + X 지우기'], ['/', '범위만 재생'], ['Delete (범위가 있을 때)', '범위 잘라 내기 — 뒤 장면·자막·소리·마커가 당겨짐'], ['Control + T  /  Control + Shift + T  (Alt + T)', '제목 넣기 / 하단 이름표 넣기'], ['Alt + F', '정지 화면 넣기 (파이널컷 ⌥F)'], ['Control + D  /  Alt + D', '고른 장면·클립의 길이를 숫자로'], ['Control + =  /  −   (Alt + = / −)', '고른 소리 음량 1dB 올리기 / 내리기'], ['Control + Shift + S  (Alt + Shift + S)', '동영상 소리 분리 (따로 트랙으로)'], ['Shift + N', '동영상 속도 보통(1배)으로'], ['Alt + W', '빈 장면 끼워 넣기'], ['Alt + 끌기', '클립 복제'], ['Alt + 장면 오른쪽 끝 끌기', '롤 편집: 경계만 옮김 (이 장면이 늘면 다음 장면이 줄고 전체 길이는 그대로)'], ['Alt + Shift + 소리 조각·동영상 장면 끌기', '슬립: 자리·길이는 그대로, 원본의 다른 구간을 씀'], ['Alt + ⌘(Ctrl) + 자막·소리 클릭', '연결점 옮기기: 누른 자리 아래 장면에 붙어 함께 움직임 (흰 점)'], ['` 키를 누른 채 장면 끌기', '장면만 옮기기 (붙은 자막·소리는 제자리)'], ['Shift + 눈금자 끌기', '범위 잡기'], ['Shift + Ctrl + B', '모두 자르기: 재생 헤드를 지나는 장면·자막·소리를 한 번에'], ['Q', '장면 앞부분을 재생 헤드까지 잘라내기'], ['W', '장면 뒷부분을 재생 헤드부터 잘라내기'], [';  /  \'', '앞 · 다음 편집점으로 (장면 경계와 클립 시작·끝)'], ['Alt + [  /  Alt + ]', '재생 헤드 앞 · 뒤 잘라내기 (Q · W와 같음, 파이널컷 방식)'], ['Delete', '고른 클립 지우기 · 장면을 고르면 리플 삭제(뒤 장면이 당겨지고, 그 장면에 붙은 자막·소리도 함께)'], ['Shift + Delete', '장면을 빈 틈으로 바꾸기 (길이·뒤 위치는 그대로)'], ['N', '스냅 켜기 / 끄기 (끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙기)'], ['M', '마커 넣기 (재생 중에도 · 두 번 눌러 이름 바꾸기·지우기)'], ['Ctrl + ;  /  Ctrl + \'', '앞 · 다음 마커로'], ['V', '고른 클립 끄기 / 켜기 (지우지 않고 미리보기·저장에서 빼기)'], ['Ctrl + Z', '되돌리기'], ['Ctrl + Shift + Z', '다시'],
+  ['B  /  Ctrl + B', '재생 헤드에서 자르기 (Ctrl + K도 됨 · 글 상자를 고른 때 Ctrl + B는 굵게)'], ['S', '훑어보기 켬/끔 — 타임라인 위에서 마우스를 움직여 미리 보기'], ['I  /  O  /  X', '범위 시작 / 끝 / 지금 장면(고른 클립)을 범위로 — Alt + X 지우기'], ['/', '범위만 재생'], ['Delete (범위가 있을 때)', '범위 잘라 내기 — 뒤 장면·자막·소리·마커가 당겨짐'], ['Control + T  /  Control + Shift + T  (Alt + T)', '제목 넣기 / 하단 이름표 넣기'], ['Alt + F', '정지 화면 넣기 (파이널컷 ⌥F)'], ['Control + D  /  Alt + D', '고른 장면·클립의 길이를 숫자로'], ['Control + =  /  −   (Alt + = / −)', '고른 소리 음량 1dB 올리기 / 내리기'], ['Control + Shift + S  (Alt + Shift + S)', '동영상 소리 분리 (따로 트랙으로)'], ['Shift + N', '동영상 속도 보통(1배)으로'], ['Alt + W', '빈 장면 끼워 넣기'], ['Alt + 끌기', '클립 복제'], ['Alt + 장면 오른쪽 끝 끌기', '롤 편집: 경계만 옮김 (이 장면이 늘면 다음 장면이 줄고 전체 길이는 그대로)'], ['Alt + Shift + 소리 조각·동영상 장면 끌기', '슬립: 자리·길이는 그대로, 원본의 다른 구간을 씀'], ['Alt + ⌘(Ctrl) + 자막·소리 클릭', '연결점 옮기기: 누른 자리 아래 장면에 붙어 함께 움직임 (흰 점)'], ['` 키를 누른 채 장면 끌기', '장면만 옮기기 (붙은 자막·소리는 제자리)'], ['Shift + 눈금자 끌기', '범위 잡기'], ['Shift + Ctrl + B', '모두 자르기: 재생 헤드를 지나는 장면·자막·소리를 한 번에'], ['Q', '장면 앞부분을 재생 헤드까지 잘라내기'], ['W', '장면 뒷부분을 재생 헤드부터 잘라내기'], [';  /  \'', '앞 · 다음 편집점으로 (장면 경계와 클립 시작·끝)'], ['Alt + [  /  Alt + ]', '재생 헤드 앞 · 뒤 잘라내기 (Q · W와 같음, 파이널컷 방식)'], ['Delete', '고른 클립 지우기 · 장면을 고르면 리플 삭제(뒤 장면이 당겨지고, 그 장면에 붙은 자막·소리도 함께)'], ['Shift + Delete', '장면을 빈 틈으로 바꾸기 (길이·뒤 위치는 그대로)'], ['N', '스냅 켜기 / 끄기 (끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙기)'], ['M', '마커 넣기 (재생 중에도 · 두 번 눌러 이름 바꾸기·지우기)'], ['Ctrl + ;  /  Ctrl + \'', '앞 · 다음 마커로'], ['V', '고른 클립 끄기 / 켜기 (지우지 않고 미리보기·저장에서 빼기)'], ['Ctrl + Z', '되돌리기'], ['Ctrl + Shift + Z', '다시'],
   ['T', '재생 위치에 글자 넣기'], ['C', '재생 위치에 자막 넣기'], ['R', '음성 녹음 시작 / 멈춤'], ['Ctrl + =  /  Ctrl + −', '타임라인 늘리기 / 줄이기'], ['Shift + Z', '타임라인 전체 보기'], ['F', '크게 미리보기'], ['Ctrl + E', '내보내기 (MP4)'], ['Esc', '미리보기 닫고 편집으로'], ['?', '단축키 목록']];
 document.addEventListener('keydown', e => {
   if (!tlOn() || editing || $('#cellEd') || $('#tlMenu') || $('#trPop') || $('#itPop') || $('#dlPanel') || document.querySelector('.fmenu, [role=menu]') || e.isComposing || e.keyCode === 229 || document.querySelector('dialog[open]') || (e.target.matches && e.target.matches('input,textarea,select,[contenteditable="true"]'))) return;
@@ -2808,7 +2814,8 @@ function openVideoMaker() {
   const estMB = (q, fps) => { const o = VIDEO.outSize(doc.w, doc.h, q), bps = Math.min(o.W * o.H > 2100000 ? 45e6 : 16e6, Math.max(5e6, o.W * o.H * fps * 0.15)); return (bps + 192000) * tot / 8 / 1048576; };
   const qBtn = q => { const o = VIDEO.outSize(doc.w, doc.h, q[0]); return `<button type="button" class="vd-qbtn" data-q="${q[0]}" aria-pressed="${(vset().q || '1080') === q[0]}"><b>${q[1]}</b><span>${o.W}×${o.H}</span><small>${q[2]}</small></button>`; };
   d = document.createElement('dialog'); d.id = 'dlgVideo'; d.className = 'nw-dlg vd-dlg';
-  d.innerHTML = `<div class="dhead"><h2>MP4 영상 저장</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
+  const emptyPh = []; doc.pages.forEach((p, i) => { if (p.dlOff) return; (p.els || []).forEach(e => { if (e.type === "image" && !e.hidden && !e.src) emptyPh.push(i + 1); }); });  /* 11/26 영상 조: 빈 사진 자리가 영상에 베이지 상자로 찍히던 것 — 미리 알림 */
+  d.innerHTML = `<div class="dhead"><h2>MP4 영상 저장</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">${emptyPh.length ? `<p class="dlwarn" style="margin:0 0 8px;color:#b54708;background:#fff7e6;border:1px solid #f5c26b;border-radius:8px;padding:8px 10px">⚠ 사진을 넣지 않은 자리 ${emptyPh.length}곳 (${[...new Set(emptyPh)].slice(0, 8).join("·")}번 장면) — 그대로 두면 빈 상자로 찍힙니다. 그 장면에서 사진 자리를 누르고 사진 패널의 사진을 누르세요.</p>` : ""}
   <div class="vd-stage"><canvas id="vidCv"></canvas><div class="vd-load" id="vidProg">장면을 준비하는 중…</div></div>
   <div class="vd-ctl"><button class="btn icon" id="vidPlay" title="재생 / 멈춤 (Space)"><svg class="ic"><use href="#i-play"/></svg></button><input type="range" id="vidSeek" min="0" max="${tot}" step="0.01" value="0"><span id="vidTime">0:00 / ${fmtT(tot)}</span><span class="vd-meta">${n}장면${doc.audio ? ' · 음악 «' + esc(doc.audio.name || '') + '»' : ''}</span></div>
   <p class="hint" style="margin:0">위에서 편집한 내용을 끝까지 확인한 뒤 화질을 고르고 <b>영상 만들기</b>를 누르세요. 미리보기는 가볍게 보여 주고, 저장은 고른 화질로 만듭니다. 장면 길이·넘김·음악은 왼쪽 <b>영상</b> 메뉴와 타임라인에서 고칩니다.</p>
@@ -2918,11 +2925,11 @@ function openManual(id) {
 /* ---- 단축키 모음 (11/26 팀장님): 매뉴얼 위 「⌨ 단축키 모음」 · 편집 화면에서 ? ---- */
 const KEY_GROUPS = [
   ['파일 · 창', 'i-save', [['Mod+S', '저장'], ['Mod+Shift+S', '새 이름으로 저장'], ['Mod+O', '열기 — 내 드라이브'], ['Mod+P', '출력 (프린터)'], ['Mod+F', '찾기 · 바꾸기'], ['?', '단축키 모음 (이 쪽)'], ['Esc', '메뉴·창 닫기 · 고른 것 풀기 · 도구를 「고르기」로']]],
-  ['넣기', 'i-plus', [['T', '글 상자'], ['R', '사각형'], ['O', '원'], ['L', '선'], ['P', '펜(그리기) 켬 / 끔'], ['Enter', '고른 글 상자 고치기 시작'], ['Esc', '글 고치기 끝']]],
-  ['고치기', 'i-pen', [['Mod+Z', '되돌리기'], ['Mod+Shift+Z | Mod+Y', '다시 하기'], ['Mod+C | Mod+X', '복사 / 잘라 내기'], ['Mod+V', '붙여넣기'], ['Mod+Shift+V', '같은 자리에 붙여넣기'], ['Mod+D', '복제'], ['Alt+끌기', '끌어서 복제'], ['Mod+A', '이 쪽의 요소 모두 고르기'], ['Delete | Backspace', '고른 요소 지우기'], ['Mod+G', '그룹으로 묶기'], ['Mod+Shift+G', '그룹 풀기'], ['Mod+L', '잠그기 / 풀기'], ['Mod+Alt+C | Mod+Alt+V', '서식 복사 / 서식 붙여넣기']]],
-  ['움직이기 · 맞추기', 'i-dist', [['← ↑ → ↓', '1mm 옮기기 (px 문서는 1px)'], ['Shift+화살표', '5mm (px 문서는 10px)'], ['Alt+화살표', '0.1mm'], ['Mod+← | Mod+→', '1° 돌리기 (Shift를 더하면 15°)'], ['Shift+H | Shift+V', '그림 좌우 / 위아래 뒤집기'], ['1 … 9 | 0', '투명도 10~90% / 100%'], ['Mod+] | Mod+[', '한 칸 앞으로 / 뒤로'], ['Mod+Shift+] | Mod+Shift+[', '맨 앞으로 / 맨 뒤로'], ['Alt+A | Alt+H | Alt+D', '왼쪽 / 가로 가운데 / 오른쪽 맞춤'], ['Alt+W | Alt+V | Alt+S', '위 / 세로 가운데 / 아래 맞춤'], ['Alt+Shift+H | Alt+Shift+V', '가로 / 세로 같은 간격'], ['Alt 누르고 있기', '고른 요소와 다른 요소 사이 거리 보기']]],
+  ['넣기', 'i-plus', [['T', '글 상자'], ['R', '사각형'], ['O', '원'], ['L', '선'], ['P', '펜(그리기) 켬 / 끔'], ['Enter', '고른 글 상자 고치기 시작'], ['글자 치기', '글 상자 하나를 고른 채 치면 바로 고치기 — 친 글로 바뀜 (PowerPoint처럼, ⌘Z로 되돌림)'], ['Esc', '글 고치기 끝'], ['R | O | L | T', '(세로 메뉴 「영상」을 연 때는 영상 키 — R 녹음 · O 범위 끝 · L 재생 · T 글자)']]],
+  ['고치기', 'i-pen', [['Mod+Z', '실행 취소 (되돌리기)'], ['Mod+Shift+Z | Mod+Y', '다시 실행'], ['Mod+C | Mod+X', '복사 / 잘라 내기'], ['Mod+V', '붙여넣기'], ['Mod+Shift+V', '같은 자리에 붙여넣기'], ['Mod+D', '복제'], ['Alt+끌기', '끌어서 복제'], ['Mod+A', '이 쪽의 요소 모두 고르기'], ['Delete | Backspace', '고른 요소 지우기'], ['Mod+G', '그룹으로 묶기'], ['Mod+Shift+G', '그룹 풀기'], ['Mod+L', '잠그기 / 풀기'], ['Mod+Alt+C | Mod+Alt+V', '서식 복사 / 서식 붙여넣기']]],
+  ['움직이기 · 맞추기', 'i-dist', [['← ↑ → ↓', '1mm 옮기기 (px 문서는 1px)'], ['Shift+화살표', '5mm (px 문서는 10px)'], ['Alt+화살표', '0.1mm'], ['Mod+← | Mod+→', '1° 돌리기 (Shift를 더하면 15°)'], ['Shift+H | Shift+V', '그림 좌우 / 위아래 뒤집기'], ['1 … 9 | 0', '투명도 10~90% / 100% (글 상자 하나만 고른 때는 글자로 들어감)'], ['Mod+] | Mod+[', '한 칸 앞으로 / 뒤로'], ['Mod+Shift+] | Mod+Shift+[', '맨 앞으로 / 맨 뒤로'], ['Alt+A | Alt+H | Alt+D', '왼쪽 / 가로 가운데 / 오른쪽 맞춤'], ['Alt+W | Alt+V | Alt+S', '위 / 세로 가운데 / 아래 맞춤'], ['Alt+Shift+H | Alt+Shift+V', '가로 / 세로 같은 간격'], ['Alt 누르고 있기', '고른 요소와 다른 요소 사이 거리 보기']]],
   ['글자', 'i-text', [['Mod+B | Mod+I | Mod+U', '굵게 / 기울임 / 밑줄'], ['Mod+Shift+. | Mod+Shift+,', '글자 크게 / 작게'], ['Mod+A', '(글 고치는 중) 이 글 상자 글 모두 고르기']]],
-  ['화면 · 쪽', 'i-pages', [['Mod+0', '화면에 딱 맞게'], ['Mod+1', '실제 크기 (100%)'], ['Mod+= | Mod+-', '크게 / 작게 보기'], ['Space+끌기', '화면 옮기기 (마우스 가운데 단추 끌기도)'], ['PageUp | PageDown', '앞 쪽 / 다음 쪽'], ['← → ↑ ↓', '(아무것도 고르지 않았을 때) 쪽 넘기기'], ['Home | End', '첫 쪽 / 끝 쪽'], ['Mod+Enter', '다음에 새 쪽 넣기'], ['Mod+Shift+Enter', '이 쪽 복제']]],
+  ['화면 · 쪽', 'i-pages', [['Mod+0', '화면에 딱 맞게'], ['Mod+1', '실제 크기 (100%)'], ['Mod+= | Mod+-', '크게 / 작게 보기'], ['Space+끌기', '화면 옮기기 (마우스 가운데 단추 끌기도)'], ['Shift+R', '눈금자 켬 / 끔 (눈금자에서 끌면 안내선)'], ['Mod+\\', '양쪽 패널 접기 / 펴기 (편집 화면만)'], ['PageUp | PageDown', '앞 쪽 / 다음 쪽'], ['← → ↑ ↓', '(아무것도 고르지 않았을 때) 쪽 넘기기'], ['Home | End', '(아무것도 고르지 않았을 때) 첫 쪽 / 끝 쪽'], ['Mod+Enter', '다음에 새 쪽 넣기'], ['Mod+Shift+Enter', '이 쪽 복제']]],
   ['쪽 목록 (왼쪽 「페이지」)', 'i-layers', [['Mod+A', '쪽 모두 고르기'], ['Mod+C | Mod+X | Mod+V', '쪽 복사 / 잘라 내기 / 붙여넣기'], ['Mod+D', '쪽 복제'], ['Delete', '쪽 지우기'], ['Mod+↑ | Mod+↓', '쪽 순서 위로 / 아래로'], ['Shift+↑ | Shift+↓', '여러 쪽 고르기'], ['F2', '쪽 이름 바꾸기']]],
   ['달력 칸', 'i-cal', [['Enter | F2', '칸에 글 쓰기'], ['글자 치기', '고른 칸에 바로 쓰기'], ['Delete', '칸 글·서식 지우기'], ['← ↑ → ↓', '옆 칸으로'], ['Shift+화살표', '여러 칸 고르기'], ['Esc', '칸 고르기 풀기']]],
   ['내 드라이브', 'i-folder', [['오른쪽 클릭', '열기·이름 바꾸기·사본·이동·내려받기·정보·휴지통'], ['Mod+클릭 | Shift+클릭', '여러 개 고르기'], ['Mod+A', '모두 고르기'], ['Enter', '열기'], ['F2', '이름 바꾸기'], ['Delete', '휴지통으로'], ['끌어 놓기', '폴더·왼쪽 메뉴(내 드라이브·종류·휴지통)로 옮기기'], ['Esc', '고른 것 풀기']]],
@@ -2933,7 +2940,7 @@ const keyHTML = k => k.split(' | ').map(alt => alt.split('+').map(t => { t = t.t
 function keysPageHTML(q) {
   q = (q || '').trim().toLowerCase(); const hit = (k, d) => !q || d.toLowerCase().includes(q) || k.toLowerCase().includes(q) || keyHTML(k).toLowerCase().includes(q);
   const groups = KEY_GROUPS.map(([t, ic, rows]) => [t, ic, rows.filter(([k, d]) => hit(k, d)).map(([k, d]) => `<tr><td>${keyHTML(k)}</td><td>${esc(d)}</td></tr>`)]).filter(g => g[2].length);
-  const tlRows = (typeof TL_KEYS !== 'undefined' ? TL_KEYS : []).filter(([a, b]) => hit(a, b)).map(([a, b]) => `<tr><td>${a.split(/(\s\/\s|\s\+\s)/).map(x => /^\s[\/+]\s$/.test(x) ? `<i>${x.trim()}</i>` : `<kbd>${esc(x.trim())}</kbd>`).join('')}</td><td>${esc(b)}</td></tr>`);
+  const tlRows = (typeof TL_KEYS !== 'undefined' ? TL_KEYS : []).filter(([a, b]) => hit(a, b)).map(([a, b]) => `<tr><td>${a.split(/(\s\/\s|\s\+\s)/).map(x => /^\s[\/+]\s$/.test(x) ? `<i>${x.trim()}</i>` : `<kbd>${esc(({ Ctrl: KEY_NAME.Mod, Alt: KEY_NAME.Alt, Shift: KEY_NAME.Shift })[x.trim()] || x.trim())}</kbd>`).join('')}</td><td>${esc(b)}</td></tr>`);
   if (tlRows.length) groups.push(['영상 타임라인 (영상 편집 중)', 'i-video', tlRows]);
   return `<h3 class="mantitle">⌨️ 단축키 모음</h3><p class="mansum">${keyIsMac ? '맥에서는 ⌘(Command)·⌥(Option)·⇧(Shift)' : '윈도우에서는 Ctrl·Alt·Shift'} 키를 씁니다. 편집 화면에서 <kbd>?</kbd>를 누르면 이 쪽이 바로 열립니다. 글 상자를 고치는 중이거나 입력 칸에 커서가 있을 때는 글자 키 단축키가 듣지 않습니다.</p>
     <input type="search" class="keysq" id="keysQ" placeholder="🔍 단축키 찾기 — 예: 복제, 맞춤, 쪽" value="${esc(q)}" autocomplete="off">
@@ -3541,7 +3548,10 @@ function recentTpls() { try { return JSON.parse(localStorage.getItem('naracal-re
 function noteRecentTpl(id) { const r = recentTpls().filter(x => x !== id); r.unshift(id); try { localStorage.setItem('naracal-recent-tpls', JSON.stringify(r.slice(0, 8))); } catch (e) {} }
 let galObs = null;
 function tplCard(t) { const two = !!t.theme; return `<button class="tcard lazy ${two ? 'two' : ''}" data-tid="${t.id}" title="${esc(t.name)}"><div class="tbox" data-w="${t.w}" data-h="${t.h}" data-n="${two ? 2 : 1}"></div><span>${esc(t.name)}</span><small>${t.theme ? esc(t.desc) : (t.w >= 1000 ? (t.w / 10) + '×' + (t.h / 10) + 'cm' : isScreenSize(t.w, t.h) ? Math.round(t.w * 96 / 25.4) + '×' + Math.round(t.h * 96 / 25.4) + 'px' : Math.round(t.w) + '×' + Math.round(t.h) + 'mm')}</small></button>`; }
-function fillCard(card, t) { if (!card.classList.contains('lazy')) return; card.classList.remove('lazy'); const pages = t.build(); const two = t.theme && pages.length > 1; const bx = card.querySelector('.tbox'); bx.innerHTML = tplSheet(t, pages) + (two ? tplSheet(t, pages.slice(1)) : ''); fitBoxes(card, '.tbox', 110); }
+function fillCard(card, t) { if (!card.classList.contains('lazy')) return; card.classList.remove('lazy'); const pages = t.build(); const two = t.theme && pages.length > 1; const bx = card.querySelector('.tbox'); const put = () => { bx.innerHTML = tplSheet(t, pages) + (two ? tplSheet(t, pages.slice(1)) : ''); fitBoxes(card, '.tbox', 110); }; put(); tplFitThen(two ? pages.slice(0, 2) : pages.slice(0, 1), put); }
+/* 11/26 포스터·자료실 조: 썸네일·미리보기는 글 자동 맞춤 없이 그려 제목이 거대하게 넘쳐 보이던 것(65개) — 맞출 글이 있으면 화면 밖에서 맞춘 뒤 다시 그림 */
+function tplFitThen(pages, again) { pages.forEach(p => (p.els || []).forEach(e => { if (e.type === 'text') for (const k in TEXT_DEF) if (e[k] === undefined) e[k] = TEXT_DEF[k]; }));  /* 막 만든 템플릿 글에는 기본값(sizing 등)이 아직 없음 — 문서를 열 때처럼 채움 */
+  const fe = pages.flatMap(p => p.els || []).filter(e => e.type === 'text' && e.fitText && e.sizing === 'fixed'); if (!fe.length) return; fitTextOffscreen(fe).then(again).catch(() => {}); }
 function renderGallery() {
   const g = $('#tgal'); if (!g) return; const items = tplItems(); const tc = $('#tcount'); if (tc) tc.textContent = `${items.length}개`;
   const filtered = tplCat !== 'all' || tplQ.trim() || Object.values(tplF).some(Boolean);
@@ -3587,12 +3597,13 @@ function openTplPreview(t) {
     <div class="row" style="margin-top:10px;justify-content:flex-end"><span class="hint" style="margin:0;flex:1">${t.theme ? '테마는 표지·이미지면·달력면·뒷표지 전체 디자인입니다. 이미 만든 캘린더에 적용하면 문구·일정·그림은 그대로 두고 디자인만 바뀝니다.' : t.holiday ? '날짜 칸은 다가오는 휴일(대체 휴일 포함)로 자동으로 채워집니다. 글자·그림·색은 자유롭게 바꿀 수 있습니다.' : '만든 뒤 글자·그림·색을 자유롭게 바꿀 수 있습니다. 로고와 연락처는 도장 정보로 고쳐 주세요.'}</span>
     ${t.theme ? `<button class="btn" id="tplRetheme" ${hasCal ? '' : 'disabled title="현재 문서에 캘린더 페이지가 없습니다"'}>현재 캘린더에 적용</button><button class="btn primary" id="tplWizard">이 테마로 캘린더 만들기</button>` : (choice === 'doc' ? `<button class="btn ${empty ? 'primary' : ''}" id="tplHere">${empty ? '이 쪽에 적용' : '현재 쪽 뒤에 추가'}</button><button class="btn ${empty ? '' : 'primary'}" id="tplNew">이 크기로 새 문서</button>` : `<button class="btn" id="tplHere" title="지금 문서 크기(${label(docS)})에 맞춰 넣습니다">${empty ? '지금 문서에 맞춰 적용' : '지금 문서 뒤에 추가 (문서 크기)'}</button><button class="btn primary" id="tplNew">${label(S)} 새 문서</button>`)}</div>`;
     requestAnimationFrame(() => fitBoxes($('#tplBody'), '.tprev', Math.min(500, window.innerHeight * 0.5)));
+    tplFitThen(pages.slice(0, n), () => { const tp = $('#tprev'); if (!tp) return; tp.innerHTML = pages.slice(0, n).map(pg => tplSheet(Object.assign({}, t, { w: S.w, h: S.h }), [pg])).join(''); fitBoxes($('#tplBody'), '.tprev', Math.min(500, window.innerHeight * 0.5)); });
     const ss = $('#tplSize'); if (ss) ss.onchange = () => { choice = ss.value; draw(); };
     if (t.theme) { $('#tplWizard').onclick = () => { d.close(); openWizard(doc.calendar.year, t.theme.id); }; const rb = $('#tplRetheme'); if (rb) rb.onclick = () => { doc.calendar.theme = clone(t.theme); const y = doc.calendar.year || 2027; const nrep = CAL.retheme(doc, uid, y); ensureAllHolidays(); commit(); renderAll(); d.close(); toast(`"${t.name}" 테마를 ${nrep}쪽에 적용했습니다`); }; return; }
     const ready = async pgs => { if (!t.lib) return true; try { setStatus('자료실 그림을 넣는 중…'); await NC.lib.materialize(pgs, addAsset); return true; } catch (e) { toast('자료실 파일을 읽지 못했습니다: ' + e.message, true); return false; } finally { setStatus(''); } };
     $('#tplNew').onclick = async () => { if (doc.pages.some(p => p.els.length) && !window.confirm(`현재 문서를 닫고 새 문서를 만들까요? (${keepNote()})`)) return; await keepCurrentDoc(); const pgs = tplPagesFor(t, S); fillDojang(pgs); const keepAssets = doc.assets; doc.assets = {}; if (!(await ready(pgs))) { doc.assets = keepAssets; return; } const libAssets = doc.assets; doc.assets = keepAssets; await store.disconnect(); const nd = newDoc(); nd.w = S.w; nd.h = S.h; nd.fmt = S.fmt || ''; nd.name = t.name; nd.pages = pgs; nd.calendar = doc.calendar; nd.holidays = doc.holidays; nd.assets = libAssets; nd.fonts = doc.fonts; nd.rules = doc.rules; nd.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); if (!S.screen && ['print', 'doc', 'cal', 'sign'].includes((FORMATS.find(f => f[0] === S.fmt) || [])[2])) nd.bleed = 3; doc = nd; hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); clearTimeout(fileTimer); setStatus('아직 저장 위치를 고르지 않았습니다 · 저장(Ctrl+S)을 누르면 위치를 고릅니다 (그 전까지는 이 브라우저에 임시 저장)'); zoom = 0; renderAll(); fitCanvas(); updateSaveBadge(); d.close(); toast(`"${t.name}" 문서를 만들었습니다 (${label(S)})`); };
     // 지금 문서에 넣기: 늘 지금 문서 크기로 다시 짜서 넣음. 지금 쪽이 비어 있으면 그 쪽을 바꿈
-    $('#tplHere').onclick = async () => { const pg = tplPagesFor(t, docS); if (!(await ready(pg))) return; const nDj = fillDojang(pg); const emp = !page().els.length, only = emp && doc.pages.length === 1, defName = !doc.name || doc.name === '새 디자인' || FORMATS.some(f => f[1] === doc.name); doc.pages.splice(emp ? cur : cur + 1, emp ? 1 : 0, ...pg); const at = emp ? cur : cur + 1; if (only && defName && t.name) { doc.name = t.name; $('#pname').value = doc.name; }  /* 빈 새 문서에 넣으면 문서 이름도 템플릿 이름으로 */ commit(); goto(at); d.close(); toastUndo((emp ? `"${t.name}"${eul(t.name)} 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`) + (nDj ? ` · 도장 정보 ${nDj}곳 채움` : '')); };
+    $('#tplHere').onclick = async () => { const pg = tplPagesFor(t, docS); if (!(await ready(pg))) return; const nDj = fillDojang(pg); const emp = !page().els.length, only = emp && doc.pages.length === 1, defName = !doc.name || doc.name === '새 디자인' || FORMATS.some(f => f[1] === doc.name); doc.pages.splice(emp ? cur : cur + 1, emp ? 1 : 0, ...pg); const at = emp ? cur : cur + 1; if (only && defName && t.name) { doc.name = t.name; $('#pname').value = doc.name; }  /* 빈 새 문서에 넣으면 문서 이름도 템플릿 이름으로 */ commit(); goto(at); d.close(); toastUndo((emp ? `"${t.name}"${eul(t.name)} 이 쪽에 적용했습니다` : `${pg.length}쪽을 추가했습니다`) + (nDj ? ` · 도장 정보 ${nDj}곳 채움` : '') + ((() => { const h = []; pg.forEach(p => (p.els || []).forEach(e => { if (e.type === 'text' && !e.hidden) { const m = String(e.text || '').match(/○○|○월|○일|010-0000-0000|0000-0000/); if (m) h.push(m[0]); } })); return h.length ? ` · 아직 고칠 자리 ${h.length}곳(「${h[0]}」 등 — 날짜·연락처를 바꿔 주세요)` : ''; })())); };
   };
   draw(); d.showModal();
 }
@@ -4010,7 +4021,7 @@ function renderInspector() {
     if (b.dataset.toggle) { el.locked = !el.locked; commit(); renderOverlay(); renderInspector(); return; }
     if (b.dataset.calln) { const [a, c] = b.dataset.calln.split(',').map(Number); selEls().filter(x => x.type === 'cal').forEach(x => { x.s = Object.assign({}, x.s || {}, { lineW: a, outerW: c }); }); commit(); rerender(); return; } /* 달력 선 굵기 한 번에 */
     if (b.dataset.arw) { const [a0, e0] = b.dataset.arw; selEls().filter(x => x.type === 'shape').forEach(x => { x.arrowStart = a0 === '1'; x.arrowEnd = e0 === '1'; }); commit(); rerender(); return; }
-    if (b.dataset.setv != null) { const i = b.dataset.setv.indexOf(':'), k = b.dataset.setv.slice(0, i); let v; try { v = JSON.parse(b.dataset.setv.slice(i + 1)); } catch (er) { v = b.dataset.setv.slice(i + 1); } if (k === 'wrap') { setImgWrap(selEls().filter(x => canWrap(x) && !x.locked), v); return; } selEls().filter(x => x.type === el.type).forEach(x => setK(x, k, v)); commit(); rerender(); return; } /* 그림 고르기 단추 — 같은 종류를 여럿 골랐으면 모두 */
+    if (b.dataset.setv != null) { const i = b.dataset.setv.indexOf(':'), k = b.dataset.setv.slice(0, i); let v; try { v = JSON.parse(b.dataset.setv.slice(i + 1)); } catch (er) { v = b.dataset.setv.slice(i + 1); } if (k === 'wrap') { setImgWrap(selEls().filter(x => canWrap(x) && !x.locked), v); return; } selEls().filter(x => x.type === el.type).forEach(x => setK(x, k, v)); if (k === 'speed' && el.type === 'video' && page() && page().vdur) { const was = page().vdur, nd = Math.max(0.5, Math.round(((Number(el.tout || el.dur || 0) - Number(el.tin || 0)) / Math.max(0.1, Number(v) || 1) + (el.anim ? Number(el.anim.d || 0) : 0)) * 10) / 10); if (Math.abs(nd - was) > 0.05) { page().vdur = nd; toast(`속도 ${v}배 — 장면 길이를 ${was}초 → ${nd}초로 맞췄습니다 (파이널컷처럼)${Number(v) !== 1 ? ' · 속도를 바꾼 동영상의 원래 소리는 빠집니다' : ''}`); } }  /* 11/26 영상 조: 속도만 바뀌고 장면 길이는 그대로라 뒤가 멈춘 화면이 되던 것 */ commit(); rerender(); return; } /* 그림 고르기 단추 — 같은 종류를 여럿 골랐으면 모두 */
     if (b.dataset.set != null) { const i = b.dataset.set.indexOf(':'); const k = b.dataset.set.slice(0, i), v = b.dataset.set.slice(i + 1); if (k === 'chartColors') el.colors = v.split(',').map(s => s.trim()); else setK(el, k, v); commit(); rerender(); return; }
     if (b.dataset.preset) { const p = FX.TEXT_PRESETS.find(x => x.id === b.dataset.preset); Object.assign(el, p.st); if (p.id === 'plain') { el.warp = 'none'; el.vertical = false; } commit(); rerender(); return; }
     if (b.dataset.imgpreset) { const p = FX.IMG_PRESETS.find(x => x[0] === b.dataset.imgpreset); el.fx = Object.assign({}, p[2]); commit(); rerender(); return; }
@@ -4531,7 +4542,7 @@ async function closeDoc() {
   await store.disconnect(); clearTimeout(fileTimer);
   doc = newDoc(); doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); hist = []; histMeta = []; hptr = -1; cur = 0; sel = []; $('#pname').value = doc.name; commit(); store.state.dirty = false;
   renderAll(); updateSaveBadge(); sideTab = 'tpl'; renderRail(); renderSide(); fitCanvas && fitCanvas();
-  setStatus(''); toast(saved || hadFile ? `「${name}」을(를) 저장하고 닫았습니다 — 다시 열려면 내 드라이브에서` : has ? `「${name}」을(를) 닫았습니다 — 저장 ▾ → 「직전 문서 되살리기」로 다시 열 수 있습니다` : `「${name}」을(를) 닫았습니다`);
+  setStatus(''); toast(saved || hadFile ? `「${name}」${eul(name)} 저장하고 닫았습니다 — 다시 열려면 내 드라이브에서` : has ? `「${name}」을(를) 닫았습니다 — 저장 ▾ → 「직전 문서 되살리기」로 다시 열 수 있습니다` : `「${name}」을(를) 닫았습니다`);
   openDrive(null, 'home');
 }
 async function createDesign(w, h, name, fmtId) {
@@ -4562,7 +4573,7 @@ function openDrive(path, view) {
     <div class="ndbody"><nav id="dvNav"></nav><div class="ndmain" id="dvMain"></div></div>`;
     document.body.appendChild(d); d.querySelector('[data-close]').onclick = () => d.close();
     $('#dvNew').onclick = () => { d.close(); openNewDesign(); }; $('#dvImport').onclick = () => { d.close(); openImport(); };
-    d.addEventListener('click', driveClick); d.addEventListener('contextmenu', driveContext); document.addEventListener('keydown', driveKey);  /* 문서 전체에서 받음 — 메뉴를 닫으면 초점이 창 밖으로 빠져도 F2·Delete가 들음 */ d.addEventListener('cancel', e => { if ($('#dvPop') || (drv.sel && drv.sel.size) || document.querySelector('#dvMain input.dvren')) { e.preventDefault(); } }); d.addEventListener('close', () => { drv.sel = new Set(); $('#dvPop') && $('#dvPop').remove(); $('#dvSelBar') && $('#dvSelBar').remove(); }); d.addEventListener('dragstart', driveDrag); d.addEventListener('dragover', e => { const z = e.target.closest('[data-dropdir],[data-droptrash]'); if (z) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; d.querySelectorAll('.over').forEach(x => { if (x !== z) x.classList.remove('over'); }); z.classList.add('over'); } }); d.addEventListener('dragend', () => { d.classList.remove('dvdragging'); d.querySelectorAll('.over').forEach(x => x.classList.remove('over')); });
+    d.addEventListener('click', driveClick); d.addEventListener('contextmenu', driveContext); document.addEventListener('keydown', driveKey);  /* 문서 전체에서 받음 — 메뉴를 닫으면 초점이 창 밖으로 빠져도 F2·Delete가 들음 */ d.addEventListener('cancel', e => { if ($('#dvPop') || (drv.sel && drv.sel.size) || document.querySelector('#dvMain input.dvren')) { e.preventDefault(); } }); d.addEventListener('close', () => { drv.sel = new Set(); $('#dvPop') && $('#dvPop').remove(); $('#dvSelBar') && $('#dvSelBar').remove(); }); d.addEventListener('dragstart', driveDrag); d.addEventListener('dragover', e => { let z = e.target.closest('[data-dropdir],[data-droptrash]'); if (z && z.dataset.dropdir && drv.view === 'drive' && z.dataset.dropdir === JSON.stringify(drv.path)) z = null; if (!z) d.querySelectorAll('.over').forEach(x => x.classList.remove('over')); if (z) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; d.querySelectorAll('.over').forEach(x => { if (x !== z) x.classList.remove('over'); }); z.classList.add('over'); } }); d.addEventListener('dragend', () => { d.classList.remove('dvdragging'); d.querySelectorAll('.over').forEach(x => x.classList.remove('over')); });
     d.addEventListener('dragleave', e => { const t = e.target.closest('[data-dropdir],[data-droptrash]'); if (t && !t.contains(e.relatedTarget)) t.classList.remove('over'); }); d.addEventListener('drop', driveDrop);
   }
   renderDrive(); if (!d.open) d.showModal();
@@ -4601,7 +4612,7 @@ async function renderDrive() {
   if (!ready) { main.innerHTML = `<div class="dvempty"><h3>동기화 폴더가 연결되어 있지 않습니다</h3><p class="hint">구글 드라이브의 나라차디자인공방 폴더를 연결하면 폴더별로 디자인을 정리할 수 있습니다.</p><button class="btn primary" data-dvnav="sync">동기화 폴더 연결</button> <button class="btn" data-dvact="other">다른 위치의 파일 열기</button></div>`; return; }
   main.innerHTML = '<p class="hint"><span class="spin"></span> 불러오는 중…</p>';
   const cur = store.state.handle ? store.state.fileName : null, curPath = await curDocPath();
-  const isCur = x => cur && x.name === cur && curPath && curPath.join('/') === x.path.join('/');
+  const isCur = x => !!x._cur;
   let folders = [], docs = [], title = '', crumbs = '';
   const q = drv.q.trim().toLowerCase();
   if (drv.view === 'home') { docs = (await store.walkDocs().catch(() => [])).sort((a, b) => b.lastModified - a.lastModified).slice(0, 8); }
@@ -4618,6 +4629,7 @@ async function renderDrive() {
   const trash = drv.view === 'trash';
   const fcardH = f => `<div class="dvfolder" data-dvfolder="${esc(f.name)}" draggable="${trash ? 'false' : 'true'}" ${trash ? '' : `data-dropdir="${esc(JSON.stringify(f.path))}"`}><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><div><b>${esc(f.name)}</b><small>${f.count}개 항목</small></div><button class="dvmore" data-dvmenu="folder:${esc(f.name)}" title="더보기">⋯</button></div>`;
   const dcardH = (x, i) => `<div class="dvdoc ${isCur(x) ? 'cur' : ''}" data-dvdoc="${i}" draggable="${trash ? 'false' : 'true'}"><div class="dvthumb" data-thumb="${i}"></div><div class="dvmeta"><b title="${nm(x)}">${nm(x)}</b><small>${when(x.lastModified)}${drv.view !== 'drive' && x.path.length ? ' · ' + esc(x.path.join(' › ')) : ''}${isCur(x) ? ' · <em>작업 중</em>' : ''}</small></div><button class="dvmore" data-dvmenu="doc:${i}" title="더보기">⋯</button></div>`;
+  for (const x of docs) x._cur = await isCurDoc(x);
   drv.docs = docs; drv.folders = folders;
   if (drv.view === 'home') { main.innerHTML = homeTop() + `<h3 style="margin-top:22px">최근 디자인</h3>${docs.length ? `<div class="dvdocs">${docs.map(dcardH).join('')}</div>` : '<p class="hint">아직 디자인이 없습니다.</p>'}`;
     const ob = new IntersectionObserver(ents => ents.forEach(en => { if (!en.isIntersecting) return; ob.unobserve(en.target); fillThumb(en.target, docs[Number(en.target.dataset.thumb)]); }), { root: main, rootMargin: '200px' }); main.querySelectorAll('[data-thumb]').forEach(t => ob.observe(t)); return; }
@@ -4627,7 +4639,7 @@ async function renderDrive() {
     <select id="dvSort"><option value="date" ${drv.sort === 'date' ? 'selected' : ''}>수정한 날짜</option><option value="name" ${drv.sort === 'name' ? 'selected' : ''}>이름</option></select>
     ${drv.view === 'drive' && !q ? '<button class="btn" data-dvact="mkdir"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM12 10v6M9 13h6"/></svg>새 폴더</button>' : ''}
     ${trash && (folders.length || docs.length) ? '<button class="btn danger" data-dvact="empty">휴지통 비우기</button>' : ''}</div>
-  ${trash ? '<p class="hint">휴지통의 항목은 "되살리기"로 내 드라이브 맨 위로 돌아갑니다. "영구 삭제"하면 되돌릴 수 없습니다.</p>' : drv.view === 'drive' && !q ? `<p class="hint">마우스 <b>오른쪽 버튼</b>으로 열기·이름 바꾸기·사본·이동·휴지통 · ${isMac ? '⌘' : 'Ctrl'}·Shift를 누른 채 누르면 여러 개 고르기 · 디자인·폴더를 끌어 폴더나 <b>왼쪽 메뉴</b>(내 드라이브·폴더·종류·휴지통)에 놓으면 옮겨집니다. 이 폴더에서 "새 디자인 만들기"를 누르면 이 폴더에 저장됩니다.</p>` : ''}
+  ${trash ? '<p class="hint">오른쪽 클릭 → <b>원래 자리로 되살리기</b>(휴지통에 넣은 그 폴더로 — 다른 PC가 넣은 것은 내 드라이브 맨 위로). <b>영구 삭제</b>하면 되돌릴 수 없습니다.</p>' : drv.view === 'drive' && !q ? `<p class="hint"><b>오른쪽 클릭</b> = 파일 메뉴 · <b>${isMac ? '⌘' : 'Ctrl'}/Shift+클릭</b> = 여러 개 · <b>끌어서</b> 폴더·왼쪽 메뉴(종류·휴지통)로 옮기기</p>` : ''}
   ${drv.view === 'drive' && drv.path.length && !q ? `<div class="dvfolder up" data-crumb="${drv.path.length - 1}" data-dropdir="${esc(JSON.stringify(drv.path.slice(0, -1)))}"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/></svg><div><b>상위 폴더로</b><small>${esc(drv.path.length > 1 ? drv.path[drv.path.length - 2] : '내 드라이브')}</small></div></div>` : ''}
   ${folders.length ? `<div class="dvfolders">${folders.map(fcardH).join('')}</div>` : ''}
   ${docs.length ? `<div class="dvdocs">${docs.map(dcardH).join('')}</div>` : !folders.length ? `<p class="hint" style="margin-top:30px;text-align:center">${trash ? '휴지통이 비어 있습니다.' : q ? '맞는 디자인이 없습니다.' : '아직 디자인이 없습니다. 오른쪽 위 "새 디자인 만들기"로 시작하세요.'}</p>` : ''}`;
@@ -4647,8 +4659,8 @@ async function fillThumb(box, x) {
   if (!html) {
     try {
       const j = JSON.parse(await (await x.handle.getFile()).text());
-      const saved = doc; doc = Object.assign(newDoc(), j, { bleed: 0, cropMarks: false });
-      try { html = { h: sheetHTML(j.pages[0], 'thumb'), w: j.w, hh: j.h, n: j.pages.length }; } finally { doc = saved; }
+      const saved = doc; const d0 = Object.assign(newDoc(), j); sanitizeDoc(d0); doc = Object.assign(d0, { bleed: 0, cropMarks: false });  /* 11/26 보안 조: 미리보기는 정리 없이 그려 폴더만 열어도 숨긴 스크립트가 돌던 것 */
+      try { html = { h: sheetHTML(d0.pages[0], 'thumb'), w: d0.w, hh: d0.h, n: d0.pages.length }; } finally { doc = saved; }
       thumbCache.set(key, html);
     } catch (e) { box.innerHTML = '<span class="hint">미리보기 없음</span>'; return; }
   }
@@ -4664,7 +4676,7 @@ async function driveClick(e) {
   const ex = t.closest('[data-dvexp]'); if (ex) { const x = drv.exp[Number(ex.dataset.dvexp)]; try { const f = await x.handle.getFile(); const u = URL.createObjectURL(f); window.open(u, '_blank'); setTimeout(() => URL.revokeObjectURL(u), 60000); } catch (err) { toast('열 수 없습니다: ' + err.message, true); } return; }
   const ga = t.closest('[data-dvgather]'); if (ga) { const K = kindInfo(drv.kind), list = drv.stray.slice(); if (!window.confirm(`${list.length}개 문서를 「내 드라이브 › ${K[1]}」 폴더로 옮길까요?\n(지금 작업 중인 문서도 옮겨지며 그 자리에서 계속 저장됩니다)`)) return;
     const cur0 = store.state.handle ? store.state.fileName : null, curP = await curDocPath(); let n = 0; await store.ensureDir([K[1]]);
-    for (const x of list) { try { const nh = await store.moveEntry(x.handle, x.path, [K[1]]); n++; if (cur0 && x.name === cur0 && curP && curP.join('/') === x.path.join('/')) { store.state.handle = nh; store.state.fileName = nh.name; store.state.lastMod = 0; await store.idbSet('fileHandle', nh).catch(() => {}); } } catch (err) { console.warn(err); } }
+    for (const x of list) { try { const nh = await store.moveEntry(x.handle, x.path, [K[1]]); n++; if (x._cur) { store.state.handle = nh; store.state.fileName = nh.name; store.state.lastMod = 0; await store.idbSet('fileHandle', nh).catch(() => {}); } } catch (err) { console.warn(err); } }
     toast(`${n}개 문서를 「${K[1]}」 폴더로 모았습니다`); renderDrive(); return; }
   const lc = t.closest('[data-dvlocal]'); if (lc) { $('#dlgDrive').close(); restorePrevDoc(Number(lc.dataset.dvlocal)); return; }
   const cr = t.closest('[data-crumb]'); if (cr) { drv.path = drv.path.slice(0, Number(cr.dataset.crumb)); drv.view = 'drive'; renderDrive(); return; }
@@ -4677,8 +4689,8 @@ async function driveClick(e) {
     return;
   }
   const mm = t.closest('[data-dvmenu]'); if (mm) { e.stopPropagation(); driveMenu(mm, mm.dataset.dvmenu); return; }
-  const mi = t.closest('[data-dvmi]'); if (mi) { if (mi.disabled) return; const [kind, key, op] = mi.dataset.dvmi.split('|'); $('#dvPop') && $('#dvPop').remove(); if (kind === 'bg') return driveBg(op); if (kind === 'multi') return driveMulti(op); if (op === 'rename') return dvInlineRename(kind, key); await driveOp(kind, key, op); return; }
-  if (!t.closest('#dvPop')) $('#dvPop') && $('#dvPop').remove();
+  const mi = t.closest('[data-dvmi]'); if (mi) { if (mi.disabled) return; const sv = mi.dataset.dvmi, a1 = sv.indexOf('|'), a2 = sv.lastIndexOf('|'), kind = sv.slice(0, a1), key = sv.slice(a1 + 1, a2), op = sv.slice(a2 + 1);  /* 폴더 이름에 | 가 들어도 (11/26 보안 조) */ dvPopClose(true); if (kind === 'bg') return driveBg(op); if (kind === 'multi') return driveMulti(op); if (op === 'rename') return dvInlineRename(kind, key); await driveOp(kind, key, op); return; }
+  if (!t.closest('#dvPop')) dvPopClose(false);
   if (t.closest('#dvSelBar')) return;
   { const card = t.closest('[data-dvdoc],[data-dvfolder]'); if (card && (e.metaKey || e.ctrlKey || e.shiftKey)) { dvSelect(card, e.shiftKey ? 'range' : 'toggle'); return; } if (!card && t.closest('#dvMain') && drv.sel && drv.sel.size) { drv.sel = new Set(); dvSelShow(); } }
   const f = t.closest('[data-dvfolder]'); if (f && drv.view !== 'trash') { drv.path = drv.path.concat(f.dataset.dvfolder); drv.view = 'drive'; drv.q = ''; renderDrive(); return; }
@@ -4713,25 +4725,28 @@ function dvPlace(p, x, y, anchor) {  /* 메뉴를 창 안(그리고 화면 안)�
   L = Math.max(L0, Math.min(L, R0 - w)); T = Math.max(T0, Math.min(T, B0 - h));
   p.style.left = (L - o.left) + 'px'; p.style.top = (T - o.top) + 'px';
 }
-function dvPop(items, x, y, anchor) {
-  $('#dvPop') && $('#dvPop').remove();
+function dvPopClose(acted) { const p = $('#dvPop'); if (!p) return; if (!acted && p._restore) { drv.sel = p._restore; dvSelShow(); } p.remove(); }  /* ⋯·오른쪽 클릭으로 메뉴만 열고 닫으면 메뉴 때문에 고른 것을 풂 (11/26 UI·UX 조) */
+function dvPop(items, x, y, anchor, restore) {
+  const old = $('#dvPop'); if (old) { if (!restore && old._restore) restore = old._restore; old.remove(); }
   const p = document.createElement('div'); p.id = 'dvPop'; p.className = 'fmenu'; p.setAttribute('role', 'menu');
   p.innerHTML = items.map(it => it === '-' ? '<hr>' : it.head ? `<div class="dvph">${esc(it.head)}</div>` : `<button role="menuitem" data-dvmi="${it.mi}" class="${it.danger ? 'danger' : ''}" ${it.off ? 'disabled' : ''}><svg class="ic"><use href="#${DV_IC[it.ic] || 'i-open'}"/></svg>${esc(it.t)}${it.k ? `<kbd>${it.k}</kbd>` : ''}</button>`).join('');
-  $('#dlgDrive').appendChild(p); dvPlace(p, x, y, anchor); const f = p.querySelector('button:not([disabled])'); if (f) f.focus({ preventScroll: true });
+  if (restore) p._restore = restore; $('#dlgDrive').appendChild(p); dvPlace(p, x, y, anchor); const f = p.querySelector('button:not([disabled])'); if (f) f.focus({ preventScroll: true });
 }
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 function dvItems(kind, key) {
   const trash = drv.view === 'trash', mi = op => `${kind}|${esc(key)}|${op}`;
-  if (trash) return [{ ic: 'restore', t: '되살리기', mi: mi('restore') }, '-', { ic: 'purge', t: '영구 삭제', mi: mi('purge'), danger: true, k: isMac ? '⌫' : 'Del' }];
-  if (kind === 'folder') return [{ ic: 'open', t: '열기', mi: mi('open'), k: '↵' }, { ic: 'newdoc', t: '이 폴더에 새 디자인', mi: mi('newdoc') }, '-', { ic: 'rename', t: '이름 바꾸기', mi: mi('rename'), k: 'F2' }, { ic: 'move', t: '다른 폴더로 이동…', mi: mi('move') }, '-', { ic: 'trash', t: '휴지통으로', mi: mi('trash'), danger: true, k: isMac ? '⌫' : 'Del' }];
+  const head = { head: kind === 'folder' ? key : ((drv.docs[Number(key)] || {}).name || '').replace(/\.design\.json$/i, '') };
+  if (trash) return [head, { ic: 'restore', t: '원래 자리로 되살리기', mi: mi('restore') }, '-', { ic: 'purge', t: '영구 삭제', mi: mi('purge'), danger: true, k: isMac ? '⌫' : 'Del' }];
+  if (kind === 'folder') return [head, { ic: 'open', t: '열기', mi: mi('open'), k: '↵' }, { ic: 'newdoc', t: '이 폴더에 새 디자인', mi: mi('newdoc') }, '-', { ic: 'rename', t: '이름 바꾸기', mi: mi('rename'), k: 'F2' }, { ic: 'move', t: '다른 폴더로 이동…', mi: mi('move') }, '-', { ic: 'trash', t: '휴지통으로', mi: mi('trash'), danger: true, k: isMac ? '⌫' : 'Del' }];
   const x = drv.docs[Number(key)], cur = x && drvIsCur(x);
-  return [{ head: x ? x.name.replace(/\.design\.json$/i, '') : '' }, { ic: 'open', t: cur ? '작업으로 돌아가기' : '열기', mi: mi('open'), k: '↵' }, '-', { ic: 'rename', t: '이름 바꾸기', mi: mi('rename'), k: 'F2' }, { ic: 'dup', t: '사본 만들기', mi: mi('dup') }, { ic: 'move', t: '다른 폴더로 이동…', mi: mi('move') }, '-', { ic: 'down', t: '파일로 내려받기 (백업)', mi: mi('down') }, { ic: 'info', t: '정보 보기', mi: mi('info') }, '-', { ic: 'trash', t: '휴지통으로', mi: mi('trash'), danger: true, off: cur, k: isMac ? '⌫' : 'Del' }];
+  return [{ head: x ? x.name.replace(/\.design\.json$/i, '') : '' }, { ic: 'open', t: cur ? '작업으로 돌아가기' : '열기', mi: mi('open'), k: '↵' }, '-', { ic: 'rename', t: '이름 바꾸기', mi: mi('rename'), k: 'F2' }, { ic: 'dup', t: '사본 만들기', mi: mi('dup') }, { ic: 'move', t: '다른 폴더로 이동…', mi: mi('move') }, '-', { ic: 'down', t: '백업 파일로 저장 (.design.json)', mi: mi('down') }, { ic: 'info', t: '정보 보기', mi: mi('info') }, '-', { ic: 'trash', t: '휴지통으로', mi: mi('trash'), danger: true, off: cur, k: isMac ? '⌫' : 'Del' }];
 }
-function drvIsCur(x) { const st = store.state; return !!(st.handle && x && x.name === st.fileName && drv.curP && drv.curP.join('/') === x.path.join('/')); }
+function drvIsCur(x) { return !!(x && x._cur); }
+async function isCurDoc(x) { const st = store.state; if (!st.handle || !x || !x.handle || x.name !== st.fileName) return false; try { return !!(await st.handle.isSameEntry(x.handle)); } catch (e) { return false; } }  /* 11/26 데이터 조: 이름·경로가 아니라 같은 파일인지 */
 function driveMenu(btn, spec) {  /* ⋯ 단추 */
-  const [kind, key] = spec.split(':'); const card = btn.closest('[data-dvdoc],[data-dvfolder]'); if (card && !(drv.sel && drv.sel.has(dvKey(card)))) dvSelect(card, 'only');
-  if (drv.sel && drv.sel.size > 1 && card && drv.sel.has(dvKey(card))) { dvPop(dvMultiItems(), 0, 0, btn.getBoundingClientRect()); return; }
-  dvPop(dvItems(kind, key), 0, 0, btn.getBoundingClientRect());
+  const si = spec.indexOf(':'), kind = spec.slice(0, si), key = spec.slice(si + 1); const card = btn.closest('[data-dvdoc],[data-dvfolder]'); let back = null; if (card && !(drv.sel && drv.sel.has(dvKey(card)))) { back = new Set(drv.sel || []); dvSelect(card, 'only'); }
+  if (drv.sel && drv.sel.size > 1 && card && drv.sel.has(dvKey(card))) { dvPop(dvMultiItems(), 0, 0, btn.getBoundingClientRect(), back); return; }
+  dvPop(dvItems(kind, key), 0, 0, btn.getBoundingClientRect(), back);
 }
 function dvMultiItems() { const n = drv.sel.size; return drv.view === 'trash' ? [{ head: `${n}개 선택` }, { ic: 'restore', t: `${n}개 되살리기`, mi: 'multi||restore' }, '-', { ic: 'purge', t: `${n}개 영구 삭제`, mi: 'multi||purge', danger: true }]
   : [{ head: `${n}개 선택` }, { ic: 'move', t: `${n}개 다른 폴더로 이동…`, mi: 'multi||move' }, '-', { ic: 'trash', t: `${n}개 휴지통으로`, mi: 'multi||trash', danger: true, k: isMac ? '⌫' : 'Del' }, '-', { ic: 'clear', t: '선택 풀기', mi: 'multi||clear', k: 'Esc' }]; }
@@ -4739,9 +4754,9 @@ function driveContext(e) {
   if (e.target.closest('input, textarea, select, #dvPop, #dvSelBar, .ndhead, #dvNav')) return;  /* 글 칸은 브라우저 메뉴 그대로 */
   const main = e.target.closest('#dvMain'); if (!main) return; e.preventDefault();
   const card = e.target.closest('[data-dvdoc],[data-dvfolder]');
-  if (card) { if (!(drv.sel && drv.sel.has(dvKey(card)))) dvSelect(card, 'only');
-    if (drv.sel.size > 1) { dvPop(dvMultiItems(), e.clientX, e.clientY); return; }
-    const k = dvKey(card).split(':'); dvPop(dvItems(k[0], k.slice(1).join(':')), e.clientX, e.clientY); return; }
+  if (card) { let back = null; if (!(drv.sel && drv.sel.has(dvKey(card)))) { const op = $('#dvPop'); back = op && op._restore ? op._restore : new Set(drv.sel || []); dvSelect(card, 'only'); }
+    if (drv.sel.size > 1) { dvPop(dvMultiItems(), e.clientX, e.clientY, null, back); return; }
+    const k = dvKey(card).split(':'); dvPop(dvItems(k[0], k.slice(1).join(':')), e.clientX, e.clientY, null, back); return; }
   drv.sel = new Set(); dvSelShow(); const trash = drv.view === 'trash', inDrive = drv.view === 'drive' && !drv.q;
   const items = trash ? [{ ic: 'refresh', t: '새로 고침', mi: 'bg||refresh' }, '-', { ic: 'empty', t: '휴지통 비우기', mi: 'bg||empty', danger: true, off: !(drv.docs.length || drv.folders.length) }]
     : [...(inDrive ? [{ head: drv.path.length ? drv.path.join(' › ') : '내 드라이브' }, { ic: 'newdoc', t: '여기에 새 디자인', mi: 'bg||newdoc' }, { ic: 'mkdir', t: '새 폴더', mi: 'bg||mkdir' }, '-'] : []),
@@ -4771,7 +4786,8 @@ function pickFolder(exclude, title) {  /* 폴더 고르기 창 — 예전엔 번
     const all = (await store.allFolders().catch(() => [[]])).filter(p => !bad(p)).sort((a, b) => a.join('\u0001').localeCompare(b.join('\u0001'), 'ko'));
     const here = drv.view === 'drive' ? drv.path : null; let pick = null, done = false;
     const d = document.createElement('dialog'); d.className = 'dvpick'; const fin = v => { if (done) return; done = true; res(v); d.close(); };
-    d.innerHTML = `<div class="dhead"><h2>${esc(title || '어느 폴더로 옮길까요?')}</h2><button class="btn sm" data-no>닫기</button></div><div class="dbody"><div class="dvtree">${all.map((p, i) => `<button data-pk="${i}" style="padding-left:${10 + p.length * 18}px"><svg class="ic"><use href="#${p.length ? 'i-folder' : 'i-cloud'}"/></svg><span>${esc(p.length ? p[p.length - 1] : '내 드라이브 (맨 위)')}</span>${here && here.join('/') === p.join('/') ? '<small>지금 위치</small>' : ''}</button>`).join('')}</div>
+    if (!title && drv.sel && drv.sel.size === 1) { const k = [...drv.sel][0]; const nm = k.startsWith('folder:') ? k.slice(7) : ((drv.docs[Number(k.slice(4))] || {}).name || '').replace(/\.design\.json$/i, ''); if (nm) title = `「${nm}」${eul(nm)} 어느 폴더로 옮길까요?`; }
+    d.innerHTML = `<div class="dhead"><h2>${esc(title || '어느 폴더로 옮길까요?')}</h2><button class="btn sm" data-no>닫기</button></div><div class="dbody"><div class="dvtree">${all.map((p, i) => `<button data-pk="${i}" style="padding-left:${10 + p.length * 18}px"><svg class="ic"><use href="#${p.length ? 'i-folder' : 'i-cloud'}"/></svg><span>${esc(p.length ? p[p.length - 1] : '내 드라이브 (맨 위)')}</span>${here && here.join('/') === p.join('/') ? '<small>지금 위치</small>' : ''}</button>`.replace('<button data-pk', here && here.join('/') === p.join('/') ? '<button class="here" data-pk' : '<button data-pk')).join('')}</div>
       <div class="row" style="justify-content:space-between;margin-top:10px"><button class="btn sm" data-mk><svg class="ic"><use href="#i-plus"/></svg>고른 곳에 새 폴더</button><span><button class="btn" data-no>취소</button> <button class="btn primary" data-ok disabled>여기로 옮기기</button></span></div></div>`;
     document.body.appendChild(d); d.querySelectorAll('[data-no]').forEach(b => b.onclick = () => fin(null));
     const okB = d.querySelector('[data-ok]'), sel = i => { pick = all[i]; d.querySelectorAll('[data-pk]').forEach(b => b.classList.toggle('on', Number(b.dataset.pk) === i)); okB.disabled = false; okB.textContent = `「${pick.length ? pick[pick.length - 1] : '내 드라이브'}」로 옮기기`; };
@@ -4787,7 +4803,7 @@ function dvInlineRename(kind, key) {  /* 카드 이름 자리에서 바로 고�
   const b = card && card.querySelector('b'); if (!b) return driveOp(kind, key, 'rename');
   const old = kind === 'folder' ? key : drv.docs[Number(key)].name.replace(/\.design\.json$/i, '');
   const i = document.createElement('input'); i.className = 'dvren'; i.value = old; i.maxLength = 80; b.replaceWith(i); i.focus(); i.select(); card.draggable = false;
-  let done = false; const fin = async ok => { if (done) return; done = true; const v = i.value.replace(/[\\/:*?"<>|]/g, '_').trim(); if (!ok || !v || v === old) { i.replaceWith(b); card.draggable = kind !== 'folder' && drv.view !== 'trash'; return; } await driveOp(kind, key, 'rename', { name: v }); };
+  let done = false; const fin = async ok => { if (done) return; done = true; const v = i.value.replace(/[\\/:*?"<>|]/g, '_').trim(); if (!ok || !v || v === old) { i.replaceWith(b); card.draggable = drv.view !== 'trash'; return; } await driveOp(kind, key, 'rename', { name: v }); };
   i.addEventListener('keydown', e => { e.stopPropagation(); if (e.isComposing) return; if (e.key === 'Enter') { e.preventDefault(); fin(true); } if (e.key === 'Escape') { e.preventDefault(); fin(false); } });
   i.addEventListener('blur', () => fin(true)); ['click', 'dblclick', 'mousedown'].forEach(t => i.addEventListener(t, e => e.stopPropagation()));
 }
@@ -4809,12 +4825,12 @@ async function driveOp(kind, key, op, o) {
       if (op === 'newdoc') { drv.path = f.path; drv.view = 'drive'; $('#dlgDrive').close(); openNewDesign(); return true; }
       if (op === 'rename') { const n = o.name || await dvAsk('폴더 이름 바꾸기', '폴더 이름', f.name); if (!n || n === f.name) return false; const cp = await curDocPath(); await store.moveEntry(f.handle, from, from, n.replace(/[\\/:*?"<>|]/g, '_').trim()); if (cp && f.path.every((x, i) => cp[i] === x)) await dvRelinkCur(); }
       if (op === 'move') { const to = o.to || await pickFolder([f.path]); if (!to) return false; if (to.length >= f.path.length && f.path.every((x, i) => to[i] === x)) throw new Error('폴더를 자기 안으로 옮길 수 없습니다'); const cp = await curDocPath(); await store.moveEntry(f.handle, from, to); if (cp && f.path.every((x, i) => cp[i] === x)) await dvRelinkCur(); }
-      if (op === 'trash') { const cp = await curDocPath(); if (cp && f.path.every((x, i) => cp[i] === x)) throw new Error(`「${f.name}」 폴더 안에 지금 작업 중인 디자인이 있습니다. 다른 디자인을 먼저 여세요.`); if (!quiet && !window.confirm(`"${f.name}" 폴더를 안의 디자인과 함께 휴지통으로 옮길까요?`)) return false; await store.toTrash(f.handle, from); }
-      if (op === 'restore') await store.moveEntry(f.handle, [store.TRASH], []);
+      if (op === 'trash') { const cp = await curDocPath(); if (cp && f.path.every((x, i) => cp[i] === x)) throw new Error(`「${f.name}」 폴더 안에 지금 작업 중인 디자인이 있습니다. 다른 디자인을 먼저 여세요.`); if (!quiet && !window.confirm(`"${f.name}" 폴더를 안의 디자인과 함께 휴지통으로 옮길까요?`)) return false; const th = await store.toTrash(f.handle, from); (o.trashed || (o.trashed = [])).push(th); if (!quiet) dvTrashToast([th], f.name); }
+      if (op === 'restore') { const to = (store.trashFrom && store.trashFrom(f.name)) || []; await store.ensureDir(to); await store.moveEntry(f.handle, [store.TRASH], to); if (!quiet) toast(`「${f.name}」 폴더를 「${to.length ? to.join(' › ') : '내 드라이브'}」로 되살렸습니다`); }
       if (op === 'purge') { if (!quiet && !window.confirm(`"${f.name}" 폴더를 영구 삭제할까요? 되돌릴 수 없습니다.`)) return false; await store.emptyEntry(f.name); }
     } else {
       const x = drv.docs[Number(key)]; if (!x) return false; const curP = await curDocPath();
-      const isCur = st.handle && x.name === st.fileName && curP && curP.join('/') === x.path.join('/');
+      const isCur = await isCurDoc(x); void curP;
       const label = x.name.replace(/\.design\.json$/i, '');
       if (op === 'open') { if (isCur) { $('#dlgDrive').close(); return true; } await openFolderDoc(x.handle); $('#dlgDrive').close(); return true; }
       if (op === 'info') { await dvInfo(x); return true; }
@@ -4828,12 +4844,17 @@ async function driveOp(kind, key, op, o) {
       }
       if (op === 'dup') { const j = JSON.parse(await (await x.handle.getFile()).text()); j.name = (j.name || label) + ' 사본'; const d = await store.dirAt(x.path); const h = await d.getFileHandle(await store.uniqueNameIn(j.name, d), { create: true }); const w = await h.createWritable(); await w.write(JSON.stringify(Object.assign(j, { saveId: '', lineage: [], docId: Date.now().toString(36) + Math.random().toString(36).slice(2, 8) }))); await w.close(); toast('사본을 만들었습니다'); }
       if (op === 'move') { const to = o.to || await pickFolder(); if (!to) return false; if (to.join('/') === x.path.join('/')) return false; if (isCur && st.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const nh = await store.moveEntry(x.handle, x.path, to); if (isCur) { st.handle = nh; st.fileName = nh.name; st.lastMod = (await nh.getFile()).lastModified; await store.idbSet('fileHandle', nh); updateSaveBadge(); } if (!quiet) toast(`"${label}"${eul(label)} ${to.length ? to.join(' › ') : '내 드라이브'}로 옮겼습니다`); }
-      if (op === 'trash') { if (isCur) throw new Error('지금 작업 중인 디자인은 휴지통으로 보낼 수 없습니다. 다른 디자인을 먼저 여세요.'); await store.toTrash(x.handle, x.path); if (!quiet) toast(`「${label}」${eul(label)} 휴지통으로 옮겼습니다 — 휴지통에서 되살릴 수 있습니다`); }
-      if (op === 'restore') { await store.moveEntry(x.handle, [store.TRASH], []); if (!quiet) toast('내 드라이브로 되살렸습니다'); }
+      if (op === 'trash') { if (isCur) throw new Error('지금 작업 중인 디자인은 휴지통으로 보낼 수 없습니다. 다른 디자인을 먼저 여세요.'); const th = await store.toTrash(x.handle, x.path); (o.trashed || (o.trashed = [])).push(th); if (!quiet) dvTrashToast([th], label); }
+      if (op === 'restore') { const to = (store.trashFrom && store.trashFrom(x.name)) || []; await store.ensureDir(to); await store.moveEntry(x.handle, [store.TRASH], to); if (!quiet) toast(`「${label}」${eul(label)} 「${to.length ? to.join(' › ') : '내 드라이브'}」로 되살렸습니다`); }
       if (op === 'purge') { if (!quiet && !window.confirm(`"${label}"${eul(label)} 영구 삭제할까요? 되돌릴 수 없습니다.`)) return false; await store.emptyEntry(x.name); }
     }
     if (!quiet) renderDrive(); return true;
   } catch (err) { if (quiet) throw err; toast(err.message, true); return false; }
+}
+function dvTrashToast(hs, label) {  /* 휴지통 알림 + [되돌리기] = 원래 자리로 (구글 드라이브처럼 묻지 않고, 대신 되돌리기) */
+  const t = toastEl(); t.className = 'toast act'; t.innerHTML = `<span>${esc(hs.length > 1 ? `${hs.length}개를` : `「${label}」${eul(label)}`)} 휴지통으로 옮겼습니다</span><button type="button">되돌리기</button>`; toastShow(t);
+  t.querySelector('button').onclick = async () => { toastHide(t); let n = 0; for (const h of hs) { try { const to = (store.trashFrom && store.trashFrom(h.name)) || []; await store.ensureDir(to); await store.moveEntry(h, [store.TRASH], to); n++; } catch (e) { console.warn(e); } } toast(`${n}개를 원래 자리로 되돌렸습니다`); if ($('#dlgDrive') && $('#dlgDrive').open) renderDrive(); };
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => toastHide(t), 8000);
 }
 async function dvRelinkCur() {  /* 작업 중인 문서가 든 폴더의 이름·자리가 바뀌면 그 파일을 다시 찾아 이어서 저장 */
   try { const st = store.state, nm = st.fileName, all = await store.walkDocs(); const hit = all.filter(x => x.name === nm); if (hit.length === 1) { st.handle = hit[0].handle; st.lastMod = hit[0].lastModified; await store.idbSet('fileHandle', hit[0].handle).catch(() => {}); updateSaveBadge(); } } catch (e) {}
@@ -4842,28 +4863,29 @@ async function driveMulti(op, to, mo) {
   if (op === 'clear') { drv.sel = new Set(); dvSelShow(); return; }
   const keys = [...(drv.sel || [])]; if (!keys.length) return; const n = keys.length;
   if (op === 'move') { to = to || await pickFolder(keys.filter(k => k.startsWith('folder:')).map(k => (drv.folders.find(f => f.name === k.slice(7)) || {}).path), `${n}개를 어느 폴더로 옮길까요?`); if (!to) return; }
-  if (op === 'trash' && !(mo && mo.noAsk) && n > 1 && !window.confirm(`고른 ${n}개를 휴지통으로 옮길까요? (휴지통에서 되살릴 수 있습니다)`)) return;
+  const tro = { quiet: true, to, trashed: [] };
   if (op === 'purge' && !window.confirm(`고른 ${n}개를 영구 삭제할까요? 되돌릴 수 없습니다.`)) return;
   if (op === 'trash' && mo && mo.noAsk && keys.some(k => k.startsWith('folder:')) && !window.confirm(`폴더를 안의 디자인과 함께 휴지통으로 옮길까요?`)) return;
   let ok = 0; const bad = [];
-  for (const k of keys) { const i = k.indexOf(':'), kind = k.slice(0, i), key = k.slice(i + 1); try { if (await driveOp(kind, key, op, { quiet: true, to })) ok++; } catch (err) { bad.push(err.message); } }
+  for (const k of keys) { const i = k.indexOf(':'), kind = k.slice(0, i), key = k.slice(i + 1); try { if (await driveOp(kind, key, op, tro)) ok++; } catch (err) { bad.push(err.message); } }
   drv.docs0 = drv.docs; drv.sel = new Set(); await renderDrive();
   const what = { move: `${to && to.length ? '「' + to.join(' › ') + '」' : '내 드라이브 맨 위'}로 옮겼습니다`, trash: '휴지통으로 옮겼습니다', restore: '되살렸습니다', purge: '영구 삭제했습니다' }[op];
   const one = n === 1 ? (keys[0].startsWith('folder:') ? keys[0].slice(7) : ((drv.docs0 || [])[Number(keys[0].slice(4))] || { name: '' }).name.replace(/\.design\.json$/i, '')) : '';
+  if (op === 'trash' && tro.trashed.length && !bad.length) { dvTrashToast(tro.trashed, one); return; }
   toast(`${one ? `「${one}」${eul(one)}` : ok + '개를'} ${what}${bad.length ? ` · ${bad.length}개는 못 함 — ${bad[0]}` : ''}`, !!bad.length);
 }
 function driveKey(e) {
   const d = $('#dlgDrive'); if (!d || !d.open || e.target.closest('input, textarea, select')) return; if (document.querySelector('dialog.dvask[open], dialog.dvpick[open]')) return;
   const pop = $('#dvPop');
   if (pop && ['ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); const bs = [...pop.querySelectorAll('button:not([disabled])')], i = bs.indexOf(document.activeElement); const nx = bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length]; if (nx) nx.focus(); return; }
-  if (e.key === 'Escape') { if (pop) { e.preventDefault(); pop.remove(); return; } if (drv.sel && drv.sel.size) { e.preventDefault(); driveMulti('clear'); } return; }
+  if (e.key === 'Escape') { if (pop) { e.preventDefault(); dvPopClose(false); return; } if (drv.sel && drv.sel.size) { e.preventDefault(); driveMulti('clear'); } return; }
   if (pop) return;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); driveBg('all'); return; }
   const ks = [...(drv.sel || [])]; if (!ks.length) return;
   const one = ks.length === 1 ? [ks[0].slice(0, ks[0].indexOf(':')), ks[0].slice(ks[0].indexOf(':') + 1)] : null;
   if (e.key === 'Delete' || (e.key === 'Backspace' && (e.metaKey || isMac))) { e.preventDefault(); if (one && drv.view !== 'trash') { driveOp(one[0], one[1], 'trash'); } else driveMulti(drv.view === 'trash' ? 'purge' : 'trash'); return; }
   if (e.key === 'F2' && one && drv.view !== 'trash') { e.preventDefault(); dvInlineRename(one[0], one[1]); return; }
-  if (e.key === 'Enter' && one && drv.view !== 'trash') { e.preventDefault(); driveOp(one[0], one[1], 'open'); }
+  if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && one && drv.view !== 'trash') { e.preventDefault(); driveOp(one[0], one[1], 'open'); }
 }
 function driveDrag(e) {
   const c = e.target.closest('[data-dvdoc],[data-dvfolder]'); if (!c || c.draggable === false || drv.view === 'trash') return; const k = dvKey(c);
@@ -4990,7 +5012,7 @@ function openFileMenu() {
   <button data-fm="open"><svg class="ic"><use href="#i-folder"/></svg>내 드라이브 (열기)…<kbd>Ctrl+O</kbd></button>
   <button data-fm="import"><svg class="ic"><use href="#i-upload"/></svg>다른 프로그램 파일 가져오기… (포토샵·인디자인·일러스트·PDF)</button>
   <button data-fm="prev"><svg class="ic"><use href="#i-open"/></svg>직전 문서 되살리기 (파일로 저장 안 한 문서)</button>
-  <button data-fm="down"><svg class="ic"><use href="#i-upload"/></svg>파일로 내려받기 (JSON)</button><hr>
+  <button data-fm="down"><svg class="ic"><use href="#i-upload"/></svg>백업 파일로 저장 (.design.json)</button><hr>
   <button data-fm="sync"><svg class="ic"><use href="#i-folder"/></svg>저장 · 동기화 설정…</button>`;
   document.body.appendChild(m); m.style.left = Math.max(8, Math.min(b.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px'; m.style.top = (b.bottom + 6) + 'px';
   m.onclick = e => { const x = e.target.closest('[data-fm]'); if (!x) return; m.remove(); ({ import: () => openImport(), prev: restorePrevDoc, save: saveNow, saveas: saveAs, dup: duplicateDoc, resize: openResize, versions: openVersions, bulk: openBulk, rename: () => { const p = $('#pname'); p.focus(); p.select(); toast('위쪽 문서 이름 칸에서 바로 고쳐 쓰세요 (Enter)'); }, new: openNewDesign, close: closeDoc, open: () => $('#btnOpen').click(), down: () => { gcAssets(); store.download(doc); }, sync: openSaveDialog })[x.dataset.fm](); };
@@ -6215,7 +6237,7 @@ function openBook() {
       <p class="hint">제본(안쪽) 여백은 바깥쪽보다 넓게 두면 펼쳤을 때 글이 접힌 곳에 묻히지 않습니다.</p></div>
     <div class="bk-sec"><h3>3. 보기 · 목차 · 인쇄</h3>
       <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn" id="bkSpread">📖 펼침면으로 보기</button><button class="btn" id="bkToc" title="쪽 이름(페이지 목록에서 F2)으로 목차를 지금 쪽에 만듭니다">📑 목차 만들기 (지금 쪽에)</button><button class="btn primary" id="bkPrint" title="한 면에 두 쪽씩, 접어서 스테이플러로 찍는 순서로 PDF (원래 크기)">🖨 중철 소책자 PDF (원래 크기)</button><button class="btn" id="bkPrintA4" title="A4 프린터용 — 한 면(A4 가로)에 두 쪽씩 줄여서 (A5 크기 책자)">A4 용지에 맞춰 (A5 책자)</button></div>
-      <p class="hint" style="margin-top:8px">지금 ${n}쪽 — ${pad ? `<b style="color:#c0392b">중철 제본은 4의 배수여야 해서 빈 쪽 ${pad}장이 뒤에 붙습니다.</b> 쪽을 ${pad}장 더 만들거나 줄이면 깔끔합니다.` : '4의 배수라 중철 제본에 딱 맞습니다.'} 소책자 PDF는 종이 한 면에 두 쪽씩(${Math.round(doc.w * 2)}×${Math.round(doc.h)}mm${Math.abs(doc.w - 210) < 1 && Math.abs(doc.h - 297) < 1 ? ' = <b>A3 용지</b> — A4 프린터면 "A4 용지에 맞춰"' : ''}) 들어가며, 양면 인쇄(짧은 쪽 넘김) 후 반으로 접으면 순서대로 됩니다. 숨긴 쪽은 빠집니다.</p></div></div>`;
+      <p class="hint" style="margin-top:8px">지금 ${n}쪽 — ${pad ? `<b style="color:#c0392b">중철 제본은 4의 배수여야 해서 빈 쪽 ${pad}장이 뒤표지(마지막 쪽) 앞에 들어갑니다.</b> 쪽을 ${pad}장 더 만들거나 줄이면 깔끔합니다.` : '4의 배수라 중철 제본에 딱 맞습니다.'} 소책자 PDF는 종이 한 면에 두 쪽씩(${Math.round(doc.w * 2)}×${Math.round(doc.h)}mm${Math.abs(doc.w - 210) < 1 && Math.abs(doc.h - 297) < 1 ? ' = <b>A3 용지</b> — A4 프린터면 "A4 용지에 맞춰"' : ''}) 들어가며, 양면 인쇄(짧은 쪽 넘김) 후 반으로 접으면 순서대로 됩니다. 숨긴 쪽은 빠집니다.</p></div></div>`;
   d.querySelector('[data-close]').onclick = () => d.close();
   const upd = () => { commit(); renderAll(); };
   d.oninput = d.onchange = e => {
@@ -6253,12 +6275,13 @@ async function bookletPdf(opt) {
   try { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => window.jspdf, 'sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk'); } catch (e) { toast('PDF 모듈을 불러오지 못했습니다 (인터넷 연결 확인)', true); return; }
   endEdit(); const fitA4 = !!(opt && opt.a4), plist = doc.pages.filter(p => !p.dlOff); /* 숨긴 쪽은 책자에서 뺌 (출력·다운로드와 같게) */
   const n0 = plist.length, N = Math.ceil(n0 / 4) * 4, sides = []; for (let k = 0; k < N / 2; k += 2) { sides.push([N - 1 - k, k]); sides.push([k + 1, N - 2 - k]); }
+  const slot = Array.from({ length: N }, (_, i) => i < n0 ? i : null); if (N > n0 && n0 >= 2) { for (let i = n0 - 1; i < N; i++) slot[i] = null; slot[N - 1] = n0 - 1; }  /* 11/26 편집 조: 빈 쪽은 뒤표지 앞에 — 뒤표지가 책 안쪽에 찍히던 것 */
   const W = fitA4 ? 297 : doc.w * 2, H = fitA4 ? 210 : doc.h, sw = W / 2, sk = Math.min(sw / doc.w, H / doc.h), pw = doc.w * sk, ph = doc.h * sk, dpi = dlDpi(200, 0), pdf = new jspdf.jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
   pdf.setProperties({ title: (doc.name || '책자') + ' 소책자 인쇄', creator: '나라차 디자인 공방' });
   try {
     for (let s_ = 0; s_ < sides.length; s_++) {
       setStatus(`소책자 ${s_ + 1}/${sides.length}면 그리는 중…`); if (s_) pdf.addPage([W, H], W > H ? 'landscape' : 'portrait');
-      for (let j = 0; j < 2; j++) { const idx = sides[s_][j]; if (idx >= n0) continue; const c = await renderPageCanvas(plist[idx], dpi, 'thumb', '#ffffff'); pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', j * sw + (sw - pw) / 2, (H - ph) / 2, pw, ph, `b${s_}_${j}`, 'NONE'); c.width = c.height = 0; }
+      for (let j = 0; j < 2; j++) { const pi = slot[sides[s_][j]]; if (pi == null) continue; const c = await renderPageCanvas(plist[pi], dpi, 'thumb', '#ffffff'); pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', j * sw + (sw - pw) / 2, (H - ph) / 2, pw, ph, `b${s_}_${j}`, 'NONE'); c.width = c.height = 0; }
     }
     saveBlob(pdf.output('blob'), `${(doc.name || '책자').replace(/[\\/:*?"<>|]/g, '_')}_소책자인쇄_${N}쪽${fitA4 ? '_A4' : ''}.pdf`);
     toast(`소책자 PDF를 만들었습니다 — 종이 ${N / 4}장, 양면 인쇄(짧은 쪽으로 넘김) 후 반으로 접으세요${N > n0 ? ` (빈 쪽 ${N - n0}장 포함)` : ''}`);
@@ -6499,7 +6522,9 @@ async function certLive() {
     const keep = [tp].concat(keep0), wasTpl = page() && page().certTpl;
     doc.pages = keep.concat(pages); cur = wasTpl ? 0 : keep.length + Math.min(Math.max(0, certPrev), pages.length - 1); sel = []; fitCache.clear();
     certBuilt = { id, sig }; commit(); const ae = document.activeElement, sb0 = $('#sidebody'), inSide = ae && sb0 && sb0.contains(ae);
-    if (inSide) { renderCanvas(); fitCanvas(); renderOverlay(); renderInspector(); updateSaveBadge(); renderThumbs && renderThumbs(); } else renderAll();
+    if (inSide) { renderCanvas(); fitCanvas(); renderOverlay(); renderInspector(); updateSaveBadge(); renderThumbs && renderThumbs();
+      { const has = doc.pages.some(p => p.cert && !p.cert.empty), n = rows.length, pb = document.querySelector('#sidebody [data-cx="print"]'), pd = document.querySelector('#sidebody [data-cx="pdf"]'); if (pb) { pb.disabled = !has; pb.textContent = `🖨 바로 출력${n ? ` (${n}장)` : ''}`; } if (pd) pd.disabled = !has; } }  /* 11/26 사용자 조: 명단 칸에 쓰는 동안 출력·PDF 단추가 꺼진 채 남던 것 */
+    else renderAll();
   } finally { certLiveBusy = false; }
 }
 /* 만들기: 이 양식으로 만든 쪽을 지우고 명단대로 다시 만듦 (다른 쪽은 그대로) */
@@ -6610,7 +6635,7 @@ async function enterDoc(kind) {
     let ok = true; if (edited || quiet) ok = await keepCurrentDoc(); if (!ok) { sideTab = 'naracha'; renderRail(); renderSide(); return; }
     if (kind === 'cert') await certNewDoc(true, true); else await attNewDoc(true, true);
     sideTab = kind; renderRail(); renderSide();
-    if (edited) noticeDlg('💾 지금 작업하던 파일은 저장되었습니다', `「<b>${esc(name)}</b>」${hadFile ? ` — 파일(<b>${esc(fname)}</b>)에 저장했습니다.` : ' — 이 브라우저의 <b>직전 문서</b>에 보관했습니다. 위 막대 <b>저장 ▾ → 직전 문서 되살리기</b>로 다시 열 수 있습니다.'}<br>${kind === 'cert' ? '<b>A4 상장</b>' : '<b>출석부(209×150)</b>'} 편집 화면으로 바꿨습니다.`);
+    if (edited) noticeDlg(hadFile ? '💾 지금 작업하던 파일은 저장되었습니다' : '💾 지금 작업은 이 PC 브라우저에 보관했습니다 (파일로는 아직 저장 안 됨)', `「<b>${esc(name)}</b>」${hadFile ? ` — 파일(<b>${esc(fname)}</b>)에 저장했습니다.` : ' — 이 브라우저의 <b>직전 문서</b>에 보관했습니다. 위 막대 <b>저장 ▾ → 직전 문서 되살리기</b>로 다시 열 수 있습니다.'}<br>${kind === 'cert' ? '<b>A4 상장</b>' : '<b>출석부(209×150)</b>'} 편집 화면으로 바꿨습니다.`);
   } finally { docEntering = false; }
 }
 const certDocOk = () => certIsA4() && !doc.pages.some(p => p.els.length && !p.cert && !p.certTpl);
@@ -8000,16 +8025,17 @@ document.addEventListener('contextmenu', e => { const row = e.target.closest && 
 
 /* ---- 추가 단축키: 스타일 복사, 찾기, 잠금, 뒤집기, 숫자 투명도, Ctrl+화살표 회전 ---- */
 document.addEventListener('keydown', e => {
-  if (editing || $('#cellEd') || (e.target.matches && e.target.matches('input,textarea,select')) || document.querySelector('dialog[open]')) { if ((e.ctrlKey || e.metaKey) && e.code === 'KeyF' && !editing && !document.querySelector('dialog[open]')) { e.preventDefault(); openFind(); } return; }
+  if (editing || $('#cellEd') || (e.target.matches && e.target.matches('input,textarea,select')) || popupOpen()) { if ((e.ctrlKey || e.metaKey) && e.code === 'KeyF' && !editing && !document.querySelector('dialog[open]')) { e.preventDefault(); openFind(); } return; }
   const mod = e.ctrlKey || e.metaKey; const stop = () => { e.preventDefault(); e.stopImmediatePropagation(); };
   if (mod && e.code === 'KeyF') { stop(); openFind(); return; }
   if (mod && e.altKey && e.code === 'KeyC') { stop(); copyStyle(); return; }
   if (mod && e.altKey && e.code === 'KeyV') { stop(); pasteStyle(); return; }
   if (!sel.length || (cellSel && (!mod || e.code.startsWith('Arrow')))) return;
+  if (typeKeyOnText(e)) return;  /* 11/26 사용자 조: 글 상자를 고른 채 「2027」을 치면 투명도만 바뀌던 것 — 글 고치기로 넘김 */
   if (mod && e.code === 'KeyL') { stop(); ctxDo('lock'); return; }
   if (e.shiftKey && !mod && !e.altKey && e.code === 'KeyH') { stop(); flipSel('h'); return; }
   if (e.shiftKey && !mod && !e.altKey && e.code === 'KeyV') { stop(); flipSel('v'); return; }
-  if (!mod && !e.altKey && !e.shiftKey && /^Digit[0-9]$/.test(e.code) && !cellSel) { stop(); const n = Number(e.code.slice(5)); selEls().forEach(x => { if (!x.locked) x.opacity = n === 0 ? 1 : n / 10; }); commitSoon(); renderCanvas(); renderInspector(); toast(`투명도 ${n === 0 ? 100 : n * 10}%`); return; }
+  if (!mod && !e.altKey && !e.shiftKey && /^Digit[0-9]$/.test(e.code) && !cellSel) { stop(); const n = Number(e.code.slice(5)); selEls().forEach(x => { if (!x.locked) x.opacity = n === 0 ? 1 : n / 10; }); commitSoon(); renderCanvas(); renderInspector(); { const m = `${sel.length > 1 ? sel.length + '개 ' : ''}투명도 ${n === 0 ? 100 : n * 10}% (숫자 키)`; if (sel.length > 1 || n > 0) toastUndo(m); else toast(m); } return; }
   if (mod && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) { stop(); const d = (e.code === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 15 : 1); selEls().forEach(x => { if (!x.locked) x.rot = Math.round((((x.rot || 0) + d) % 360 + 360) % 360); }); commitSoon(); renderCanvas(); renderOverlay(); renderInspector(); return; }
 }, true);
 
@@ -8347,7 +8373,7 @@ async function renderVersions() {
   B.querySelector('.verlist').onclick = async e => {
     const li = e.target.closest('[data-ver]'); if (!li) return; const x = list[Number(li.dataset.ver)]; verSel = x.name; B.querySelectorAll('.verlist li').forEach(l => l.classList.toggle('on', l === li));
     $('#verPrev').innerHTML = '<span class="hint">불러오는 중…</span>'; let j; try { j = await store.readSnapshot(x, doc.docId); } catch (err) { $('#verPrev').textContent = '읽지 못했습니다: ' + err.message; return; }
-    const saved = doc; let html = ''; try { doc = Object.assign({}, saved, { w: j.w, h: j.h, assets: j.assets || {}, bleed: 0, cropMarks: false }); const k = Math.min(300 / (j.w * MM), 260 / (j.h * MM)); html = `<div class="verbox" style="width:${j.w * MM * k}px;height:${j.h * MM * k}px"><div style="transform:scale(${k});transform-origin:0 0">${sheetHTML(j.pages[0], 'thumb')}</div></div>`; } finally { doc = saved; }
+    const saved = doc; let html = ''; try { const j0 = Object.assign(newDoc(), JSON.parse(JSON.stringify(j))); sanitizeDoc(j0); const w0 = Number(j0.w) || 210, h0 = Number(j0.h) || 297; doc = Object.assign({}, saved, { w: w0, h: h0, assets: j0.assets || {}, bleed: 0, cropMarks: false }); const k = Math.min(300 / (w0 * MM), 260 / (h0 * MM)); html = `<div class="verbox" style="width:${w0 * MM * k}px;height:${h0 * MM * k}px"><div style="transform:scale(${k});transform-origin:0 0">${sheetHTML(j0.pages[0], 'thumb')}</div></div>`; } finally { doc = saved; }
     $('#verPrev').innerHTML = `${html}<p class="hint">${fmt(x.time)} · ${esc(x.pc)} · ${j.pages.length}쪽 · ${Math.round(j._size / 1024)}KB</p>`;
     $('#verRestore').disabled = false; $('#verCopy').disabled = false;
     $('#verRestore').onclick = async () => {
@@ -8673,7 +8699,7 @@ if (NC.aichat) NC.aichat.init({ openAIPanel, chatMode,
     if (!F[k]) return false; const r = F[k](); return r !== false;
   },
 });
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { setStatus, openSaveDialog, openAcctGuide, connectDriveChecked, gdMigrate, cleanConflictCopies, afterFolderReady, saveFileNow: () => saveFileNow(), attFrontParts, attBackParts, attState, resizedDoc, bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { setStatus, sanitizeDoc, tplItems, openSaveDialog, openAcctGuide, connectDriveChecked, gdMigrate, cleanConflictCopies, afterFolderReady, saveFileNow: () => saveFileNow(), attFrontParts, attBackParts, attState, resizedDoc, bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
 
 /* ---- 도구 막대 한 줄 (팀장님 11/24 「도구 막대 한 줄도 정리」) ----
    넘치면 덜 쓰는 묶음(정렬 → 순서 → 펜·그룹)부터 「⋯」 펼침 창으로 옮김(단추를 그대로 옮겨 동작 같음), 자리가 나면 제자리로. 세로 도구 막대는 그대로 */
@@ -8771,7 +8797,7 @@ function setFold(side, on, quiet) {
 
 /* ---- 기타 ---- */
 // 알림은 맨 위층(popover)에 띄움: 대화창이 열려 있어도 어두운 배경 뒤에 깔리지 않게. 글이 길면 더 오래
-function toastShow(t) { t.hidden = false; try { if (t.showPopover) { if (t.matches(':popover-open')) t.hidePopover(); t.showPopover(); } } catch (e) {} }
+function toastShow(t) { t.hidden = false; { const top = [...document.querySelectorAll('dialog[open]')].pop() || document.body; if (t.parentElement !== top) { try { if (t.hidePopover && t.matches(':popover-open')) t.hidePopover(); } catch (e) {} top.appendChild(t); } }  /* 11/26: 모달 창(내 드라이브 등)이 열려 있으면 알림의 「되돌리기」가 눌리지 않던 것 → 맨 위 창 안으로 */ try { if (t.showPopover) { if (t.matches(':popover-open')) t.hidePopover(); t.showPopover(); } } catch (e) {} }
 function toastHide(t) { t.hidden = true; try { if (t.hidePopover && t.matches(':popover-open')) t.hidePopover(); } catch (e) {} }
 function toastEl() { let t = $('#toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; t.hidden = true; try { t.setAttribute('popover', 'manual'); } catch (e) {} document.body.appendChild(t); } return t; }  /* 알림 칸이 없어졌어도 다시 만듦 */
 let toastTimer; function toast(msg, err) { const t = toastEl(); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); toastShow(t); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastHide(t), Math.max(err ? 5000 : 2500, String(msg).length * 70)); }
@@ -8830,4 +8856,15 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
   const nlm = /[?&]nlimport=(\d{4}-\d{2})/.exec(location.search);
   if (nlm) { try { history.replaceState(null, '', location.pathname + (location.search.replace(/[?&]nlimport=[^&]*/, '').replace(/^&/, '?') || '')); } catch (e) {} setTimeout(() => newsFromProgram(nlm[1]), 700); }
 })();
+})();
+
+/* 11/26 UI·UX 조: 맥에서 「Ctrl+S」와 「⌘S」가 섞여 보이던 것 → 맥이면 화면의 Ctrl 표기를 ⌘로 (title·kbd·알림 글만, 사용자 글은 건드리지 않음) */
+(() => { if (!/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)) return;
+  const mk = s => s.replace(/Ctrl\s*\+\s*Shift\s*\+\s*/g, '⌘⇧').replace(/Ctrl\s*\+\s*Alt\s*\+\s*/g, '⌘⌥').replace(/Ctrl\s*\+\s*/g, '⌘').replace(/\(Ctrl\)/g, '(⌘)');
+  const fixEl = el => { if (el.nodeType !== 1) return; const t = el.getAttribute && el.getAttribute('title'); if (t && t.includes('Ctrl')) { const n = mk(t); if (n !== t) el.setAttribute('title', n); }
+    if ((el.tagName === 'KBD' || (el.classList && el.classList.contains('toast'))) && /Ctrl/.test(el.textContent)) { const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); let x; while ((x = w.nextNode())) if (x.nodeValue.includes('Ctrl')) x.nodeValue = mk(x.nodeValue); } };
+  const all = root => { fixEl(root); if (root.querySelectorAll) root.querySelectorAll('[title*="Ctrl"], kbd, .toast').forEach(fixEl); };
+  all(document.body); const toastSel = n => n.nodeType === 3 && n.parentElement && n.parentElement.closest('.toast');
+  new MutationObserver(ms => ms.forEach(m => { if (m.type === 'attributes') fixEl(m.target); else { m.addedNodes.forEach(n => { if (n.nodeType === 1) all(n); else if (toastSel(n) && n.nodeValue.includes('Ctrl')) n.nodeValue = mk(n.nodeValue); }); if (m.target.closest && m.target.closest('.toast')) fixEl(m.target.closest('.toast')); } }))
+    .observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['title'] });
 })();

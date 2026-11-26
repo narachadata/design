@@ -166,7 +166,7 @@ const fitT = (txt, bh, lh) => { const sz = Math.max(8, Math.round(bh / (String(t
       const longest = Math.max(...lines.map(l => [...l].reduce((a, ch) => a + emW(ch), 0) + (e.ls || 0) * l.length)) * mm;
       if (longest > 0) f = Math.min(f, (e.w * 0.98) / longest);
       const tall = lines.length * mm * (e.lh || 1.35); if (tall > 0) f = Math.min(f, Math.max(1, (e.h * 1.05) / tall));
-      if (f > 1.02) { e.size = Math.round(e.size * f * 10) / 10; }
+      if (f > 1.02) { e.size = Math.round(e.size * f * 10) / 10; if (e.fitText) e.fitMax = e.size; }  /* 자동 맞춤 글은 최대 크기도 함께 (11/26 포스터 조) */
     });
     return pg;
   }

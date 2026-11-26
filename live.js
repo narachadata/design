@@ -100,9 +100,12 @@ NC.live = (function () {
   function apply(ops, d) {
     const touched = [];   // [키, 바뀐 속성 목록(요소 전체면 null)]
     const pageOf = id => d.pages.find(p => p.id === id);
+    if (!Array.isArray(ops) || ops.length > 5000) return touched;
     for (const op of ops) {
       let attrs = null;
       try {
+        if (!op || typeof op !== 'object') continue;
+        if (op.op === 'doc' && (typeof op.k !== 'string' || /^(__proto__|constructor|prototype|pages|assets|media)$/.test(op.k))) continue;  /* 11/26 보안 조: 받은 변경은 아무 칸이나 바꾸지 못하게 */
         if (op.op === 'doc') { if (op.del) delete d[op.k]; else d[op.k] = op.v; }
         else if (op.op === 'page') { const p = pageOf(op.pg); if (!p) continue; for (const k in p) if (k !== 'els') delete p[k]; Object.assign(p, op.v); }
         else if (op.op === 'pageAdd') { const miss = { v: false }; const page = unslim(op.page, pageOf(op.pg), miss); if (!Array.isArray(page.els)) page.els = []; const p = pageOf(op.pg); if (p) { Object.keys(p).forEach(k => delete p[k]); Object.assign(p, page); } else d.pages.splice(Math.min(op.i || 0, d.pages.length), 0, page); if (miss.v) page.els.forEach(e => pending.add(op.pg + '/' + e.id)); }
@@ -113,6 +116,7 @@ NC.live = (function () {
           for (const k in (op.set || {})) { if (late(k)) continue; const v = unslim(op.set[k], el[k], miss); if (J(el[k]) !== J(v)) { el[k] = v; attrs.push(k); } } (op.del || []).forEach(k => { if (late(k)) return; if (k in el) { delete el[k]; attrs.push(k); } }); if (miss.v) pending.add(op.pg + '/' + op.id); }
         else if (op.op === 'del') { const p = pageOf(op.pg); if (!p) continue; p.els = p.els.filter(e => e.id !== op.id); pending.delete(op.pg + '/' + op.id); }
         else if (op.op === 'order') { const p = pageOf(op.pg); if (!p) continue; const m = new Map(p.els.map(e => [e.id, e])); const out = op.ids.map(id => m.get(id)).filter(Boolean); p.els.forEach(e => { if (!op.ids.includes(e.id)) out.push(e); }); p.els = out; }
+        try { if (window.NC && NC.cleanLive) NC.cleanLive(d, op); } catch (e) {}  /* 받은 요소·쪽을 문서 열 때와 같은 검사로 (html·속성·id) */
         touched.push([keyOf(op), attrs]);
       } catch (e) { console.warn('실시간 변경 적용 실패', op, e); }
     }

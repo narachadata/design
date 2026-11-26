@@ -2263,3 +2263,23 @@ dialog.mandlg .mankeys.on{background:var(--ui-accent-soft);color:var(--ui-accent
 #manMain table.mkeys i.or{margin:0 6px}
 #manMain table.mkeys .kw{font-size:12.5px;color:var(--ui-fg2);font-weight:600}
 #manMain .mansum kbd{padding:1px 6px;border:1px solid var(--ui-line2);border-radius:5px;background:#f8f9fb;font-size:12px}
+
+/* 템플릿 카드 이름 두 줄까지 (11/26 사용자 조: 「승급심사 안내 · 화이…」로 잘려 분위기를 모름) */
+.tcard span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.3}
+
+/* 11/26 UI·UX 조 */
+/* 세로 메뉴: 매뉴얼·설정은 늘 아래에 보이게, 키 낮은 화면은 단추를 낮게 */
+.rail button.rail-x{position:sticky;background:#1b2440;z-index:2}.rail button.rail-x[data-rx="settings"]{bottom:-6px}.rail button.rail-x[data-rx="manual"]{bottom:40px}
+@media (max-height:860px){.rail button{padding:5px 2px;gap:2px}.rail button .ic{width:18px;height:18px}.rail .rail-sep{margin:2px 8px}}
+/* 내 드라이브 왼쪽 메뉴: 휴지통·저장 설정은 아래에 붙여 늘 보이게 */
+dialog.nd.drive nav .dvnav-end{position:sticky;bottom:-16px;background:var(--ui-bg,#fff);padding-bottom:16px;box-shadow:0 -1px 0 var(--ui-line);z-index:1}
+.drive .dvfolder,.drive .dvdoc{user-select:none;-webkit-user-select:none}
+.dvtree button.here{opacity:.55}
+/* 1024 폭에서도 저장 상태가 보이게 (짧게) */
+@media (max-width:1050px){.topbar #status{display:block!important;max-width:120px;min-width:0;font-size:11px}}
+/* 단축키 표: 키 칸을 좁혀 설명이 가깝게 */
+#manMain table.mkeys td:first-child{width:auto;min-width:150px;max-width:230px}
+.topbar .btn[disabled],.tgroup .btn[disabled]{opacity:.4;cursor:default}
+
+/* 요소 카드 빼기(×): 작게 모서리 바깥에 — 작은 아이콘 카드 가운데를 누르면 넣기 대신 빼지던 것 (11/26 포스터 조) */
+.ecard{overflow:visible}.ecard .edel{width:15px!important;height:15px!important;line-height:13px!important;font-size:11px!important;top:-6px!important;right:-6px!important}

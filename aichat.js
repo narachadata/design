@@ -10,7 +10,9 @@
   let B = null, busy = false, aborter = null;
   const S = Object.assign({ prov: 'claude', claudeModel: 'claude-opus-5-5', geminiModel: '', sendPage: false, log: [] }, (() => { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) { return {}; } })());
   if (!Array.isArray(S.log)) S.log = [];
-  let api = []; /* 지금 대화의 AI 회사 형식 기록 — 덧붙이기만 함(Claude 생각 블록을 그대로 돌려보내야 해서 고치지 않음). 새로 고침하면 새 대화 */
+  let api = [];
+  const xDoc = new WeakMap();  /* 되돌리기 줄 → 그때 고친 문서(이 창 메모리에만) — 같은 문서·새로 고침 전에만 되돌리기 (11/26 AI 조) */
+  const xOk = m => !!m && xDoc.get(m) === B.doc; /* 지금 대화의 AI 회사 형식 기록 — 덧붙이기만 함(Claude 생각 블록을 그대로 돌려보내야 해서 고치지 않음). 새로 고침하면 새 대화 */
   let apiProv = null;
   if (S.gemV !== 2) { S.gemV = 2; S.geminiModel = ''; S.gemAuto = null; }  /* 예전 판은 자동으로 고른 모델을 '직접 적은 모델' 칸에 넣어 둠 → 한 번 비워 자동 고르기·바쁠 때 바꾸기가 되게 (11/20) */
   function save() { try { localStorage.setItem(LS, JSON.stringify(Object.assign({}, S, { log: S.log.slice(-60) }))); } catch (e) {} }
@@ -116,7 +118,7 @@ ${manualText()}`;
   function findEl(id) { const d = B.doc; for (let i = 0; i < d.pages.length; i++) { const e = d.pages[i].els.find(x => x.id === id); if (e) return { e, i, p: d.pages[i] }; } return null; }
 
   /* ---------- 도구 실행 ---------- */
-  const isCol = v => typeof v === 'string' && (/^#[0-9a-f]{3,8}$/i.test(v.trim()) || v.trim() === '' || /^(rgb|hsl)a?\(/i.test(v.trim()));
+  const isCol = v => typeof v === 'string' && (/^#[0-9a-f]{3,8}$/i.test(v.trim()) || v.trim() === '' || /^(rgb|hsl)a?\([\d.,%\s]+\)$/i.test(v.trim()));  /* 11/26 보안 조: 끝까지 검사 */
   const NUMK = ['x', 'y', 'w', 'h', 'rot', 'size', 'weight', 'lh', 'ls', 'strokeW', 'radius', 'opacity'];
   const COLK = ['color', 'bg', 'fill', 'stroke'];
   function applyProps(e, c) {
@@ -128,7 +130,9 @@ ${manualText()}`;
       if (COLK.includes(k)) { if (!isCol(v)) throw new Error(`${k} 색은 #RRGGBB로 적어 주세요`); e[k] = String(v).trim(); done.push(k); continue; }
       if (k === 'text') { if (e.type !== 'text') continue; e.text = String(v); delete e.html; done.push(k); continue; }
       if (k === 'font') { const f = String(v); if (!B.fonts().includes(f)) throw new Error(`'${f}' 글꼴은 공방에 없습니다. get_document의 fonts 목록에서 고르세요`); e.font = f; done.push(k); continue; }
-      if (k === 'align' || k === 'valign' || k === 'name') { e[k] = String(v); done.push(k); continue; }
+      if (k === 'align') { if (!['left', 'center', 'right', 'justify'].includes(v)) throw new Error('align은 left·center·right·justify 중 하나'); e.align = v; done.push(k); continue; }
+      if (k === 'valign') { if (!['top', 'middle', 'bottom'].includes(v)) throw new Error('valign은 top·middle·bottom 중 하나'); e.valign = v; done.push(k); continue; }
+      if (k === 'name') { e.name = String(v).replace(/[<>"`]/g, '').slice(0, 80); done.push(k); continue; }
       if (k === 'italic') { e.italic = !!v; done.push(k); continue; }
     }
     return done;
@@ -203,23 +207,34 @@ ${manualText()}`;
   async function claudeCall() {
     const model = S.claudeModel || 'claude-opus-5-5';
     const fb = /^claude-(fable-5-[12]|opus-5-5|opus-5|sonnet-5-5)$/.test(model);  /* 서버 쪽 대체 모델(fallbacks)을 받는 모델만 — 그 밖(Haiku·Sonnet 5 등)에 보내면 400 */
-    const body = { model, max_tokens: 16000, system: [{ type: 'text', text: system() }], tools: TOOLS, messages: api, cache_control: { type: 'ephemeral' }, output_config: { effort: 'medium' } };
+    const body = { model, max_tokens: 32000, system: [{ type: 'text', text: system() }], tools: TOOLS, messages: api, cache_control: { type: 'ephemeral' }, output_config: { effort: 'medium' } };
     if (fb) body.fallbacks = 'default';
     const h = { 'content-type': 'application/json', 'x-api-key': cfg().anthropicKey, 'anthropic-version': '2026-10-21', 'anthropic-dangerous-direct-browser-access': 'true' };
     if (fb) h['anthropic-beta'] = 'server-side-fallback-2026-07-01';
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: h, body: JSON.stringify(body), signal: aborter.signal });
-    const j = await r.json().catch(() => ({}));
+    /* 11/26 AI 조: 바쁨(429·500·529)은 1.5초·4초 쉬고 두 번 더 (retry-after 따름), 인터넷 끊김은 한글 안내 */
+    let r, j;
+    for (let tries = 0; ; tries++) {
+      try { r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: h, body: JSON.stringify(body), signal: aborter.signal }); }
+      catch (e) { if (e.name === 'AbortError') throw e; throw new Error('인터넷 연결을 확인하고 다시 보내 주세요 (Claude 서버에 닿지 못함)'); }
+      j = await r.json().catch(() => ({}));
+      if (r.ok || ![429, 500, 502, 503, 529].includes(r.status) || tries >= 2 || (r.status === 429 && /credit|billing/i.test((j.error && j.error.message) || ''))) break;
+      const ra = Number(r.headers.get('retry-after')) || 0, wait = Math.min(20, ra || (tries ? 4 : 1.5)) * 1000;
+      busyNote = `Claude 서버가 바빠서 ${Math.round(wait / 1000)}초 뒤 다시 보냅니다…`; try { renderLog(); } catch (e) {}
+      await new Promise((ok, no) => { const t = setTimeout(ok, wait); aborter.signal.addEventListener('abort', () => { clearTimeout(t); no(Object.assign(new Error('멈춤'), { name: 'AbortError' })); }, { once: true }); });
+    }
     if (!r.ok) throw new Error(errKo('claude', r.status, j.error && j.error.message));
     return j;
   }
   async function claudeTurn(ctx) {
     for (let n = 0; n < MAX_LOOP; n++) {
       const j = await claudeCall();
+      /* 11/26 AI 조: 거절(빈 답)을 기록에 넣으면 다음 요청마다 400 — 넣지 않고 이번 차례를 되감음 */
+      if (j.stop_reason === 'refusal') { while (api.length && !(api[api.length - 1].role === 'assistant' && !(api[api.length - 1].content || []).some(b => b.type === 'tool_use'))) api.pop(); ctx.say('AI가 이 부탁은 도와드릴 수 없다고 답했습니다. 말을 바꿔 다시 보내 주세요 (대화는 그대로 이어집니다).'); return; }
       api.push({ role: 'assistant', content: j.content || [] });
       const text = (j.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
-      if (j.stop_reason === 'refusal') { ctx.say(text || 'AI가 이 부탁은 도와드릴 수 없다고 답했습니다. 다르게 말해 보세요.'); return; }
       const uses = (j.content || []).filter(b => b.type === 'tool_use');
       if (text) ctx.say(text);
+      if (j.stop_reason === 'max_tokens' && uses.length) { api.push({ role: 'user', content: uses.map(u => ({ type: 'tool_result', tool_use_id: u.id, is_error: true, content: '답이 길이 한도에서 끊겨 이 도구는 실행하지 않았습니다.' })) }); ctx.say('(답이 너무 길어 중간에 끊겼습니다. 「이어서」라고 보내 주세요.)'); return; }  /* 끊긴 도구 호출에 결과를 붙여 기록을 바르게 (다음 요청 400 방지) */
       if (j.stop_reason !== 'tool_use' || !uses.length) { if (j.stop_reason === 'max_tokens') ctx.say('(답이 너무 길어 중간에 끊겼습니다. 「이어서」라고 보내 주세요.)'); return; }
       const results = [];
       for (const u of uses) {
@@ -328,7 +343,7 @@ ${manualText()}`;
       if (m.r === 'a') return `<div class="ach-m a">${md(m.t)}</div>`;
       if (m.r === 't') return `<div class="ach-t${m.err ? ' err' : ''}">${esc(m.t)}</div>`;
       if (m.r === 'e') return `<div class="ach-m e">${esc(m.t)}</div>`;
-      if (m.r === 'x') return `<div class="ach-x"><span>${esc(m.t)}</span>${m.undo && !m.undone ? `<button type="button" class="btn sm" data-undo="${k}">↶ 되돌리기</button>` : m.undone ? '<em>되돌렸음</em>' : ''}</div>`;
+      if (m.r === 'x') return `<div class="ach-x"><span>${esc(m.t)}</span>${m.undo && !m.undone && xOk(m) ? `<button type="button" class="btn sm" data-undo="${k}">↶ 되돌리기</button>` : m.undone ? '<em>되돌렸음</em>' : ''}</div>`;
       if (m.r === 'n') return `<div class="ach-n">${esc(m.t)}</div>`;
       return '';
     }).join('') + (busy ? `<div class="ach-busy"><i></i><i></i><i></i><span id="achNote">${esc(busyNote)}</span></div>` : '');
@@ -341,8 +356,8 @@ ${manualText()}`;
     s.innerHTML = `<div class="ach-seg">${[['claude', 'Claude'], ['gemini', 'Gemini']].map(([v, t]) => `<button type="button" data-prov="${v}" class="${p === v ? 'on' : ''}">${t}${keyOf(v) ? '' : ' <small>(키 없음)</small>'}</button>`).join('')}</div>
       <label class="f"><span>${p === 'gemini' ? 'Gemini' : 'Claude'} API 키</span><input type="password" id="achKey" autocomplete="off" placeholder="${p === 'gemini' ? 'AIza… 또는 AQ.… (aistudio.google.com에서 만든 키)' : 'sk-ant-… (console.anthropic.com에서 만든 키)'}" value="${esc(k)}"></label>
       <label class="f"><span>모델</span>${p === 'gemini' ? `<input id="achModel" placeholder="비워 두면 가장 새 Flash를 자동으로" value="${esc(S.geminiModel)}">` : `${window.proxyPick ? window.proxyPick('#achModel', S.claudeModel, [[CLAUDE_MODELS[0][0], '🧠', 'Opus', CLAUDE_MODELS[0][1]], [CLAUDE_MODELS[1][0], '⚡', 'Sonnet', CLAUDE_MODELS[1][1]], [CLAUDE_MODELS[2][0], '💸', 'Haiku', CLAUDE_MODELS[2][1]]], 'txt') : ''}<select id="achModel" ${window.proxyPick ? 'hidden' : ''}>${CLAUDE_MODELS.map(([v, t]) => `<option value="${v}" ${S.claudeModel === v ? 'selected' : ''}>${t}</option>`).join('')}</select>`}</label>
-      <p class="hint" style="margin-bottom:2px">💳 쓴 만큼 요금 · 🔒 키는 이 PC에만 · 👤 상장·출석부를 연 채 물으면 이름도 함께 보내짐</p><details class="bk-more"><summary>ⓘ 자세히</summary><div>API는 쓴 만큼 요금이 듭니다(채팅 요금제와 따로). 키와 대화는 이 브라우저(동기화 폴더가 있으면 그 설정 파일)에만 두고, 문서 내용은 고른 AI 회사로만 보냅니다. 학생 이름이 든 상장·출석부를 열어 둔 채 물으면 그 이름도 함께 보내집니다.</div></details>
-      <div class="row"><button type="button" class="btn sm" id="achKeySave">저장</button>${k ? '<button type="button" class="btn sm" id="achKeyDel">이 PC에서 키 지우기</button>' : ''}<button type="button" class="btn sm" id="achOld">예전 AI 도구 창</button></div>`;
+      <p class="hint" style="margin-bottom:2px">💳 쓴 만큼 요금 · 🔒 키는 이 PC와 공방 구글 드라이브 설정 파일에만 (두 PC가 같이 씀 · 드라이브 폴더를 남과 공유하지 마세요) · 👤 상장·출석부를 연 채 물으면 이름도 함께 보내짐</p><details class="bk-more"><summary>ⓘ 자세히</summary><div>API는 쓴 만큼 요금이 듭니다(채팅 요금제와 따로). 키와 대화는 이 브라우저(동기화 폴더가 있으면 그 설정 파일)에만 두고, 문서 내용은 고른 AI 회사로만 보냅니다. 학생 이름이 든 상장·출석부를 열어 둔 채 물으면 그 이름도 함께 보내집니다.</div></details>
+      <div class="row"><button type="button" class="btn sm" id="achKeySave">저장</button>${k ? '<button type="button" class="btn sm" id="achKeyDel">키 지우기 (두 PC 모두)</button>' : ''}<button type="button" class="btn sm" id="achOld">예전 AI 도구 창</button></div>`;
   }
   function needKey() { return `${S.prov === 'gemini' ? 'Gemini' : 'Claude'} API 키가 아직 없습니다. 위 ⚙ 설정 칸에 키를 넣고 「저장」을 눌러 주세요. 키는 ${S.prov === 'gemini' ? 'aistudio.google.com → Get API key' : 'console.anthropic.com → API Keys'}에서 팀장님이 직접 만듭니다.`; }
 
@@ -376,12 +391,13 @@ ${manualText()}`;
       else { while (api.length && !(api[api.length - 1].role === 'model' && !(api[api.length - 1].parts || []).some(p => p.functionCall))) api.pop(); }
     }
     finally { busy = false; aborter = null; }
-    if (ctx.edits && B.doc === d0 && B.hptr > h0) push({ r: 'x', t: `디자인을 ${B.hptr - h0}번 고쳤습니다`, undo: true, h0, h1: B.hptr });
+    if (ctx.edits && B.doc === d0 && B.hptr > h0) { const xm = { r: 'x', t: `디자인을 ${B.hptr - h0}번 고쳤습니다`, undo: true, h0, h1: B.hptr }; xDoc.set(xm, B.doc); push(xm); }
     else renderLog();
     updBtn();
   }
   function undoTurn(k) {
     const m = S.log[k]; if (!m || m.undone) return;
+    if (!xOk(m)) { B.toast('다른 문서이거나 새로 고친 뒤라 여기서는 되돌릴 수 없습니다 — 그 문서를 열고 Ctrl+Z로 되돌려 주세요.', true); renderLog(); return; }  /* 11/26 AI 조: 다른 문서에서 사용자 작업을 되돌리던 것 */
     if (B.hptr !== m.h1) { B.toast('그 뒤에 다른 것을 고쳐서 여기서는 되돌릴 수 없습니다. Ctrl+Z로 하나씩 되돌려 주세요.', true); return; }
     while (B.hptr > m.h0) B.undo();
     m.undone = true; save(); renderLog();

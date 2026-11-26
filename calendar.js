@@ -143,7 +143,7 @@ NC.cal = (function () {
       if (!last && s.lineW > 0) lines += ln(XS[q], YS[re], XS[qe], YS[re], s.line, s.lineW);
       const border = '';
       const al = cs.align ? `text-align:${cs.align};` : '';
-      const ph = cs.img ? srcOf(cs.img) : ''; /* 날짜 칸 사진 (Snapfish처럼): 칸을 꽉 채우고 날짜·일정은 흰 바탕 위에 */
+      const ph = cs.img ? String(srcOf(cs.img) || '').replace(/['"()\\\s<>]/g, c => encodeURIComponent(c)) : '';  /* 11/26 보안: 칸 그림 주소를 style 속성에 넣기 전에 따옴표·괄호 막음 */ /* 날짜 칸 사진 (Snapfish처럼): 칸을 꽉 채우고 날짜·일정은 흰 바탕 위에 */
       cells += `<div class="cell${ph ? ' phc' : ''}" data-c="${c}" data-day="${n >= 1 && n <= dim ? n : ''}" style="grid-row:${r + 1}/span ${g.rs};grid-column:${q + 1}/span ${g.cs};${bgc ? `background:${bgc};` : ''}${ph ? `background-image:url('${ph}');background-size:cover;background-position:${cs.imgPos || 'center'};` : ''}${border}${al}padding:${s.cellPad}mm ${s.cellPad + 0.2}mm">${inner}</div>`;
     }
     const wd = s.showWd ? `<div class="wd" style="grid-template-columns:${colW.map(w => w + 'fr').join(' ')};height:${s.wdH}mm;font-family:'${s.fontNum}';font-size:${s.wdSize}pt;color:${s.wdColor}">${Array.from({ length: 7 }, (_, i) => { const d = (i + s.weekStart) % 7; return `<span style="${d === 0 ? `color:${s.sunColor}` : ''}">${(WD[s.wdLang] || WD.en)[d]}</span>`; }).join('')}</div>` : '';
