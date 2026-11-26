@@ -9,6 +9,8 @@
   const MAX_LOOP = 14, MAX_MSGS = 80;
   let B = null, busy = false, aborter = null;
   const S = Object.assign({ prov: 'claude', claudeModel: 'claude-opus-5-5', geminiModel: '', sendPage: false, log: [] }, (() => { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) { return {}; } })());
+  /* 11/26 AI 조: 새로 고침하면 화면 기록은 남지만 AI는 기억 못 함 — 그 자리에 한 줄 표시 */
+  if (Array.isArray(S.log) && S.log.length && !(S.log[S.log.length - 1].r === 'n' && /기억하지 못/.test(S.log[S.log.length - 1].t))) S.log.push({ r: 'n', t: '— 새로 고침해서 AI는 위 대화를 기억하지 못해요. 이어서 하려면 필요한 내용을 다시 말해 주세요 (＋는 새 대화) —' });
   if (!Array.isArray(S.log)) S.log = [];
   let api = [];
   const xDoc = new WeakMap();  /* 되돌리기 줄 → 그때 고친 문서(이 창 메모리에만) — 같은 문서·새로 고침 전에만 되돌리기 (11/26 AI 조) */
@@ -368,6 +370,8 @@ ${manualText()}`;
     text = String(text || '').trim(); if (!text || busy) return;
     if (!keyOf(S.prov)) { push({ r: 'u', t: text }); push({ r: 'e', t: needKey() }); openSet(true); return; }
     if (apiProv && apiProv !== S.prov) newChat();
+    if (api.length && lastDoc && lastDoc !== B.doc) pendingNote += `[알림] 사용자가 다른 문서 「${B.doc.name || '제목 없음'}」를 열었습니다. 앞 대화의 요소 id·쪽은 이 문서에 없으니 get_document로 다시 보세요.\n`;  /* 문서를 바꿔도 예전 문서 기억으로 이어지던 것 */
+    lastDoc = B.doc;
     if (api.length > MAX_MSGS) { newChat(); push({ r: 'n', t: '대화가 길어져 새 대화로 이어 갑니다(앞 내용은 AI가 기억하지 못함).' }); }
     apiProv = S.prov;
     push({ r: 'u', t: text });
@@ -403,7 +407,7 @@ ${manualText()}`;
     m.undone = true; save(); renderLog();
     if (api.length) pendingNote = '[알림] 사용자가 앞에서 AI가 고친 것을 「되돌리기」로 모두 되돌렸습니다(문서가 그 전으로 돌아감).\n';
   }
-  let pendingNote = '';
+  let pendingNote = '', lastDoc = null;
   function updBtn() { const b = $('#achSend'); if (b) { b.textContent = busy ? '■ 멈춤' : '보내기'; b.classList.toggle('stop', busy); } }
   function openSet(on) { const s = $('#achSet'); if (!s) return; s.hidden = on === undefined ? !s.hidden : !on; if (!s.hidden) renderSet(); }
 

@@ -230,7 +230,16 @@ async function loadDoc(j, from, quiet) {
   tabDocMark(); renderAll(); if (from) toast(from);
   checkMedia(!quiet);
 }
+let trashWarned = '';
+async function checkTrashed() {  /* 11/26 데이터 조: 열어 둔 문서를 다른 PC가 휴지통에 넣으면 알림 + 되살리기 (모르고 휴지통 안 파일에 계속 저장하던 것) */
+  const st = store.state; if (!st.handle || !store.isDrive || !store.isDrive()) return; const cp = await curDocPath().catch(() => null); if (!cp || cp[0] !== store.TRASH) { trashWarned = ''; return; }
+  if (trashWarned === st.fileName) return; trashWarned = st.fileName;
+  const t = toastEl(); t.className = 'toast act'; t.innerHTML = `<span>⚠ 지금 문서 「${esc(doc.name || st.fileName)}」를 다른 PC에서 휴지통에 넣었습니다 — 계속 쓰려면 되살리세요</span><button type="button">원래 자리로 되살리기</button>`; toastShow(t);
+  t.querySelector('button').onclick = async () => { toastHide(t); try { const to = (store.trashFrom && store.trashFrom(st.fileName)) || []; await store.ensureDir(to); const nh = await store.moveEntry(st.handle, [store.TRASH], to); st.handle = nh; st.fileName = nh.name; await store.idbSet('fileHandle', nh).catch(() => {}); updateSaveBadge(); trashWarned = ''; toast(`「${doc.name || nh.name}」을(를) 「${to.length ? to.join(' › ') : '내 드라이브'}」로 되살렸습니다`); } catch (e) { toast('되살리지 못했습니다: ' + e.message, true); } };
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => toastHide(t), 20000);
+}
 async function checkExternalChange() {
+  try { await checkTrashed(); } catch (e) {}
   const st = store.state; if (st.conflict || editing || $('#cellEd') || drag) return;
   const ch = await store.checkExternal(); if (!ch) return;
   let j; try { j = JSON.parse(ch.text); } catch (e) { return; } // 동기화 중인 파일: 다음에 다시 확인
@@ -4700,7 +4709,7 @@ async function driveClick(e) {
     if (a === 'clearq') { drv.q = ''; renderDrive(); }
     if (a === 'newhere') { $('#dlgDrive').close(); openNewDesign(); }  /* 빈 폴더 화면 (11/26 UI·UX 조) */
     if (a === 'mkdir') { const n = window.prompt('새 폴더 이름', '새 폴더'); if (n) { try { await store.makeFolder(drv.path, n); renderDrive(); } catch (err) { toast(err.message, true); } } }
-    if (a === 'empty' && window.confirm('휴지통을 비울까요? 안의 디자인과 폴더가 영구히 삭제됩니다.')) { for (const x of drv.folders.concat(drv.docs)) await store.emptyEntry(x.name); toast('휴지통을 비웠습니다'); renderDrive(); }
+    if (a === 'empty' && window.confirm('휴지통을 비울까요? 안의 디자인과 폴더가 영구히 삭제됩니다.')) { let kept = 0; for (const x of drv.folders.concat(drv.docs)) { if (x._cur) { kept++; continue; } await store.emptyEntry(x.name); } toast(kept ? '휴지통을 비웠습니다 — 지금 작업 중인 디자인 1개는 남겨 두었습니다' : '휴지통을 비웠습니다'); renderDrive(); }
     return;
   }
   const mm = t.closest('[data-dvmenu]'); if (mm) { e.stopPropagation(); driveMenu(mm, mm.dataset.dvmenu); return; }
@@ -4785,7 +4794,7 @@ async function driveBg(op) {
   if (op === 'newdoc') { $('#dlgDrive').close(); return openNewDesign(); }
   if (op === 'import') { $('#dlgDrive').close(); return openImport(); }
   if (op === 'mkdir') { const n = await dvAsk('새 폴더', '폴더 이름', '새 폴더'); if (n) { try { await store.makeFolder(drv.path, n); renderDrive(); toast(`「${n}」 폴더를 만들었습니다`); } catch (err) { toast(err.message, true); } } return; }
-  if (op === 'empty' && window.confirm('휴지통을 비울까요? 안의 디자인과 폴더가 영구히 삭제됩니다.')) { for (const x of drv.folders.concat(drv.docs)) await store.emptyEntry(x.name); toast('휴지통을 비웠습니다'); renderDrive(); }
+  if (op === 'empty' && window.confirm('휴지통을 비울까요? 안의 디자인과 폴더가 영구히 삭제됩니다.')) { let kept = 0; for (const x of drv.folders.concat(drv.docs)) { if (x._cur) { kept++; continue; } await store.emptyEntry(x.name); } toast(kept ? '휴지통을 비웠습니다 — 지금 작업 중인 디자인 1개는 남겨 두었습니다' : '휴지통을 비웠습니다'); renderDrive(); }
 }
 function dvAsk(title, label, val) {  /* 작은 입력 창 (window.prompt 대신 — 한글 입력·Enter·Esc) */
   return new Promise(res => { const d = document.createElement('dialog'); d.className = 'dvask'; let done = false; const fin = v => { if (done) return; done = true; res(v); d.close(); };
@@ -4861,7 +4870,7 @@ async function driveOp(kind, key, op, o) {
       if (op === 'move') { const to = o.to || await pickFolder(); if (!to) return false; if (to.join('/') === x.path.join('/')) return false; if (isCur && st.dirty) { clearTimeout(fileTimer); await saveFileNow(); } const nh = await store.moveEntry(x.handle, x.path, to); if (isCur) { st.handle = nh; st.fileName = nh.name; st.lastMod = (await nh.getFile()).lastModified; await store.idbSet('fileHandle', nh); updateSaveBadge(); } if (!quiet) toast(`"${label}"${eul(label)} ${to.length ? to.join(' › ') : '내 드라이브'}로 옮겼습니다`); }
       if (op === 'trash') { if (isCur) throw new Error('지금 작업 중인 디자인은 휴지통으로 보낼 수 없습니다. 다른 디자인을 먼저 여세요.'); const th = await store.toTrash(x.handle, x.path); (o.trashed || (o.trashed = [])).push(th); if (!quiet) dvTrashToast([th], label); }
       if (op === 'restore') { const to = (store.trashFrom && store.trashFrom(x.name)) || []; await store.ensureDir(to); await store.moveEntry(x.handle, [store.TRASH], to); if (!quiet) toast(`「${label}」${eul(label)} 「${to.length ? to.join(' › ') : '내 드라이브'}」로 되살렸습니다`); }
-      if (op === 'purge') { if (!quiet && !window.confirm(`"${label}"${eul(label)} 영구 삭제할까요? 되돌릴 수 없습니다.`)) return false; await store.emptyEntry(x.name); }
+      if (op === 'purge') { if (isCur) throw new Error('지금 작업 중인 디자인은 영구 삭제할 수 없습니다 — 먼저 되살리거나 다른 디자인을 여세요.'); if (!quiet && !window.confirm(`"${label}"${eul(label)} 영구 삭제할까요? 되돌릴 수 없습니다.`)) return false; await store.emptyEntry(x.name); }
     }
     if (!quiet) renderDrive(); return true;
   } catch (err) { if (quiet) throw err; toast(err.message, true); return false; }

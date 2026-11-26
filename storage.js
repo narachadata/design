@@ -243,7 +243,7 @@ NC.store = (function () {
     return true;
   }
   // 문서 번호(docId)로 동기화 폴더 안의 문서 파일 찾기 (영상 사본 → 원본 다시 가져오기용)
-  async function findDocById(id) { if (!id) return null; const docs = await listDocs(); for (const x of docs) { try { const f = await x.handle.getFile(); if (f.size > 40 * 1024 * 1024) continue; const t = await f.text(); const m = t.match(/"docId":"([^"]+)"/); if (m && m[1] === id) return x.handle; } catch (e) {} } return null; }
+  async function findDocById(id) { if (!id) return null; let docs = []; try { docs = (await walkDocs()).sort((a, b) => ((a.path || [])[0] === TRASH) - ((b.path || [])[0] === TRASH)); } catch (e) { docs = await listDocs(); }  /* 11/26 데이터 조: 맨 위 폴더만 보던 것 — 하위 폴더까지 */ for (const x of docs) { try { const f = await x.handle.getFile(); if (f.size > 40 * 1024 * 1024) continue; const t = await f.text(); const m = t.match(/"docId":"([^"]+)"/); if (m && m[1] === id) return x.handle; } catch (e) {} } return null; }
   async function listDocs() {
     if (!(await folderReady())) return [];
     const out = [];
