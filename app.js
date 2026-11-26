@@ -348,7 +348,7 @@ function elHTML(el, mode, ext) {
     let bs = base; if (sx !== 1 || sy !== 1 || sk) { /* 장평(가로 비율)·세로 비율·기울기 (인디자인 문자 패널) — 상자는 보이는 크기 그대로, 안쪽 글자만 눌리고 늘어남. 줄바꿈은 바뀐 폭에 맞춰 다시 */
       const W = w / sx, H = h / sy; bs = base.replace(/width:[^;]+;/, el.sizing === 'autow' ? 'width:max-content;' : `width:${Math.round(W * 100) / 100}mm;`).replace(/(min-height|height):[^;]+;/, `$1:${Math.round(H * 100) / 100}mm;`).replace(/transform:rotate\(([^)]*)\);/, `transform:rotate($1) translate(${Math.round((sx - 1) * w / 2 * 100) / 100}mm,${Math.round((sy - 1) * h / 2 * 100) / 100}mm) scale(${sx},${sy}) skewX(${-sk}deg);transform-origin:${Math.round(w / 2 * 100) / 100}mm ${Math.round(h / 2 * 100) / 100}mm;`); }
     const wf = wrapFloats(el), tst = wf ? FX.textStyle(el).replace(/display:flex;flex-direction:column;justify-content:[^;]+;/, '') : FX.textStyle(el);  /* 그림 둘레 글 배치가 있으면 위에서부터 흐름 */
-    return `<div class="el el-text${lock}${wf ? ' wrapped' : ''}" data-id="${el.id}" style="${bs}${tst}">${wf}${el.html && el.htmlFor === el.text ? (el.valign && el.valign !== 'top' && !wf ? `<div class="txw">${el.html}</div>` : el.html) : esc(el.text)}</div>`;
+    return `<div class="el el-text${lock}${wf ? ' wrapped' : ''}" data-id="${el.id}" style="${bs}${tst}">${wf}${el.html && el.htmlFor === el.text ? (el.valign && el.valign !== 'top' && !wf ? `<div class="txw">${el.html}</div>` : el.html) : nobrPhone(esc(el.text))}</div>`;
   }
   if (el.type === 'image') {
     const s = elSrcOv.get(el.id) || viewSrc(el, mode); const clip = FX.clipPath(el.clip, el.w * MM, el.h * MM); const z = el.zoom || 1;
@@ -1006,8 +1006,10 @@ wrap.addEventListener('dblclick', e => {
   const cell = (document.elementsFromPoint(e.clientX, e.clientY).find(n => n.closest && n.closest('.el-cal .cell')) || e.target).closest('.el-cal .cell'); if (cell && sel.length === 1 && find(sel[0]).type === 'cal') { const c = Number(cell.dataset.c); cellSel = { id: sel[0], a: c, b: c }; renderOverlay(); openCellEditor(c); return; }
 });
 wrap.addEventListener('dblclick', e => { const dom = e.target.closest('.el-text'); const fe = dom && find(dom.dataset.id); if (fe && fe.flowFrame && BK()) { BK().onFrameDbl(fe); return; } /* 도서 편집 본문 상자 → 원고 편집기 (인디자인 스토리 편집기) */ if (dom && dom !== editing && !find(dom.dataset.id).locked && !dom.classList.contains('warp')) startEdit(dom, e); });
+/* 11/26 포스터·자료실 조: 전화번호가 「010-」/「0000-0000」으로 끊기던 것 — 그릴 때만 한 덩어리(줄 안 바꿈), 글 고치기를 시작하면 풂(저장 글에는 안 들어감) */
+function nobrPhone(h) { return /\d-\d/.test(h) ? h.replace(/(\d{2,4}-\d{3,4}-\d{4})/g, '<span class="nobr">$1</span>') : h; }
 function startEdit(dom, ev) {
-  if (editing === dom) return;
+  if (editing === dom) return; { const nb = dom.querySelectorAll('span.nobr'); if (nb.length) { nb.forEach(s => s.replaceWith(document.createTextNode(s.textContent))); dom.normalize(); } }
   { const el0 = find(dom.dataset.id); if (el0 && /\{(쪽|전체쪽|디데이:|남은날:)/.test(el0.text || '')) dom.innerHTML = el0.html && el0.htmlFor === el0.text ? el0.html : esc(el0.text); } /* 쪽 번호·D-day 자리는 원문으로 편집 */
   editing = dom; dom.contentEditable = 'true'; dom.classList.add('editing'); dom.focus(); try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
   // 누른 자리에 커서 (새 글 상자처럼 위치가 없으면 전체 선택)

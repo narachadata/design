@@ -2288,3 +2288,5 @@ dialog.nd.drive nav .dvnav-end{position:sticky;bottom:-16px;background:var(--ui-
 .drive .dvempty2{display:flex;flex-direction:column;align-items:center;gap:10px;margin:40px auto;color:var(--ui-muted);text-align:center;max-width:360px}.drive .dvempty2 svg{width:44px;height:44px;fill:none;stroke:currentColor;stroke-width:1.4;opacity:.55}.drive .dvempty2 p{margin:0;font-size:14px}
 /* 요소 오른쪽 클릭 메뉴: 줄을 낮게 — 889px로 화면을 넘던 것 (11/26 UI·UX 조) */
 .fmenu.ctx button{padding:5px 10px;font-size:13px;gap:8px}.fmenu.ctx hr{margin:3px 4px}.fmenu.ctx button .ic{width:15px;height:15px}
+
+.el-text span.nobr{white-space:nowrap}
