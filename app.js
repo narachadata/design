@@ -30,26 +30,74 @@ function blobURL(key, d) {
   const c = blobOf.get(key); if (c && c.data === d) return c.url;
   try { const i = d.indexOf(','), meta = d.slice(5, i), mime = meta.split(';')[0], raw = /;base64/.test(meta) ? atob(d.slice(i + 1)) : decodeURIComponent(d.slice(i + 1)); const arr = new Uint8Array(raw.length); for (let k = 0; k < raw.length; k++) arr[k] = raw.charCodeAt(k) & 255; const url = URL.createObjectURL(new Blob([arr], { type: mime })); blobOf.set(key, { data: d, url }); /* 예전 주소는 다른 화면(미리보기 등)이 쓰고 있을 수 있어 해제하지 않음 */ return url; } catch (e) { return d; }
 }
-const PREV_MAX = 2048, prevOf = new Map(); // 원본 주소 → { url } (작은 그림이면 {}), 만드는 중이면 null
+const PREV_MAX = 2048, prevOf = new Map(); // 원본 주소 → { w, h(원본 크기), src·sw·sh(선명하게 줄일 바탕 그림), url(큰 그림의 2048 미리보기) }, 만드는 중이면 null
 let prevTimer = 0;
+const PREV_SRC_MAX = PREV_MAX * 1.3;
 function makePreview(full) {
   prevOf.set(full, null);
-  fetch(full).then(r => r.blob()).then(b => /svg/.test(b.type) ? null : createImageBitmap(b).then(bm => ({ bm, type: b.type }))).then(r => {
+  fetch(full).then(r => r.blob()).then(b => /svg/.test(b.type) ? null : createImageBitmap(b).then(bm => ({ bm, type: b.type, b }))).then(r => {
     if (!r) { prevOf.set(full, {}); return; }
-    const { bm } = r, L = Math.max(bm.width, bm.height);
-    if (L <= PREV_MAX * 1.3) { bm.close && bm.close(); prevOf.set(full, {}); return; }
+    const { bm } = r, L = Math.max(bm.width, bm.height), info = { w: bm.width, h: bm.height, type: r.type };
+    if (L <= PREV_SRC_MAX) { bm.close && bm.close(); Object.assign(info, { src: r.b, sw: info.w, sh: info.h }); prevOf.set(full, info); viewImgsSoon(); return; }
     const k = PREV_MAX / L, cv = document.createElement('canvas'); cv.width = Math.round(bm.width * k); cv.height = Math.round(bm.height * k);
     const x = cv.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(bm, 0, 0, cv.width, cv.height); bm.close && bm.close();
-    cv.toBlob(bl => { if (!bl) { prevOf.set(full, {}); return; } prevOf.set(full, { url: URL.createObjectURL(bl) }); clearTimeout(prevTimer); prevTimer = setTimeout(() => { if (!drag && !editing) renderCanvas(); }, 250); }, /jpe?g/.test(r.type) ? 'image/jpeg' : 'image/png', 0.92);
+    cv.toBlob(bl => { if (!bl) { prevOf.set(full, {}); return; } Object.assign(info, { url: URL.createObjectURL(bl), src: bl, sw: cv.width, sh: cv.height }); prevOf.set(full, info); clearTimeout(prevTimer); prevTimer = setTimeout(() => { if (!drag && !editing) renderCanvas(); }, 250); }, /jpe?g/.test(r.type) ? 'image/jpeg' : 'image/png', 0.92);
   }).catch(() => prevOf.set(full, {}));
 }
-// 편집 화면에서 쓸 그림 주소 (썸네일·내보내기는 'thumb'·'print'로 원본을 씀): 화면에 작게 보일 때는 미리보기, 크게 확대하면 원본
+/* 11/27 팀장님 「송년회 포스터의 시범단 육각 패치가 흐릿 — 컴퓨터 성능에 문제가 없다면 편집 화면에서도 잘 보이게」·「영상 편집이나 무거운 파일 편집할 때만 보기 방법을 달리하는 옵션」
+   브라우저는 큰 그림을 작게 보일 때 밉맵(뭉갠 축소판)을 써서 가는 글자·선이 흐려짐 → 화면에 보이는 크기에 맞춰 란초시로 미리 줄인 그림(lzwork.js 일꾼)으로 바꿔 보여 줌.
+   보기 방법(설정 → 화면 · 편집 → 편집 화면 그림): 자동(기본 — 보통 문서는 선명하게, 영상이 든 문서·타임라인·그림이 아주 많은 문서·저사양 PC는 가볍게) · 늘 선명하게 · 늘 가볍게(예전 방식) */
+function viewQPref() { try { return localStorage.getItem('naracal-viewq') || 'auto'; } catch (e) { return 'auto'; } }
+let heavyMemo = { d: null, t: 0, v: false };
+function docHeavy() {
+  if (!doc) return false; const now = Date.now(); if (heavyMemo.d === doc && now - heavyMemo.t < 3000) return heavyMemo.v;
+  let n = 0, vid = false; for (const p of doc.pages || []) for (const e of p.els || []) { if (e.type === 'video') vid = true; else if (e.type === 'image') n++; }
+  const low = (navigator.deviceMemory && navigator.deviceMemory <= 2);
+  const v = vid || n > 150 || !!low || (typeof tl !== 'undefined' && tl && tl.open); heavyMemo = { d: doc, t: now, v }; return v;
+}
+function viewQ() { const v = viewQPref(); return v === 'sharp' || v === 'light' ? v : (docHeavy() ? 'light' : 'sharp'); }
+const sharpOf = new Map(); let lzW = null, lzOff = false, lzBusy = false; const lzQ = [];
+function lzWorker() { if (lzW || lzOff) return lzW; try { lzW = new Worker('lzwork.js?v=' + (window.NARACAL_VER || '')); lzW.onerror = () => { lzOff = true; lzW = null; }; } catch (e) { lzOff = true; } return lzW; }
+function makeSharp(p, B, key) {
+  sharpOf.set(key, null); lzQ.push({ p, B, key }); if (lzQ.length > 60) { const o = lzQ.shift(); sharpOf.delete(o.key); } lzPump();
+}
+async function lzPump() {
+  if (lzBusy || !lzQ.length) return; const w = lzWorker(); if (!w) { lzQ.length = 0; return; }
+  lzBusy = true; const { p, B, key } = lzQ.pop();  /* 가장 나중에 부탁한 것(지금 화면)부터 */
+  try {
+    const k = B / Math.max(p.sw, p.sh), dw = Math.max(1, Math.round(p.sw * k)), dh = Math.max(1, Math.round(p.sh * k));
+    const bm = await createImageBitmap(p.src); const cv = document.createElement('canvas'); cv.width = bm.width; cv.height = bm.height; const x = cv.getContext('2d', { willReadFrequently: true }); x.drawImage(bm, 0, 0); bm.close && bm.close();
+    const img = x.getImageData(0, 0, cv.width, cv.height); cv.width = cv.height = 1;
+    const out = await new Promise((ok, no) => { const t = setTimeout(() => no(new Error('시간 초과')), 20000); w.onmessage = e => { clearTimeout(t); e.data.err ? no(new Error(e.data.err)) : ok(e.data); }; w.postMessage({ id: key, buf: img.data.buffer, sw: img.width, sh: img.height, dw, dh }, [img.data.buffer]); });
+    const oc = document.createElement('canvas'); oc.width = out.dw; oc.height = out.dh; oc.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(out.buf), out.dw, out.dh), 0, 0);
+    const bl = await new Promise(r => oc.toBlob(r, /jpe?g/.test(p.type || '') ? 'image/jpeg' : 'image/png', 0.93));
+    if (bl) { sharpOf.set(key, URL.createObjectURL(bl)); while (sharpOf.size > 300) { const [k0, u0] = sharpOf.entries().next().value; sharpOf.delete(k0); if (u0) setTimeout(() => URL.revokeObjectURL(u0), 5000); } viewImgsSoon(); } else sharpOf.set(key, '');
+  } catch (e) { console.warn('선명하게 줄이기', e); sharpOf.set(key, ''); }
+  lzBusy = false; if (lzQ.length) setTimeout(lzPump, 0);
+}
+// 편집 화면에서 쓸 그림 주소 (썸네일·내보내기는 'thumb'·'print'로 원본을 씀): 화면에 작게 보일 때는 화면 크기에 맞춘 선명한 그림(또는 가볍게 보기면 미리보기), 크게 확대하면 원본
 function viewSrc(el, mode) {
   const full = src(el.src); if (!full || mode !== 'edit' || /^https?:/.test(full) && !full.startsWith(location.origin)) return full;
   const p = prevOf.get(full); if (p === undefined) { makePreview(full); return full; }
-  if (!p || !p.url) return full;
-  const onScreen = Math.max(el.w, el.h) * (el.zoom || 1) * MM * kScale() * (window.devicePixelRatio || 1);
-  return onScreen < PREV_MAX * 0.8 ? p.url : full;
+  if (!p || !p.w) return full;
+  const kd = kScale() * (window.devicePixelRatio || 1), bw = el.w * MM * kd, bh = el.h * MM * kd;
+  const sc = (el.fit === 'cover' || el.fit === 'fill' ? Math.max(bw / p.w, bh / p.h) : Math.min(bw / p.w, bh / p.h)) * (el.zoom || 1);  /* 원본 한 점이 화면 몇 점인지 */
+  const onScreen = Math.max(p.w, p.h) * sc, plain = p.url && onScreen < PREV_MAX * 0.8 ? p.url : full;
+  if (!p.src || sc >= 0.6 || !(onScreen > 8) || viewQ() !== 'sharp') return plain;
+  const B = Math.max(16, Math.ceil(Math.pow(2, Math.ceil(Math.log2(onScreen) * 4) / 4)));  /* 화면 크기를 1.19배 칸으로 — 확대·축소마다 새로 만들지 않게 */
+  if (B >= Math.max(p.sw, p.sh) * 0.75) return plain;
+  const key = full + '|' + B, v = sharpOf.get(key);
+  if (v === undefined) { makeSharp(p, B, key); return plain; }
+  if (v) { sharpOf.delete(key); sharpOf.set(key, v); }  /* 최근 쓴 것을 뒤로 (오래된 것부터 지움) */
+  return v || plain;
+}
+/* 다시 그리지 않고 편집 화면의 그림 주소만 바꿈 — 선명한 그림이 다 만들어졌을 때·확대 배율이 바뀌었을 때 */
+let viewImgT = 0;
+function viewImgsSoon(ms) { clearTimeout(viewImgT); viewImgT = setTimeout(refreshViewImgs, ms || 120); }
+function refreshViewImgs() {
+  if (drag || !doc) { if (drag) viewImgsSoon(400); return; }
+  const pg = page(); if (!pg) return; const by = new Map(pg.els.map(e => [e.id, e]));
+  document.querySelectorAll('#canvas .el-image[data-id]').forEach(d => { const el = by.get(d.dataset.id); if (!el || el.type !== 'image') return; const im = d.querySelector('.imgclip > img'); if (!im) return; const u = elSrcOv.get(el.id) || viewSrc(el, 'edit'); if (u && im.getAttribute('src') !== u) im.setAttribute('src', u); });
 }
 /* 공방 그림(assets/virtue …)은 같은 이름으로 고쳐 올리므로 배포 버전을 붙여 브라우저·GitHub 캐시의 예전 그림이 안 나오게 (팀장님 11/20 — 단말기 템플릿에 예전 도복이 보였음) */
 const vref = r => /^assets\/[^?#]+\.(webp|png|jpe?g)$/i.test(r || '') ? r + '?v=' + (window.NARACAL_VER || '') : r;
@@ -618,7 +666,7 @@ function fitCanvas() {
   /* 여백이 바뀌면(쪽 밖 요소) 바뀌기 전 페이지 자리를 재 두었다가 스크롤로 되돌림 — 여백 차이만큼만 옮기면 '가운데 정렬 → 넘침'으로 바뀔 때 정렬 기준이 달라져 화면이 튀었음 */
   if (padCh) queueMicrotask(() => { const r1 = $('#canvasWrap').getBoundingClientRect(); sc.scrollLeft += r1.x - r0.x; sc.scrollTop += r1.y - r0.y; });
   fitCanvas.pad = [px, py]; fitCanvas.pad.k = k;
-  const c = $('#canvas'); c.style.transform = `scale(${k})`; c.dataset.k = k; const gh = $('#ghost'); if (gh) gh.style.transform = `scale(${k})`;
+  const c = $('#canvas'); { const k0 = Number(c.dataset.k) || 0; if (k0 && Math.abs(k - k0) / k0 > 0.04) viewImgsSoon(300); } c.style.transform = `scale(${k})`; c.dataset.k = k;  /* 확대·축소하면 그 크기에 맞는 선명한 그림으로 (11/27) */ const gh = $('#ghost'); if (gh) gh.style.transform = `scale(${k})`;
   const wrap = $('#canvasWrap'); wrap.style.width = (doc.w * MM * k) + 'px'; wrap.style.height = (doc.h * MM * k) + 'px';
   const o = $('#ovl'); o.style.transform = `scale(${k})`; o.style.setProperty('--k', k); o.style.width = (doc.w * MM) + 'px'; o.style.height = (doc.h * MM) + 'px';
   const z = $('#zoomPct'); if (z) z.textContent = Math.round(k * 100) + '%'; { const pf = $('#pnFit'); if (pf) { pf.classList.toggle('on', !zoom); pf.setAttribute('aria-pressed', String(!zoom)); pf.title = (zoom ? `지금 ${Math.round(k * 100)}% — 누르면 ` : '') + '화면에 딱 맞게 보기 — 편집 화면 크기에 맞춰 쪽 전체가 보이게 (⌘0 · Ctrl+0)'; } }
@@ -3154,7 +3202,7 @@ const SET_TABS = [['view', '🖥', '화면 · 편집'], ['video', '🎬', '영�
 /* 설정 줄마다 그림(팀장님 11/23 「설정도 사용자 경험 고려해 고도화」 · UX 전문가 검토: 그림·지금 상태·찾기·마지막 칸 기억·줄 전체 누르기·처음대로 모으기) */
 /* 설정 아이콘: 이모지 대신 프로그램의 선 아이콘 (11/24 고급스럽게 2차 — 이모지는 PC마다 모양이 달라 어수선) */
 const SET_TAB_SVG = { view: 'i-fit', video: 'i-video', save: 'i-save', dojang: 'i-award', print: 'i-print', clean: 'i-clean', about: 'i-help' };
-const SET_SVG = { guides: 'i-fit', rulers: 'i-ruler', smart: 'i-dist', snap: 'i-magnet', panels: 'i-spread', keys: 'i-text', pgm: 'i-tv', skim: 'i-eye', tlonly: 'i-video', vshare: 'i-upload', tlh: 'i-down', sync: 'i-cloud', versions: 'i-clock', local: 'i-pc', dojang: 'i-award', brandreset: 'i-theme', rules: 'i-cal', calendar: 'i-cal', print: 'i-print', ai: 'i-ai', recent: 'i-clean', blocks: 'i-elems', blocksdel: 'i-del', manual: 'i-book', help: 'i-help', vkeys: 'i-video', reload: 'i-refresh', resetall: 'i-undo', pc: 'i-pc' };
+const SET_SVG = { viewq: 'i-eye', guides: 'i-fit', rulers: 'i-ruler', smart: 'i-dist', snap: 'i-magnet', panels: 'i-spread', keys: 'i-text', pgm: 'i-tv', skim: 'i-eye', tlonly: 'i-video', vshare: 'i-upload', tlh: 'i-down', sync: 'i-cloud', versions: 'i-clock', local: 'i-pc', dojang: 'i-award', brandreset: 'i-theme', rules: 'i-cal', calendar: 'i-cal', print: 'i-print', ai: 'i-ai', recent: 'i-clean', blocks: 'i-elems', blocksdel: 'i-del', manual: 'i-book', help: 'i-help', vkeys: 'i-video', reload: 'i-refresh', resetall: 'i-undo', pc: 'i-pc' };
 const SET_IC = { guides: '📐', rulers: '📏', snap: '🧲', panels: '↔️', keys: '⌨️', pgm: '🖥', skim: '👆', tlonly: '🎬', vshare: '📤', tlh: '↕️', sync: '☁️', versions: '🕘', local: '💻', dojang: '🥋', brandreset: '🎨', rules: '📅', calendar: '🗓', print: '🖨', ai: '🤖', recent: '🧹', blocks: '🧩', blocksdel: '🗑', manual: '📘', help: '❓', vkeys: '🎞', reload: '🔄', resetall: '↩️', pc: '🏷' };
 const setOk = (on, t1, t0) => `<em class="sst ${on ? 'ok' : 'no'}">${on ? '● ' + t1 : '○ ' + t0}</em>`;
 async function setTabHTML(k) {
@@ -3162,7 +3210,7 @@ async function setTabHTML(k) {
   const sw = (id, on, t, d) => `<label class="setrow">${ic(id)}<span><b>${t}</b>${d ? `<small>${d}</small>` : ''}</span><input type="checkbox" class="sw" data-set="${id}" ${on ? 'checked' : ''}></label>`;
   const btn = (act, t, d, label, st, danger) => `<div class="setrow act${danger ? ' danger' : ''}" title="누르면 ${esc(label || '열기')}">${ic(act)}<span><b>${t}</b>${d ? `<small>${d}</small>` : ''}</span>${st || ''}<button class="btn sm${danger ? ' danger' : ''}" data-sa="${act}">${label || '열기'} ›</button></div>`;
   let h = '';
-  if (k === 'view') h = `<h3>화면 · 편집</h3>${sw('guides', showGuides(), '인쇄 안내선', '도련(빨강)·안전 여백(파랑)·리플렛 접는 선·스토리 가림 영역')}${sw('rulers', showRulers(), '눈금자', '위·왼쪽 눈금자 — 눈금자에서 끌어 안내선 만들기')}${sw('smart', smartOn(), '다른 개체에 맞춤 (스마트 가이드)', '끌 때 다른 개체의 가장자리·가운데·같은 간격에 붙고 보라 선·mm 표시 — 끄면 쪽 기준(분홍)만. 잠깐 끄려면 ⌘/Ctrl을 누른 채 끌기')}${sw('snap', tlSnapOn, '타임라인 자석(스냅)', '끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙음 (단축키 N)')}${btn('panels', '패널 너비 처음대로', '왼쪽 패널·오른쪽 속성 패널을 끌어 바꾼 너비를 기본으로', '처음대로')}${btn('keys', '디자인 단축키', '복사·붙여넣기·정렬·묶기 등')}${btn('resetall', '화면 설정 모두 처음대로', '안내선·눈금자·패널 너비·타임라인 높이를 처음 상태로 (문서는 그대로)', '처음대로')}`;
+  if (k === 'view') h = `<h3>화면 · 편집</h3>${sw('guides', showGuides(), '인쇄 안내선', '도련(빨강)·안전 여백(파랑)·리플렛 접는 선·스토리 가림 영역')}${sw('rulers', showRulers(), '눈금자', '위·왼쪽 눈금자 — 눈금자에서 끌어 안내선 만들기')}${sw('smart', smartOn(), '다른 개체에 맞춤 (스마트 가이드)', '끌 때 다른 개체의 가장자리·가운데·같은 간격에 붙고 보라 선·mm 표시 — 끄면 쪽 기준(분홍)만. 잠깐 끄려면 ⌘/Ctrl을 누른 채 끌기')}${sw('snap', tlSnapOn, '타임라인 자석(스냅)', '끌 때 장면 경계·재생 헤드·클립 끝·마커에 붙음 (단축키 N)')}${(() => { const v = viewQPref(); return `<div class="setrow">${ic('viewq')}<span><b>편집 화면 그림</b><small>선명하게 = 화면 크기에 맞춰 곱게 줄여 가는 글자·로고도 또렷 · 가볍게 = 예전 방식(영상·사진이 아주 많은 문서에서 빠름) · 지금 문서: ${viewQ() === 'sharp' ? '선명하게' : '가볍게'}</small></span><select data-set="viewq"><option value="auto" ${v === 'auto' ? 'selected' : ''}>자동 (권장)</option><option value="sharp" ${v === 'sharp' ? 'selected' : ''}>늘 선명하게</option><option value="light" ${v === 'light' ? 'selected' : ''}>늘 가볍게</option></select></div>`; })()}${btn('panels', '패널 너비 처음대로', '왼쪽 패널·오른쪽 속성 패널을 끌어 바꾼 너비를 기본으로', '처음대로')}${btn('keys', '디자인 단축키', '복사·붙여넣기·정렬·묶기 등')}${btn('resetall', '화면 설정 모두 처음대로', '안내선·눈금자·패널 너비·타임라인 높이를 처음 상태로 (문서는 그대로)', '처음대로')}`;
   else if (k === 'video') h = `<h3>영상</h3>${sw('pgm', pgmPref, '나란히 보기 (결과 화면)', '타임라인을 열면 왼쪽 편집·오른쪽 결과 화면으로 나눠 봄')}${sw('skim', tlSkimOn, '훑어보기', '타임라인 위에서 마우스를 움직이면 그 자리 화면을 미리 봄 (단축키 S)')}${sw('tlonly', tlOnlyVideo, '영상 메뉴에서만 타임라인', '끄면 다른 메뉴에서도 타임라인이 열려 있음')}${sw('vshare', (() => { try { return localStorage.getItem('naracal-video-share') === '1'; } catch (e) { return false; } })(), '영상 저장 때 결과물 폴더에도', '동기화 폴더의 결과물 폴더에 MP4를 함께 저장 (다른 PC·TV에서 바로)')}${btn('tlh', '타임라인 높이 처음대로', '끌어 바꾼 타임라인 높이를 기본으로', '처음대로')}${btn('vkeys', '영상 편집 단축키', '파이널컷 방식 J·K·L·B·Q·W·I·O 등 (타임라인에서 ?)')}`;
   else if (k === 'save') { const ready = await store.folderReady().catch(() => false); let est = ''; try { const e = await navigator.storage.estimate(); est = `${(e.usage / 1048576).toFixed(0)}MB 사용 / 약 ${(e.quota / 1073741824).toFixed(0)}GB 가능`; } catch (e) {}
     h = `<h3>저장 · 이 PC</h3><div class="svmini" data-sa="sync" title="누르면 저장 설정"><span class="ok">💻 브라우저 ✔</span><i>→</i><span class="${ready ? 'ok' : 'no'}">☁️ 드라이브 ${ready ? '✔' : '○'}</span><i>→</i><span class="${store.state.handle ? 'ok' : 'no'}">📄 지금 문서 ${store.state.handle ? '✔' : '○'}</span><b>${ready ? '바꾸기 ›' : '처음 설정 ›'}</b></div><div class="setrow"><i class="sic">🏷</i><span><b>이 PC 이름</b><small>충돌 안내·버전 기록·실시간에 표시 (예: 도장 PC, 집 맥북)</small></span><input type="text" id="setPc" value="${esc(store.pcName())}" maxlength="20" style="width:150px"></div>${btn('sync', '저장 설정 (폴더·지금 문서·종류 폴더)', ready ? `연결됨 — ${esc(store.state.dirName || '동기화 폴더')} (두 PC에서 같은 문서·설정)` : '연결 안 됨 — 구글 드라이브 폴더를 연결하면 두 PC에서 같이 씀', '', setOk(ready, '연결됨', '연결 안 됨'))}${btn('versions', '버전 기록', '자동으로 남긴 예전 판을 보고 되살리기')}${btn('local', '이 브라우저에만 있는 문서', '파일로 저장 안 한 직전 문서·다른 탭 문서')}<div class="setrow"><span><b>브라우저 저장 공간</b><small>${est || '알 수 없음'} — 사진·동영상 원본은 이 PC 파일 그대로 (저장 공간을 쓰지 않음)</small></span></div>`; }
@@ -3185,6 +3233,7 @@ async function renderSettings() {
   main.innerHTML = out || `<p class="hint" style="padding:20px 0">「${esc(setQ)}」에 맞는 설정이 없어요 — 다른 말로 찾아보세요 (예: 프린터, 저장, 단축키)</p>`;
 }
 function settingsChange(e) { const t = e.target, k = t.dataset && t.dataset.set; if (t.id === 'setPc') { store.setPcName(t.value); t.value = store.pcName(); toast('이 PC 이름을 저장했습니다'); return; } if (!k) return; const on = t.checked;
+  if (k === 'viewq') { try { localStorage.setItem('naracal-viewq', t.value); } catch (er) {} heavyMemo.d = null; renderCanvas(); renderSettings(); toast({ auto: '편집 화면 그림: 자동 — 보통 문서는 선명하게, 영상·아주 무거운 문서는 가볍게', sharp: '편집 화면 그림을 늘 선명하게 보여 줍니다', light: '편집 화면 그림을 늘 가볍게(예전 방식) 보여 줍니다' }[t.value] || ''); return; }
   if (k === 'guides') { try { localStorage.setItem('naracal-guides', on ? '1' : '0'); } catch (er) {} renderOverlay(); }
   else if (k === 'rulers') { if (showRulers() !== on) toggleRulers(); }
   else if (k === 'smart') { try { localStorage.setItem('naracal-smart', on ? '1' : '0'); } catch (er) {} toast(on ? '다른 개체에 맞춤을 켰습니다' : '다른 개체에 맞춤을 껐습니다 — 쪽 기준 안내선만'); }
@@ -9033,7 +9082,7 @@ if (NC.aichat) NC.aichat.init({ openAIPanel, chatMode,
     if (!F[k]) return false; const r = F[k](); return r !== false;
   },
 });
-if (/[?&]qa\b/.test(location.search)) window.NCQA = { freezeLines: r => freezeLines(r), exportPPTX: (...a) => exportPPTX(...a), relinkByDocId: q => relinkByDocId(q), _dbg: () => ({ sel: sel.slice(), lastClick, editing: !!editing, drag: drag && drag.kind }), setStatus, sanitizeDoc, tplItems, fitTextOffscreen, textContentH, autoFitText, elHTML: (e, m) => elHTML(e, m), openSaveDialog, openAcctGuide, connectDriveChecked, gdMigrate, cleanConflictCopies, afterFolderReady, saveFileNow: () => saveFileNow(), attFrontParts, attBackParts, attState, resizedDoc, bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
+if (/[?&]qa\b/.test(location.search)) window.NCQA = { view: { viewQ: () => viewQ(), prevOf, sharpOf, refresh: () => refreshViewImgs(), lzOff: () => lzOff }, freezeLines: r => freezeLines(r), exportPPTX: (...a) => exportPPTX(...a), relinkByDocId: q => relinkByDocId(q), _dbg: () => ({ sel: sel.slice(), lastClick, editing: !!editing, drag: drag && drag.kind }), setStatus, sanitizeDoc, tplItems, fitTextOffscreen, textContentH, autoFitText, elHTML: (e, m) => elHTML(e, m), openSaveDialog, openAcctGuide, connectDriveChecked, gdMigrate, cleanConflictCopies, afterFolderReady, saveFileNow: () => saveFileNow(), attFrontParts, attBackParts, attState, resizedDoc, bk: () => BK(), imp: () => IMP(), exportCopy, docKind, renderDrive, openDrive, store, tlShow, openGradeImport, gradeRounds, live: NC.live, confirmBtns, videoVoices, duckSpans, printIssues, openWizard, calOverflowDays, bleedFor, createDesign, openPrint, prUse, get prState() { return prState; }, get prKey() { return prKey; }, FORMATS, openPresent, renderPageCanvas, videoLayers, fontCSSFor, placeVideo, checkMedia, mediaMissing, tlSeekTo: t => tlSeek(t, false), tlSplit, tlTrim, loadDoc, get doc() { return doc; }, get sel() { return sel; }, get tl() { return tl; }, get cur() { return cur; }, select, goto, commit, undo, renderAll, tplItems, tplPagesFor, tplSheet, sheetHTML, fitBoxes, themeSheet: (id, kind, m, y) => { const th = CAL.THEMES.find(x => x.id === id), saved = doc; const t = Object.assign({}, saved, { calendar: Object.assign(clone(saved.calendar), { theme: clone(th), year: y || 2027 }), w: 224, h: 154, bleed: 0, cropMarks: false }); virtueTextFix(t.calendar, y || 2027); virtueArtFix(t.calendar, null, y || 2027); doc = t; try { const pv = CAL.buildPages(t, uid, { year: y || 2027, kind: kind || 'virtue', month: m || 1 })[0]; return sheetHTML(pv, 'thumb'); } finally { doc = saved; } } };
 
 /* ---- 도구 막대 한 줄 (팀장님 11/24 「도구 막대 한 줄도 정리」) ----
    넘치면 덜 쓰는 묶음(정렬 → 순서 → 펜·그룹)부터 「⋯」 펼침 창으로 옮김(단추를 그대로 옮겨 동작 같음), 자리가 나면 제자리로. 세로 도구 막대는 그대로 */
