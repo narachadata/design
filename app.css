@@ -2429,3 +2429,6 @@ table.dvinfo th{font-weight:700}
 .mmbox .mmppl label{display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .mmbox .mmppl label span{color:var(--ui-muted);font-size:10.5px;min-width:16px;text-align:right}
 .mmbox .mmppl label.off{opacity:.45;text-decoration:line-through}
+/* 11/27 모아 찍기 이름표·라벨(10~24쪽) */
+.prnup .prnup-more{display:flex;align-items:center;gap:6px;flex-basis:100%;flex-wrap:wrap;margin-top:4px}
+.prnup .prnup-more .seg button{padding-left:6px;padding-right:6px}
