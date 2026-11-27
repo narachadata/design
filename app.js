@@ -103,7 +103,7 @@ function refreshViewImgs() {
 const vref = r => /^assets\/[^?#]+\.(webp|png|jpe?g)$/i.test(r || '') ? r + '?v=' + (window.NARACAL_VER || '') : r;
 function src(ref) { if (!ref) return ''; if (/^assets\//.test(ref)) return vref(ref); if (ref.startsWith('asset:')) { const v = ASSETS[ref.slice(6)]; return /^assets\//.test(v || '') ? vref(v) : blobURL(ref, v); } if (ref.startsWith('a:')) return blobURL(ref, doc.assets[ref.slice(2)]); if (ref.startsWith('lib:')) return NC.lib.url(ref.slice(4)); return ref; }
 function addAsset(dataURL) { for (const k in doc.assets) if (doc.assets[k] === dataURL) return 'a:' + k; const id = uid(); doc.assets[id] = dataURL; return 'a:' + id; }
-function gcAssets() { const used = new Set(); const walk = v => { if (typeof v === 'string' && v.startsWith('a:')) used.add(v.slice(2)); else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(doc.pages); walk(doc.calendar); walk(doc.audio); walk(doc.cert); hist.forEach(h => { for (const m of h.matchAll(/"a:([^"]+)"/g)) used.add(m[1]); }); for (const k in doc.assets) if (!used.has(k)) delete doc.assets[k]; } // 실행 취소 기록에 남은 그림도 지키기 (저장 뒤 Ctrl+Z로 지운 사진 되살리기)
+function gcAssets() { const used = new Set(); const walk = v => { if (typeof v === 'string' && v.startsWith('a:')) used.add(v.slice(2)); else if (v && typeof v === 'object') Object.values(v).forEach(walk); }; walk(doc.pages); walk(doc.calendar); walk(doc.audio); walk(doc.cert); walk(doc.merge); hist.forEach(h => { for (const m of h.matchAll(/"a:([^"]+)"/g)) used.add(m[1]); }); for (const k in doc.assets) if (!used.has(k)) delete doc.assets[k]; } // 실행 취소 기록에 남은 그림도 지키기 (저장 뒤 Ctrl+Z로 지운 사진 되살리기)
 
 /* ---------- 실행 취소 ---------- */
 // 기록에는 내용만: 그림·올린 글꼴(수 MB)·이름·문서 번호·저장 시각은 빼고, 되돌릴 때 지금 값을 그대로 둠
@@ -133,7 +133,7 @@ async function tabPick(saved) { let id = null; try { id = sessionStorage.getItem
 // 창을 닫거나 새로 고칠 때: 미뤄 둔 미세 이동을 기록하고 브라우저 저장을 바로, 파일 저장이 남았으면 경고
 addEventListener('pagehide', () => { try { flushNudge(); if (store.state.dirty) store.idbSet('doc', doc); if (tabMulti && doc.docId) store.idbSet('doc@' + doc.docId, doc); tabDocMark(); } catch (e) {} });
 addEventListener('beforeunload', e => { try { flushNudge(); store.idbSet('doc', doc); if (tabMulti && doc.docId) store.idbSet('doc@' + doc.docId, doc); tabDocMark(); } catch (err) {} if (store.state.handle && store.state.dirty && !store.state.conflict && !NC.live.deferSave()) { saveFileNow(); e.preventDefault(); e.returnValue = ''; } });
-let idbTimer, fileTimer, freshDraft = false, idbFailShown = false; const liveAssetKeys = new Set(); // freshDraft: 처음 열 때 만든 초안을 아직 고치지 않음
+let bootBusy = false, idbTimer, fileTimer, freshDraft = false, idbFailShown = false; const liveAssetKeys = new Set(); // freshDraft: 처음 열 때 만든 초안을 아직 고치지 않음
 function markDirty() {
   freshDraft = false; doc.updatedAt = Date.now(); store.state.dirty = true; store.state.seq++;
   clearTimeout(idbTimer); idbTimer = setTimeout(async () => { try { await store.idbSet('doc', doc); tabDocMark(); slotSave(); store.idbSet('docMeta', { dirty: !!store.state.dirty, docId: doc.docId || '', base: store.state.lastSaveId || '', t: Date.now() }).catch(() => {}); idbFailShown = false; if (!store.state.handle) setStatus('브라우저에 저장됨 ' + tnow()); } catch (e) { setStatus('브라우저 저장 실패'); if (!idbFailShown) { idbFailShown = true; toast(`브라우저 저장소에 저장하지 못했습니다(${e.name === 'QuotaExceededError' ? '저장 공간 부족' : e.message || e.name}). 저장 ▾ → 동기화 폴더에 저장하거나 내려받아 두세요`, true); } } }, 900);
@@ -145,6 +145,7 @@ function markDirty() {
 }
 async function saveFileNow() {
   if (store.state.conflict) return false;
+  if (bootBusy) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 1500); return false; }  /* 시작 중(지난 문서 되살리기 전)에는 파일에 쓰지 않음 — 다시 연결된 옛 파일에 새 문서가 덮이지 않게 */
   if (store.state.saving) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 800); return false; } // 저장 중이면 끝난 뒤 다시
   let ok = false;
   try {
@@ -497,7 +498,7 @@ function elHTML(el, mode, ext) {
     return `<div class="el el-text${lock}${wf ? ' wrapped' : ''}" data-id="${el.id}" style="${bs}${tst}">${wf}${el.html && el.htmlFor === el.text ? (el.valign && el.valign !== 'top' && !wf ? `<div class="txw">${el.html}</div>` : el.html) : paraHTML(el, nobrPhone(esc(el.text)))}</div>`;
   }
   if (el.type === 'image') {
-    const s = elSrcOv.get(el.id) || viewSrc(el, mode); const clip = FX.clipPath(el.clip, el.w * MM, el.h * MM); const z = el.zoom || 1;
+    const s = (el._mmp ? null : elSrcOv.get(el.id)) || viewSrc(el, mode); const clip = FX.clipPath(el.clip, el.w * MM, el.h * MM); const z = el.zoom || 1;
     const sh = el.shadow ? `filter:drop-shadow(${el.shX || 0.8}mm ${el.shY || 0.8}mm ${el.shB || 0.8}mm ${FX.rgba(el.shC || '#000000', el.shA == null ? 0.3 : el.shA)});` : '';
     const inner = s ? `<img src="${s}" alt="" draggable="false" style="object-fit:${el.fit};object-position:${el.pos};transform:translate(${el.panX || 0}%,${el.panY || 0}%) scale(${z * (el.flip ? -1 : 1)},${z * (el.flipV ? -1 : 1)});${FX.imageFilter(el)}">${el.tint ? `<div class="tint" style="background:${el.tint};opacity:${el.tintA == null ? 0.4 : el.tintA};mix-blend-mode:${el.tintMode || 'multiply'}"></div>` : ''}` : (mode === 'edit' ? `<div class="imgph" style="font-size:${Math.max(3.5, Math.min(14, Math.min(el.w, el.h) * 0.07)).toFixed(2)}mm">그림 없음<br>오른쪽에서 넣기</div>` : mode === 'thumb' ? '<div class="imgph"></div>' : '');
     return `<div class="el el-image${lock}" data-id="${el.id}" style="${base}${blend}${sh}"><div class="imgclip" style="border-radius:${el.radius || 0}mm;${clip ? `clip-path:${clip};` : ''}${el.border ? `border:${el.borderW || 0.5}mm solid ${el.border};` : ''}${s ? '' : `outline:${Math.max(0.4, Math.min(el.w, el.h) * 0.004).toFixed(2)}mm dashed rgba(128,128,128,.7);`}">${inner}</div></div>`;
@@ -538,7 +539,7 @@ function chartSVG(el) {
 }
 function sheetHTML(pg, mode) {
   const b = mode === 'print' ? (doc.bleed || 0) : 0;
-  return bookTokens(pg, `<div class="sheet${mode === 'print' ? ' print' : ''}" style="--pw:${doc.w};--ph:${doc.h};--b:${b}mm"><div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, mode, true)).join('')}${masterHTML(pg)}</div>${(b > 0 && doc.cropMarks) ? marks(b) : ''}</div>`, mode);
+  return bookTokens(pg, `<div class="sheet${mode === 'print' ? ' print' : ''}" style="--pw:${doc.w};--ph:${doc.h};--b:${b}mm"><div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(mmPhEl(e, pg._mm, mode), mode, true)).join('')}${masterHTML(pg)}</div>${(b > 0 && doc.cropMarks) ? marks(b) : ''}</div>`, mode);
 }
 /* ---- 책자 (인디자인·쿽 참고): 공통 머리글·바닥글·자동 쪽 번호(마스터 페이지), 여백·단 안내선, 펼침면, 목차, 중철 소책자 인쇄 ----
    doc.book = { on, start(시작 번호), skip(앞 몇 쪽은 번호 없음 — 표지), facing(펼침면: 홀수 쪽=오른쪽), pos('outer'|'center'|'inner'), style('n'|'dash'|'p'|'total'), size, color, font, margin, header, footer, guides, mg:{top,bottom,inner,outer}, cols, gutter }
@@ -576,7 +577,10 @@ function mmField(w, k) {
 }
 function mmFieldKnown(k) { if (!mmList().length) return true; k = unesc(k).trim(); const cols = (doc.merge && doc.merge.cols) || []; return cols.includes(k) || (/^\d+$/.test(k) && Number(k) >= 1 && Number(k) <= cols.length) || MM_F.some(x => x[0] === k) || k === '성명'; }
 const mmHasTok = e => !!e && ((e.type === 'text' && MM_TEST.test(e.text || '')) || (e.type === 'tbl' && MM_TEST.test(JSON.stringify(e.rows || ''))));  /* 표 칸 안의 칸도 (11/27) */
-function mmUsed(pages) { return (pages || (doc && doc.pages) || []).some(p => (p.els || []).some(e => (e.type === 'text' && MM_TEST.test(e.text || '')) || (e.type === 'tbl' && MM_TEST.test(JSON.stringify(e.rows || ''))))); }
+/* 11/27 메일머지 사진 자리: 그림 요소에 mmPhoto — 사람마다 명단의 사진(w.p, 관리프로그램 사진을 칸 크기에 맞게 줄여 문서 그림으로)으로 바꿔 찍음. 사진이 없는 사람은 그 자리를 비움(다른 아이 사진이 찍히지 않게) */
+const mmPhotoSlot = e => !!e && e.type === 'image' && !!e.mmPhoto;
+const mmPhEl = (e, who, mode) => !who || !mmPhotoSlot(e) ? e : typeof who.p === 'string' && /^a:[\w-]{1,40}$/.test(who.p) ? Object.assign({}, e, { src: who.p, srcOrig: undefined, crop: undefined, _mmp: 1 }) : Object.assign({}, e, mode === 'edit' ? { src: '', _mmp: 1 } : { opacity: 0, _mmp: 1 });
+function mmUsed(pages) { return (pages || (doc && doc.pages) || []).some(p => (p.els || []).some(e => mmPhotoSlot(e) || (e.type === 'text' && MM_TEST.test(e.text || '')) || (e.type === 'tbl' && MM_TEST.test(JSON.stringify(e.rows || ''))))); }
 const mmWhoWord = () => (doc && doc.merge && doc.merge.cols ? '명단' : '재원생');  /* 엑셀 명단은 「명단 N명」 */
 const mmActive = () => mmUsed() && mmList().length > 0;
 function mmFill(html, who, mark) {
@@ -638,7 +642,7 @@ function renderCanvas() {
   ensureLibFonts([page()]).then(n => { if (n && !editing) renderCanvas(); });
   const c = $('#canvas'); const pg = page();
   c.style.setProperty('--pw', doc.w); c.style.setProperty('--ph', doc.h); c.style.setProperty('--b', '0mm');
-  c.innerHTML = bookTokens(pg, `<div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, 'edit')).join('')}${masterHTML(pg)}</div>`, 'edit');
+  c.innerHTML = bookTokens(pg, `<div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(mmPhEl(e, mmPv >= 0 ? mmList()[mmPv] : null, 'edit'), 'edit')).join('')}${masterHTML(pg)}</div>`, 'edit');
   textOver.clear();
   pg.els.forEach(el => { if (el.type === 'text' && !isWarp(el)) { let d = c.querySelector(`[data-id="${el.id}"]`); if (!d) return; if (el.sizing === 'autow') autoWidth(d, el); if (el.fitText && el.sizing === 'fixed') d = autoFitText(d, el) || d; const hh = fitTextH(d, el, true); if (hh != null) el.h = hh; if (el.sizing === 'fixed' && !(el.flowFrame && el.flowFrame !== 'body') && textOverflows(d, el)) textOver.add(el.id); } });  /* 차례·찾아보기 흐름 상자는 다음 쪽으로 이어지므로 넘침 표시 안 함 (11/26 편집 조) */
   pg.els.forEach(el => { if (el.type !== 'tbl') return; const d = c.querySelector(`[data-id="${el.id}"]`); if (!d) return; const hh = Math.round(d.offsetHeight / MM * 100) / 100; if (hh > 0 && Math.abs(hh - el.h) > 0.05) el.h = hh; });  /* 표: 줄 높이는 글에 맞춰 — 선택 상자도 같게 */
@@ -1357,7 +1361,7 @@ function sizeSel(f) {
 function rerenderEl(el) {
   wrapDirty();
   const c = $('#canvas'), old = c && c.querySelector(`[data-id="${el.id}"]`);
-  if (!old || /\{(쪽|전체쪽|디데이:|남은날:)/.test(el.text || '') || mmHasTok(el)) { renderCanvas(); return; } /* 쪽 번호·D-day 자리는 쪽 전체 바꿈이 필요 */
+  if (!old || /\{(쪽|전체쪽|디데이:|남은날:)/.test(el.text || '') || mmHasTok(el) || mmPhotoSlot(el)) { renderCanvas(); return; } /* 쪽 번호·D-day 자리는 쪽 전체 바꿈이 필요 */
   const tmp = document.createElement('div'); tmp.innerHTML = elHTML(el, 'edit'); const nu = tmp.firstElementChild; if (!nu) { renderCanvas(); return; }
   if (old.classList.contains('editing')) return; old.replaceWith(nu);
   if (el.type === 'text' && !isWarp(el)) { let d = nu; if (el.sizing === 'autow') autoWidth(d, el); if (el.fitText && el.sizing === 'fixed') d = autoFitText(d, el) || d; const hh = fitTextH(d, el, true); if (hh != null) { el.h = hh; d.style.minHeight = hh + 'mm'; } }
@@ -4143,6 +4147,26 @@ function mmPanelHTML(el) {
     ${L.length && used ? `<div class="pk-lb">미리보기</div><div class="row mmpv"><button type="button" class="btn sm icon" data-mm="pv:-1" title="앞 사람">‹</button><button type="button" class="btn sm mmpvb${mmPv >= 0 ? ' on' : ''}" data-mm="pv:0">${mmPv >= 0 ? `${esc(L[mmPv].n)} <small>${mmPv + 1}/${L.length}</small>` : '칸 이름으로 보기 <small>누르면 첫 사람</small>'}</button><button type="button" class="btn sm icon" data-mm="pv:1" title="다음 사람">›</button>${mmPv >= 0 ? '<button type="button" class="btn sm" data-mm="pv:off">끄기</button>' : ''}</div><div class="row" style="gap:4px;margin-top:4px"><button type="button" class="btn sm" data-mm="pv:long" title="글에 쓴 칸으로 바꿨을 때 가장 긴 사람 — 줄이 넘치는지 확인">가장 긴 이름 보기</button></div><p class="hint" style="margin:4px 0 0">이름이 긴 사람으로 넘겨 보며 줄이 넘치지 않는지 확인하세요 · 인쇄: 출력 창의 「메일머지 — ${L.length}명 각각」</p>` : ''}
   </details>`;
 }
+function mmPhotoHTML(el) {
+  const A = (doc.merge && Array.isArray(doc.merge.list) ? doc.merge.list : []).filter(x => x && x.n), L = mmList(), has = L.filter(w => w.p).length, miss = L.filter(w => !w.p);
+  return `<details class="fx mmbox" ${el.mmPhoto ? 'open' : ''}><summary><span class="anim-h">✉ 메일머지 사진 <small>${el.mmPhoto ? (L.length ? `사진 ${has}/${L.length}명` : '사진 자리') : '사람마다 사진'}</small></span></summary>
+    <label class="chk" style="display:flex;gap:6px;align-items:flex-start;margin:2px 0 4px"><input type="checkbox" data-mmphoto ${el.mmPhoto ? 'checked' : ''}><span>이 그림을 <b>사진 자리</b>로 — 인쇄·다운로드할 때 사람마다 그 사람 사진으로 바뀜</span></label>
+    ${el.mmPhoto ? `<p class="hint" style="margin:2px 0 6px">사진은 <b>관리프로그램</b>에 올린 수련생 사진(이름이 같은 사람)을 이 칸 크기에 맞게 줄여 문서에 넣습니다. 사진이 없는 사람은 이 자리가 <b>비어</b> 찍힙니다.</p>
+    ${A.length ? `<div class="row" style="flex-wrap:wrap;gap:4px"><button type="button" class="btn sm${has ? '' : ' primary'}" data-mm="photo">📷 관리프로그램 사진 ${has ? '다시 ' : ''}받기</button>${has ? '<button type="button" class="btn sm" data-mm="photo:clear" title="문서에 넣은 사진을 모두 빼서 문서를 가볍게">사진 빼기</button>' : ''}</div>
+    ${miss.length && has ? `<p class="hint" style="margin:4px 0 0">⚠ 사진 없는 사람 ${miss.length}명 — ${esc(miss.slice(0, 5).map(w => w.n).join(', '))}${miss.length > 5 ? ' 외' : ''} (관리프로그램에 사진을 올린 뒤 다시 받기)</p>` : ''}` : `<p class="hint">먼저 글 상자를 고르고 속성 창 「✉ 메일머지」에서 명단을 고르세요.</p>`}` : ''}
+  </details>`;
+}
+async function mmPhotoFetch(quiet) {
+  const M = doc.merge, A = (M && Array.isArray(M.list) ? M.list : []).filter(x => x && x.n); if (!A.length) { if (!quiet) toast('먼저 메일머지 명단을 고르세요'); return 0; }
+  const slots = doc.pages.flatMap(p => p.els).filter(mmPhotoSlot); if (!slots.length) return 0;
+  const px = Math.max(300, Math.min(900, Math.round(Math.max(...slots.map(e => Math.max(e.w, e.h))) / 25.4 * 300)));  /* 칸 크기에 맞게(300dpi) — 문서가 무겁지 않게 */
+  let pm = {}; try { pm = await attPhotos(A.map(w => w.n).concat(A.map(w => mmClean(w.n))), true); } catch (e) { console.warn(e); }
+  const did = A.map(w => w.p).filter(Boolean); let n = 0;
+  for (const w of A) { const o = pm[w.n] || pm[mmClean(w.n)], d = o && o.d; if (!d) { delete w.p; continue; } let ref; try { ref = addAsset(await shrinkDataURL(d, px)); } catch (e) { ref = addAsset(d); } w.p = ref; n++; }
+  commit(); renderCanvas(); renderInspector();
+  if (!quiet || n) toast(n ? `사진 ${n}/${A.length}명을 넣었습니다${A.length - n ? ` — ${A.length - n}명은 관리프로그램에 사진이 없어 자리가 비어 찍힙니다` : ''}` : (Object.keys(pm).length ? '명단의 이름과 같은 관리프로그램 사진이 없습니다' : '관리프로그램 사진을 읽지 못했습니다 — 같은 브라우저에서 관리프로그램에 한 번 로그인한 뒤 다시 누르세요'), !n);
+  return n;
+}
 /* 칸 넣기: 글 고치는 중이면 커서 자리에, 아니면 고른 글 상자의 「[수련생 이름]」 자리를, 그것도 없으면 안내 */
 function mmInsert(k) {
   if (mmFieldMenu.cancel) mmFieldMenu.cancel();
@@ -4163,12 +4187,15 @@ document.addEventListener('click', e => {
   const a = t.dataset.mm, L = mmList();
   if (a === 'pick') { openMergePick(); return; }
   if (a === 'xls') { openMergeXls(); return; }
+  if (a === 'photo') { mmPhotoFetch(false); return; }
+  if (a === 'photo:clear') { (doc.merge && doc.merge.list || []).forEach(w => { if (w) delete w.p; }); commit(); renderCanvas(); renderInspector(); toastUndo('문서에 넣은 사진을 뺐습니다 — 사진 자리는 비어 찍힙니다'); return; }
   if (a.startsWith('offall:')) { const M = doc.merge; if (!M) return; M.off = {}; if (a.endsWith('1')) (M.list || []).forEach(x => { M.off[mmKey(x)] = 1; }); mmPv = Math.min(mmPv, mmList().length - 1); mmListOpen = true; commit(); renderCanvas(); renderInspector(); return; }
   if (a === 'clear') { confirmBtns('이 문서의 메일머지 명단을 비울까요?\n(글 속 {이름} 칸은 그대로 남고, 명단은 언제든 다시 고를 수 있어요)').then(ok => { if (!ok) return; delete doc.merge; mmPv = -1; commit(); rerender(); renderInspector(); }); return; }
   if (a.startsWith('ph:')) { const el = selEls().find(x => mmPhOf(x)) || page().els.find(x => mmPhOf(x)); if (el) mmPh(el, a.slice(3)); renderInspector(); return; }
   if (a === 'pv:long') { if (!L.length) return; const src = doc.pages.flatMap(p => p.els).filter(mmHasTok).map(e => e.type === 'tbl' ? e.rows.flat().join('\n') : e.text).join('\n'), len = w => mmFill(src, w, false).length; let k = 0; L.forEach((w, i) => { if (len(w) > len(L[k])) k = i; }); mmPv = k; renderCanvas(); renderInspector(); toast(`가장 긴 이름: ${L[k].n} — 줄이 넘치거나 줄바꿈이 어색하지 않은지 보세요`); return; }
   if (a.startsWith('pv:')) { const v = a.slice(3); if (!L.length) return; mmPv = v === 'off' ? -1 : v === '0' ? (mmPv < 0 ? 0 : mmPv) : (Math.max(0, mmPv) + Number(v) + L.length) % L.length; renderCanvas(); renderInspector(); return; }
 });
+document.addEventListener('change', e => { const t = e.target; if (!t || t.dataset.mmphoto == null || !t.closest('#inspector')) return; const el = selEls().find(x => x.type === 'image'); if (!el) return; if (t.checked) el.mmPhoto = true; else delete el.mmPhoto; commit(); renderCanvas(); renderInspector(); if (t.checked && doc.merge && (doc.merge.list || []).length && !(doc.merge.list || []).some(w => w && w.p)) mmPhotoFetch(true); else if (t.checked) toast('사진 자리로 정했습니다 — 메일머지 명단을 고르면 관리프로그램 사진을 받아 옵니다'); });  /* 그림 → 메일머지 사진 자리 */
 document.addEventListener('change', e => { const t = e.target; if (!t || t.dataset.mmoff == null || !t.closest('#inspector') || !doc.merge) return; const M = doc.merge; M.off = Object.assign({}, M.off); if (t.checked) delete M.off[t.dataset.mmoff]; else M.off[t.dataset.mmoff] = 1; const n = mmList().length; mmPv = n ? Math.min(mmPv, n - 1) : -1; mmListOpen = true; commit(); renderCanvas(); renderInspector(); });  /* 속성 창 「명단 보기 · 빼기」 */
 document.addEventListener('toggle', e => { if (e.target && e.target.classList && e.target.classList.contains('mmlist')) mmListOpen = e.target.open; }, true);
 document.addEventListener('input', e => { const q = e.target; if (!q.classList || !q.classList.contains('prmmq')) return; const v = q.value.trim(); mmR().q = v; const L = mmList(); q.parentElement.querySelectorAll('.prmm-grid [data-mmpk]').forEach(b => { const w = L[Number(b.dataset.mmpk)]; b.hidden = !!v && !(w && String(w.n).includes(v)); }); });  /* 출력 창 골라서: 이름 찾기 */
@@ -4200,7 +4227,7 @@ async function openMergePick() {
       const al = e.target.closest('[data-mmall]'); if (al) { list.forEach(x => { if (al.dataset.mmall === '1') delete P.off[x.n]; else P.off[x.n] = 1; }); draw(); return; }
       if (e.target.closest('#mmGo')) { const picked = list.filter(x => !P.off[x.n]); if (!picked.length) return;
         doc.merge = { src: '관리프로그램 재원생', at: Date.now(), list: picked.map((x, ki) => ({ k: ki, n: String(x.n).trim(), b: String(x.b || '').trim(), g: String(x.grade || '').trim(), y: (() => { try { return attGrade(x) || ''; } catch (er) { return ''; } })(), d: (String(x.by || '').match(/^\d{4}-(\d\d-\d\d)/) || [])[1] || '', j: (String(x.joinDate || '').match(/^\d{4}-\d\d-\d\d/) || [])[0] || '' })), off: {} };
-        mmPv = 0; commit(); d.close(); rerender(); renderInspector();
+        mmPv = 0; commit(); d.close(); rerender(); renderInspector(); if (doc.pages.some(p => p.els.some(mmPhotoSlot))) setTimeout(() => mmPhotoFetch(true), 1200);
         toast(mmUsed() ? `메일머지 명단 ${picked.length}명 — 편집 화면은 「${picked[0].n}」 미리보기, 출력·다운로드하면 ${picked.length}명 각각 찍힙니다` : `메일머지 명단 ${picked.length}명을 넣었습니다 — 이제 글 상자에 {이름} 칸을 넣으세요(속성 창 「칸 넣기」)`); } };
     d.onchange = e => { const t = e.target; if (t.dataset.mmban != null) { const b = t.dataset.mmban; P.ban = t.checked ? [...new Set(P.ban.concat(b))] : P.ban.filter(x => x !== b); draw(); return; } if (t.dataset.mmoff != null) { if (t.checked) delete P.off[t.dataset.mmoff]; else P.off[t.dataset.mmoff] = 1; draw(); } };
     d.oninput = e => { if (e.target.id !== 'mmQ' || e.isComposing) return; P.q = e.target.value; clearTimeout(draw.t); draw.t = setTimeout(() => { draw(); const i = d.querySelector('#mmQ'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
@@ -4322,7 +4349,7 @@ function mmXDialog() {
       if (e.target.closest('#mmXGo')) { const pick = T.rows.map((r, k) => [r, k]).filter(([, k]) => !mmX.off.has(k)); if (!pick.length) return; const g = (r, i) => i >= 0 ? r[i] || '' : '';
         doc.merge = { src: '엑셀 파일', file: mmX.file, sheet: (mmX.sheets[mmX.si] || {}).name || '', at: Date.now(), cols: T.cols, nameCol: T.cols[ni],
           list: pick.map(([r, k], j) => { const f = {}; T.cols.forEach((c, i) => { f[c] = r[i] || ''; }); return { k: j, n: String(r[ni] || '').trim() || `${k + 1}번째 줄`, b: g(r, G.bi), g: g(r, G.gi), y: g(r, G.yi), d: mmMD(g(r, G.di)), j: mmYMD(g(r, G.ji)), f }; }), off: {} };
-        mmPv = 0; mmRange.doc = ''; commit(); d.close(); rerender(); renderInspector();
+        mmPv = 0; mmRange.doc = ''; commit(); d.close(); rerender(); renderInspector(); if (doc.pages.some(p => p.els.some(mmPhotoSlot))) setTimeout(() => mmPhotoFetch(true), 1200);
         toast(mmUsed() ? `엑셀 명단 ${pick.length}줄 — 편집 화면은 첫 줄 미리보기, 출력·다운로드하면 ${pick.length}장 각각 찍힙니다` : `엑셀 명단 ${pick.length}줄을 넣었습니다 — 이제 글에 {{${T.cols[ni] || '1'}}} 같은 표시를 다세요(속성 창 「✉ 메일머지」)`); } };
   };
   draw(); if (!d.open) d.showModal();
@@ -4364,6 +4391,7 @@ function mmEmptyInfo(people) {
   const flds = [...new Set([...src.matchAll(MM_FLD)].map(m => m[1].trim()))].filter(k => mmFieldKnown(esc(k))), toks = [...new Set([...src.replace(MM_FLD, '').matchAll(MM_RX)].map(m => m[1]))];
   flds.forEach(k => { const em = people.filter(w => !String(mmField(w, k) || '').trim()); if (em.length) out.push({ t: `{{${k}}}`, em }); });
   toks.forEach(k => { const f = MM_F.find(x => x[0] === k); const em = people.filter(w => !String(f[2](w) || '').trim()); if (em.length) out.push({ t: `{${k}}`, em }); });
+  if (doc.pages.some(p => p.els.some(mmPhotoSlot))) { const em = people.filter(w => !w.p); if (em.length) out.push({ t: '📷 사진', em }); }
   return out;
 }
 function mmBadFields() { return [...new Set(doc.pages.flatMap(p => p.els).filter(mmHasTok).flatMap(e => [...String(e.type === 'tbl' ? e.rows.flat().join('\n') : e.text || '').matchAll(MM_FLD)].map(m => m[1].trim())))].filter(k => !mmFieldKnown(esc(k))); }  /* 문서에 단 {{표시}} 중 명단에 없는 열 */
@@ -4471,7 +4499,7 @@ function renderInspector() {
     ${el.role ? `<p class="hint">역할: ${el.role}${el.month ? ' · ' + el.month + '월' : ''} (AI 문구·테마 적용 대상)</p>` : ''}` + geo;
   } else if (el.type === 'image') {
     const f = el.fx || {};
-    h += `<h3>그림</h3><div class="imgprev">${src(el.src) ? `<img id="imgPrevImg" src="${src(el.src)}" alt="" style="${FX.imageFilter(el)}transform:${el.flip ? 'scaleX(-1)' : 'none'}">` : '<span class="hint">그림 없음</span>'}</div>
+    h += (doc.cert || doc.att || newsMode ? '' : mmPhotoHTML(el)) + `<h3>그림</h3><div class="imgprev">${src(el.src) ? `<img id="imgPrevImg" src="${src(el.src)}" alt="" style="${FX.imageFilter(el)}transform:${el.flip ? 'scaleX(-1)' : 'none'}">` : '<span class="hint">그림 없음</span>'}</div>
     <div class="row"><label class="btn sm">바꾸기(파일)<input type="file" accept="image/*" id="imgReplace" hidden></label><button class="btn sm" id="imgLib">사진 보관함</button><button class="btn sm ai" id="imgAI" title="흰 배경 지우기·비슷하게 새로 그리기·말로 바꾸기">✨ 사진 AI</button></div>
     <div class="row" style="margin-top:6px"><button class="btn sm primary" id="imgEdit" ${src(el.src) ? '' : 'disabled'}>편집기 (배경 지우기·브러시·자르기)</button>${el.srcOrig ? '<button class="btn sm" id="imgOrig">원본으로</button>' : ''}</div>
     <h3>글 배치 <small>글 상자와 겹칠 때</small></h3>${vpick('wrap', el.wrap || 'none', WRAP_OPTS.map(([k, t, tip]) => [k, wrapPic(k), t, tip]), 'sm wraps')}${WRAPS.includes(el.wrap) ? F('글과 간격', 'wrapGap', el.wrapGap == null ? 2 : el.wrapGap, { type: 'slider', min: 0, max: 10, step: 0.5, unit: 'mm', def: 2 }) : ''}
@@ -5147,6 +5175,12 @@ async function uploadLocalDocs() {
     await store.idbSet('doc-prevs', keep);
     if (n) toast(`이 브라우저에만 있던 문서 ${n}개를 구글 드라이브에 올렸습니다 (내 드라이브에서 열 수 있어요)`);
   } catch (e) { console.warn('브라우저 문서 올리기', e); } }
+async function stashPrev(d) { /* 다른 문서(지금 화면이 아닌 것)를 「직전 문서」 목록(6개)에 넣음 — 시작 중 덮임 ② */
+  if (!d || !Array.isArray(d.pages) || !d.pages.some(p => p.els && p.els.length)) return '';
+  if (doc && d.docId && d.docId === doc.docId) return '';
+  const cp = JSON.parse(JSON.stringify(d)); cp._keptAt = Date.now(); let L = []; try { L = (await store.idbGet('doc-prevs')) || []; } catch (e) {}
+  L = [cp].concat(L.filter(x => x && !(x.docId && x.docId === cp.docId))).slice(0, 6); await store.idbSet('doc-prevs', L); await store.idbSet('doc-prev', cp); return cp.name || '디자인';
+}
 async function keepCurrentDoc() {
   try { flushNudge(); } catch (e) {}
   if (store.state.handle) {
@@ -6512,7 +6546,7 @@ let dlFallback = 0;
    → 이름 칸이 없는 바탕(그림·다른 글)은 한 번만 그리고, 이름 칸이 든 글 상자만 여러 사람 것을 세로로 쌓아 한 번에 그린 뒤 잘라 얹음.
    이름 글 상자 위에 겹치는 다른 요소가 있거나(겹침 순서)·혼합 모드면 예전처럼 한 장씩 */
 const mmFast = { bases: new Map(), layers: new Map(), q: Promise.resolve() };
-const mmDynOf = pg => (pg.els || []).filter(e => !elHidden(e) && ((e.type === 'text' && MM_TEST.test(e.text || '')) || (e.type === 'tbl' && MM_TEST.test(JSON.stringify(e.rows || '')))));
+const mmDynOf = pg => (pg.els || []).filter(e => !elHidden(e) && (mmPhotoSlot(e) || (e.type === 'text' && MM_TEST.test(e.text || '')) || (e.type === 'tbl' && MM_TEST.test(JSON.stringify(e.rows || '')))));
 function mmBox(e) { const a = (Number(e.rot) || 0) * Math.PI / 180, cx = e.x + e.w / 2, cy = e.y + e.h / 2, hw = (Math.abs(Math.cos(a)) * e.w + Math.abs(Math.sin(a)) * e.h) / 2 + 2, hh = (Math.abs(Math.sin(a)) * e.w + Math.abs(Math.cos(a)) * e.h) / 2 + 2; return [cx - hw, cy - hh, cx + hw, cy + hh]; }
 function mmFastOK(pg) {
   const dyn = mmDynOf(pg); if (!dyn.length) return false; const els = pg.els || [];
@@ -9625,16 +9659,21 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
   const boot = document.createElement('div'); boot.id = 'ncBoot'; boot.innerHTML = '<span><i class="spin"></i>지난 문서를 여는 중…</span>'; document.body.appendChild(boot);
   const bootOff = () => { clearTimeout(bootT); boot.remove(); }, bootT = setTimeout(bootOff, 10000);
   let loaded = false;
+  /* 11/27 시작 중 덮임 ②: 10초 가림이 걷힌 뒤에도 되살리기가 안 끝난 PC — 그사이 다른 문서를 열었거나 새로 쓰기 시작했으면 지금 문서를 그대로 두고, 되살릴 문서는 「직전 문서」로 보관 (브라우저에만 있던 작업은 가장 먼저 읽어 둠 — 새로 쓴 글이 그 칸을 덮기 전에) */
+  const doc0 = doc; let drEarly = null; try { drEarly = await store.idbGet('doc'); } catch (e) {} bootBusy = true;
+  const late = () => doc !== doc0 || hist.length > 0;
+  const bootYield = async (h0, ...cands) => { let kept = ''; for (const c of cands) { try { const k = await stashPrev(c); if (k && !kept) kept = k; } catch (e) { console.warn('직전 문서 보관 실패', e); } } if (h0 && store.state.handle === h0) { try { await store.disconnect(); } catch (e) {} updateSaveBadge(); } loaded = true; toast(kept ? `지난 문서 「${kept}」를 여는 데 오래 걸려 지금 문서를 그대로 두었습니다 — 지난 문서는 저장 ▾ → 직전 문서 되살리기에 있습니다` : '지난 문서를 여는 데 오래 걸려 지금 문서를 그대로 두었습니다 — 지난 문서는 내 드라이브에서 여세요'); };
   try {
-    const p = await store.reconnect();
-    if (p === 'granted') { const base = await store.idbGet('docBase').catch(() => null), meta = await store.idbGet('docMeta').catch(() => null); const j = await store.readFile(); const dr = await store.idbGet('doc').catch(() => null); const moved = !!dr && sameDoc(dr, j) && fileMovedOn(j, base), newer = !!dr && sameDoc(dr, j) && browserNewer(dr, j, meta);
+    const p = await store.reconnect(), h0 = store.state.handle;
+    if (p === 'granted') { const base = await store.idbGet('docBase').catch(() => null), meta = await store.idbGet('docMeta').catch(() => null); const j = await store.readFile(); const dr = drEarly; if (late()) { await bootYield(h0, dr && j && sameDoc(dr, j) && !browserNewer(dr, j, meta) ? null : dr); } else { const moved = !!dr && sameDoc(dr, j) && fileMovedOn(j, base), newer = !!dr && sameDoc(dr, j) && browserNewer(dr, j, meta);
       /* 11/26 같이 작업: 그사이 다른 PC가 저장했어도 함께 가졌던 판을 알면 묻지 않고 합쳐 열고, 다른 PC가 안 바꿨으면 브라우저 작업으로 바로 */
       const mbase = newer && moved ? ((base && base.saveId ? await store.verById(base.saveId) : null) || (await store.commonBase(dr, j))) : null;
       if (newer && moved && !mbase) { await loadDoc(NC.live.union(dr, j)); loaded = true; markDirty(); setStatus(`연결된 파일: ${store.state.fileName} · ${j.savedBy || '다른 PC'}가 고친 것과 이 브라우저 작업을 합쳤습니다`); }  /* 기준판이 없어도 사본 대신 합침 */
       else if (newer && mbase) { const merged = NC.live.merge(mbase, dr, j); await loadDoc(merged); loaded = true; markDirty(); setStatus(`연결된 파일: ${store.state.fileName} · ${j.savedBy || '다른 PC'}가 고친 것과 이 브라우저 작업을 합쳤습니다`); }
       else if (newer && !moved) { await loadDoc(dr); loaded = true; markDirty(); setStatus(`연결된 파일: ${store.state.fileName} · 브라우저 작업을 이어서 저장합니다`); }
-      else if (newer && await confirmBtns(`이 브라우저에 파일보다 나중에 고친 작업이 있습니다 (파일에 저장되지 못한 작업).\n\n확인: 브라우저 작업으로 열어 파일에 저장 (권장)\n취소: 파일 내용으로 열기 (브라우저 작업은 충돌 사본으로 보관)${moved ? movedNote(j) : ''}`)) { if (moved) await keepFileCopy(j); await loadDoc(dr); loaded = true; markDirty(); setStatus(`연결된 파일: ${store.state.fileName} · 브라우저 작업을 이어서 저장합니다`); } else { if (newer) { try { await store.writeCopy(dr, '브라우저 작업'); } catch (e) {} } await loadDoc(j); loaded = true; setStatus(`연결된 파일: ${store.state.fileName}`); setTimeout(() => warnIfRecentOther(j), 1500); } }
-    else if (p === 'prompt') { const saved = await store.idbGet('doc'); if (saved) { await loadDoc(saved); loaded = true; } const st = $('#status'); st.innerHTML = `<button class="btn sm" id="reconn">연결된 파일 "${esc(store.state.fileName)}" 다시 열기</button>`; store.state.needPerm = true;
+      else if (newer && await confirmBtns(`이 브라우저에 파일보다 나중에 고친 작업이 있습니다 (파일에 저장되지 못한 작업).\n\n확인: 브라우저 작업으로 열어 파일에 저장 (권장)\n취소: 파일 내용으로 열기 (브라우저 작업은 충돌 사본으로 보관)${moved ? movedNote(j) : ''}`)) { if (moved) await keepFileCopy(j); await loadDoc(dr); loaded = true; markDirty(); setStatus(`연결된 파일: ${store.state.fileName} · 브라우저 작업을 이어서 저장합니다`); } else { if (newer) { try { await store.writeCopy(dr, '브라우저 작업'); } catch (e) {} } await loadDoc(j); loaded = true; setStatus(`연결된 파일: ${store.state.fileName}`); setTimeout(() => warnIfRecentOther(j), 1500); } } }
+    else if (p === 'prompt' && late()) await bootYield(h0, drEarly);
+    else if (p === 'prompt') { const saved = drEarly; if (saved) { await loadDoc(saved); loaded = true; } const st = $('#status'); st.innerHTML = `<button class="btn sm" id="reconn">연결된 파일 "${esc(store.state.fileName)}" 다시 열기</button>`; store.state.needPerm = true;
       $('#reconn').onclick = async () => {
         if (!(await store.requestPermission())) return; store.state.needPerm = false;
         const base = await store.idbGet('docBase').catch(() => null), meta = await store.idbGet('docMeta').catch(() => null); const draft = loaded ? doc : null; const j = await store.readFile(); const moved = !!draft && sameDoc(draft, j) && fileMovedOn(j, base);
@@ -9647,9 +9686,10 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
         await loadDoc(j, '연결된 파일을 열었습니다'); updateSaveBadge();
       }; }
   } catch (e) { console.warn(e); }
-  if (!loaded) { try { const saved0 = await store.idbGet('doc'), saved = await tabPick(saved0); if (saved) { await loadDoc(saved); loaded = true; setStatus(saved !== saved0 ? '이 탭에서 쓰던 문서를 불러왔습니다' : '브라우저 저장본을 불러왔습니다'); setTimeout(() => relinkByDocId(), 2500); } } catch (e) {} }  /* 파일 연결을 못 되살렸으면 같은 문서 번호의 파일에 다시 연결 */
+  if (!loaded && late()) { let s2 = null; try { s2 = await tabPick(drEarly); } catch (e) {} await bootYield(null, drEarly, s2 !== drEarly ? s2 : null); }
+  if (!loaded) { try { const saved0 = drEarly, saved = await tabPick(saved0); if (saved) { await loadDoc(saved); loaded = true; setStatus(saved !== saved0 ? '이 탭에서 쓰던 문서를 불러왔습니다' : '브라우저 저장본을 불러왔습니다'); setTimeout(() => relinkByDocId(), 2500); } } catch (e) {} }  /* 파일 연결을 못 되살렸으면 같은 문서 번호의 파일에 다시 연결 */
   if (!loaded) { doc = newDoc(); doc.calendar.year = 2027; doc.name = '2027 인성 캘린더'; virtueTextFix(doc.calendar, 2027); virtueArtFix(doc.calendar, null, 2027); doc.pages = CAL.buildPages(doc, uid, { year: 2027, kind: 'full' }); ensureAllHolidays(); $('#pname').value = doc.name; hist = [snapshot()]; histMeta = [{ cur: 0, sel: [] }]; hptr = 0; renderAll(); setStatus('2027년 캘린더 초안을 만들었습니다. 공휴일은 자동으로 들어갔습니다.'); freshDraft = true; }
-  bootOff();
+  bootBusy = false; bootOff();
   // 동기화 폴더(구글 드라이브): 허락돼 있으면 바로 맞추고, 아니면 한 번 눌러 허락받기
   const nlm0 = /[?&]nlimport=/.test(location.search), acctHash = acctFromHash();
   try {
