@@ -320,7 +320,7 @@ async function oldModeNag() {
     d.showModal(); } catch (e) { console.warn('예전 방식 안내', e); } }
 async function afterFolderReady(opts) {
   opts = opts || {};
-  setTimeout(oldModeNag, 2500);
+  setTimeout(oldModeNag, 2500); setTimeout(uploadLocalDocs, 5000);
   await syncSettings(true);
   NC.lib.load(true); syncBlocks();
   if (store.state.handle && await store.inFolder(store.state.handle)) {
@@ -4760,12 +4760,30 @@ function renderNewDesign() {
 }
 // 새 문서를 만들고, 동기화 폴더가 있으면 그 폴더에 새 파일로 저장
 // 다른 문서로 넘어가기 전에 지금 문서 지키기: 파일이 연결돼 있으면 저장, 아니면 이 브라우저에 '직전 문서'로 한 부 보관(저장 ▾ → 직전 문서 되살리기)
+/* 파일 없는 문서를 드라이브 맨 위(종류 폴더를 쓰면 그 폴더)에 새 파일로 — 같은 문서 번호의 본 파일이 이미 있으면 넣지 않음(사본 안 만듦) */
+async function putDocToDrive(d) {
+  if (!d || !d.pages || !d.docId) return false;
+  try { if (await store.findDocById(d.docId, { main: true })) return true; } catch (e) {}
+  const j = JSON.parse(JSON.stringify(d)); ['_keptAt', '_tab', '_why'].forEach(k => delete j[k]);
+  const path = prefOn('naracal-kind-folders') && typeof kindPath === 'function' ? (() => { try { return kindPath(j) || []; } catch (e) { return []; } })() : [];
+  const nm = await store.writeBlobAt(path, String(j.name || '문서').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) + '.design.json', new Blob([JSON.stringify(j)], { type: 'application/json' }));
+  return !!nm;
+}
+/* 11/27: 드라이브에 연결되면 「이 브라우저에만」 남아 있던 문서(저장 안 한 채 넘어간 문서)를 드라이브로 올림 — 다른 탭 문서·안전용 한 부(_why)는 빼고, 같은 문서가 드라이브에 있으면 올리지 않음 */
+async function uploadLocalDocs() {
+  try { if (!(store.isDrive && store.isDrive()) || !(await store.folderReady())) return; let L = []; try { L = (await store.idbGet('doc-prevs')) || []; } catch (e) {} if (!L.length) return;
+    let n = 0; const keep = [];
+    for (const x of L) { if (!x || !x.pages || x._why || !x.pages.some(p => (p.els || []).length) || (doc && x.docId === doc.docId)) { keep.push(x); continue; } try { if (await putDocToDrive(x)) n++; else keep.push(x); } catch (e) { keep.push(x); } }
+    await store.idbSet('doc-prevs', keep);
+    if (n) toast(`이 브라우저에만 있던 문서 ${n}개를 구글 드라이브에 올렸습니다 (내 드라이브에서 열 수 있어요)`);
+  } catch (e) { console.warn('브라우저 문서 올리기', e); } }
 async function keepCurrentDoc() {
   try { flushNudge(); } catch (e) {}
   if (store.state.handle) {
     if (!store.state.dirty) return true;  // 이미 파일에 저장됨
     if (!store.state.needPerm) { clearTimeout(fileTimer); if (await saveFileNow()) return true; }
   }  // 파일 저장에 실패했거나 권한 대기·파일 없음이면 아래에서 '직전 문서'로 보관 (최근 6개까지)
+  if (!store.state.handle && !freshDraft && doc.pages.some(p => p.els.length) && store.isDrive && store.isDrive() && await store.folderReady()) { try { if (await putDocToDrive(doc)) return true; } catch (e) { console.warn('드라이브에 보관 실패 — 직전 문서로', e); } }  /* 11/27 팀장님 「모든 문서는 구글에 올라가는 게 기본」: 파일 없는 문서도 브라우저가 아니라 드라이브에 (인터넷이 끊겨도 이 PC에 먼저 담고 연결되면 올림) */
   if (doc.pages.some(p => p.els.length)) {
     try { if (!doc.docId) doc.docId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); const cp = JSON.parse(JSON.stringify(doc)); cp._keptAt = Date.now(); let L = []; try { L = (await store.idbGet('doc-prevs')) || []; } catch (e) {} if (!L.length) { try { const old = await store.idbGet('doc-prev'); if (old && old.pages && old.docId !== cp.docId) L = [old]; } catch (e) {} } /* 예전 한 칸짜리 직전 문서도 목록으로 옮김 */ L = [cp].concat(L.filter(x => x && !(x.docId && x.docId === cp.docId))).slice(0, 6); keepCurrentDoc.kept = cp.name || '디자인'; await store.idbSet('doc-prevs', L); await store.idbSet('doc-prev', cp); }
     catch (e) { console.warn('직전 문서 보관 실패', e); if (!window.confirm(`지금 문서 "${doc.name || '디자인'}"를 브라우저에 보관하지 못했습니다(${e.message || e.name}).\n\n확인: 지금 문서를 내려받은 뒤 계속\n취소: 그대로 머물기`)) return false; try { store.download(doc); } catch (e2) {} }
@@ -4847,7 +4865,7 @@ async function renderDriveNav(ready) {
     const has = p => all.some(q => q.length > p.length && p.every((x, i) => q[i] === x));
     tree = all.filter(open).map(p => { const on = drv.view === 'drive' && here.join('/') === p.join('/'); return `<button class="dvtf ${on ? 'on' : ''}" data-dvpath="${esc(JSON.stringify(p))}" ${dd(p)} style="padding-left:${18 + p.length * 14}px" title="${esc(p.join(' › '))}"><svg viewBox="0 0 24 24">${NAV_IC.fold}</svg><span>${esc(p[p.length - 1])}</span>${has(p) ? '<i class="dvtw">›</i>' : ''}</button>`; }).join(''); }
   const btn = (k, t, extra) => `<button data-dvnav="${k}" class="${drv.view === k && !(k === 'drive' && drv.path.length) ? 'on' : drv.view === k ? 'half' : ''}" ${extra || ''}><svg viewBox="0 0 24 24">${NAV_IC[k]}</svg><span>${t}</span></button>`;
-  nav.innerHTML = btn('home', '홈') + btn('drive', '내 드라이브', dd([])) + (tree ? `<div class="dvtree-nav">${tree}</div>` : '') + btn('recent', '최근 문서') + btn('local', '이 브라우저에만')
+  nav.innerHTML = btn('home', '홈') + btn('drive', '내 드라이브', dd([])) + (tree ? `<div class="dvtree-nav">${tree}</div>` : '') + btn('recent', '최근 문서') + (ready ? '' : btn('local', '이 브라우저에만'))  /* 11/27 팀장님: 드라이브(폴더)에 연결된 PC에선 감춤 — 모든 문서는 드라이브가 기본 */
     + `<div class="dvkinds"><small>종류별</small>${DOC_KINDS.map(([k, t, ic]) => `<button data-dvkind="${k}" class="${drv.view === 'kind' && drv.kind === k ? 'on' : ''}" ${ready ? dd([t]) : ''} title="${esc(t)} — 끌어 놓으면 「${esc(t)}」 폴더로"><span class="dvk-ic">${DOC_KIND_SVG[k] ? `<svg viewBox="0 0 24 24">${DOC_KIND_SVG[k]}</svg>` : ic}</span><span>${esc(t)}</span></button>`).join('')}</div>`
     + `<div class="dvnav-end">${btn('trash', '휴지통', ready ? 'data-droptrash="1" title="끌어 놓으면 휴지통으로"' : '')}<hr>${btn('sync', '저장·동기화 설정')}</div>`;
 }
