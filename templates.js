@@ -230,6 +230,33 @@ NC.tpl = (function () {
       T(`${PHONE}  ·  naracha@example.com`, 6, 34, 78, 5, { size: 6.5, color: '#C8CFE4', name: '연락처' }),
       T('NARACHA TAEKWONDO', 40, 8, 46, 5, { font: 'Montserrat', size: 6.5, weight: 700, color: YEL, align: 'right', ls: 0.2 }),
     ], '명함 네이비')]; } },
+    /* 세로 명함 50×90 (11/27 — 새 문서 「명함 세로」에 맞는 전용 템플릿) */
+    { id: 'card-name-v', cat: 'card', name: '세로 명함 · 화이트', w: 50, h: 90, build(uid) { const { T, I, S, P } = H(uid); return [P(WHITE, [
+      S('rect', 0, 0, 50, 30, { fill: NAVY, name: '위 띠' }), S('rect', 0, 30, 50, 1.2, { fill: YEL }),
+      I(D.swoosh, 18, 7, 14, 12, { name: '로고' }),
+      T('NARACHA TAEKWONDO', 3, 21, 44, 4, { font: 'Montserrat', size: 5.6, weight: 700, color: YEL, align: 'center', ls: 0.15 }),
+      T('홍 길 동', 4, 38, 42, 8, { size: 15, weight: 700, align: 'center', name: '이름' }),
+      T('사범 · 지도교사', 4, 47, 42, 5, { size: 7.5, color: '#555', weight: 500, align: 'center', name: '직함' }),
+      S('rect', 21, 55, 8, 0.5, { fill: NAVY, name: '가는 선' }),
+      T(`${PHONE}\nnaracha@example.com\n${ADDR}`, 4, 59, 42, 18, { size: 6.2, lh: 1.6, color: '#333', align: 'center', name: '연락처' }),
+      I(D.logo, 11, 80, 28, 6, { name: '워드마크' }),
+    ], '세로 명함')]; } },
+    { id: 'card-name-v-navy', cat: 'card', name: '세로 명함 · 네이비', w: 50, h: 90, build(uid) { const { T, I, S, P } = H(uid); return [P(NAVY, [
+      S('rect', 0, 0, 3, 90, { fill: YEL, name: '노란 세로 띠' }),
+      I(D.swoosh, 8, 8, 12, 10, { name: '로고' }),
+      T('NARACHA\nTAEKWONDO', 8, 21, 38, 9, { font: 'Montserrat', size: 6, weight: 700, color: YEL, lh: 1.3, ls: 0.15 }),
+      T('홍 길 동', 8, 46, 38, 8, { size: 15, weight: 700, color: WHITE, name: '이름' }),
+      T('관장', 8, 55, 38, 5, { size: 7.5, color: YEL, weight: 600, name: '직함' }),
+      T(`${PHONE}\nnaracha@example.com\n${ADDR}`, 8, 66, 38, 18, { size: 6, lh: 1.6, color: '#C8CFE4', name: '연락처' }),
+    ], '세로 명함 네이비')]; } },
+    { id: 'card-name-v-racha', cat: 'card', name: '세로 명함 · 라차', w: 50, h: 90, build(uid) { const { T, I, S, P } = H(uid); return [P(CREAM, [
+      S('ellipse', 7, 5, 36, 36, { fill: YEL, name: '동그라미' }),
+      I(D.m3, 9, 6, 32, 34, { name: '마스코트' }),
+      T('홍 길 동', 4, 45, 42, 8, { font: 'Jua', size: 16, color: NAVY, align: 'center', name: '이름' }),
+      T('나라차태권도 사범', 4, 54, 42, 5, { size: 7.5, color: RED, weight: 700, align: 'center', name: '직함' }),
+      S('rect', 4, 62, 42, 0.4, { fill: NAVY, opacity: 0.3, name: '가는 선' }),
+      T(`${PHONE}\nnaracha@example.com\n${ADDR}`, 4, 65, 42, 18, { size: 6.2, lh: 1.6, color: '#333', align: 'center', name: '연락처' }),
+    ], '세로 명함 라차')]; } },
     { id: 'card-invite', cat: 'card', name: '대회 초대장', w: 148, h: 105, build(uid) { const { T, I, S, P } = H(uid); return [P(YEL, [
       S('rect', 6, 6, 136, 93, { fill: '', stroke: NAVY, strokeW: 0.6, radius: 3 }),
       T('INVITATION', 12, 13, 124, 6, { font: 'Montserrat', size: 8, weight: 700, color: RED, align: 'center', ls: 0.3 }),
