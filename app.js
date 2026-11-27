@@ -97,7 +97,7 @@ function viewImgsSoon(ms) { clearTimeout(viewImgT); viewImgT = setTimeout(refres
 function refreshViewImgs() {
   if (drag || !doc) { if (drag) viewImgsSoon(400); return; }
   const pg = page(); if (!pg) return; const by = new Map(pg.els.map(e => [e.id, e]));
-  document.querySelectorAll('#canvas .el-image[data-id]').forEach(d => { const el = by.get(d.dataset.id); if (!el || el.type !== 'image') return; const im = d.querySelector('.imgclip > img'); if (!im) return; const u = elSrcOv.get(el.id) || viewSrc(el, 'edit'); if (u && im.getAttribute('src') !== u) im.setAttribute('src', u); });
+  document.querySelectorAll('#canvas .el-image[data-id]').forEach(d => { const el = by.get(d.dataset.id); if (!el || el.type !== 'image' || (mmPhotoSlot(el) && mmPv >= 0)) return; const im = d.querySelector('.imgclip > img'); if (!im) return; const u = elSrcOv.get(el.id) || viewSrc(el, 'edit'); if (u && im.getAttribute('src') !== u) im.setAttribute('src', u); });
 }
 /* 공방 그림(assets/virtue …)은 같은 이름으로 고쳐 올리므로 배포 버전을 붙여 브라우저·GitHub 캐시의 예전 그림이 안 나오게 (팀장님 11/20 — 단말기 템플릿에 예전 도복이 보였음) */
 const vref = r => /^assets\/[^?#]+\.(webp|png|jpe?g)$/i.test(r || '') ? r + '?v=' + (window.NARACAL_VER || '') : r;
@@ -292,7 +292,7 @@ function cleanEl(e) { if (!e || typeof e !== 'object') return false; if (!DOC_ID
 async function loadDoc(j, from, quiet) {
   if (!j || !j.pages) throw new Error('문서 형식이 아닙니다');
   if (j.v !== 2) throw new Error('이 프로그램의 문서 파일이 아닙니다');
-  { const d0 = Object.assign(newDoc(), j); sanitizeDoc(d0); j = d0; }
+  { const d0 = Object.assign(newDoc(), j); sanitizeDoc(d0); j = d0; } mmPv = -1;  /* 미리보기 사람 번호는 문서마다 (11/28 점검: 짧은 명단 문서를 열면 속성 창이 멈췄음) */
   if (j.pstyles && !Array.isArray(j.pstyles)) { j.bstyles = j.pstyles; delete j.pstyles; } /* 도서 편집 첫 시험판의 스타일 이름 바로잡기 */
   doc = Object.assign(newDoc(), j); doc.assets = doc.assets || {}; doc.holidays = doc.holidays || {}; doc.fonts = doc.fonts || [];
   if (!doc.calendar.theme || !doc.calendar.theme.id) doc.calendar.theme = Object.assign({ id: 'classic' }, doc.calendar.theme || {});
@@ -556,7 +556,7 @@ function pgIndex(pg) { let i = doc.pages.indexOf(pg); if (i < 0 && pg && pg.id) 
    명단 = doc.merge.list(관리프로그램에서 고른 재원생 — 이름·반·띠급·학년만). 편집 화면은 노란 표시, 미리보기면 그 사람 이름 */
 /* 동명이인 구분 영어 글자 빼기(11/27 팀장님 「이름 끝에 붙인 영어 이니셜은 찍지 않게」): 김민준A·김민준 B·김민준(a)·김민준-b → 김민준. 한글 이름일 때만, 명단·고르기 화면에는 그대로 보여 구분 */
 function mmClean(n) { n = String(n || '').trim(); const t = n.replace(/[\s\-_.·(\[]*[A-Za-z\uFF21-\uFF3A\uFF41-\uFF5A]{1,3}[0-9]{0,2}[)\]]?$/, '').trim(); return /[\uAC00-\uD7A3]$/.test(t) ? t : n; }
-const MM_F = [['이름', '이름 (성 포함)', s => mmClean(s.n)], ['이름만', '이름만 (성 빼고)', s => mmGiven(mmClean(s.n))], ['성', '성', s => mmSur(mmClean(s.n))], ['이름만+아', '부를 때 (나라야·민준아)', s => mmGiven(mmClean(s.n)) + (mmBat(mmGiven(mmClean(s.n))) ? '아' : '야')], ['이름만+이', '이름만+이 (나라·민준이)', s => mmGiven(mmClean(s.n)) + (mmBat(mmGiven(mmClean(s.n))) ? '이' : '')], ['반', '반', s => s.b || ''], ['띠급', '띠·급', s => s.g || ''], ['학년', '학년', s => s.y || ''], ['생일', '생일 (3월 5일)', s => { const m = String(s.d || '').match(/^(\d\d)-(\d\d)$/); return m ? `${+m[1]}월 ${+m[2]}일` : ''; }], ['입관일', '입관일 (2024년 3월 2일)', s => { const m = String(s.j || '').match(/^(\d{4})-(\d\d)-(\d\d)/); return m ? `${m[1]}년 ${+m[2]}월 ${+m[3]}일` : ''; }], ['수련기간', '수련 기간 (1년 8개월 — 오늘까지)', s => mmSpan(s.j)]];  /* 생일: 문서에는 월·일만(태어난 해 없이 — 11/27) · 입관일·수련 기간(송년 카드) */
+const MM_F = [['이름', '이름 (성 포함)', s => mmClean((s.nn ? '' : s.n))], ['이름만', '이름만 (성 빼고)', s => mmGiven(mmClean((s.nn ? '' : s.n)))], ['성', '성', s => mmSur(mmClean((s.nn ? '' : s.n)))], ['이름만+아', '부를 때 (나라야·민준아)', s => mmGiven(mmClean((s.nn ? '' : s.n))) + (mmBat(mmGiven(mmClean((s.nn ? '' : s.n)))) ? '아' : '야')], ['이름만+이', '이름만+이 (나라·민준이)', s => mmGiven(mmClean((s.nn ? '' : s.n))) + (mmBat(mmGiven(mmClean((s.nn ? '' : s.n)))) ? '이' : '')], ['반', '반', s => s.b || ''], ['띠급', '띠·급', s => s.g || ''], ['학년', '학년', s => s.y || ''], ['생일', '생일 (3월 5일)', s => { const m = String(s.d || '').match(/^(\d\d)-(\d\d)$/); return m ? `${+m[1]}월 ${+m[2]}일` : ''; }], ['입관일', '입관일 (2024년 3월 2일)', s => { const m = String(s.j || '').match(/^(\d{4})-(\d\d)-(\d\d)/); return m ? `${m[1]}년 ${+m[2]}월 ${+m[3]}일` : ''; }], ['수련기간', '수련 기간 (1년 8개월 — 오늘까지)', s => mmSpan(s.j)]];  /* 생일: 문서에는 월·일만(태어난 해 없이 — 11/27) · 입관일·수련 기간(송년 카드) */
 function mmSpan(j) { const m = String(j || '').match(/^(\d{4})-(\d\d)-(\d\d)/); if (!m) return ''; const t = new Date(); let mo = (t.getFullYear() - +m[1]) * 12 + (t.getMonth() + 1 - +m[2]) - (t.getDate() < +m[3] ? 1 : 0); if (mo < 0) return ''; const y = Math.floor(mo / 12), r = mo % 12; return y && r ? `${y}년 ${r}개월` : y ? `${y}년` : r ? `${r}개월` : '1개월 미만'; }
 const MM_RX = /\{(이름만\+아|이름만\+이|이름만|이름|성|반|띠급|학년|생일|입관일|수련기간)\}/g, MM_TEST = /\{\{[^{}\n]{1,30}\}\}|\{(이름만\+아|이름만\+이|이름만|이름|성|반|띠급|학년|생일|입관일|수련기간)\}/;
 const MM_FLD = /\{\{([^{}\n]{1,30})\}\}/g;  /* 엑셀 열(필드) 표시 — 아래한글 메일 머지처럼 {{열 이름}}·{{1}}(첫째 열) */
@@ -4132,6 +4132,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#fpPop'
 const MM_PH = /\[[^\]\n]{0,12}이름[^\]\n]{0,6}\]|○○○|OOO|홍 ?길 ?동/;  /* 템플릿 이름 자리 「홍길동」·「홍 길 동」도 (11/27) */
 const mmPhOf = e => !e ? '' : e.type === 'text' ? (String(e.text || '').match(MM_PH) || [''])[0] : e.type === 'tbl' ? ((e.rows || []).flat().map(t => (String(t || '').match(MM_PH) || [''])[0]).find(Boolean) || '') : '';  /* 글 상자·표 칸의 「[수련생 이름]」 자리 */  /* 「[수련생 이름]」 같은 자리 표시 */
 function mmPanelHTML(el) {
+  if (mmPv >= mmList().length) mmPv = mmList().length ? mmList().length - 1 : -1;  /* 되돌리기·합치기로 명단이 줄었을 때 */
   const L = mmList(), used = mmUsed(), ex = L[Math.max(0, mmPv)] || { n: '김나라', b: '', g: '', y: '' }, M = doc.merge || {};
   const ph = (el ? [el] : page().els).find(e => mmPhOf(e));
   const chips = MM_F.map(([k, t, fn]) => { const v = String(fn(ex) || ''); return `<button type="button" class="mmins" data-mmins="${esc(k)}" title="${esc(t)} — 글 상자(또는 표 칸)를 두 번 눌러 커서를 둔 자리에 넣습니다"><b>{${esc(k)}}</b><small>${esc(v || t)}</small></button>`; }).join('');
@@ -4141,7 +4142,7 @@ function mmPanelHTML(el) {
     ${L.length ? `<p class="hint mmsrc">${esc(M.src || '관리프로그램')}${M.file ? ` 「${esc(M.file)}${M.sheet ? ' · ' + esc(M.sheet) : ''}」` : ''} · ${M.at ? new Date(M.at).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' 받음' : ''} · ${esc(L.slice(0, 3).map(x => x.n).join(', '))}${L.length > 3 ? ` 외 ${L.length - 3}명` : ''}</p>` : ''}
     ${ph ? `<div class="mmph"><span>「${esc(mmPhOf(ph))}」 자리를</span><button type="button" class="btn sm" data-mm="ph:이름">{이름}</button><button type="button" class="btn sm" data-mm="ph:이름만">{이름만}</button><span>으로</span></div>` : ''}
     ${(() => { const A = (M.list || []).filter(x => x && x.n); if (!A.length) return ''; const off = M.off || {};
-      return `<details class="mmlist" ${mmListOpen ? 'open' : ''}><summary>명단 보기 · 빼기 <small>${L.length}/${A.length}명 찍음</small></summary>${A.length > 12 ? '<input type="search" class="mmlistq" placeholder="이름 찾기" autocomplete="off">' : ''}<div class="mmppl">${A.map((x, i) => `<label class="${off[mmKey(x)] ? 'off' : ''}"><input type="checkbox" data-mmoff="${esc(mmKey(x))}" ${off[mmKey(x)] ? '' : 'checked'}><span>${i + 1}</span>${esc(x.n)}</label>`).join('')}</div><div class="row" style="gap:4px;margin-top:4px"><button type="button" class="btn sm" data-mm="offall:0">모두 체크</button><button type="button" class="btn sm" data-mm="offall:1">모두 해제</button></div></details>`; })()}
+      return `<details class="mmlist" ${mmListOpen ? 'open' : ''}><summary>명단 보기 · 빼기 <small>${L.length}/${A.length}명 찍음</small></summary>${A.length > 12 ? '<input type="search" class="mmlistq" placeholder="이름 찾기" autocomplete="off">' : ''}<div class="mmppl">${(() => { let no = 0; return A.map(x => `<label class="${off[mmKey(x)] ? 'off' : ''}"><input type="checkbox" data-mmoff="${esc(mmKey(x))}" ${off[mmKey(x)] ? '' : 'checked'}><span title="출력 창 「번호로」의 번호">${off[mmKey(x)] ? '–' : ++no}</span>${esc(x.n)}</label>`).join(''); })()}</div><div class="row" style="gap:4px;margin-top:4px"><button type="button" class="btn sm" data-mm="offall:0">모두 체크</button><button type="button" class="btn sm" data-mm="offall:1">모두 해제</button></div></details>`; })()}
     ${mmColsHTML(ex)}
     <div class="pk-lb">칸 넣기 <small>${el && el.type === 'tbl' ? '고른 표 칸에 · 칸을 두 번 눌러 쓰는 중이면 커서 자리에' : '글 상자 안 커서 자리에'}</small></div><div class="mmchips">${chips}</div>
     ${L.length && used ? `<div class="pk-lb">미리보기</div><div class="row mmpv"><button type="button" class="btn sm icon" data-mm="pv:-1" title="앞 사람">‹</button><button type="button" class="btn sm mmpvb${mmPv >= 0 ? ' on' : ''}" data-mm="pv:0">${mmPv >= 0 ? `${esc(L[mmPv].n)} <small>${mmPv + 1}/${L.length}</small>` : '칸 이름으로 보기 <small>누르면 첫 사람</small>'}</button><button type="button" class="btn sm icon" data-mm="pv:1" title="다음 사람">›</button>${mmPv >= 0 ? '<button type="button" class="btn sm" data-mm="pv:off">끄기</button>' : ''}</div><div class="row" style="gap:4px;margin-top:4px"><button type="button" class="btn sm" data-mm="pv:long" title="글에 쓴 칸으로 바꿨을 때 가장 긴 사람 — 줄이 넘치는지 확인">가장 긴 이름 보기</button></div><p class="hint" style="margin:4px 0 0">이름이 긴 사람으로 넘겨 보며 줄이 넘치지 않는지 확인하세요 · 인쇄: 출력 창의 「메일머지 — ${L.length}명 각각」</p>` : ''}
@@ -4160,9 +4161,14 @@ async function mmPhotoFetch(quiet) {
   const M = doc.merge, A = (M && Array.isArray(M.list) ? M.list : []).filter(x => x && x.n); if (!A.length) { if (!quiet) toast('먼저 메일머지 명단을 고르세요'); return 0; }
   const slots = doc.pages.flatMap(p => p.els).filter(mmPhotoSlot); if (!slots.length) return 0;
   const px = Math.max(300, Math.min(900, Math.round(Math.max(...slots.map(e => Math.max(e.w, e.h))) / 25.4 * 300)));  /* 칸 크기에 맞게(300dpi) — 문서가 무겁지 않게 */
-  let pm = {}; try { pm = await attPhotos(A.map(w => w.n).concat(A.map(w => mmClean(w.n))), true); } catch (e) { console.warn(e); }
-  const did = A.map(w => w.p).filter(Boolean); let n = 0;
-  for (const w of A) { const o = pm[w.n] || pm[mmClean(w.n)], d = o && o.d; if (!d) { delete w.p; continue; } let ref; try { ref = addAsset(await shrinkDataURL(d, px)); } catch (e) { ref = addAsset(d); } w.p = ref; n++; }
+  if (!quiet) { attPhotoMap = null; attPhotoSrv = false; }  /* 「다시 받기」: 관리프로그램에 방금 로그인했거나 사진을 올렸으면 새로 읽음 */
+  let pm = {}; try { pm = await attPhotos(A.map(w => w.n).concat(A.map(w => mmClean(w.n))), true) || {}; } catch (e) { console.warn(e); }
+  if (!Object.keys(pm).length) { toast('관리프로그램 사진을 읽지 못했습니다 — 같은 브라우저에서 관리프로그램에 한 번 로그인한 뒤 「사진 다시 받기」를 누르세요 (넣어 둔 사진은 그대로)', true); return 0; }  /* 못 읽었으면 있던 사진을 지우지 않음 */
+  /* 이름 찾기: 똑같은 이름 먼저. 이니셜을 뺀 이름(김민준B → 김민준)은 명단에도 사진 목록에도 그 이름이 한 사람뿐일 때만 — 동명이인에게 다른 아이 사진이 들어가지 않게 (11/28 점검) */
+  const cnt = (arr) => arr.reduce((m, x) => m.set(x, (m.get(x) || 0) + 1), new Map()), inList = cnt(A.map(w => mmClean(w.n))), inPm = cnt(Object.keys(pm).map(mmClean));
+  const pick = w => { if (pm[w.n]) return pm[w.n]; const c = mmClean(w.n); if (c === w.n || inList.get(c) !== 1 || inPm.get(c) !== 1) return null; const k = Object.keys(pm).find(x => mmClean(x) === c); return k ? pm[k] : null; };
+  let n = 0;
+  for (const w of A) { const o = pick(w), d = o && o.d; if (!d) { delete w.p; continue; } let ref; try { ref = addAsset(await shrinkDataURL(d, px)); } catch (e) { ref = addAsset(d); } w.p = ref; n++; }
   commit(); renderCanvas(); renderInspector();
   if (!quiet || n) toast(n ? `사진 ${n}/${A.length}명을 넣었습니다${A.length - n ? ` — ${A.length - n}명은 관리프로그램에 사진이 없어 자리가 비어 찍힙니다` : ''}` : (Object.keys(pm).length ? '명단의 이름과 같은 관리프로그램 사진이 없습니다' : '관리프로그램 사진을 읽지 못했습니다 — 같은 브라우저에서 관리프로그램에 한 번 로그인한 뒤 다시 누르세요'), !n);
   return n;
@@ -4190,7 +4196,7 @@ document.addEventListener('click', e => {
   if (a === 'photo') { mmPhotoFetch(false); return; }
   if (a === 'photo:clear') { (doc.merge && doc.merge.list || []).forEach(w => { if (w) delete w.p; }); commit(); renderCanvas(); renderInspector(); toastUndo('문서에 넣은 사진을 뺐습니다 — 사진 자리는 비어 찍힙니다'); return; }
   if (a.startsWith('offall:')) { const M = doc.merge; if (!M) return; M.off = {}; if (a.endsWith('1')) (M.list || []).forEach(x => { M.off[mmKey(x)] = 1; }); mmPv = Math.min(mmPv, mmList().length - 1); mmListOpen = true; commit(); renderCanvas(); renderInspector(); return; }
-  if (a === 'clear') { confirmBtns('이 문서의 메일머지 명단을 비울까요?\n(글 속 {이름} 칸은 그대로 남고, 명단은 언제든 다시 고를 수 있어요)').then(ok => { if (!ok) return; delete doc.merge; mmPv = -1; commit(); rerender(); renderInspector(); }); return; }
+  if (a === 'clear') { confirmBtns('이 문서의 메일머지 명단을 비울까요?\n(글 속 {이름} 칸은 그대로 남고, 명단은 언제든 다시 고를 수 있어요)').then(ok => { if (!ok) return; delete doc.merge; mmPv = -1; mmRange.doc = ''; commit(); rerender(); renderInspector(); }); return; }
   if (a.startsWith('ph:')) { const el = selEls().find(x => mmPhOf(x)) || page().els.find(x => mmPhOf(x)); if (el) mmPh(el, a.slice(3)); renderInspector(); return; }
   if (a === 'pv:long') { if (!L.length) return; const src = doc.pages.flatMap(p => p.els).filter(mmHasTok).map(e => e.type === 'tbl' ? e.rows.flat().join('\n') : e.text).join('\n'), len = w => mmFill(src, w, false).length; let k = 0; L.forEach((w, i) => { if (len(w) > len(L[k])) k = i; }); mmPv = k; renderCanvas(); renderInspector(); toast(`가장 긴 이름: ${L[k].n} — 줄이 넘치거나 줄바꿈이 어색하지 않은지 보세요`); return; }
   if (a.startsWith('pv:')) { const v = a.slice(3); if (!L.length) return; mmPv = v === 'off' ? -1 : v === '0' ? (mmPv < 0 ? 0 : mmPv) : (Math.max(0, mmPv) + Number(v) + L.length) % L.length; renderCanvas(); renderInspector(); return; }
@@ -4227,7 +4233,7 @@ async function openMergePick() {
       const al = e.target.closest('[data-mmall]'); if (al) { list.forEach(x => { if (al.dataset.mmall === '1') delete P.off[x.n]; else P.off[x.n] = 1; }); draw(); return; }
       if (e.target.closest('#mmGo')) { const picked = list.filter(x => !P.off[x.n]); if (!picked.length) return;
         doc.merge = { src: '관리프로그램 재원생', at: Date.now(), list: picked.map((x, ki) => ({ k: ki, n: String(x.n).trim(), b: String(x.b || '').trim(), g: String(x.grade || '').trim(), y: (() => { try { return attGrade(x) || ''; } catch (er) { return ''; } })(), d: (String(x.by || '').match(/^\d{4}-(\d\d-\d\d)/) || [])[1] || '', j: (String(x.joinDate || '').match(/^\d{4}-\d\d-\d\d/) || [])[0] || '' })), off: {} };
-        mmPv = 0; commit(); d.close(); rerender(); renderInspector(); if (doc.pages.some(p => p.els.some(mmPhotoSlot))) setTimeout(() => mmPhotoFetch(true), 1200);
+        mmPv = 0; mmRange.doc = ''; commit(); d.close(); rerender(); renderInspector(); if (doc.pages.some(p => p.els.some(mmPhotoSlot))) setTimeout(() => mmPhotoFetch(true), 1200);
         toast(mmUsed() ? `메일머지 명단 ${picked.length}명 — 편집 화면은 「${picked[0].n}」 미리보기, 출력·다운로드하면 ${picked.length}명 각각 찍힙니다` : `메일머지 명단 ${picked.length}명을 넣었습니다 — 이제 글 상자에 {이름} 칸을 넣으세요(속성 창 「칸 넣기」)`); } };
     d.onchange = e => { const t = e.target; if (t.dataset.mmban != null) { const b = t.dataset.mmban; P.ban = t.checked ? [...new Set(P.ban.concat(b))] : P.ban.filter(x => x !== b); draw(); return; } if (t.dataset.mmoff != null) { if (t.checked) delete P.off[t.dataset.mmoff]; else P.off[t.dataset.mmoff] = 1; draw(); } };
     d.oninput = e => { if (e.target.id !== 'mmQ' || e.isComposing) return; P.q = e.target.value; clearTimeout(draw.t); draw.t = setTimeout(() => { draw(); const i = d.querySelector('#mmQ'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
@@ -4266,6 +4272,8 @@ function xlNum(n, code) {
     return (fl(c2.slice(0, m.index)) + num + fl(c2.slice(m.index + pat.length))).trim();
   } catch (e) { return String(Number(n.toPrecision(15))); }
 }
+function mmYMD(v) { const m = String(v || '').trim().match(/(\d{4})\s*[-.년/]\s*(\d{1,2})\s*[-.월/]\s*(\d{1,2})/); return m ? `${m[1]}-${String(+m[2]).padStart(2, '0')}-${String(+m[3]).padStart(2, '0')}` : ''; }  /* 입관일 글 → YYYY-MM-DD (11/28 점검: 11/27 커밋에서 지워져 엑셀 메일머지가 멈췄던 것 되살림) */
+function mmMD(v) { v = String(v || '').trim(); let m = v.match(/(?:\d{4}\s*[-.년/]\s*)?(\d{1,2})\s*[-.월/]\s*(\d{1,2})/); if (!m) return ''; const a = +m[1], b = +m[2]; return a >= 1 && a <= 12 && b >= 1 && b <= 31 ? `${String(a).padStart(2, '0')}-${String(b).padStart(2, '0')}` : ''; }
 function xlDate(n, kind) { const d = new Date(Math.round((n - 25569) * 864e5)), y = d.getUTCFullYear(), m = d.getUTCMonth() + 1, dd = d.getUTCDate(); return kind === 'k' ? `${y}년 ${m}월 ${dd}일` : `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`; }
 /* .xlsx 읽기 — 압축(JSZip)을 풀어 시트 XML을 직접 읽음(따로 큰 라이브러리 없이). 글자·숫자·날짜·참거짓·수식 결과 */
 async function xlsxSheets(buf) {
@@ -4278,13 +4286,14 @@ async function xlsxSheets(buf) {
     if ((id >= 14 && id <= 17) || id === 22) return 'd'; if ((id >= 27 && id <= 36) || (id >= 50 && id <= 58)) return 'k'; if (code && /[yd]/i.test(code)) return kr ? 'k' : 'd';
     const bi = { 2: '0.00', 3: '#,##0', 4: '#,##0.00', 9: '0%', 10: '0.00%', 37: '#,##0', 38: '#,##0', 39: '#,##0.00', 40: '#,##0.00' }[id], fc = fmt[id] || bi; return fc && fc !== 'General' && /[0#]/.test(fc) ? { c: fc } : ''; });
   const out = [];
+  const d1904 = tags(wb, 'workbookPr').some(x => /^(1|true)$/i.test(x.getAttribute('date1904') || ''));  /* 맥 엑셀 옛 파일의 1904 날짜 체계 (11/28 점검) */
   for (const sh of tags(wb, 'sheet')) {
     const rid = [...sh.attributes].find(a => a.localName === 'id'), tg0 = rel[rid ? rid.value : ''] || ''; let tg = tg0.replace(/^\//, ''); if (!tg.startsWith('xl/')) tg = 'xl/' + tg;
     const doc2 = X(await rd(tg)), rows = [];
     tags(doc2, 'row').forEach(r => { const ri = Number(r.getAttribute('r')) - 1, row = [];
       tags(r, 'c').forEach((c, k) => { const L = ((c.getAttribute('r') || '').match(/^[A-Z]+/) || [''])[0], ci = L ? [...L].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1 : k; if (ci > 60) return;
         const t = c.getAttribute('t') || '', vEl = tags(c, 'v')[0], v = vEl ? vEl.textContent : ''; let val = '';
-        if (t === 's') val = ss[Number(v)] || ''; else if (t === 'inlineStr') val = tags(c, 't').map(x => x.textContent).join(''); else if (t === 'b') val = v === '1' ? 'TRUE' : 'FALSE'; else if (t === 'str') val = v; else if (t !== 'e' && v !== '') { const n = Number(v), df = xfs[Number(c.getAttribute('s') || 0)]; val = typeof df === 'string' && df && n > 0 && n < 2958466 ? xlDate(n, df) : df && df.c ? xlNum(n, df.c) : String(Number(n.toPrecision(15))); }
+        if (t === 'd') val = String(v).slice(0, 10); else if (t === 's') val = ss[Number(v)] || ''; else if (t === 'inlineStr') val = tags(c, 't').map(x => x.textContent).join(''); else if (t === 'b') val = v === '1' ? 'TRUE' : 'FALSE'; else if (t === 'str') val = v; else if (t !== 'e' && v !== '') { const n = Number(v), df = xfs[Number(c.getAttribute('s') || 0)]; val = typeof df === 'string' && df && n > 0 && n < 2958466 ? xlDate(n + (d1904 ? 1462 : 0), df) : df && df.c ? xlNum(n, df.c) : String(Number(n.toPrecision(15))); }
         row[ci] = val; });
       if (ri >= 0 && ri < 5000) rows[ri] = row; else if (rows.length < 5000) rows.push(row); });
     out.push({ name: sh.getAttribute('name') || `시트${out.length + 1}`, hidden: sh.getAttribute('state') === 'hidden', rows: Array.from(rows, r => Array.from(r || [], v => v == null ? '' : String(v))) });
@@ -4348,7 +4357,7 @@ function mmXDialog() {
     d.onclick = e => { const al = e.target.closest('[data-mxall]'); if (al) { mmX.off = al.dataset.mxall === '1' ? new Set() : new Set(T.rows.map((_, i) => i)); draw(); return; }
       if (e.target.closest('#mmXGo')) { const pick = T.rows.map((r, k) => [r, k]).filter(([, k]) => !mmX.off.has(k)); if (!pick.length) return; const g = (r, i) => i >= 0 ? r[i] || '' : '';
         doc.merge = { src: '엑셀 파일', file: mmX.file, sheet: (mmX.sheets[mmX.si] || {}).name || '', at: Date.now(), cols: T.cols, nameCol: T.cols[ni],
-          list: pick.map(([r, k], j) => { const f = {}; T.cols.forEach((c, i) => { f[c] = r[i] || ''; }); return { k: j, n: String(r[ni] || '').trim() || `${k + 1}번째 줄`, b: g(r, G.bi), g: g(r, G.gi), y: g(r, G.yi), d: mmMD(g(r, G.di)), j: mmYMD(g(r, G.ji)), f }; }), off: {} };
+          list: pick.map(([r, k], j) => { const f = {}; T.cols.forEach((c, i) => { f[c] = r[i] || ''; }); return { k: j, n: String(r[ni] || '').trim() || `${k + 1}번째 줄`, nn: String(r[ni] || '').trim() ? undefined : 1, b: g(r, G.bi), g: g(r, G.gi), y: g(r, G.yi), d: mmMD(g(r, G.di)), j: mmYMD(g(r, G.ji)), f }; }), off: {} };
         mmPv = 0; mmRange.doc = ''; commit(); d.close(); rerender(); renderInspector(); if (doc.pages.some(p => p.els.some(mmPhotoSlot))) setTimeout(() => mmPhotoFetch(true), 1200);
         toast(mmUsed() ? `엑셀 명단 ${pick.length}줄 — 편집 화면은 첫 줄 미리보기, 출력·다운로드하면 ${pick.length}장 각각 찍힙니다` : `엑셀 명단 ${pick.length}줄을 넣었습니다 — 이제 글에 {{${T.cols[ni] || '1'}}} 같은 표시를 다세요(속성 창 「✉ 메일머지」)`); } };
   };
@@ -6582,7 +6591,7 @@ async function mmFastCanvas(pg, dpi, mode, bg) {
   let base = mmFast.bases.get(key);
   if (!base) { const p0 = Object.assign({}, pg, { els: stat }); delete p0._mm; delete p0._mmJobs; delete p0._mmIdx; base = await renderPageCanvas(p0, dpi, mode, bg); mmFast.bases.set(key, base); while (mmFast.bases.size > 4) { const [k0, c0] = mmFast.bases.entries().next().value; mmFast.bases.delete(k0); c0.width = c0.height = 0; } }  /* 이름 칸 없는 쪽(뒷면 등)·바탕은 한 번만 그려 사람마다 다시 씀 */
   let lay = null;
-  if (dyn.length) { lay = mmFast.layers.get(pg._mmIdx);
+  if (dyn.length) { if (mmFast.J !== pg._mmJobs) { mmFast.layers.forEach(c => { c.width = c.height = 0; }); mmFast.layers.clear(); mmFast.J = pg._mmJobs; }  /* 다른 출력(명단·범위가 바뀜, 앞 출력이 중간에 멈춤)의 이름 그림을 쓰지 않게 (11/28 점검) */ lay = mmFast.layers.get(pg._mmIdx);
     if (!lay) { const J = pg._mmJobs, list = [], b = mode === 'print' ? (Number(doc.bleed) || 0) : 0, hpx = (doc.h + 2 * b) / 25.4 * dpi, wpx = (doc.w + 2 * b) / 25.4 * dpi, B = Math.max(1, Math.min(window.__mmB || 12, Math.floor(28000 / hpx), Math.floor(90e6 / (wpx * hpx))));
       for (let k = pg._mmIdx; k < J.length && list.length < B; k++) if (J[k].id === pg.id) list.push({ pg: k === pg._mmIdx ? pg : J[k], k });
       mmFast.layers.forEach(c => { c.width = c.height = 0; }); mmFast.layers = (await mmLayers(list, dpi, mode)) || new Map(); lay = mmFast.layers.get(pg._mmIdx); }
@@ -9663,8 +9672,9 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
   const doc0 = doc; let drEarly = null; try { drEarly = await store.idbGet('doc'); } catch (e) {} bootBusy = true;
   const late = () => doc !== doc0 || hist.length > 0;
   const bootYield = async (h0, ...cands) => { let kept = ''; for (const c of cands) { try { const k = await stashPrev(c); if (k && !kept) kept = k; } catch (e) { console.warn('직전 문서 보관 실패', e); } } if (h0 && store.state.handle === h0) { try { await store.disconnect(); } catch (e) {} updateSaveBadge(); } loaded = true; toast(kept ? `지난 문서 「${kept}」를 여는 데 오래 걸려 지금 문서를 그대로 두었습니다 — 지난 문서는 저장 ▾ → 직전 문서 되살리기에 있습니다` : '지난 문서를 여는 데 오래 걸려 지금 문서를 그대로 두었습니다 — 지난 문서는 내 드라이브에서 여세요'); };
+  let h0 = null;
   try {
-    const p = await store.reconnect(), h0 = store.state.handle;
+    const p = await store.reconnect(); h0 = store.state.handle;
     if (p === 'granted') { const base = await store.idbGet('docBase').catch(() => null), meta = await store.idbGet('docMeta').catch(() => null); const j = await store.readFile(); const dr = drEarly; if (late()) { await bootYield(h0, dr && j && sameDoc(dr, j) && !browserNewer(dr, j, meta) ? null : dr); } else { const moved = !!dr && sameDoc(dr, j) && fileMovedOn(j, base), newer = !!dr && sameDoc(dr, j) && browserNewer(dr, j, meta);
       /* 11/26 같이 작업: 그사이 다른 PC가 저장했어도 함께 가졌던 판을 알면 묻지 않고 합쳐 열고, 다른 PC가 안 바꿨으면 브라우저 작업으로 바로 */
       const mbase = newer && moved ? ((base && base.saveId ? await store.verById(base.saveId) : null) || (await store.commonBase(dr, j))) : null;
@@ -9686,7 +9696,7 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
         await loadDoc(j, '연결된 파일을 열었습니다'); updateSaveBadge();
       }; }
   } catch (e) { console.warn(e); }
-  if (!loaded && late()) { let s2 = null; try { s2 = await tabPick(drEarly); } catch (e) {} await bootYield(null, drEarly, s2 !== drEarly ? s2 : null); }
+  if (!loaded && late()) { let s2 = null; try { s2 = await tabPick(drEarly); } catch (e) {} await bootYield(h0, drEarly, s2 !== drEarly ? s2 : null); }  /* 파일 읽기가 오래 걸리다 실패한 경우에도 다시 붙은 옛 파일 연결을 풂 (11/28 점검) */
   if (!loaded) { try { const saved0 = drEarly, saved = await tabPick(saved0); if (saved) { await loadDoc(saved); loaded = true; setStatus(saved !== saved0 ? '이 탭에서 쓰던 문서를 불러왔습니다' : '브라우저 저장본을 불러왔습니다'); setTimeout(() => relinkByDocId(), 2500); } } catch (e) {} }  /* 파일 연결을 못 되살렸으면 같은 문서 번호의 파일에 다시 연결 */
   if (!loaded) { doc = newDoc(); doc.calendar.year = 2027; doc.name = '2027 인성 캘린더'; virtueTextFix(doc.calendar, 2027); virtueArtFix(doc.calendar, null, 2027); doc.pages = CAL.buildPages(doc, uid, { year: 2027, kind: 'full' }); ensureAllHolidays(); $('#pname').value = doc.name; hist = [snapshot()]; histMeta = [{ cur: 0, sel: [] }]; hptr = 0; renderAll(); setStatus('2027년 캘린더 초안을 만들었습니다. 공휴일은 자동으로 들어갔습니다.'); freshDraft = true; }
   bootBusy = false; bootOff();

@@ -186,7 +186,14 @@ NC.live = (function () {
     ops.forEach(op => { if (op.op !== 'patch') return; const eb = elIn(baseD, op.pg, op.id), em = elIn(mineD, op.pg, op.id), et = elIn(theirsD, op.pg, op.id), eo = elIn(out, op.pg, op.id); if (!eb || !em || !et || !eo) return;
       for (const k in (op.set || {})) { if (J(eb[k]) === J(et[k])) continue; const n0 = conf.length, v = merge3(eb[k], em[k], et[k], conf, k); if (v === undefined) delete eo[k]; else eo[k] = v; if (conf.length > n0) what.add(elName(em)); } });
     /* 문서 칸(달력·영상 트랙·원고·책 설정·출석부 명단 등) */
-    for (const k of new Set([...Object.keys(mineD), ...Object.keys(theirsD)])) { if (k === 'pages' || k === 'media' || SKIP.includes(k) || k === 'mergeNote') continue; if (J(baseD[k]) === J(mineD[k])) continue; const n0 = conf.length, v = merge3(baseD[k], mineD[k], theirsD[k], conf, k); if (v === undefined) delete out[k]; else out[k] = v; if (conf.length > n0) what.add(({ bstory: '원고', calendar: '달력', tracks: '영상 타임라인', att: '출석부 명단', cert: '상장 명단', book: '책 설정' })[k] || k); }
+    for (const k of new Set([...Object.keys(mineD), ...Object.keys(theirsD)])) { if (k === 'pages' || k === 'media' || SKIP.includes(k) || k === 'mergeNote') continue; if (J(baseD[k]) === J(mineD[k])) continue;
+      if (k === 'merge') { /* 메일머지 명단은 통째로 (11/28 점검: 줄 번호끼리 칸을 합치면 이름과 사진·반이 서로 다른 아이 것으로 섞였음) — 둘 다 바꿨으면 이 PC 것, 사진은 이름이 같은 한 사람에게만 옮김 */
+        const o = mineD.merge === undefined ? undefined : JSON.parse(J(mineD.merge)); if (o === undefined) delete out.merge; else out.merge = o;
+        if (J(baseD.merge) !== J(theirsD.merge) && J(theirsD.merge) !== J(mineD.merge)) { conf.push('merge'); what.add('메일머지 명단');
+          const TL = ((theirsD.merge || {}).list || []).filter(x => x && x.n && x.p), ML = ((o || {}).list || []).filter(x => x && x.n), cnt = (L, n) => L.filter(x => x.n === n).length;
+          ML.forEach(w => { if (w.p || cnt(ML, w.n) !== 1 || cnt(TL, w.n) !== 1) return; const t = TL.find(x => x.n === w.n); w.p = t.p; }); }
+        continue; }
+      const n0 = conf.length, v = merge3(baseD[k], mineD[k], theirsD[k], conf, k); if (v === undefined) delete out[k]; else out[k] = v; if (conf.length > n0) what.add(({ bstory: '원고', calendar: '달력', tracks: '영상 타임라인', att: '출석부 명단', cert: '상장 명단', book: '책 설정' })[k] || k); }
     if (J(baseD.media) !== J(mineD.media) && mineD.media !== undefined) out.media = merge3(baseD.media, mineD.media, theirsD.media, conf, 'media');
     if (Array.isArray(theirsD.fonts) || Array.isArray(mineD.fonts)) { const seen = new Set(), f = []; [].concat(theirsD.fonts || [], mineD.fonts || []).forEach(x => { const k = J(x); if (!seen.has(k)) { seen.add(k); f.push(x); } }); out.fonts = f; }
     /* 다른 PC가 지운 쪽에 이 PC가 새로 넣은 요소 → 그 쪽을 되살림 */
