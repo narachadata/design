@@ -189,15 +189,15 @@ async function mergeTheirs(theirs, file) {
   if (editing || drag || $('#cellEd')) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 2000); return true; }  /* 글 고치는 중·끄는 중이면 끝난 뒤에 */
   flushNudge();
   const myLin = st.lineage.slice(), merged = base ? NC.live.merge(base, doc, theirs) : NC.live.union(doc, theirs);
-  { const I0 = NC.live.lastMerge || {}, dk = doc.docId || theirs.docId || ''; if (((I0.conf && I0.conf.length) || I0.union) && Date.now() - (mergeSnapAt[dk] || 0) > 600000) { mergeSnapAt[dk] = Date.now(); const by = theirs.savedBy && theirs.savedBy !== store.pcName() ? theirs.savedBy : '다른 PC';  /* 11/27 같은 곳을 둘 다 고쳤으면(이 PC 것이 이김) 진 쪽 — 상대 판 — 을 이름표 붙여 버전 기록에 (이름표 붙은 기록은 40개 넘어도 지우지 않음) */
-    store.snapshot(doc.docId || theirs.docId, JSON.stringify(Object.assign({}, theirs, { savedBy: by })), `합치기 전 ${by} 판${I0.union ? ' (모아 합침)' : ` (같은 곳 ${I0.conf.length}곳)`}`).catch(() => {}); } }
+  { const I0 = NC.live.lastMerge || {}, dk = doc.docId || theirs.docId || ''; if ((I0.conf && I0.conf.length) || I0.union) { const lab = Date.now() - (mergeSnapAt[dk] || 0) > 600000; if (lab) mergeSnapAt[dk] = Date.now(); const by = theirs.savedBy && theirs.savedBy !== store.pcName() ? theirs.savedBy : '다른 PC';  /* 11/27 같은 곳을 둘 다 고쳤으면(이 PC 것이 이김) 진 쪽 — 상대 판 — 을 이름표 붙여 버전 기록에 (이름표 붙은 기록은 40개 넘어도 지우지 않음) */
+    store.snapshot(doc.docId || theirs.docId, JSON.stringify(Object.assign({}, theirs, { savedBy: by })), lab ? `합치기 전 ${by} 판${I0.union ? ' (모아 합침)' : ` (같은 곳 ${I0.conf.length}곳)`}` : '').catch(() => {}); } }  /* 10분 안 두 번째부터는 이름표 없이(보통 기록 — 40개 정리 대상)라도 꼭 남김 */
   NC.live.patchTo(doc, merged); sanitizeDoc(doc);
   st.lastMod = file && file.lastModified || st.lastMod; store.adopt(theirs); st.lineage = [...new Set(st.lineage.concat(myLin))].slice(0, 60);
   Object.keys(doc.assets || {}).forEach(k => liveAssetKeys.add(k));
   refreshAfterFile(); markDirty();
   const who = theirs.savedBy && theirs.savedBy !== store.pcName() ? theirs.savedBy : '다른 PC';
   const I = NC.live.lastMerge || {}; if (I.union) toast(`${who} 판과 두 판을 모아 합쳤습니다 — 함께 가진 판을 몰라 대강 합쳤으니 지운 것이 되살아났거나 고친 것이 빠졌는지 한 번 봐 주세요 (버전 기록에 두 판 모두 있음)`);
-  else if (I.what && I.what.length) toast(`${who}에서 고친 것과 합쳤습니다 — 살펴볼 곳: ${I.what.join(', ')} (같은 곳을 둘 다 고쳤으면 이 PC 것 · ${who} 판은 버전 기록 「합치기 전 ${who} 판」에)`);
+  else if (I.what && I.what.length) toast(`${who}에서 고친 것과 합쳤습니다 — 살펴볼 곳: ${I.what.join(', ')} (같은 곳을 둘 다 고쳤으면 이 PC 것 · ${who} 판은 버전 기록에)`);
   else if (Date.now() - mergeToastAt > 60000) { mergeToastAt = Date.now(); toast(`${who}에서 고친 것과 합쳤습니다 — 같이 작업 중 (충돌 사본 없음)`); }
   setStatus(`${who}와 합침 ${tnow()}`);
   return true;
@@ -556,7 +556,7 @@ function pgIndex(pg) { let i = doc.pages.indexOf(pg); if (i < 0 && pg && pg.id) 
 /* 동명이인 구분 영어 글자 빼기(11/27 팀장님 「이름 끝에 붙인 영어 이니셜은 찍지 않게」): 김민준A·김민준 B·김민준(a)·김민준-b → 김민준. 한글 이름일 때만, 명단·고르기 화면에는 그대로 보여 구분 */
 function mmClean(n) { n = String(n || '').trim(); const t = n.replace(/[\s\-_.·(\[]*[A-Za-z\uFF21-\uFF3A\uFF41-\uFF5A]{1,3}[0-9]{0,2}[)\]]?$/, '').trim(); return /[\uAC00-\uD7A3]$/.test(t) ? t : n; }
 const MM_F = [['이름', '이름 (성 포함)', s => mmClean(s.n)], ['이름만', '이름만 (성 빼고)', s => mmGiven(mmClean(s.n))], ['성', '성', s => mmSur(mmClean(s.n))], ['이름만+아', '부를 때 (나라야·민준아)', s => mmGiven(mmClean(s.n)) + (mmBat(mmGiven(mmClean(s.n))) ? '아' : '야')], ['이름만+이', '이름만+이 (나라·민준이)', s => mmGiven(mmClean(s.n)) + (mmBat(mmGiven(mmClean(s.n))) ? '이' : '')], ['반', '반', s => s.b || ''], ['띠급', '띠·급', s => s.g || ''], ['학년', '학년', s => s.y || ''], ['생일', '생일 (3월 5일)', s => { const m = String(s.d || '').match(/^(\d\d)-(\d\d)$/); return m ? `${+m[1]}월 ${+m[2]}일` : ''; }], ['입관일', '입관일 (2024년 3월 2일)', s => { const m = String(s.j || '').match(/^(\d{4})-(\d\d)-(\d\d)/); return m ? `${m[1]}년 ${+m[2]}월 ${+m[3]}일` : ''; }], ['수련기간', '수련 기간 (1년 8개월 — 오늘까지)', s => mmSpan(s.j)]];  /* 생일: 문서에는 월·일만(태어난 해 없이 — 11/27) · 입관일·수련 기간(송년 카드) */
-function mmSpan(j) { const m = String(j || '').match(/^(\d{4})-(\d\d)-(\d\d)/); if (!m) return ''; const t = new Date(); let mo = (t.getFullYear() - +m[1]) * 12 + (t.getMonth() + 1 - +m[2]) - (t.getDate() < +m[3] ? 1 : 0); if (mo < 0) return ''; const y = Math.floor(mo / 12), r = mo % 12; return y && r ? `${y}년 ${r}개월` : y ? `${y}년` : `${Math.max(1, r)}개월`; }
+function mmSpan(j) { const m = String(j || '').match(/^(\d{4})-(\d\d)-(\d\d)/); if (!m) return ''; const t = new Date(); let mo = (t.getFullYear() - +m[1]) * 12 + (t.getMonth() + 1 - +m[2]) - (t.getDate() < +m[3] ? 1 : 0); if (mo < 0) return ''; const y = Math.floor(mo / 12), r = mo % 12; return y && r ? `${y}년 ${r}개월` : y ? `${y}년` : r ? `${r}개월` : '1개월 미만'; }
 const MM_RX = /\{(이름만\+아|이름만\+이|이름만|이름|성|반|띠급|학년|생일|입관일|수련기간)\}/g, MM_TEST = /\{\{[^{}\n]{1,30}\}\}|\{(이름만\+아|이름만\+이|이름만|이름|성|반|띠급|학년|생일|입관일|수련기간)\}/;
 const MM_FLD = /\{\{([^{}\n]{1,30})\}\}/g;  /* 엑셀 열(필드) 표시 — 아래한글 메일 머지처럼 {{열 이름}}·{{1}}(첫째 열) */
 const MM_SUR2 = ['남궁', '황보', '제갈', '사공', '선우', '서문', '독고', '동방', '어금', '망절', '무본', '장곡', '소봉', '강전', '사마'];
@@ -4150,7 +4150,7 @@ function mmInsert(k) {
   { const ta = $('#cellEd'); if (ta && ta.dataset.tbl) { ta.focus(); const a = ta.selectionStart, b = ta.selectionEnd; ta.setRangeText(tok, a, b, 'end'); ta.dispatchEvent(new Event('input', { bubbles: true })); return; } }  /* 표 칸을 쓰는 중: 커서 자리에 */
   if (editing) { const ed = document.querySelector('#canvas .el-text.editing') || document.querySelector('#canvas [contenteditable="true"]'); if (ed) { ed.focus(); document.execCommand('insertText', false, tok); return; } }
   const tb = selEls().find(e => e.type === 'tbl');
-  if (tb) { if (mmPhOf(tb)) { mmPh(tb, k); return; } const cc = tblCell && tblCell.id === tb.id ? tblCell : null; if (!cc || tb.locked) { toast('표 칸을 하나 누른 뒤(또는 두 번 눌러 쓰는 중에) 누르세요'); return; } tblNorm(tb); const m = tblMergeAt(tb, cc.r, cc.c), r = m ? m.r : cc.r, c = m ? m.c : cc.c, v = String(tb.rows[r][c] || ''); tb.rows[r][c] = v ? v.replace(/\s+$/, '') + ' ' + tok : tok; commit(); renderCanvas(); renderOverlay(); tblPaintSel(tb.id); renderInspector(); toastUndo(`${r + 1}줄 ${c + 1}칸 끝에 ${tok}을(를) 넣었습니다 — 자리를 옮기려면 칸을 두 번 눌러 고치세요`); return; }
+  if (tb) { const cc = tblCell && tblCell.id === tb.id ? tblCell : null; if (!cc && mmPhOf(tb)) { mmPh(tb, k); return; } if (!cc || tb.locked) { toast('표 칸을 하나 누른 뒤(또는 두 번 눌러 쓰는 중에) 누르세요'); return; } tblNorm(tb); const m = tblMergeAt(tb, cc.r, cc.c), r = m ? m.r : cc.r, c = m ? m.c : cc.c, v = String(tb.rows[r][c] || ''); tb.rows[r][c] = v ? v.replace(/\s+$/, '') + ' ' + tok : tok; commit(); renderCanvas(); renderOverlay(); tblPaintSel(tb.id); renderInspector(); toastUndo(`${r + 1}줄 ${c + 1}칸 끝에 ${tok}을(를) 넣었습니다 — 자리를 옮기려면 칸을 두 번 눌러 고치세요`); return; }
   const el = selEls().find(e => e.type === 'text'); if (el && MM_PH.test(el.text || '')) { mmPh(el, k); return; }
   toast('글 상자를 두 번 눌러 이름이 들어갈 자리에 커서를 둔 뒤 누르세요');
 }
@@ -4199,7 +4199,7 @@ async function openMergePick() {
     d.onclick = e => { const m = e.target.closest('[data-mmm]'); if (m) { P.mode = m.dataset.mmm; draw(); if (P.mode === 'name') setTimeout(() => { const i = d.querySelector('#mmQ'); if (i) i.focus(); }, 0); return; }
       const al = e.target.closest('[data-mmall]'); if (al) { list.forEach(x => { if (al.dataset.mmall === '1') delete P.off[x.n]; else P.off[x.n] = 1; }); draw(); return; }
       if (e.target.closest('#mmGo')) { const picked = list.filter(x => !P.off[x.n]); if (!picked.length) return;
-        doc.merge = { src: '관리프로그램 재원생', at: Date.now(), list: picked.map(x => ({ n: String(x.n).trim(), b: String(x.b || '').trim(), g: String(x.grade || '').trim(), y: (() => { try { return attGrade(x) || ''; } catch (er) { return ''; } })(), d: (String(x.by || '').match(/^\d{4}-(\d\d-\d\d)/) || [])[1] || '', j: (String(x.joinDate || '').match(/^\d{4}-\d\d-\d\d/) || [])[0] || '' })), off: {} };
+        doc.merge = { src: '관리프로그램 재원생', at: Date.now(), list: picked.map((x, ki) => ({ k: ki, n: String(x.n).trim(), b: String(x.b || '').trim(), g: String(x.grade || '').trim(), y: (() => { try { return attGrade(x) || ''; } catch (er) { return ''; } })(), d: (String(x.by || '').match(/^\d{4}-(\d\d-\d\d)/) || [])[1] || '', j: (String(x.joinDate || '').match(/^\d{4}-\d\d-\d\d/) || [])[0] || '' })), off: {} };
         mmPv = 0; commit(); d.close(); rerender(); renderInspector();
         toast(mmUsed() ? `메일머지 명단 ${picked.length}명 — 편집 화면은 「${picked[0].n}」 미리보기, 출력·다운로드하면 ${picked.length}명 각각 찍힙니다` : `메일머지 명단 ${picked.length}명을 넣었습니다 — 이제 글 상자에 {이름} 칸을 넣으세요(속성 창 「칸 넣기」)`); } };
     d.onchange = e => { const t = e.target; if (t.dataset.mmban != null) { const b = t.dataset.mmban; P.ban = t.checked ? [...new Set(P.ban.concat(b))] : P.ban.filter(x => x !== b); draw(); return; } if (t.dataset.mmoff != null) { if (t.checked) delete P.off[t.dataset.mmoff]; else P.off[t.dataset.mmoff] = 1; draw(); } };
@@ -4222,18 +4222,23 @@ function mmCsvParse(t) {
 }
 /* 엑셀 숫자 칸 서식 흉내 (11/27): 천 단위 쉼표 #,##0 · 소수 0.00 · 백분율 % · 따옴표 글자("원") — 엑셀 화면에 보이는 모양 그대로 메일머지에 */
 function xlNum(n, code) {
-  try { const secs = String(code).split(';'), neg = n < 0 && secs[1] != null; let c = (neg ? secs[1] : secs[0]).replace(/\[[^\]]*\]/g, ''); const v0 = neg ? Math.abs(n) : n;
-    const lit = []; const c2 = c.replace(/"([^"]*)"|\\(.)/g, (m, a, b) => { lit.push(a != null ? a : b); return '\u0001'; });
+  try { const secs = String(code).split(';'), cond = t => { const m = t.match(/^\[(<=|>=|<>|<|>|=)(-?[\d.]+)\]/); if (!m) return null; const v = +m[2]; return { '<=': n <= v, '>=': n >= v, '<>': n !== v, '<': n < v, '>': n > v, '=': n === v }[m[1]]; };
+    let sec, neg = false; if (secs.some(t => cond(t) != null)) { sec = secs.find(t => cond(t) === true) || secs.find(t => cond(t) == null) || secs[secs.length - 1]; } else { neg = n < 0 && secs[1] != null; sec = neg ? secs[1] : secs[0]; }
+    const c = sec.replace(/\[[^\]]*\]/g, ''), v0 = neg ? Math.abs(n) : n, lit = [];
+    const c2 = c.replace(/"([^"]*)"|\\(.)/g, (m, a, b) => { lit.push(a != null ? a : b); return '\u0001'; }), fill = t => { let k = 0; return t.replace(/\u0001/g, () => lit[k++] || '').replace(/[_*]./g, ''); };
+    const runs = c2.match(/[0#?][0#?,]*/g) || [];
+    if (runs.length > 1 && !/[.%]/.test(c2)) {  /* 전화번호 000-0000-0000 · 우편번호 000-000 처럼 자리가 여러 덩어리 — 오른쪽부터 숫자를 채움 */
+      let d = String(Math.round(Math.abs(v0))), out = ''; const ch = [...c2.replace(/,/g, '')]; let k = lit.length;
+      for (let i = ch.length - 1; i >= 0; i--) { const x = ch[i]; if (x === '0' || x === '#' || x === '?') { if (d) { out = d.slice(-1) + out; d = d.slice(0, -1); } else if (x === '0') out = '0' + out; } else if (x === '\u0001') out = (lit[--k] || '') + out; else out = x + out; }
+      return ((n < 0 && !neg ? '-' : '') + (d || '') + out).replace(/[_*]./g, '').trim();
+    }
     const m = c2.match(/[#0,.]*[#0][#0,.]*/); if (!m) return String(Number(n.toPrecision(15)));
     const pat = m[0], [ip, fp = ''] = pat.split('.'), pct = /%/.test(c2), v = v0 * (pct ? 100 : 1);
     const num = v.toLocaleString('en-US', { minimumIntegerDigits: Math.max(1, Math.min(21, (ip.match(/0/g) || []).length)), minimumFractionDigits: (fp.match(/0/g) || []).length, maximumFractionDigits: (fp.match(/[0#]/g) || []).length, useGrouping: /,/.test(ip) });
-    let k = 0; const fill = t => t.replace(/\u0001/g, () => lit[k++] || '').replace(/[_*]./g, '');
-    return (fill(c2.slice(0, m.index)) + num + fill(c2.slice(m.index + pat.length))).trim();
+    let k = 0; const fl = t => t.replace(/\u0001/g, () => lit[k++] || '').replace(/[_*]./g, '');
+    return (fl(c2.slice(0, m.index)) + num + fl(c2.slice(m.index + pat.length))).trim();
   } catch (e) { return String(Number(n.toPrecision(15))); }
 }
-/* 생일 글 → 「MM-DD」 (2015-03-05 · 2015년 3월 5일 · 3월 5일 · 3/5 · 2015.3.5) */
-function mmYMD(v) { const m = String(v || '').trim().match(/(\d{4})\s*[-.년/]\s*(\d{1,2})\s*[-.월/]\s*(\d{1,2})/); return m ? `${m[1]}-${String(+m[2]).padStart(2, '0')}-${String(+m[3]).padStart(2, '0')}` : ''; }  /* 입관일 글 → YYYY-MM-DD */
-function mmMD(v) { v = String(v || '').trim(); let m = v.match(/(?:\d{4}\s*[-.년/]\s*)?(\d{1,2})\s*[-.월/]\s*(\d{1,2})/); if (!m) return ''; const a = +m[1], b = +m[2]; return a >= 1 && a <= 12 && b >= 1 && b <= 31 ? `${String(a).padStart(2, '0')}-${String(b).padStart(2, '0')}` : ''; }
 function xlDate(n, kind) { const d = new Date(Math.round((n - 25569) * 864e5)), y = d.getUTCFullYear(), m = d.getUTCMonth() + 1, dd = d.getUTCDate(); return kind === 'k' ? `${y}년 ${m}월 ${dd}일` : `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`; }
 /* .xlsx 읽기 — 압축(JSZip)을 풀어 시트 XML을 직접 읽음(따로 큰 라이브러리 없이). 글자·숫자·날짜·참거짓·수식 결과 */
 async function xlsxSheets(buf) {
@@ -4297,6 +4302,7 @@ function openMergeXls() {
 function mmXDialog() {
   let d = $('#dlgMMXls'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgMMXls'; d.className = 'wide'; document.body.appendChild(d); }
   const draw = () => {
+    const sw = d.querySelector('.mmxwrap'), sb = d.querySelector('.dbody'), y1 = sw ? sw.scrollTop : 0, y2 = sb ? sb.scrollTop : 0; requestAnimationFrame(() => { const a = d.querySelector('.mmxwrap'), b = d.querySelector('.dbody'); if (a) a.scrollTop = y1; if (b) b.scrollTop = y2; });  /* 줄을 체크할 때 표가 맨 위로 튀지 않게 */
     const T = mmXTable(), G = mmXGuess(T); if (mmX.nameCol < 0 || mmX.nameCol >= T.cols.length) mmX.nameCol = G.ni; const ni = mmX.nameCol, nOn = T.rows.length - [...mmX.off].filter(i => i < T.rows.length).length, SHOW = 400;
     const ex = T.rows.find((r, i) => !mmX.off.has(i)) || [];
     d.innerHTML = `<div class="dhead"><h2>📊 엑셀·CSV로 메일머지 <small>${esc(mmX.file)}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
