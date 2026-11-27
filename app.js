@@ -562,7 +562,7 @@ function mmUsed(pages) { return (pages || (doc && doc.pages) || []).some(p => (p
 const mmActive = () => mmUsed() && mmList().length > 0;
 function mmFill(html, who, mark) { return html.replace(MM_RX, (all, k) => { const f = MM_F.find(x => x[0] === k); const v = who ? esc(String(f[2](who) || '')) : all; return mark ? `<span class="mmk${who ? ' pv' : ''}">${v || '&nbsp;'}</span>` : v; }); }
 /* 내보내기용 쪽 목록: 메일머지를 켜면 사람마다 고른 쪽을 한 벌씩 (쪽 사본에 _mm = 그 사람) */
-function mmJobs(idx, on) { const L = on ? mmList() : []; if (!L.length || !mmUsed(idx.map(i => doc.pages[i]))) return idx.map(i => doc.pages[i]); const out = []; L.forEach(w => idx.forEach(i => out.push(Object.assign({}, doc.pages[i], { _mm: w })))); return out; }
+function mmJobs(idx, on) { const L = on ? mmList() : []; if (!L.length || !mmUsed(idx.map(i => doc.pages[i]))) return idx.map(i => doc.pages[i]); const out = []; L.forEach(w => idx.forEach(i => out.push(Object.assign({}, doc.pages[i], { _mm: w })))); out.forEach((j, k) => { j._mmJobs = out; j._mmIdx = k; }); return out; }
 function bookTokens(pg, html, mode) {
   if (html.indexOf('{') >= 0 && MM_TEST.test(html)) { const who = pg && pg._mm ? pg._mm : (mode === 'edit' && mmPv >= 0 ? mmList()[mmPv] : null); html = mmFill(html, who, mode === 'edit'); }
   if (html.indexOf('{디데이:') >= 0 || html.indexOf('{남은날:') >= 0) html = html.replace(/\{(디데이|남은날):(\d{4})-(\d{1,2})-(\d{1,2})\}/g, (_, k, y, m, d) => k === '디데이' ? ddayText(+y, +m, +d) : String(Math.max(0, Math.round((new Date(+y, +m - 1, +d) - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000)))); /* D-day: 볼 때(내보낼 때) 날짜 기준으로 계산 */
@@ -6292,7 +6292,57 @@ async function fontCSSFor(node) {
   return out.join('\n');
 }
 let dlFallback = 0;
+/* 메일머지 빠르게 (11/27 — 한 사람 3초 × 200명 = 10분이던 것): 그림 한 장마다 한글 글꼴(수 MB)을 새로 넣는 것이 느린 까닭
+   → 이름 칸이 없는 바탕(그림·다른 글)은 한 번만 그리고, 이름 칸이 든 글 상자만 여러 사람 것을 세로로 쌓아 한 번에 그린 뒤 잘라 얹음.
+   이름 글 상자 위에 겹치는 다른 요소가 있거나(겹침 순서)·혼합 모드면 예전처럼 한 장씩 */
+const mmFast = { bases: new Map(), layers: new Map(), q: Promise.resolve() };
+const mmDynOf = pg => (pg.els || []).filter(e => !elHidden(e) && ((e.type === 'text' && MM_TEST.test(e.text || '')) || (e.type === 'tbl' && MM_TEST.test(JSON.stringify(e.rows || '')))));
+function mmBox(e) { const a = (Number(e.rot) || 0) * Math.PI / 180, cx = e.x + e.w / 2, cy = e.y + e.h / 2, hw = (Math.abs(Math.cos(a)) * e.w + Math.abs(Math.sin(a)) * e.h) / 2 + 2, hh = (Math.abs(Math.sin(a)) * e.w + Math.abs(Math.cos(a)) * e.h) / 2 + 2; return [cx - hw, cy - hh, cx + hw, cy + hh]; }
+function mmFastOK(pg) {
+  const dyn = mmDynOf(pg); if (!dyn.length) return false; const els = pg.els || [];
+  if (dyn.some(e => (e.blend && e.blend !== 'normal') || e.group && els.some(x => x.group === e.group && !dyn.includes(x)))) return false;
+  for (const d of dyn) { const i = els.indexOf(d), b = mmBox(d); for (let j = i + 1; j < els.length; j++) { const o = els[j]; if (dyn.includes(o) || elHidden(o)) continue; const c = mmBox(o); if (c[0] < b[2] && c[2] > b[0] && c[1] < b[3] && c[3] > b[1]) return false; } }
+  return true;
+}
+async function mmLayers(list, dpi, mode) {  /* list: 같은 쪽의 [{pg, k}] → Map(k → 투명 그림) */
+  const keepMarks = doc.cropMarks; doc.cropMarks = false; const tmp = document.createElement('div'); tmp.style.cssText = 'position:fixed;left:-99999px;top:0';
+  const pr = dpi / 96, b = mode === 'print' ? (Number(doc.bleed) || 0) : 0, cpm = 96 / 25.4;
+  /* 이름 글 상자들이 있는 둘레만 그림(쪽 전체를 그리면 넓이만큼 느림). 글자는 CSS 1화소 단위로 놓이므로 칸의 시작점·크기를 「CSS 화소도 정수·그림 화소도 정수」인 q 단위로
+     (300dpi = 8 CSS 화소 = 25화소) — 아니면 칸마다 글 줄이 0.26mm쯤 다르게 맞춰짐. 맞는 q가 없는 해상도면 null(한 장씩) */
+  let q = 0; for (let t = 1; t <= 48; t++) if (Math.abs(pr * t - Math.round(pr * t)) < 1e-6) { q = t; break; } if (!q) return null;
+  const bx = list.map(x => mmDynOf(x.pg).map(mmBox)).flat(), PW = Math.ceil((doc.w + 2 * b) * cpm / q) * q, PH = Math.ceil((doc.h + 2 * b) * cpm / q) * q;
+  const X0c = Math.max(0, Math.floor((Math.min(...bx.map(v => v[0])) + b) * cpm / q) * q), Y0c = Math.max(0, Math.floor((Math.min(...bx.map(v => v[1])) + b) * cpm / q) * q), X1c = Math.min(PW, Math.ceil((Math.max(...bx.map(v => v[2])) + b) * cpm / q) * q), Y1c = Math.min(PH, Math.ceil((Math.max(...bx.map(v => v[3])) + b) * cpm / q) * q);
+  const CW = Math.max(q, X1c - X0c), CH = Math.max(q, Y1c - Y0c), cw = Math.round(CW * pr), ch = Math.round(CH * pr), X0 = Math.round(X0c * pr), Y0 = Math.round(Y0c * pr);
+  if (CH * list.length * pr > 30000) return null;
+  try { tmp.innerHTML = `<div class="mmstack" style="display:block;width:${CW}px">${list.map(x => `<div class="mmcell" style="position:relative;width:${CW}px;height:${CH}px;overflow:hidden"><div style="position:absolute;left:${-X0c}px;top:${-Y0c}px">${sheetHTML(Object.assign({}, x.pg, { els: mmDynOf(x.pg), bg: 'transparent', noMaster: true }), mode)}</div></div>`).join('')}</div>`; } finally { doc.cropMarks = keepMarks; }
+  tmp.querySelectorAll('.mmcell .sheet').forEach(sh => { sh.classList.add('transp'); sh.style.margin = '0'; sh.style.boxShadow = 'none'; }); document.body.appendChild(tmp);
+  try {
+    try { freezeLines(tmp); } catch (e) {}
+    await loadScript('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js', () => window.htmlToImage, 'sha384-UbfRVKN3/elS1r7JcK2FhmPP+KlJ4CvYwbyYD7tH+uTkbT9bNJr9eJeQ0FoFbAgz');
+    const st = tmp.firstElementChild;
+    const big = await htmlToImage.toCanvas(st, { pixelRatio: pr, width: CW, height: CH * list.length, fontEmbedCSS: await fontCSSFor(st), cacheBust: false, skipAutoScale: true }), out = new Map();
+    if (Math.abs(big.height - ch * list.length) > 1) { big.width = big.height = 0; return null; }
+    list.forEach((x, i) => { const c = document.createElement('canvas'); c.width = cw; c.height = ch; c.getContext('2d').drawImage(big, 0, i * ch, cw, ch, 0, 0, cw, ch); c._x = X0; c._y = Y0; out.set(x.k, c); });
+    big.width = big.height = 0; return out;
+  } finally { tmp.remove(); }
+}
+async function mmFastCanvas(pg, dpi, mode, bg) {
+  const dyn = mmDynOf(pg), stat = pg.els.filter(e => !dyn.includes(e)); if (dyn.length && !mmFastOK(pg)) return null;
+  const key = [pg.id, dpi, mode, bg, pg.bg, !!pg.transp, doc.w, doc.h, doc.bleed, JSON.stringify(stat)].join('|');
+  let base = mmFast.bases.get(key);
+  if (!base) { const p0 = Object.assign({}, pg, { els: stat }); delete p0._mm; delete p0._mmJobs; delete p0._mmIdx; base = await renderPageCanvas(p0, dpi, mode, bg); mmFast.bases.set(key, base); while (mmFast.bases.size > 4) { const [k0, c0] = mmFast.bases.entries().next().value; mmFast.bases.delete(k0); c0.width = c0.height = 0; } }  /* 이름 칸 없는 쪽(뒷면 등)·바탕은 한 번만 그려 사람마다 다시 씀 */
+  let lay = null;
+  if (dyn.length) { lay = mmFast.layers.get(pg._mmIdx);
+    if (!lay) { const J = pg._mmJobs, list = [], b = mode === 'print' ? (Number(doc.bleed) || 0) : 0, hpx = (doc.h + 2 * b) / 25.4 * dpi, wpx = (doc.w + 2 * b) / 25.4 * dpi, B = Math.max(1, Math.min(window.__mmB || 12, Math.floor(28000 / hpx), Math.floor(90e6 / (wpx * hpx))));
+      for (let k = pg._mmIdx; k < J.length && list.length < B; k++) if (J[k].id === pg.id) list.push({ pg: k === pg._mmIdx ? pg : J[k], k });
+      mmFast.layers.forEach(c => { c.width = c.height = 0; }); mmFast.layers = (await mmLayers(list, dpi, mode)) || new Map(); lay = mmFast.layers.get(pg._mmIdx); }
+    if (!lay) return null; }
+  const c = document.createElement('canvas'); c.width = base.width; c.height = base.height; const g = c.getContext('2d'); g.drawImage(base, 0, 0); if (lay) { g.drawImage(lay, lay._x || 0, lay._y || 0); mmFast.layers.delete(pg._mmIdx); lay.width = lay.height = 0; }
+  if (pg._mmIdx === pg._mmJobs.length - 1) setTimeout(() => { mmFast.bases.forEach(c0 => { c0.width = c0.height = 0; }); mmFast.bases.clear(); mmFast.layers.forEach(c0 => { c0.width = c0.height = 0; }); mmFast.layers.clear(); }, 0);  /* 마지막 사람 뒤 메모리 비움 */
+  return c;
+}
 async function renderPageCanvas(pg, dpi, mode, bg) {
+  if (pg && pg._mm && pg._mmJobs && !window.__mmSlow) { const run = mmFast.q.then(() => mmFastCanvas(pg, dpi, mode, bg)); mmFast.q = run.catch(() => null); try { const c = await run; if (c) return c; } catch (e) { console.warn('메일머지 빠른 그리기 실패 — 한 장씩', e); } }  /* 한 줄로 차례차례(바탕·쌓은 칸 기억을 같이 씀) */
   const restoreF = await swapPdfFrames([pg], dpi); let c; try { c = await renderPageCanvas0(pg, dpi, mode, bg); } finally { restoreF(); } /* 상장 틀(원본 PDF)은 이 해상도로 다시 그림 */
   // 정확한 픽셀 크기로 (예: 1080×1350, 반올림 오차로 생기는 흰 줄 없앰)
   const b = mode === 'print' ? (Number(doc.bleed) || 0) : 0, tw = Math.round((doc.w + 2 * b) / 25.4 * dpi), th = Math.round((doc.h + 2 * b) / 25.4 * dpi);
