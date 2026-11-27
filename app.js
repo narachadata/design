@@ -555,8 +555,9 @@ function pgIndex(pg) { let i = doc.pages.indexOf(pg); if (i < 0 && pg && pg.id) 
    명단 = doc.merge.list(관리프로그램에서 고른 재원생 — 이름·반·띠급·학년만). 편집 화면은 노란 표시, 미리보기면 그 사람 이름 */
 /* 동명이인 구분 영어 글자 빼기(11/27 팀장님 「이름 끝에 붙인 영어 이니셜은 찍지 않게」): 김민준A·김민준 B·김민준(a)·김민준-b → 김민준. 한글 이름일 때만, 명단·고르기 화면에는 그대로 보여 구분 */
 function mmClean(n) { n = String(n || '').trim(); const t = n.replace(/[\s\-_.·(\[]*[A-Za-z\uFF21-\uFF3A\uFF41-\uFF5A]{1,3}[0-9]{0,2}[)\]]?$/, '').trim(); return /[\uAC00-\uD7A3]$/.test(t) ? t : n; }
-const MM_F = [['이름', '이름 (성 포함)', s => mmClean(s.n)], ['이름만', '이름만 (성 빼고)', s => mmGiven(mmClean(s.n))], ['성', '성', s => mmSur(mmClean(s.n))], ['이름만+아', '부를 때 (나라야·민준아)', s => mmGiven(mmClean(s.n)) + (mmBat(mmGiven(mmClean(s.n))) ? '아' : '야')], ['이름만+이', '이름만+이 (나라·민준이)', s => mmGiven(mmClean(s.n)) + (mmBat(mmGiven(mmClean(s.n))) ? '이' : '')], ['반', '반', s => s.b || ''], ['띠급', '띠·급', s => s.g || ''], ['학년', '학년', s => s.y || ''], ['생일', '생일 (3월 5일)', s => { const m = String(s.d || '').match(/^(\d\d)-(\d\d)$/); return m ? `${+m[1]}월 ${+m[2]}일` : ''; }]];  /* 생일: 문서에는 월·일만(태어난 해 없이 — 11/27) */
-const MM_RX = /\{(이름만\+아|이름만\+이|이름만|이름|성|반|띠급|학년|생일)\}/g, MM_TEST = /\{\{[^{}\n]{1,30}\}\}|\{(이름만\+아|이름만\+이|이름만|이름|성|반|띠급|학년|생일)\}/;
+const MM_F = [['이름', '이름 (성 포함)', s => mmClean(s.n)], ['이름만', '이름만 (성 빼고)', s => mmGiven(mmClean(s.n))], ['성', '성', s => mmSur(mmClean(s.n))], ['이름만+아', '부를 때 (나라야·민준아)', s => mmGiven(mmClean(s.n)) + (mmBat(mmGiven(mmClean(s.n))) ? '아' : '야')], ['이름만+이', '이름만+이 (나라·민준이)', s => mmGiven(mmClean(s.n)) + (mmBat(mmGiven(mmClean(s.n))) ? '이' : '')], ['반', '반', s => s.b || ''], ['띠급', '띠·급', s => s.g || ''], ['학년', '학년', s => s.y || ''], ['생일', '생일 (3월 5일)', s => { const m = String(s.d || '').match(/^(\d\d)-(\d\d)$/); return m ? `${+m[1]}월 ${+m[2]}일` : ''; }], ['입관일', '입관일 (2024년 3월 2일)', s => { const m = String(s.j || '').match(/^(\d{4})-(\d\d)-(\d\d)/); return m ? `${m[1]}년 ${+m[2]}월 ${+m[3]}일` : ''; }], ['수련기간', '수련 기간 (1년 8개월 — 오늘까지)', s => mmSpan(s.j)]];  /* 생일: 문서에는 월·일만(태어난 해 없이 — 11/27) · 입관일·수련 기간(송년 카드) */
+function mmSpan(j) { const m = String(j || '').match(/^(\d{4})-(\d\d)-(\d\d)/); if (!m) return ''; const t = new Date(); let mo = (t.getFullYear() - +m[1]) * 12 + (t.getMonth() + 1 - +m[2]) - (t.getDate() < +m[3] ? 1 : 0); if (mo < 0) return ''; const y = Math.floor(mo / 12), r = mo % 12; return y && r ? `${y}년 ${r}개월` : y ? `${y}년` : `${Math.max(1, r)}개월`; }
+const MM_RX = /\{(이름만\+아|이름만\+이|이름만|이름|성|반|띠급|학년|생일|입관일|수련기간)\}/g, MM_TEST = /\{\{[^{}\n]{1,30}\}\}|\{(이름만\+아|이름만\+이|이름만|이름|성|반|띠급|학년|생일|입관일|수련기간)\}/;
 const MM_FLD = /\{\{([^{}\n]{1,30})\}\}/g;  /* 엑셀 열(필드) 표시 — 아래한글 메일 머지처럼 {{열 이름}}·{{1}}(첫째 열) */
 const MM_SUR2 = ['남궁', '황보', '제갈', '사공', '선우', '서문', '독고', '동방', '어금', '망절', '무본', '장곡', '소봉', '강전', '사마'];
 function mmSur(n) { n = String(n || '').trim(); if (n.length >= 3 && MM_SUR2.includes(n.slice(0, 2))) return n.slice(0, 2); return n.slice(0, 1); }
@@ -4196,7 +4197,7 @@ async function openMergePick() {
     d.onclick = e => { const m = e.target.closest('[data-mmm]'); if (m) { P.mode = m.dataset.mmm; draw(); if (P.mode === 'name') setTimeout(() => { const i = d.querySelector('#mmQ'); if (i) i.focus(); }, 0); return; }
       const al = e.target.closest('[data-mmall]'); if (al) { list.forEach(x => { if (al.dataset.mmall === '1') delete P.off[x.n]; else P.off[x.n] = 1; }); draw(); return; }
       if (e.target.closest('#mmGo')) { const picked = list.filter(x => !P.off[x.n]); if (!picked.length) return;
-        doc.merge = { src: '관리프로그램 재원생', at: Date.now(), list: picked.map(x => ({ n: String(x.n).trim(), b: String(x.b || '').trim(), g: String(x.grade || '').trim(), y: (() => { try { return attGrade(x) || ''; } catch (er) { return ''; } })(), d: (String(x.by || '').match(/^\d{4}-(\d\d-\d\d)/) || [])[1] || '' })), off: {} };
+        doc.merge = { src: '관리프로그램 재원생', at: Date.now(), list: picked.map(x => ({ n: String(x.n).trim(), b: String(x.b || '').trim(), g: String(x.grade || '').trim(), y: (() => { try { return attGrade(x) || ''; } catch (er) { return ''; } })(), d: (String(x.by || '').match(/^\d{4}-(\d\d-\d\d)/) || [])[1] || '', j: (String(x.joinDate || '').match(/^\d{4}-\d\d-\d\d/) || [])[0] || '' })), off: {} };
         mmPv = 0; commit(); d.close(); rerender(); renderInspector();
         toast(mmUsed() ? `메일머지 명단 ${picked.length}명 — 편집 화면은 「${picked[0].n}」 미리보기, 출력·다운로드하면 ${picked.length}명 각각 찍힙니다` : `메일머지 명단 ${picked.length}명을 넣었습니다 — 이제 글 상자에 {이름} 칸을 넣으세요(속성 창 「칸 넣기」)`); } };
     d.onchange = e => { const t = e.target; if (t.dataset.mmban != null) { const b = t.dataset.mmban; P.ban = t.checked ? [...new Set(P.ban.concat(b))] : P.ban.filter(x => x !== b); draw(); return; } if (t.dataset.mmoff != null) { if (t.checked) delete P.off[t.dataset.mmoff]; else P.off[t.dataset.mmoff] = 1; draw(); } };
@@ -4229,6 +4230,7 @@ function xlNum(n, code) {
   } catch (e) { return String(Number(n.toPrecision(15))); }
 }
 /* 생일 글 → 「MM-DD」 (2015-03-05 · 2015년 3월 5일 · 3월 5일 · 3/5 · 2015.3.5) */
+function mmYMD(v) { const m = String(v || '').trim().match(/(\d{4})\s*[-.년/]\s*(\d{1,2})\s*[-.월/]\s*(\d{1,2})/); return m ? `${m[1]}-${String(+m[2]).padStart(2, '0')}-${String(+m[3]).padStart(2, '0')}` : ''; }  /* 입관일 글 → YYYY-MM-DD */
 function mmMD(v) { v = String(v || '').trim(); let m = v.match(/(?:\d{4}\s*[-.년/]\s*)?(\d{1,2})\s*[-.월/]\s*(\d{1,2})/); if (!m) return ''; const a = +m[1], b = +m[2]; return a >= 1 && a <= 12 && b >= 1 && b <= 31 ? `${String(a).padStart(2, '0')}-${String(b).padStart(2, '0')}` : ''; }
 function xlDate(n, kind) { const d = new Date(Math.round((n - 25569) * 864e5)), y = d.getUTCFullYear(), m = d.getUTCMonth() + 1, dd = d.getUTCDate(); return kind === 'k' ? `${y}년 ${m}월 ${dd}일` : `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`; }
 /* .xlsx 읽기 — 압축(JSZip)을 풀어 시트 XML을 직접 읽음(따로 큰 라이브러리 없이). 글자·숫자·날짜·참거짓·수식 결과 */
@@ -4280,7 +4282,7 @@ function mmXGuess(T) {
   const N = c => c.replace(/\s/g, ''), find = rx => T.cols.findIndex(c => rx.test(N(c)));
   let ni = find(MM_NAME_H);
   if (ni < 0) { let best = -1, bn = 0; T.cols.forEach((c, i) => { const n = T.rows.filter(r => /^[가-힣]{2,5}\s?[A-Za-z]{0,2}$/.test(r[i] || '')).length; if (n > bn) { bn = n; best = i; } }); ni = bn >= Math.max(1, T.rows.length * 0.5) ? best : 0; }
-  return { ni, bi: find(/^(반|부|반이름|소속|소속반|클래스|class)$/i), gi: find(/^(띠|띠급|띠색|급|급수|품|품띠|벨트|belt)$/i), yi: find(/^(학년|학년반)$/), di: find(/^(생일|생년월일|생년월일\(.*\)|birthday)$/i) };
+  return { ni, bi: find(/^(반|부|반이름|소속|소속반|클래스|class)$/i), gi: find(/^(띠|띠급|띠색|급|급수|품|품띠|벨트|belt)$/i), yi: find(/^(학년|학년반)$/), di: find(/^(생일|생년월일|생년월일\(.*\)|birthday)$/i), ji: find(/^(입관일|등록일|입학일|입관|가입일)$/) };
 }
 function openMergeXls() {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xlsm,.csv,.tsv,.txt,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv';
@@ -4311,7 +4313,7 @@ function mmXDialog() {
     d.onclick = e => { const al = e.target.closest('[data-mxall]'); if (al) { mmX.off = al.dataset.mxall === '1' ? new Set() : new Set(T.rows.map((_, i) => i)); draw(); return; }
       if (e.target.closest('#mmXGo')) { const pick = T.rows.map((r, k) => [r, k]).filter(([, k]) => !mmX.off.has(k)); if (!pick.length) return; const g = (r, i) => i >= 0 ? r[i] || '' : '';
         doc.merge = { src: '엑셀 파일', file: mmX.file, sheet: (mmX.sheets[mmX.si] || {}).name || '', at: Date.now(), cols: T.cols, nameCol: T.cols[ni],
-          list: pick.map(([r, k], j) => { const f = {}; T.cols.forEach((c, i) => { f[c] = r[i] || ''; }); return { k: j, n: String(r[ni] || '').trim() || `${k + 1}번째 줄`, b: g(r, G.bi), g: g(r, G.gi), y: g(r, G.yi), d: mmMD(g(r, G.di)), f }; }), off: {} };
+          list: pick.map(([r, k], j) => { const f = {}; T.cols.forEach((c, i) => { f[c] = r[i] || ''; }); return { k: j, n: String(r[ni] || '').trim() || `${k + 1}번째 줄`, b: g(r, G.bi), g: g(r, G.gi), y: g(r, G.yi), d: mmMD(g(r, G.di)), j: mmYMD(g(r, G.ji)), f }; }), off: {} };
         mmPv = 0; mmRange.doc = ''; commit(); d.close(); rerender(); renderInspector();
         toast(mmUsed() ? `엑셀 명단 ${pick.length}줄 — 편집 화면은 첫 줄 미리보기, 출력·다운로드하면 ${pick.length}장 각각 찍힙니다` : `엑셀 명단 ${pick.length}줄을 넣었습니다 — 이제 글에 {{${T.cols[ni] || '1'}}} 같은 표시를 다세요(속성 창 「✉ 메일머지」)`); } };
   };
