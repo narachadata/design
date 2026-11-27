@@ -2433,3 +2433,7 @@ table.dvinfo th{font-weight:700}
 .prnup .prnup-more{display:flex;align-items:center;gap:6px;flex-basis:100%;flex-wrap:wrap;margin-top:4px}
 .prnup .prnup-more .seg button{padding-left:6px;padding-right:6px}
 .mmkmenu .mmk-sink{position:absolute;opacity:0;width:1px;height:1px;left:0;top:0;border:0;padding:0;pointer-events:none}
+.mmbox .mmlistq{width:100%;margin-top:6px;padding:4px 8px;border:1px solid var(--ui-line);border-radius:6px;font:inherit;font-size:12px}
+.mmbox .mmppl label[hidden]{display:none}
+.prmm .prmmq{width:100%;margin:6px 0 4px;padding:4px 8px;border:1px solid var(--ui-line);border-radius:6px;font:inherit;font-size:12px}
+.prmm .prmm-grid [hidden]{display:none}
