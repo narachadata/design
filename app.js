@@ -4546,12 +4546,25 @@ async function cleanConflictCopies() {
   }
   return { moved, kept, total: copies.length };
 }
+/* 예전 폴더 → 구글 로그인 저장 곳으로 옮기기. 11/27 팀장님(도장 PC가 예전 방식): 받는 곳에 이미 자료가 있어도 합쳐 옮김
+   — 같은 이름 문서: 문서 번호가 같으면 두 쪽에서 고친 것을 합침(계보가 겹치는 판 기준, 없으면 합집합), 다르면 새 이름 「(이름 PC이름에서 옮김)」으로 · 설정 파일은 받는 곳 것을 그대로(덮지 않음) */
 async function gdMigrate(src, dst, say) {
-  let n = 0, big = 0; const skip = new Set(['휴지통', '.기록']);
+  let n = 0, big = 0, merged = 0, renamed = 0; const skip = new Set(['휴지통', '.기록']), strip = j => { const o = Object.assign({}, j); ['saveId', 'lineage', 'savedBy', 'savedAt', 'pcId', 'assets', '_gdA', 'gone', 'mergeNote'].forEach(k => delete o[k]); return JSON.stringify(o); };
+  const put = async (d, name, data) => { const w = await (await d.getFileHandle(name, { create: true })).createWritable(); await w.write(data); await w.close(); };
   const walk = async (s, d, depth) => { for await (const [name, h] of s.entries()) {
-    if (h.kind === 'directory') { if (depth === 0 && skip.has(name)) continue; await walk(h, await d.getDirectoryHandle(name, { create: true }), depth + 1); }
-    else { let f; try { f = await h.getFile(); } catch (e) { continue; } if (f.size > 40 * 1048576 && !/\.(json|txt)$/i.test(name)) { big++; continue; } let ok = false; try { await d.getFileHandle(name); ok = true; } catch (e) {} if (ok && name !== '설정.naracha.json') continue; const w = await (await d.getFileHandle(name, { create: true })).createWritable(); await w.write(/\.(json|txt)$/i.test(name) ? await f.text() : f); await w.close(); n++; if (say && n % 5 === 0) say(n); } } };
-  await walk(src, dst, 0); return { n, big };
+    if (h.kind === 'directory') { if (depth === 0 && skip.has(name)) continue; if (/\(충돌 사본 /.test(name)) continue; await walk(h, await d.getDirectoryHandle(name, { create: true }), depth + 1); continue; }
+    if (/\(충돌 사본 /.test(name)) continue;  /* 충돌 사본은 옮기지 않음 */
+    let f; try { f = await h.getFile(); } catch (e) { continue; } if (f.size > 40 * 1048576 && !/\.(json|txt)$/i.test(name)) { big++; continue; }
+    let ex = null; try { ex = await d.getFileHandle(name); } catch (e) {}
+    if (!ex) { await put(d, name, /\.(json|txt)$/i.test(name) ? await f.text() : f); n++; if (say && n % 5 === 0) say(n); continue; }
+    if (!/\.design\.json$/i.test(name)) continue;  /* 설정·자료실 등 이미 있으면 그대로 */
+    let A, B; try { A = JSON.parse(await f.text()); B = JSON.parse(await (await ex.getFile()).text()); } catch (e) { continue; }
+    if (!A || !A.pages || !B || !B.pages || strip(A) === strip(B)) continue;  /* 같은 내용 */
+    if (A.docId && B.docId && A.docId !== B.docId) { const nm = name.replace(/\.design\.json$/i, '') + ` (${store.pcName()}에서 옮김)`; let k = nm, i = 2; for (;;) { try { await d.getFileHandle(k + '.design.json'); k = `${nm} ${i++}`; } catch (e) { break; } } await put(d, k + '.design.json', JSON.stringify(Object.assign({}, A, { name: k }))); renamed++; n++; continue; }  /* 이름만 같은 다른 문서 */
+    const base = await store.commonBase(A, B), out = base ? NC.live.merge(base, A, B) : NC.live.union(A, B), sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    Object.assign(out, { name: B.name || A.name, docId: B.docId || A.docId, saveId: sid, lineage: [...new Set([sid].concat(A.lineage || [], B.lineage || []))].slice(0, 60), savedBy: store.pcName(), savedAt: Date.now(), mergeNote: { by: store.pcName(), at: Date.now(), what: ['예전 폴더에서 옮기며 합침'] } });
+    await put(d, name, JSON.stringify(out)); merged++; n++; if (say) say(n); } };
+  await walk(src, dst, 0); return { n, big, merged, renamed };
 }
 async function connectDriveChecked() {
   try { if (!NC.gdrive.tokOK()) await NC.gdrive.login(); } catch (e) { setStatus(''); throw e; }  /* 로그인 창은 누른 순간 맨 먼저 (늦으면 크롬이 팝업으로 막음) */
@@ -4569,7 +4582,13 @@ async function connectDriveChecked() {
   if ((NC.gdrive.status().created || !(c0.set || c0.docs || c0.folders)) && !(await confirmBtns(`「${gs.email || '로그인한 계정'}」의 구글 드라이브에는 아직 공방 자료가 없습니다(새 공방 곳).\n\n• 앱 없이 쓰는 것을 이 PC에서 처음 시작하는 거라면(도장 PC 첫 연결 등) → 확인\n• 다른 PC(예: 도장 PC)에서 이미 쓰고 있다면 → 다른 계정으로 로그인한 것입니다. 취소를 누르고 그 PC와 같은 계정(저장 설정 맨 위에 보이는 계정)으로 다시 로그인하세요.\n\n확인: 이 계정으로 새로 시작\n취소: 연결하지 않기 (다른 계정으로 다시)`))) {
     NC.gdrive.forget(); await store.disconnectFolder(); if (old) await store.useFolder(old); updateSaveBadge(); setStatus(''); toast('연결하지 않았습니다 — 저장 설정 → 「🔑 구글 로그인으로 시작」을 눌러 다른 PC와 같은 계정을 고르세요'); return false; }
   let c = await store.folderInfo();
-  if (old && !(c.set || c.docs || c.folders)) {
+  if (old && (c.set || c.docs || c.folders) && oc && oc.docs && await confirmBtns(`구글 드라이브(앱 없이 쓰는 곳)에 이미 공방 자료가 있습니다(다른 PC가 먼저 옮김).\n지금 폴더 「${old.name}」의 문서 ${oc.docs}개도 합쳐 옮길까요?\n\n· 같은 문서는 두 쪽에서 고친 것을 합칩니다(충돌 사본 없음)\n· 없는 문서는 옮기고, 이름만 같은 다른 문서는 「(이 PC에서 옮김)」 이름으로\n· 지금 폴더의 파일은 그대로 남습니다\n\n확인: 합쳐 옮기기 (권장)\n취소: 옮기지 않고 드라이브 자료만 쓰기`)) {  /* 11/27: 예전엔 받는 곳이 비어 있을 때만 옮겨, 나중에 바꾼 PC(도장 PC)의 예전 폴더 작업이 빠졌음 */
+    setStatus('합쳐 옮기는 중…'); const r = await gdMigrate(old, st.dir, k => setStatus(`합쳐 옮기는 중… ${k}개`));
+    toast(`✅ ${r.n}개를 옮겼습니다${r.merged ? ` · 같은 문서 ${r.merged}개는 합침` : ''}${r.renamed ? ` · 이름만 같은 다른 문서 ${r.renamed}개는 새 이름으로` : ''}${r.big ? ` · 아주 큰 파일 ${r.big}개는 지금 폴더에만` : ''} — 드라이브에는 뒤에서 올라갑니다`);
+    if (curPath) { try { let d = st.dir; for (const p of curPath.slice(0, -1)) d = await d.getDirectoryHandle(p); const h = await d.getFileHandle(curPath[curPath.length - 1]); await store.openHandle(h); st.dirty = false; } catch (e) { console.warn(e); } }
+    c = await store.folderInfo();
+  }
+  else if (old && !(c.set || c.docs || c.folders)) {
     if (oc && (oc.docs || oc.folders || oc.set) && await confirmBtns(`지금 폴더 「${old.name}」의 문서·설정을 구글 드라이브(앱 없이 쓰는 곳)로 옮길까요?\n(문서 ${oc.docs}개 · 폴더 ${oc.folders}개 — 지금 폴더의 파일은 그대로 남습니다)\n\n확인: 옮기기 (권장)\n취소: 빈 곳에서 새로 시작`)) {
       setStatus('옮기는 중… (이 PC에 먼저 담고 드라이브에는 뒤에서 올립니다)');
       const r = await gdMigrate(old, st.dir, k => setStatus(`옮기는 중… ${k}개`));
