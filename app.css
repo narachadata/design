@@ -2333,3 +2333,7 @@ table.dvinfo th{font-weight:700}
 .nd .fcard .ori i{font-style:normal;padding:2px 9px;color:var(--ui-muted);background:#fff}
 .nd .fcard .ori i.on{background:var(--ui-accent-soft,#e8eefc);color:var(--ui-accent,#2f5bea);font-weight:700}
 .nd .fcard .ori i:hover{background:var(--ui-accent,#2f5bea);color:#fff}
+
+/* 11/27 팀장님 「PowerPoint 글꼴 배지 한 글자만 줄바꿈」: 좁은 칸에서도 낱말 단위로·고르게 (다운로드 창 칸 전체) */
+#dlPanel button,#dlPanel label,.seg button{word-break:keep-all;overflow-wrap:break-word;text-wrap:balance}
+.seg.dlpf button{padding:6px 6px}
