@@ -2358,6 +2358,21 @@ table.dvinfo th{font-weight:700}
 /* 메일머지 (11/27) — 편집 화면의 칸 표시·속성 창 */
 #canvas .mmk{background:rgba(255,214,64,.45);border-radius:.15em;box-shadow:0 0 0 .08em rgba(214,158,0,.55);-webkit-box-decoration-break:clone;box-decoration-break:clone}
 #canvas .mmk.pv{background:rgba(120,200,255,.32);box-shadow:0 0 0 .08em rgba(47,111,228,.45)}
+#canvas .mmk.bad{background:rgba(255,120,120,.28);box-shadow:0 0 0 .08em rgba(220,38,38,.6)}
+.mmbox .mmins.xl b{color:#166534}
+.mmbox .mmbad{color:#b91c1c;margin:4px 0}
+#dlgMMXls .mmxopt{gap:10px;flex-wrap:wrap;align-items:flex-end}
+#dlgMMXls .mmxopt .f{margin:0;min-width:150px}
+#dlgMMXls .mmxwrap{max-height:46vh;overflow:auto;border:1px solid var(--ui-line);border-radius:8px}
+#dlgMMXls .mmxt{border-collapse:collapse;font-size:12.5px;width:max-content;min-width:100%}
+#dlgMMXls .mmxt th,#dlgMMXls .mmxt td{border-bottom:1px solid var(--ui-line);padding:4px 8px;text-align:left;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+#dlgMMXls .mmxt th{position:sticky;top:0;background:var(--ui-panel,#f6f7fb);color:#166534;font-weight:700;z-index:1}
+#dlgMMXls .mmxt .nm{background:#fff7d6}
+#dlgMMXls .mmxt th.nm{background:#ffe9a8}
+#dlgMMXls .mmxt td.n{color:var(--ui-muted);text-align:right}
+#dlgMMXls .mmxt tr.off td{opacity:.38}
+#dlgMMXls .mmxcols{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px}
+#dlgMMXls .mmxcols b{color:#166534}
 .mmbox .mmrow{gap:6px;flex-wrap:wrap;margin:4px 0}
 .mmbox .mmsrc{margin:2px 0 6px}
 .mmbox .mmchips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin:2px 0 8px}
@@ -2388,3 +2403,15 @@ table.dvinfo th{font-weight:700}
 .prmm-sum{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin-top:8px;font-size:13px}
 .prmm-pv{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:12.5px;color:var(--ui-fg2)}.prmm-pv .btn{flex:none}
 #prGo small{color:inherit}
+/* 11/27 속성 창 「영상」 탭 안에 여는 영상 메뉴 */
+.pgvmenu{margin-top:10px;padding:10px 0 2px;border-top:1px dashed var(--ui-line2)}
+.pgvmenu .vd-top{flex-wrap:wrap}
+.pgvmenu .vd-pane h3{font-size:12.5px;margin:12px 0 6px}
+/* 11/27 내 드라이브 전체 보기 — 카드 아래 폴더 띠 */
+.drive .dvmeta .dvloc{display:flex;align-items:center;gap:4px;max-width:100%;margin-top:6px;padding:3px 8px 3px 6px;border:1px solid hsl(var(--h) 55% 78%);border-radius:7px;background:hsl(var(--h) 70% 95%);color:hsl(var(--h) 45% 30%);font:inherit;font-size:11.5px;font-weight:600;line-height:1.3;cursor:pointer;text-align:left}
+.drive .dvmeta .dvloc:hover{background:hsl(var(--h) 70% 90%);border-color:hsl(var(--h) 55% 60%)}
+.drive .dvmeta .dvloc .ic{width:14px;height:14px;flex:none;color:hsl(var(--h) 55% 45%)}
+.drive .dvmeta .dvloc span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drive .dvmeta .dvloc i{font-style:normal;opacity:.55;margin:0 3px}
+.drive .dvmeta .dvloc.root{border-style:dashed;background:#f6f7f9;color:var(--ui-muted);border-color:var(--ui-line2)}
+.drive .dvmeta .dvloc.root .ic{color:var(--ui-muted)}
