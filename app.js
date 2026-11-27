@@ -4162,6 +4162,30 @@ async function openMergePick() {
   };
   draw(); if (!d.open) d.showModal();
 }
+/* 11/27 팀장님 「오른쪽 위에 '스타일 프리셋'·'메일머지' 등 탭으로 메뉴가 보이게 — 어디에 있는지 찾기 어려움」·「눈에 띄게」:
+   속성 창의 칸(제목 h2.phead·h3·메일머지·영상 장면)을 맨 위 탭 막대로 — 누르면 그 칸으로 가고(접힌 칸은 펼침), 스크롤하면 지금 칸 탭이 켜짐. 속성 창을 다시 그릴 때마다 저절로 */
+const ITAB_SKIP = /^(동작)$/;
+function itabLabel(h) { const c = h.cloneNode(true); c.querySelectorAll('small, button, input, select, svg, .sst').forEach(x => x.remove()); let t = (c.textContent || '').replace(/\s+/g, ' ').trim(); t = t.replace(/^[^\p{L}\p{N}]+/u, '').replace(/\s*(MM|mm|FIGMA.*|포토샵.*)$/, '').trim(); if (/^영상 장면/.test(t)) t = '영상'; return t.length > 9 ? t.slice(0, 9) + '…' : t; }
+let itabSel = '';  /* 고른 탭(칸 이름) — 다른 요소를 골라도 같은 이름 칸이 있으면 그대로, 없으면 전체 */
+function buildInspTabs() {
+  const ins = $('#inspector'); if (!ins) return; const old = ins.querySelector(':scope > .itabs'); if (old) old.remove();
+  ins.querySelectorAll(':scope > .itab-hide').forEach(n => n.classList.remove('itab-hide'));
+  const kids = [...ins.children], isHead = n => n.matches('h2.phead, h3, details.mmbox, details.pgvid');
+  const secs = []; kids.forEach(n => { if (isHead(n)) { const t = itabLabel(n.tagName === 'DETAILS' ? (n.querySelector('summary .anim-h') || n.querySelector('summary')) : n); secs.push({ h: n, t, nodes: [n] }); } else if (secs.length) secs[secs.length - 1].nodes.push(n); });
+  /* 「동작」(복제·지우기)은 늘 보이게 — 어느 탭에서도 맨 아래 */
+  const keep = secs.filter(x => !x.t || ITAB_SKIP.test(x.t)), tabs = secs.filter(x => x.t && !ITAB_SKIP.test(x.t));
+  if (tabs.length < 2) { itabSel = itabSel; return; }
+  const sel0 = tabs.some(x => x.t === itabSel) ? itabSel : '';
+  const bar = document.createElement('div'); bar.className = 'itabs'; bar.setAttribute('role', 'tablist'); bar.setAttribute('aria-label', '속성 칸');
+  bar.innerHTML = `<button type="button" role="tab" data-itab="" class="all">전체</button>` + tabs.map((x, i) => `<button type="button" role="tab" data-itab="${i + 1}" class="${/메일머지/.test(x.t) ? 'mm' : ''}">${esc(x.t)}</button>`).join('');
+  ins.prepend(bar);
+  const show = t => { itabSel = t; tabs.forEach(x => x.nodes.forEach(n => n.classList.toggle('itab-hide', !!t && x.t !== t))); tabs.forEach(x => { if (t && x.t === t && x.h.tagName === 'DETAILS') x.h.open = true; });
+    bar.querySelectorAll('[data-itab]').forEach(q => { const on = (q.dataset.itab === '' && !t) || (q.dataset.itab !== '' && tabs[Number(q.dataset.itab) - 1].t === t); q.classList.toggle('on', on); q.setAttribute('aria-selected', String(on)); }); };
+  bar.addEventListener('click', e => { const q = e.target.closest('[data-itab]'); if (!q) return; const t = q.dataset.itab === '' ? '' : tabs[Number(q.dataset.itab) - 1].t; show(t); ins.scrollTo({ top: 0 }); });
+  show(sel0); void keep;
+}
+{ let iq = 0; const mo = new MutationObserver(ms => { if (ms.every(m => [...m.addedNodes, ...m.removedNodes].every(n => n.classList && n.classList.contains('itabs')))) return; if (iq) return; iq = 1; queueMicrotask(() => { iq = 0; buildInspTabs(); }); });
+  const go = () => { const ins = $('#inspector'); if (ins) mo.observe(ins, { childList: true }); else setTimeout(go, 200); }; go(); }
 function renderInspector() {
   if (newsMode) { renderNewsInspector(); return; }
   const ins = $('#inspector'); const els = selEls(); ins.onclick = null;

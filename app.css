@@ -2367,3 +2367,13 @@ table.dvinfo th{font-weight:700}
 .mmbox .mmph{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:7px 8px;margin:4px 0 8px;border-radius:8px;background:#fff6db;border:1px solid #f1d68a;font-size:12px}
 .mmbox .mmpv{gap:4px;align-items:center;flex-wrap:nowrap}.mmbox .mmpvb{flex:1;min-width:0;justify-content:center}.mmbox .mmpvb.on{border-color:#2f6fe4;color:#2f6fe4}
 .mmchk .pk-chk{color:#8a5a00}
+
+/* 속성 창 맨 위 탭 막대 (11/27 팀장님 「눈에 띄게」) */
+.inspector > .itabs{position:sticky;top:-14px;z-index:6;display:flex;flex-wrap:wrap;gap:5px;margin:-14px -14px 12px;padding:10px 12px 9px;background:color-mix(in srgb,var(--ui-accent) 9%,var(--ui-panel));border-bottom:2px solid color-mix(in srgb,var(--ui-accent) 45%,transparent);box-shadow:0 4px 10px -6px rgba(16,24,40,.25)}
+.inspector > .itabs button{flex:none;font:700 12.5px var(--font-ui);line-height:1;padding:7px 11px;border-radius:999px;border:1.5px solid color-mix(in srgb,var(--ui-accent) 40%,transparent);background:var(--ui-panel);color:var(--ui-accent);cursor:pointer;white-space:nowrap;transition:background .12s,color .12s,border-color .12s}
+.inspector > .itabs button:hover{background:color-mix(in srgb,var(--ui-accent) 14%,var(--ui-panel))}
+.inspector > .itabs button.on{background:var(--ui-accent);border-color:var(--ui-accent);color:#fff;box-shadow:0 2px 6px -2px color-mix(in srgb,var(--ui-accent) 70%,transparent)}
+.inspector > .itabs button.mm{border-color:#e0a800;color:#8a5a00;background:#fff6db}.inspector > .itabs button.mm.on{background:#e0a800;border-color:#e0a800;color:#fff}
+.inspector > .itab-hide{display:none !important}
+.inspector > .itabs button.all{border-style:dashed}.inspector > .itabs button.all.on{border-style:solid}
+.inspector > .itabs + h2.phead,.inspector > .itabs ~ h3.itab-first{margin-top:4px}
