@@ -2361,6 +2361,7 @@ table.dvinfo th{font-weight:700}
 #canvas .mmk.bad{background:rgba(255,120,120,.28);box-shadow:0 0 0 .08em rgba(220,38,38,.6)}
 .mmbox .mmins.xl b{color:#166534}
 .mmbox .mmbad,.prmm .mmbad{color:#b91c1c;margin:4px 0}
+.prmm .mmempty{color:#92400e}
 #dlgMMXls .mmxopt{gap:10px;flex-wrap:wrap;align-items:flex-end}
 #dlgMMXls .mmxopt .f{margin:0;min-width:150px}
 #dlgMMXls .mmxwrap{max-height:46vh;overflow:auto;border:1px solid var(--ui-line);border-radius:8px}
@@ -2420,3 +2421,11 @@ table.dvinfo th{font-weight:700}
 .mmkmenu .mmk-h{padding:6px 10px 4px;font-size:12px;font-weight:700;color:#8a5a00}
 .mmkmenu .mmk-h small{font-weight:400;color:var(--ui-muted);margin-left:4px}
 .mmkmenu button.on{background:color-mix(in srgb,var(--ui-accent,#2f6fe4) 12%,#fff)}
+/* 11/27 메일머지 「명단 보기 · 빼기」 */
+.mmbox .mmlist{margin:4px 0 8px}
+.mmbox .mmlist>summary{cursor:pointer;font-size:12.5px;font-weight:600}
+.mmbox .mmlist>summary small{font-weight:400;color:var(--ui-muted);margin-left:4px}
+.mmbox .mmppl{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:2px 6px;max-height:180px;overflow:auto;margin-top:6px;padding:4px;border:1px solid var(--ui-line);border-radius:8px}
+.mmbox .mmppl label{display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.mmbox .mmppl label span{color:var(--ui-muted);font-size:10.5px;min-width:16px;text-align:right}
+.mmbox .mmppl label.off{opacity:.45;text-decoration:line-through}

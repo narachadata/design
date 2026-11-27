@@ -188,13 +188,15 @@ async function mergeTheirs(theirs, file) {
   if (editing || drag || $('#cellEd')) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 2000); return true; }  /* 글 고치는 중·끄는 중이면 끝난 뒤에 */
   flushNudge();
   const myLin = st.lineage.slice(), merged = base ? NC.live.merge(base, doc, theirs) : NC.live.union(doc, theirs);
+  { const I0 = NC.live.lastMerge || {}; if ((I0.conf && I0.conf.length) || I0.union) { const by = theirs.savedBy && theirs.savedBy !== store.pcName() ? theirs.savedBy : '다른 PC';  /* 11/27 같은 곳을 둘 다 고쳤으면(이 PC 것이 이김) 진 쪽 — 상대 판 — 을 이름표 붙여 버전 기록에 (이름표 붙은 기록은 40개 넘어도 지우지 않음) */
+    store.snapshot(doc.docId || theirs.docId, JSON.stringify(Object.assign({}, theirs, { savedBy: by })), `합치기 전 ${by} 판${I0.union ? ' (모아 합침)' : ` (같은 곳 ${I0.conf.length}곳)`}`).catch(() => {}); } }
   NC.live.patchTo(doc, merged); sanitizeDoc(doc);
   st.lastMod = file && file.lastModified || st.lastMod; store.adopt(theirs); st.lineage = [...new Set(st.lineage.concat(myLin))].slice(0, 60);
   Object.keys(doc.assets || {}).forEach(k => liveAssetKeys.add(k));
   refreshAfterFile(); markDirty();
   const who = theirs.savedBy && theirs.savedBy !== store.pcName() ? theirs.savedBy : '다른 PC';
   const I = NC.live.lastMerge || {}; if (I.union) toast(`${who} 판과 두 판을 모아 합쳤습니다 — 함께 가진 판을 몰라 대강 합쳤으니 지운 것이 되살아났거나 고친 것이 빠졌는지 한 번 봐 주세요 (버전 기록에 두 판 모두 있음)`);
-  else if (I.what && I.what.length) toast(`${who}에서 고친 것과 합쳤습니다 — 살펴볼 곳: ${I.what.join(', ')} (같은 곳을 둘 다 고쳤으면 이 PC 것 · ${who} 판은 버전 기록에)`);
+  else if (I.what && I.what.length) toast(`${who}에서 고친 것과 합쳤습니다 — 살펴볼 곳: ${I.what.join(', ')} (같은 곳을 둘 다 고쳤으면 이 PC 것 · ${who} 판은 버전 기록 「합치기 전 ${who} 판」에)`);
   else if (Date.now() - mergeToastAt > 60000) { mergeToastAt = Date.now(); toast(`${who}에서 고친 것과 합쳤습니다 — 같이 작업 중 (충돌 사본 없음)`); }
   setStatus(`${who}와 합침 ${tnow()}`);
   return true;
@@ -560,7 +562,8 @@ function mmSur(n) { n = String(n || '').trim(); if (n.length >= 3 && MM_SUR2.inc
 function mmGiven(n) { n = String(n || '').trim().replace(/\s+/g, ''); if (n.length <= 1) return n; return n.slice(mmSur(n).length) || n; }
 function mmBat(w) { const c = String(w || '').slice(-1).charCodeAt(0); return c >= 0xAC00 && c <= 0xD7A3 ? (c - 0xAC00) % 28 !== 0 : false; }
 let mmPv = -1;  /* 편집 화면 미리보기 사람 번호 (-1 = 끔, 문서에는 안 남김) */
-const mmList = () => (doc && doc.merge && Array.isArray(doc.merge.list) ? doc.merge.list.filter(x => x && x.n && !(doc.merge.off || {})[x.n]) : []);
+const mmList = () => (doc && doc.merge && Array.isArray(doc.merge.list) ? doc.merge.list.filter(x => x && x.n && !(doc.merge.off || {})[mmKey(x)]) : []);  /* off: 속성 창 「명단 보기 · 빼기」에서 뺀 사람 (mmKey) */
+let mmListOpen = false;
 const mmKey = w => w && w.k != null ? '#' + w.k : (w && w.n);  /* 사람 구분(엑셀은 줄 번호 — 같은 이름 두 줄도 따로) */
 const unesc = t => String(t).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 /* {{열}} 값: 엑셀 줄(f)에서 열 이름 → 없으면 {{1}} 번호 → 없으면 기본 칸 이름(이름·이름만·반…). 모르는 열은 null(빈칸으로 찍힘) */
@@ -4131,6 +4134,8 @@ function mmPanelHTML(el) {
     <div class="row mmrow" style="flex-wrap:wrap;gap:4px"><button type="button" class="btn sm${L.length ? '' : ' primary'}" data-mm="pick" title="관리프로그램 재원생 명단에서 고르기">📥 관리프로그램 명단</button><button type="button" class="btn sm${L.length ? '' : ' primary'}" data-mm="xls" title="엑셀(.xlsx)·CSV 파일 — 첫 줄이 열 이름 (아래한글 메일 머지와 같은 방식)">📊 엑셀·CSV 파일</button>${L.length ? `<button type="button" class="btn sm" data-mm="clear" title="이 문서의 메일머지 명단 비우기">명단 비우기</button>` : ''}</div>
     ${L.length ? `<p class="hint mmsrc">${esc(M.src || '관리프로그램')}${M.file ? ` 「${esc(M.file)}${M.sheet ? ' · ' + esc(M.sheet) : ''}」` : ''} · ${M.at ? new Date(M.at).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' 받음' : ''} · ${esc(L.slice(0, 3).map(x => x.n).join(', '))}${L.length > 3 ? ` 외 ${L.length - 3}명` : ''}</p>` : ''}
     ${ph ? `<div class="mmph"><span>「${esc(mmPhOf(ph))}」 자리를</span><button type="button" class="btn sm" data-mm="ph:이름">{이름}</button><button type="button" class="btn sm" data-mm="ph:이름만">{이름만}</button><span>으로</span></div>` : ''}
+    ${(() => { const A = (M.list || []).filter(x => x && x.n); if (!A.length) return ''; const off = M.off || {};
+      return `<details class="mmlist" ${mmListOpen ? 'open' : ''}><summary>명단 보기 · 빼기 <small>${L.length}/${A.length}명 찍음</small></summary><div class="mmppl">${A.map((x, i) => `<label class="${off[mmKey(x)] ? 'off' : ''}"><input type="checkbox" data-mmoff="${esc(mmKey(x))}" ${off[mmKey(x)] ? '' : 'checked'}><span>${i + 1}</span>${esc(x.n)}</label>`).join('')}</div><div class="row" style="gap:4px;margin-top:4px"><button type="button" class="btn sm" data-mm="offall:0">모두 체크</button><button type="button" class="btn sm" data-mm="offall:1">모두 해제</button></div></details>`; })()}
     ${mmColsHTML(ex)}
     <div class="pk-lb">칸 넣기 <small>${el && el.type === 'tbl' ? '고른 표 칸에 · 칸을 두 번 눌러 쓰는 중이면 커서 자리에' : '글 상자 안 커서 자리에'}</small></div><div class="mmchips">${chips}</div>
     ${L.length && used ? `<div class="pk-lb">미리보기</div><div class="row mmpv"><button type="button" class="btn sm icon" data-mm="pv:-1" title="앞 사람">‹</button><button type="button" class="btn sm mmpvb${mmPv >= 0 ? ' on' : ''}" data-mm="pv:0">${mmPv >= 0 ? `${esc(L[mmPv].n)} <small>${mmPv + 1}/${L.length}</small>` : '칸 이름으로 보기 <small>누르면 첫 사람</small>'}</button><button type="button" class="btn sm icon" data-mm="pv:1" title="다음 사람">›</button>${mmPv >= 0 ? '<button type="button" class="btn sm" data-mm="pv:off">끄기</button>' : ''}</div><div class="row" style="gap:4px;margin-top:4px"><button type="button" class="btn sm" data-mm="pv:long" title="글에 쓴 칸으로 바꿨을 때 가장 긴 사람 — 줄이 넘치는지 확인">가장 긴 이름 보기</button></div><p class="hint" style="margin:4px 0 0">이름이 긴 사람으로 넘겨 보며 줄이 넘치지 않는지 확인하세요 · 인쇄: 출력 창의 「메일머지 — ${L.length}명 각각」</p>` : ''}
@@ -4155,11 +4160,14 @@ document.addEventListener('click', e => {
   const a = t.dataset.mm, L = mmList();
   if (a === 'pick') { openMergePick(); return; }
   if (a === 'xls') { openMergeXls(); return; }
+  if (a.startsWith('offall:')) { const M = doc.merge; if (!M) return; M.off = {}; if (a.endsWith('1')) (M.list || []).forEach(x => { M.off[mmKey(x)] = 1; }); mmPv = Math.min(mmPv, mmList().length - 1); mmListOpen = true; commit(); renderCanvas(); renderInspector(); return; }
   if (a === 'clear') { confirmBtns('이 문서의 메일머지 명단을 비울까요?\n(글 속 {이름} 칸은 그대로 남고, 명단은 언제든 다시 고를 수 있어요)').then(ok => { if (!ok) return; delete doc.merge; mmPv = -1; commit(); rerender(); renderInspector(); }); return; }
   if (a.startsWith('ph:')) { const el = selEls().find(x => mmPhOf(x)) || page().els.find(x => mmPhOf(x)); if (el) mmPh(el, a.slice(3)); renderInspector(); return; }
   if (a === 'pv:long') { if (!L.length) return; const src = doc.pages.flatMap(p => p.els).filter(mmHasTok).map(e => e.type === 'tbl' ? e.rows.flat().join('\n') : e.text).join('\n'), len = w => mmFill(src, w, false).length; let k = 0; L.forEach((w, i) => { if (len(w) > len(L[k])) k = i; }); mmPv = k; renderCanvas(); renderInspector(); toast(`가장 긴 이름: ${L[k].n} — 줄이 넘치거나 줄바꿈이 어색하지 않은지 보세요`); return; }
   if (a.startsWith('pv:')) { const v = a.slice(3); if (!L.length) return; mmPv = v === 'off' ? -1 : v === '0' ? (mmPv < 0 ? 0 : mmPv) : (Math.max(0, mmPv) + Number(v) + L.length) % L.length; renderCanvas(); renderInspector(); return; }
 });
+document.addEventListener('change', e => { const t = e.target; if (!t || t.dataset.mmoff == null || !t.closest('#inspector') || !doc.merge) return; const M = doc.merge; M.off = Object.assign({}, M.off); if (t.checked) delete M.off[t.dataset.mmoff]; else M.off[t.dataset.mmoff] = 1; const n = mmList().length; mmPv = n ? Math.min(mmPv, n - 1) : -1; mmListOpen = true; commit(); renderCanvas(); renderInspector(); });  /* 속성 창 「명단 보기 · 빼기」 */
+document.addEventListener('toggle', e => { if (e.target && e.target.classList && e.target.classList.contains('mmlist')) mmListOpen = e.target.open; }, true);
 /* 명단 고르기 — 출석부와 같은 관리프로그램 재원생 명단(읽기만). 문서에는 이름·반·띠급·학년만 남김 */
 const mmPick = { mode: 'all', ban: [], q: '', off: {} };
 async function openMergePick() {
@@ -4241,18 +4249,20 @@ async function mmReadFile(f) {
   let t; try { t = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (e) { t = new TextDecoder('euc-kr').decode(buf); }  /* 한글 엑셀의 CSV는 흔히 EUC-KR */
   return [{ name: nm.replace(/\.[^.]+$/, '') || 'CSV', rows: mmCsvParse(t.replace(/^﻿/, '')) }];
 }
-const mmX = { file: '', sheets: [], si: 0, head: true, nameCol: -1, off: new Set() };
+const mmX = { file: '', sheets: [], si: 0, head: true, hr: -1, nameCol: -1, off: new Set() };  /* hr: 열 이름 줄(글 있는 줄 중 몇째, -1 = 저절로 — 맨 위 제목 줄 건너뛰기) */
+const MM_NAME_H = /^(이름|성명|학생이름|학생명|원생명|원생이름|수련생|수련생이름|수련생명|아동명|자녀이름|name)$/i;
+function mmXHeadGuess(rows) { const nz = r => r.filter(v => String(v).trim()).length, mx = Math.max(0, ...rows.slice(0, 12).map(nz)); for (let i = 0; i < Math.min(8, rows.length); i++) if (rows[i].some(v => MM_NAME_H.test(String(v).replace(/\s/g, '')))) return i; for (let i = 0; i < Math.min(8, rows.length); i++) if (nz(rows[i]) >= Math.max(2, Math.ceil(mx * 0.6))) return i; return 0; }
 function mmXTable() {
   const sh = mmX.sheets[mmX.si] || { rows: [] }; let rows = sh.rows.filter(r => r && r.some(v => String(v).trim() !== ''));
   let nc = 0; rows.forEach(r => { for (let i = r.length - 1; i >= 0; i--) if (String(r[i] || '').trim() !== '') { nc = Math.max(nc, i + 1); break; } }); nc = Math.min(40, nc);
   rows = rows.map(r => Array.from({ length: nc }, (_, i) => String(r[i] == null ? '' : r[i]).replace(/\s+$/, '').replace(/^\s+/, '')));
-  let cols; if (mmX.head && rows.length) { const h = rows.shift(), seen = {}; cols = h.map((v, i) => { let c = v.replace(/[{}\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30) || String(i + 1); if (seen[c]) c = `${c}_${i + 1}`; seen[c] = 1; return c; }); }
+  let cols; if (mmX.head && rows.length) { const hr = mmX.hr >= 0 ? Math.min(mmX.hr, rows.length - 1) : mmXHeadGuess(rows); mmX.hrNow = hr; rows = rows.slice(hr); const h = rows.shift(), seen = {}; cols = h.map((v, i) => { let c = v.replace(/[{}\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30) || String(i + 1); if (seen[c]) c = `${c}_${i + 1}`; seen[c] = 1; return c; }); }
   else cols = Array.from({ length: nc }, (_, i) => String(i + 1));
   return { cols, rows: rows.slice(0, 3000) };
 }
 function mmXGuess(T) {
   const N = c => c.replace(/\s/g, ''), find = rx => T.cols.findIndex(c => rx.test(N(c)));
-  let ni = find(/^(이름|성명|학생이름|학생명|원생명|원생이름|수련생|수련생이름|수련생명|아동명|자녀이름|name)$/i);
+  let ni = find(MM_NAME_H);
   if (ni < 0) { let best = -1, bn = 0; T.cols.forEach((c, i) => { const n = T.rows.filter(r => /^[가-힣]{2,5}\s?[A-Za-z]{0,2}$/.test(r[i] || '')).length; if (n > bn) { bn = n; best = i; } }); ni = bn >= Math.max(1, T.rows.length * 0.5) ? best : 0; }
   return { ni, bi: find(/^(반|부|반이름|소속|소속반|클래스|class)$/i), gi: find(/^(띠|띠급|띠색|급|급수|품|품띠|벨트|belt)$/i), yi: find(/^(학년|학년반)$/) };
 }
@@ -4260,7 +4270,7 @@ function openMergeXls() {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xlsm,.csv,.tsv,.txt,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv';
   inp.onchange = async () => { const f = inp.files && inp.files[0]; if (!f) return;
     try { const sheets = await mmReadFile(f); if (!sheets.length) throw new Error('시트를 찾지 못했습니다');
-      Object.assign(mmX, { file: f.name || '', sheets, si: Math.max(0, sheets.findIndex(x => x.rows.some(r => r && r.some(v => String(v).trim())))), head: true, nameCol: -1, off: new Set() }); mmXDialog(); }
+      Object.assign(mmX, { file: f.name || '', sheets, si: Math.max(0, sheets.findIndex(x => x.rows.some(r => r && r.some(v => String(v).trim())))), head: true, hr: -1, nameCol: -1, off: new Set() }); mmXDialog(); }
     catch (e) { toast(String((e && e.message) || e), true); } };
   inp.click();
 }
@@ -4270,16 +4280,17 @@ function mmXDialog() {
     const T = mmXTable(), G = mmXGuess(T); if (mmX.nameCol < 0 || mmX.nameCol >= T.cols.length) mmX.nameCol = G.ni; const ni = mmX.nameCol, nOn = T.rows.length - [...mmX.off].filter(i => i < T.rows.length).length, SHOW = 400;
     const ex = T.rows.find((r, i) => !mmX.off.has(i)) || [];
     d.innerHTML = `<div class="dhead"><h2>📊 엑셀·CSV로 메일머지 <small>${esc(mmX.file)}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
-      <p class="hint" style="margin-top:0">아래한글 메일 머지와 같은 방식입니다 — 파일의 <b>첫 줄이 열(필드) 이름</b>이고, 문서에는 <b>{{열 이름}}</b>으로 표시를 답니다. 고른 줄마다 한 장씩 찍힙니다. 파일은 이 PC에서만 읽습니다.</p>
+      <p class="hint" style="margin-top:0">아래한글 메일 머지와 같은 방식입니다 — 파일의 <b>열 이름 줄</b>(보통 첫 줄 — 위에 제목 줄이 있으면 저절로 건너뜀)이 필드 이름이고, 문서에는 <b>{{열 이름}}</b>으로 표시를 답니다. 고른 줄마다 한 장씩 찍힙니다. 파일은 이 PC에서만 읽습니다.</p>
       <div class="row mmxopt">${mmX.sheets.length > 1 ? `<label class="f"><span>시트</span><select id="mmXSheet">${mmX.sheets.map((s, i) => `<option value="${i}" ${i === mmX.si ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>` : ''}
         <label class="f"><span>이름 열 <small>{이름}·{이름만+아}에 씀</small></span><select id="mmXName">${T.cols.map((c, i) => `<option value="${i}" ${i === ni ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
-        <label class="chk" style="align-self:flex-end;margin-bottom:6px"><input type="checkbox" id="mmXHead" ${mmX.head ? 'checked' : ''}> 첫 줄이 열 이름</label></div>
+        <label class="chk" style="align-self:flex-end;margin-bottom:6px"><input type="checkbox" id="mmXHead" ${mmX.head ? 'checked' : ''}> 열 이름 줄이 있음</label>
+        ${mmX.head ? (() => { const sh = mmX.sheets[mmX.si] || { rows: [] }, R = sh.rows.filter(r => r && r.some(v => String(v).trim())).slice(0, 8); return R.length > 1 ? `<label class="f"><span>열 이름 줄 <small>위의 제목 줄은 건너뜀</small></span><select id="mmXHr">${R.map((r, i) => `<option value="${i}" ${i === mmX.hrNow ? 'selected' : ''}>${i + 1}째 줄 — ${esc(r.filter(v => String(v).trim()).slice(0, 3).join(' · ').slice(0, 24))}</option>`).join('')}</select></label>` : ''; })() : ''}</div>
       <h3>${T.rows.length}줄 중 <b>${nOn}줄</b> <small>찍을 줄(레코드) 고르기 — 체크를 풀면 빠짐</small> <button class="btn sm" data-mxall="1">모두 체크</button> <button class="btn sm" data-mxall="0">모두 해제</button></h3>
       ${T.rows.length ? `<div class="mmxwrap"><table class="mmxt"><thead><tr><th></th><th>#</th>${T.cols.map((c, i) => `<th class="${i === ni ? 'nm' : ''}">{{${esc(c)}}}</th>`).join('')}</tr></thead><tbody>${T.rows.slice(0, SHOW).map((r, k) => `<tr class="${mmX.off.has(k) ? 'off' : ''}"><td><input type="checkbox" data-mxr="${k}" ${mmX.off.has(k) ? '' : 'checked'}></td><td class="n">${k + 1}</td>${r.map((v, i) => `<td class="${i === ni ? 'nm' : ''}">${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${T.rows.length > SHOW ? `<p class="hint">앞 ${SHOW}줄만 보여 줍니다 — 나머지 ${T.rows.length - SHOW}줄도 함께 들어갑니다.</p>` : ''}` : '<p class="hint">이 시트에 글이 있는 줄이 없습니다.</p>'}
       ${T.cols.length ? `<div class="pk-lb" style="margin-top:8px">문서에 달 표시 <small>속성 창 「✉ 메일머지」의 칸 단추로 넣거나, 글에 그대로 써도 됩니다</small></div><div class="mmxcols">${T.cols.map((c, i) => `<span><b>{{${esc(c)}}}</b> → ${esc(i === ni ? mmClean(ex[i] || '') : (ex[i] || '')) || '<i>(빈칸)</i>'}</span>`).join('')}</div>` : ''}
       <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn primary" id="mmXGo" ${nOn ? '' : 'disabled'}>이 ${nOn}줄로 메일머지</button></div></div>`;
     d.querySelector('[data-close]').onclick = () => d.close();
-    d.onchange = e => { const t = e.target; if (t.id === 'mmXSheet') { mmX.si = Number(t.value); mmX.off = new Set(); mmX.nameCol = -1; draw(); return; } if (t.id === 'mmXHead') { mmX.head = t.checked; mmX.off = new Set(); mmX.nameCol = -1; draw(); return; } if (t.id === 'mmXName') { mmX.nameCol = Number(t.value); draw(); return; }
+    d.onchange = e => { const t = e.target; if (t.id === 'mmXSheet') { mmX.si = Number(t.value); mmX.hr = -1; mmX.off = new Set(); mmX.nameCol = -1; draw(); return; } if (t.id === 'mmXHead') { mmX.head = t.checked; mmX.off = new Set(); mmX.nameCol = -1; draw(); return; } if (t.id === 'mmXHr') { mmX.hr = Number(t.value); mmX.off = new Set(); mmX.nameCol = -1; draw(); return; } if (t.id === 'mmXName') { mmX.nameCol = Number(t.value); draw(); return; }
       if (t.dataset.mxr != null) { const k = Number(t.dataset.mxr); t.checked ? mmX.off.delete(k) : mmX.off.add(k); draw(); } };
     d.onclick = e => { const al = e.target.closest('[data-mxall]'); if (al) { mmX.off = al.dataset.mxall === '1' ? new Set() : new Set(T.rows.map((_, i) => i)); draw(); return; }
       if (e.target.closest('#mmXGo')) { const pick = T.rows.map((r, k) => [r, k]).filter(([, k]) => !mmX.off.has(k)); if (!pick.length) return; const g = (r, i) => i >= 0 ? r[i] || '' : '';
@@ -4318,6 +4329,14 @@ document.addEventListener('keydown', e => {
   if (!['Control', 'Meta'].includes(e.key)) mmChordT = 0;
 }, true);
 /* 속성 창: 엑셀 열 표시 달기 단추 + 명단에 없는 표시 알림 */
+/* 찍을 사람 중 쓰인 칸 값이 빈 사람 — 출력 창에서 미리 알림 (11/27 — 실제 엽서 찍기 전에 빠진 정보 찾기) */
+function mmEmptyInfo(people) {
+  const src = doc.pages.flatMap(p => p.els).filter(mmHasTok).map(e => e.type === 'tbl' ? e.rows.flat().join('\n') : e.text || '').join('\n'), out = [];
+  const flds = [...new Set([...src.matchAll(MM_FLD)].map(m => m[1].trim()))].filter(k => mmFieldKnown(esc(k))), toks = [...new Set([...src.replace(MM_FLD, '').matchAll(MM_RX)].map(m => m[1]))];
+  flds.forEach(k => { const em = people.filter(w => !String(mmField(w, k) || '').trim()); if (em.length) out.push({ t: `{{${k}}}`, em }); });
+  toks.forEach(k => { const f = MM_F.find(x => x[0] === k); const em = people.filter(w => !String(f[2](w) || '').trim()); if (em.length) out.push({ t: `{${k}}`, em }); });
+  return out;
+}
 function mmBadFields() { return [...new Set(doc.pages.flatMap(p => p.els).filter(mmHasTok).flatMap(e => [...String(e.type === 'tbl' ? e.rows.flat().join('\n') : e.text || '').matchAll(MM_FLD)].map(m => m[1].trim())))].filter(k => !mmFieldKnown(esc(k))); }  /* 문서에 단 {{표시}} 중 명단에 없는 열 */
 function mmColsHTML(ex) {
   const M = doc.merge || {}, cols = M.cols || [];
@@ -5230,7 +5249,7 @@ async function renderDrive() {
   /* 11/27 팀장님 「전체 문서를 볼 때 어느 폴더에 들어 있는지 직관적으로」: 카드 아래 폴더 띠 — 폴더 그림·맨 위 폴더마다 다른 색·누르면 그 폴더로 */
   const dvLocH = path => { const top = path[0] || '', hue = top ? [...top].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7) : 215;
     return `<button type="button" class="dvloc${path.length ? '' : ' root'}" style="--h:${hue}" data-dvpath="${esc(JSON.stringify(path))}" title="${path.length ? `「${esc(path.join(' › '))}」 폴더에 있습니다 — 누르면 그 폴더로` : '내 드라이브 맨 위(폴더 밖)에 있습니다'}"><svg class="ic"><use href="#i-folder"/></svg><span>${path.length ? path.map(esc).join('<i>›</i>') : '내 드라이브'}</span></button>`; };
-  const dcardH = (x, i) => `<div class="dvdoc ${isCur(x) ? 'cur' : ''}" data-dvdoc="${i}" draggable="${trash ? 'false' : 'true'}"><div class="dvthumb" data-thumb="${i}"></div><div class="dvmeta"><b title="${nm(x)}">${nm(x)}</b><small>${when(x.lastModified)}${isCur(x) ? ' · <em>작업 중</em>' : ''}</small>${drv.view !== 'drive' || (drv.rootAll && !drv.path.length) ? dvLocH(x.path) : ''}</div><button class="dvmore" data-dvmenu="doc:${i}" title="더보기">⋯</button></div>`;
+  const dcardH = (x, i) => `<div class="dvdoc ${isCur(x) ? 'cur' : ''}" data-dvdoc="${i}" draggable="${trash ? 'false' : 'true'}"><div class="dvthumb" data-thumb="${i}"></div><div class="dvmeta"><b title="${nm(x)}">${nm(x)}</b><small>${when(x.lastModified)}${isCur(x) ? ' · <em>작업 중</em>' : ''}</small>${trash ? (x.path.length > 1 ? `<small class="dvloc-t">${esc(x.path.slice(1).join(' › '))}</small>` : '') : drv.view !== 'drive' || (drv.rootAll && !drv.path.length) ? dvLocH(x.path) : ''}</div><button class="dvmore" data-dvmenu="doc:${i}" title="더보기">⋯</button></div>`;
   for (const x of docs) x._cur = await isCurDoc(x);
   drv.docs = docs; drv.folders = folders;
   if (drv.view === 'home') { main.innerHTML = homeTop() + `<h3 style="margin-top:22px">최근 문서</h3>${docs.length ? `<div class="dvdocs">${docs.map(dcardH).join('')}</div>` : '<p class="hint">아직 문서가 없습니다.</p>'}`;
@@ -7381,7 +7400,7 @@ function renderCertSide(body) {
   <div class="ctable-wrap"><table class="ctable"><tr><th>#</th>${F.cols.map(([, l]) => `<th title="${esc(l)}">${esc(l.replace(/ \(.*\)$/, ''))}</th>`).join('')}<th></th></tr>
   ${rows.map((r, i) => `<tr class="${i === certPrev ? 'cur' : ''}"><td class="ci" data-cpick="${i}" title="미리 보기">${i + 1}</td>${Array.isArray(r.recs) && r.recs.length && form === 'record' ? `<td><input data-cr="${i}" data-ck="name" value="${esc(r.name || '')}" style="width:7em"></td><td colspan="${F.cols.length - 1}" class="crecs" title="관리프로그램 측정에서 가져온 기록">${r.recs.map(q => `${esc(q.k)} ${esc(q.a)}→${esc(q.b)}${esc(q.u || '')}`).join(' · ')}</td>` : F.cols.map(([kk, , w]) => `<td><input data-cr="${i}" data-ck="${kk}" value="${esc(r[kk] || '')}" style="width:${w}em"></td>`).join('')}<td><button class="x" data-cdel="${i}" title="이 줄 지우기">×</button></td></tr>`).join('')}</table></div>
   ${form === 'record' ? '<button class="btn sm primary full" data-cx="meas" style="margin:6px 0" title="관리프로그램 측정입력에 쌓인 줄넘기·체력 기록으로 향상왕을 계산해 명단을 채웁니다 (한 사람이 여러 종목이면 한 장에)">📥 관리프로그램 측정에서 향상왕 가져오기</button>' : ''}
-  <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" data-cx="add">+ 한 명</button><button class="btn sm" data-cx="paste">엑셀에서 붙여넣기</button>${rows.length ? '<button class="btn sm" data-cx="clear">명단 비우기</button>' : ''}</div>
+  <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" data-cx="add">+ 한 명</button><button class="btn sm" data-cx="paste">엑셀에서 붙여넣기</button><button class="btn sm" data-cx="xls" title="엑셀(.xlsx)·CSV 파일 — 첫 줄이 열 이름이면 이름으로 맞춤">📊 엑셀 파일에서</button>${rows.length ? '<button class="btn sm" data-cx="clear">명단 비우기</button>' : ''}</div>
   <details class="fx" id="cpasteBox" style="margin-top:6px"><summary>붙여넣기 칸</summary><p class="hint">엑셀에서 <b>${F.cols.map(c => c[1].replace(/ \(.*\)$/, '')).join(' · ')}</b> 순서로 복사해 붙여 넣으세요. 첫 줄이 열 이름이면 이름으로 맞춥니다.</p><textarea id="cpaste" rows="5" placeholder="${F.cols.map(c => c[1].replace(/ \(.*\)$/, '')).join('&#9;')}"></textarea><button class="btn sm primary" data-cx="pastego">명단에 더하기</button></details>
   <h3>④ 확인</h3>
   ${nOk ? `<p class="hint" style="margin:0 0 6px">오른쪽 편집 화면이 곧 미리 보기입니다 — 왼쪽에서 바꾸면 바로 바뀝니다 (② 명단에서 이름을 누르면 그 상장으로).</p><button class="btn sm full" data-cx="preview" style="margin-bottom:6px">🔍 모두 크게 미리 보기</button>${certWarn(form)}` : '<p class="hint">이름을 넣으면 오른쪽에 상장이 만들어집니다.</p>'}
@@ -7468,6 +7487,11 @@ function certWarn(form) { const D = certState().data[form], w = []; D.rows.forEa
     if (k === 'add') { D.rows.push({}); certPrev = D.rows.length - 1; markDirty(); renderSide(); setTimeout(() => { const n = sb().querySelector(`[data-cr="${certPrev}"][data-ck="name"]`); if (n) n.focus(); }, 0); }
     if (k === 'paste') { const d = $('#cpasteBox'); d.open = true; $('#cpaste').focus(); }
     if (k === 'pastego') { certPaste($('#cpaste').value); }
+    if (k === 'xls') { /* 11/27 상장 명단도 엑셀 파일로 — 메일머지와 같은 읽기(mmReadFile), 붙여넣기와 같은 길(certPaste: 첫 줄 열 이름 맞추기) */
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xlsm,.csv,.tsv,.txt,.xls';
+      inp.onchange = async () => { const f = inp.files && inp.files[0]; if (!f) return; try { const sh = (await mmReadFile(f)).find(x => x.rows.some(r => r && r.some(v => String(v).trim()))); if (!sh) throw new Error('글이 있는 시트가 없습니다');
+        const R0 = sh.rows.filter(r => r && r.some(v => String(v).trim())).map(r => Array.from(r, v => v == null ? '' : v)), tsv = R0.slice(mmXHeadGuess(R0)).map(r => Array.from(r, v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim()).join('\t')).join('\n'); certPaste(tsv); toast(`「${f.name}」${sh.name ? ' · ' + sh.name : ''}에서 명단을 읽었습니다 — 아래 ③ 명단을 확인하세요`); } catch (er) { toast(String((er && er.message) || er), true); } };
+      inp.click(); }
     if (k === 'clear' && window.confirm(`명단 ${D.rows.length}줄을 비울까요?`)) { D.rows = []; certPrev = 0; markDirty(); renderSide(); }
     if (k === 'bodyreset') { D.body = F.body; markDirty(); renderSide(); }
     if (k === 'tpl') certShowTpl(); if (k === 'merge') certMerge(); if (k === 'pdf') certReady().then(() => openDownload('pdfhq')); if (k === 'layout') certSaveLayout(); if (k === 'meas') openMeasImport(); if (k === 'gradeImp') openGradeImport(); if (k === 'preview') openCertPreview(); if (k === 'print') certReady().then(() => openPrint('cert'));
@@ -8176,7 +8200,8 @@ function mmPrBlock(S, list) {
   const L = mmList(), on = S.mm !== false, R = mmR(), sel = mmSel(), n = sel.length;
   let h = `<div class="prmm"><label class="chk mmchk prmm-on"><input type="checkbox" id="prMM" ${on ? 'checked' : ''}> <b>✉ 메일머지</b> <small>사람마다 {이름} 자리만 바꿔 찍기</small></label>`;
   if (!on) return h + `<p class="hint" style="margin:4px 0 0">끄면 문서 그대로(칸 이름 {이름}이 그대로) 찍힙니다.</p></div>`;
-  { const bad = mmBadFields(); if (bad.length) h += `<p class="hint mmbad" style="margin:4px 0">⚠ 명단에 없는 표시 ${bad.map(k => `<b>{{${esc(k)}}}</b>`).join(' ')} — 그 자리는 빈칸으로 찍힙니다(속성 창 「✉ 메일머지」에서 확인).</p>`; }
+  { const bad = mmBadFields(); if (bad.length) h += `<p class="hint mmbad" style="margin:4px 0">⚠ 명단에 없는 표시 ${bad.map(k => `<b>{{${esc(k)}}}</b>`).join(' ')} — 그 자리는 빈칸으로 찍힙니다(속성 창 「✉ 메일머지」에서 확인).</p>`;
+    const em = mmEmptyInfo(mmSel()); if (em.length) h += `<p class="hint mmempty" style="margin:4px 0">ℹ 값이 빈 사람 — ${em.slice(0, 4).map(x => `<b>${esc(x.t)}</b> ${x.em.length}명(${esc(x.em.slice(0, 3).map(w => w.n).join(', '))}${x.em.length > 3 ? ' …' : ''})`).join(' · ')} — 그 자리는 비어서 찍힙니다.</p>`; }
   h += `<div class="prr-opts">${[['all', '모두', L.length + '명'], ['range', '번호로', R.mode === 'range' ? n + '명' : ''], ['pick', '골라서', R.mode === 'pick' ? n + '명' : '']].map(([a, t, c]) => `<label class="prr ${R.mode === a ? 'on' : ''}"><input type="radio" name="prMMR" value="${a}" ${R.mode === a ? 'checked' : ''}> ${t} <small>${c}</small></label>`).join('')}</div>`;
   if (R.mode === 'range') h += `<label class="f" style="margin:6px 0 0"><span>명단 번호 <small>예: 1-20, 25 — 명단 순서(아래 번호) · ${L.length}명</small></span><input id="prMMRange" value="${esc(R.range)}" placeholder="예: 1-20, 25" autocomplete="off"></label>`;
   if (R.mode === 'range' || R.mode === 'pick') { const on2 = R.mode === 'pick' ? w => R.pick.has(mmKey(w)) : (() => { const st = mmRangeSet(R.range, L.length); return (w, i) => st.has(i); })();
@@ -8348,7 +8373,7 @@ document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && !e.s
 /* 엑셀 붙여넣기: 첫 줄이 열 이름이면 이름으로, 아니면 열 순서대로 (at·atKey = 표 칸에 바로 붙여 넣은 자리부터) */
 function certPaste(txt, at, atKey) {
   const C = certState(), D = C.data[C.form], F = CERT_FORMS[C.form], lines = String(txt || '').replace(/\r/g, '').split('\n').filter(l => l.trim()); if (!lines.length) return;
-  const cells = l => l.split('\t').map(x => x.trim()), first = cells(lines[0]), lab = c => c[1].replace(/ \(.*\)$/, '');
+  const cells = l => l.split('\t').map(x => x.trim()), first = cells(lines[0]).map(h => /^(성명|학생\s?이름|학생명|원생명|원생\s?이름|수련생|수련생\s?이름|수련생명)$/.test(h) ? '이름' : h), lab = c => c[1].replace(/ \(.*\)$/, '');  /* 엑셀 머리글 「성명」 등도 이름으로 */
   const byName = first.some(h => h && (F.cols.some(c => lab(c) === h || c[1].startsWith(h)) || h === '이름')); /* 빈 칸('')은 머리글 판정에서 뺌 — 종목2가 빈 사람이 머리글로 오인되지 않게 */
   let keys = byName ? first.map(h => (h && F.cols.find(c => lab(c) === h || c[1].startsWith(h)) || [])[0] || null) : F.cols.map(c => c[0]);
   if (!byName && atKey) { const s0 = F.cols.findIndex(c => c[0] === atKey); keys = F.cols.slice(s0).map(c => c[0]); }
