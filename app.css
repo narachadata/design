@@ -1484,9 +1484,10 @@ body.prmg-drag{cursor:grabbing;-webkit-user-select:none;user-select:none}
 /* 출력 창 인쇄 범위 (아래한글 인쇄 대화 상자처럼, 11/19) */
 .prrange{border:1px solid var(--ui-line);border-radius:10px;padding:8px 10px;margin-bottom:8px;background:var(--ui-field)}
 .prr-h{font-size:12.5px;font-weight:700;color:var(--ui-fg2);margin-bottom:6px}
-.prr-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px 8px}
-.prr{display:flex;align-items:center;gap:5px;font-size:13.5px;padding:4px 6px;border-radius:7px;cursor:pointer;white-space:nowrap}.prr small{color:var(--ui-muted);font-size:11px}
-.prr.on{background:#fff;box-shadow:0 0 0 1.5px var(--ui-accent) inset;font-weight:700}
+.prr-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:5px}
+.prr{display:flex;align-items:center;gap:6px;font-size:13.5px;line-height:1.2;padding:6px 9px;border-radius:8px;border:1px solid var(--ui-line);background:var(--ui-panel);cursor:pointer;white-space:nowrap;min-width:0}.prr:hover{border-color:color-mix(in srgb,var(--ui-accent) 45%,var(--ui-line))}
+.prr input{margin:0;flex:none}.prr small{display:inline;flex:none;margin-left:auto;padding-left:4px;color:var(--ui-muted);font-size:11.5px;font-weight:500;white-space:nowrap}  /* 11/27 팀장님 「인쇄 범위 글자 정렬」: 쪽 수가 블록이 되어 「1 / 쪽」 두 줄로 쪼개지던 것 — 한 줄·오른쪽 끝에 */
+.prr.on{background:#fff;border-color:var(--ui-accent);box-shadow:0 0 0 1px var(--ui-accent) inset;font-weight:700}.prr.on small{color:var(--ui-accent)}
 .prr-at{display:flex;align-items:center;gap:5px;margin-top:8px;flex-wrap:wrap}.prr-at>span{font-size:12.5px;color:var(--ui-fg2);font-weight:600}
 #dlgPrint .prset .prrow{margin:5px 0}
 
@@ -2377,3 +2378,13 @@ table.dvinfo th{font-weight:700}
 .inspector > .itab-hide{display:none !important}
 .inspector > .itabs button.all{border-style:dashed}.inspector > .itabs button.all.on{border-style:solid}
 .inspector > .itabs + h2.phead,.inspector > .itabs ~ h3.itab-first{margin-top:4px}
+
+/* 출력 창 메일머지 칸 (11/27) */
+.prmm{border:1px solid #f1d68a;border-radius:10px;padding:9px 10px;margin-bottom:8px;background:#fffbea}
+.prmm .prmm-on{display:flex;align-items:center;gap:6px;margin:0 0 7px;font-size:13.5px}.prmm .prmm-on small{color:#8a5a00;font-weight:500}
+.prmm .prr-opts{grid-template-columns:repeat(3,minmax(0,1fr))}
+.prmm .prpick-q{margin:7px 0 5px}.prmm .prmm-grid{max-height:190px;overflow:auto;margin-top:6px}
+.prmm .prmm-grid .prpk small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.prmm-sum{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin-top:8px;font-size:13px}
+.prmm-pv{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:12.5px;color:var(--ui-fg2)}.prmm-pv .btn{flex:none}
+#prGo small{color:inherit}
