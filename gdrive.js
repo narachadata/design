@@ -166,7 +166,9 @@ NC.gdrive = (function () {
       let k = kOf(f.id); const pk = (f.parents || [])[0] === S.rootId ? S.rootK : (kOf((f.parents || [])[0]) || (f.parents || [])[0]);
       const folder = f.mimeType === FOLDER, lm = lmOf(f);
       if (!k) { k = f.id; idK.set(f.id, k); S.nodes.set(k, { k, id: f.id, name: f.name, parent: pk, folder, size: Number(f.size) || 0, lm, rlm: lm, rparent: (f.parents || [])[0], ct: f.createdTime || '' }); }
-      else { const n = node(k); if (f.createdTime) n.ct = f.createdTime; if (!pend.has(k) && !recent(n) && !n.local) { n.rlm = lm; Object.assign(n, { name: f.name, parent: pk, size: Number(f.size) || 0, lm, rparent: (f.parents || [])[0], gone: false }); } }
+      else { const n = node(k); if (f.createdTime) n.ct = f.createdTime; const newOther = !folder && recent(n) && lm && lm !== n.rlm && lm !== n.lm && !(n.seen || []).includes(lm);  /* 11/27: 이 PC가 올린 뒤 30초 안에도, 처음 보는 판(다른 PC가 새로 올림)이면 받음 — 예전엔 30초 동안 상대 판이 안 왔음. 옛 목록이 보여 주는 지난 판(seen)은 그대로 무시 */
+        n.seen = [n.rlm, lm].concat(n.seen || []).filter((x, i, A) => x && A.indexOf(x) === i).slice(0, 8);
+        if (!pend.has(k) && (!recent(n) || newOther) && !n.local) { n.rlm = lm; Object.assign(n, { name: f.name, parent: pk, size: Number(f.size) || 0, lm, rparent: (f.parents || [])[0], gone: false }); } }
       seenK.add(k);
     }
     if (!partial) {
@@ -231,9 +233,12 @@ NC.gdrive = (function () {
   async function existing(id) { try { return await call(`${API}/files/${id}?fields=${FIELDS}`); } catch (e) { if (e.status === 404) return null; throw e; } }
   /* 「충돌 사본」은 정말 갈라졌을 때만 (11/25 팀장님 「열고 보기만 해도 충돌 사본이 많이 생김」): 드라이브 판과 이 PC 판의 저장 번호(saveId·lineage)를 봐서
      같은 판이거나 이 PC 판이 드라이브 판을 이어 고친 것이면 true(그대로 올림), 드라이브 판이 이 PC 판을 이어 고친 것이면 n.newer(이 PC 옛 판은 버림) */
+  /* 11/27: 같은 판 확인(sameLine) 뒤 합치기(mergeUp)에서 같은 드라이브 판을 또 내려받던 것 — 판(번호·lm)이 같으면 1분 안에는 한 번만 받음 */
+  const rtx = new Map();
+  async function remoteText(f) { const key = f.id + '|' + lmOf(f) + '|' + (f.modifiedTime || ''), h = rtx.get(key); if (h && now() - h.t < 60000) return h.v; const v = await (await call(`${API}/files/${f.id}?alt=media`, {}, true)).text(); rtx.clear(); rtx.set(key, { t: now(), v }); return v; }
   async function sameLine(n, f, mine) {
     if (!/\.design\.json$/i.test(n.name) || typeof mine !== 'string') return false;
-    let a, b; try { a = JSON.parse(mine); b = JSON.parse(await (await call(`${API}/files/${f.id}?alt=media`, {}, true)).text()); } catch (e) { if (e && e.name === 'SyntaxError') return false; const x = new Error('드라이브 판을 받지 못해 다음에 다시 비교 — ' + (e.message || e)); x.net = !!e.net; x.auth = !!e.auth; x.status = e.status; throw x; }  /* 받기 실패(시간 초과·5xx·요청 많음)로 사본을 만들지 않음 */
+    let a, b; try { a = JSON.parse(mine); b = JSON.parse(await remoteText(f)); } catch (e) { if (e && e.name === 'SyntaxError') return false; const x = new Error('드라이브 판을 받지 못해 다음에 다시 비교 — ' + (e.message || e)); x.net = !!e.net; x.auth = !!e.auth; x.status = e.status; throw x; }  /* 받기 실패(시간 초과·5xx·요청 많음)로 사본을 만들지 않음 */
     const as = a.saveId || '', bs = b.saveId || '';
     if (as && as === bs) return true;
     if (bs && (a.lineage || []).includes(bs)) return true;
@@ -249,7 +254,7 @@ NC.gdrive = (function () {
     if (!n || n.gone) return;
     const pk0 = real(n.parent), pid = pk0 === S.rootK ? S.rootId : (node(pk0) || {}).id; if (!pid) { const e = new Error('윗 폴더가 아직 안 올라감'); e.later = true; throw e; }
     if (o.op === 'mkdir') { if (n.id || n.alias) return; const pre = await newId(n); let f = null; try { f = await call(`${API}/files?fields=${FIELDS}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign(pre ? { id: pre } : {}, { name: n.name, mimeType: FOLDER, parents: [pid], appProperties: { lm: String(n.lm) } })) }); } catch (e) { if (pre && e.status === 400) { delete n.pid; delete n.sent; S.ids = []; } if (!(e.status === 409 && pre)) throw e; f = await existing(pre); if (!f || f.trashed) { delete n.pid; delete n.sent; throw e; } }  /* 409: 지난번 보낸 것이 이미 만들어짐 (휴지통이면 다음에 새로) · 400: 받아 둔 번호가 안 맞음(계정 바뀜 등) → 버리고 다시 */
-      Object.assign(n, { id: f.id, rparent: pid, rlm: n.lm, upAt: now() }); delete n.pid; return; }
+      n.seen = [n.rlm, n.lm].concat(n.seen || []).filter((x, i, A) => x && A.indexOf(x) === i).slice(0, 8); Object.assign(n, { id: f.id, rparent: pid, rlm: n.lm, upAt: now() }); delete n.pid; return; }
     if (o.op === 'mv') { if (!n.id) { const e = new Error('처음 올리기가 끝나면 옮김'); e.later = true; throw e; } let rp = n.rparent; if (rp && rp !== pid) { try { const cur = await call(`${API}/files/${n.id}?${qs({ fields: 'parents' })}`); if (cur && Array.isArray(cur.parents)) rp = cur.parents.filter(x => x !== pid).join(',') || ''; } catch (e) {} }  /* 11/26 데이터 조: 다른 PC가 이미 옮겼으면 옛 부모를 빼려다 실패 반복 — 지금 부모를 받아서 */
       await call(`${API}/files/${n.id}?${qs(Object.assign({ fields: 'id' }, rp && n.rparent !== pid ? { addParents: pid, removeParents: rp } : (n.rparent && n.rparent !== pid ? { addParents: pid } : {})))}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n.name }) }); n.rparent = pid; n.upAt = now(); return; }
     if (o.op === 'put') {
@@ -281,7 +286,7 @@ NC.gdrive = (function () {
       let f; try { f = await upload(n.id, meta, body, typeOf(n.name)); } catch (e) { if (n.pid && e.status === 400) { delete n.pid; delete n.sent; S.ids = []; } if (!(e.status === 409 && n.pid)) throw e; const ex = await existing(n.pid); if (!ex || ex.trashed) { delete n.pid; delete n.sent; throw e; } n.id = ex.id; f = await upload(n.id, { name: n.name, appProperties: { lm: String(lm) } }, body, typeOf(n.name)); }
       delete n.pid; delete n.sent;
       if (typeof c.data === 'string' && /\.design\.json$/i.test(n.name)) keepB(n.k, c.data);
-      Object.assign(n, { id: f.id, rparent: pid, rlm: lm, upAt: now() }); if (n.k !== f.id && S.nodes.get(f.id) && S.nodes.get(f.id) !== n) S.nodes.delete(f.id);
+      n.seen = [n.rlm, n.lm].concat(n.seen || []).filter((x, i, A) => x && A.indexOf(x) === i).slice(0, 8); Object.assign(n, { id: f.id, rparent: pid, rlm: lm, upAt: now() }); if (n.k !== f.id && S.nodes.get(f.id) && S.nodes.get(f.id) !== n) S.nodes.delete(f.id);
     }
   }
   /* 올릴 순서: 폴더 → 문서(.design.json)·설정 → 나머지(자료실 그림·내보낸 파일·버전 기록 등). 같은 무리 안에서는 들어온 순서 그대로 (11/25 — 308개 중 문서가 뒤에 밀렸음) */
@@ -321,7 +326,7 @@ NC.gdrive = (function () {
   async function mergeUp(n, f, c, pid) {  /* 성공하면 true: 합친 판을 올리고 이 PC 판도 합친 판으로 */
     if (!window.NC || !NC.live || !NC.live.merge || typeof c.data !== 'string') return false;
     const bt = await st().idbGet('gd-b:' + n.k).catch(() => null);
-    let T, M, B; try { M = JSON.parse(c.data); B = bt ? JSON.parse(bt) : null; T = JSON.parse(await unpackDoc(await (await call(`${API}/files/${f.id}?alt=media`, {}, true)).text())); } catch (e) { if (e && e.name === 'SyntaxError') { if ((n.mfail = (n.mfail || 0) + 1) < 6) { const x = new Error('드라이브 판을 덜 받음 — 잠시 뒤 다시 합침'); x.later = true; throw x; } return false; } throw e; }  /* 11/27: 덜 받은 판(읽기 실패)으로 곧장 사본을 만들지 않고 5번까지 다시 */
+    let T, M, B; try { M = JSON.parse(c.data); B = bt ? JSON.parse(bt) : null; T = JSON.parse(await unpackDoc(await remoteText(f))); } catch (e) { if (e && e.name === 'SyntaxError') { if ((n.mfail = (n.mfail || 0) + 1) < 6) { const x = new Error('드라이브 판을 덜 받음 — 잠시 뒤 다시 합침'); x.later = true; throw x; } return false; } throw e; }  /* 11/27: 덜 받은 판(읽기 실패)으로 곧장 사본을 만들지 않고 5번까지 다시 */
     delete n.mfail;
     if (!T || !T.pages || !M || !M.pages || (T.docId && M.docId && T.docId !== M.docId)) return false;
     if (B && B.saveId && T.saveId !== B.saveId && !(T.lineage || []).includes(B.saveId)) B = null;  /* 11/27 합치기 조: 이 PC가 마지막에 올린 판이 그사이 다른 PC 판에 덮여 드라이브 판의 조상이 아님 → 그것을 기준으로 하면 이 PC의 그 판 작업이 사라짐 → 두 판이 함께 가진 판으로 */
@@ -333,7 +338,7 @@ NC.gdrive = (function () {
     const lm2 = Math.max(now(), (n.lm || 0) + 1), body = await packDoc(text);
     const f2 = await upload(n.id, { appProperties: { lm: String(lm2) } }, body, typeOf(n.name));
     await cSet(n.k, { lm: lm2, data: text }); keepB(n.k, text);
-    Object.assign(n, { lm: lm2, rlm: lmOf(f2), size: text.length, rparent: pid, upAt: now() }); S.merged = (S.merged || 0) + 1; return true;
+    n.seen = [n.rlm, n.lm].concat(n.seen || []).filter((x, i, A) => x && A.indexOf(x) === i).slice(0, 8); Object.assign(n, { lm: lm2, rlm: lmOf(f2), size: text.length, rparent: pid, upAt: now() }); S.merged = (S.merged || 0) + 1; return true;
   }
   /* ---------- 내용 읽기 (이 PC에 있으면 바로, 없으면 내려받기) ---------- */
   async function content(n) {

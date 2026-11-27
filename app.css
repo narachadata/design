@@ -398,7 +398,9 @@ details.fx>.grid2,details.fx>.grid3,details.fx>.grid4,details.fx>label,details.f
 dialog.nd{max-width:1100px;width:94vw;height:min(760px,88vh)}
 dialog.nd[open]{display:flex;flex-direction:column}
 .nd .ndhead{padding:22px 28px 10px;display:flex;align-items:center;gap:12px}
-.nd .ndhead h2{margin:0;font-size:24px;font-weight:800;flex:1}
+.nd .ndhead h2{margin:0;font-size:24px;font-weight:800;flex:1;white-space:nowrap;min-width:max-content}
+.nd .ndhead .btn{white-space:nowrap;word-break:keep-all}  /* 11/27: 좁은 창에서 제목·단추 글이 한 글자씩 줄바꿈되던 것 */
+@media (max-width:860px){.nd .ndhead{flex-wrap:wrap}.nd .ndhead h2{flex-basis:100%}}
 .nd .ndsearch{margin:0 28px 14px;position:relative}
 .nd .ndsearch input{width:100%;padding:13px 16px 13px 42px;border:1px solid var(--ui-line2);border-radius:12px;font:inherit;font-size:15px;background:var(--ui-field)}
 .nd .ndsearch svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:18px;height:18px;stroke:var(--ui-muted);fill:none;stroke-width:2}
