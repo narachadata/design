@@ -2353,3 +2353,17 @@ table.dvinfo th{font-weight:700}
 .stage .pagenav .pager .pg-in{height:15px;padding:1px 2px;border-radius:5px}
 .stage .pagenav .pn-sep,.stage .pagenav span.pn-sep{height:14px}
 .stage .pagenav span{font-size:12px}
+
+/* 메일머지 (11/27) — 편집 화면의 칸 표시·속성 창 */
+#canvas .mmk{background:rgba(255,214,64,.45);border-radius:.15em;box-shadow:0 0 0 .08em rgba(214,158,0,.55);-webkit-box-decoration-break:clone;box-decoration-break:clone}
+#canvas .mmk.pv{background:rgba(120,200,255,.32);box-shadow:0 0 0 .08em rgba(47,111,228,.45)}
+.mmbox .mmrow{gap:6px;flex-wrap:wrap;margin:4px 0}
+.mmbox .mmsrc{margin:2px 0 6px}
+.mmbox .mmchips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin:2px 0 8px}
+.mmbox .mmins{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:5px 8px;border:1px solid var(--ui-line);border-radius:8px;background:var(--ui-field,#fff);color:var(--ui-fg);cursor:pointer;text-align:left;min-width:0;font:inherit}
+.mmbox .mmins:hover{border-color:var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 7%,var(--ui-field,#fff))}
+.mmbox .mmins b{font-size:12.5px;font-weight:700;color:#8a5a00}
+.mmbox .mmins small{font-size:11px;color:var(--ui-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.mmbox .mmph{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:7px 8px;margin:4px 0 8px;border-radius:8px;background:#fff6db;border:1px solid #f1d68a;font-size:12px}
+.mmbox .mmpv{gap:4px;align-items:center;flex-wrap:nowrap}.mmbox .mmpvb{flex:1;min-width:0;justify-content:center}.mmbox .mmpvb.on{border-color:#2f6fe4;color:#2f6fe4}
+.mmchk .pk-chk{color:#8a5a00}

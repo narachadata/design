@@ -535,7 +535,7 @@ function chartSVG(el) {
 }
 function sheetHTML(pg, mode) {
   const b = mode === 'print' ? (doc.bleed || 0) : 0;
-  return bookTokens(pg, `<div class="sheet${mode === 'print' ? ' print' : ''}" style="--pw:${doc.w};--ph:${doc.h};--b:${b}mm"><div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, mode, true)).join('')}${masterHTML(pg)}</div>${(b > 0 && doc.cropMarks) ? marks(b) : ''}</div>`);
+  return bookTokens(pg, `<div class="sheet${mode === 'print' ? ' print' : ''}" style="--pw:${doc.w};--ph:${doc.h};--b:${b}mm"><div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, mode, true)).join('')}${masterHTML(pg)}</div>${(b > 0 && doc.cropMarks) ? marks(b) : ''}</div>`, mode);
 }
 /* ---- 책자 (인디자인·쿽 참고): 공통 머리글·바닥글·자동 쪽 번호(마스터 페이지), 여백·단 안내선, 펼침면, 목차, 중철 소책자 인쇄 ----
    doc.book = { on, start(시작 번호), skip(앞 몇 쪽은 번호 없음 — 표지), facing(펼침면: 홀수 쪽=오른쪽), pos('outer'|'center'|'inner'), style('n'|'dash'|'p'|'total'), size, color, font, margin, header, footer, guides, mg:{top,bottom,inner,outer}, cols, gutter }
@@ -547,7 +547,24 @@ function bookTotal() { const B = book(); return Math.max(0, doc.pages.length - (
 function isRightPage(i) { const B = book(); if (!B.facing) return true; return i % 2 === 0; } /* 펼침면: 1쪽(표지)은 오른쪽, 그다음부터 왼·오른쪽 번갈아 */
 function ddayText(y, m, d) { const t = new Date(); t.setHours(0, 0, 0, 0); const n = Math.round((new Date(y, m - 1, d) - t) / 86400000); return n > 0 ? `D-${n}` : n === 0 ? 'D-DAY' : `D+${-n}`; }
 function pgIndex(pg) { let i = doc.pages.indexOf(pg); if (i < 0 && pg && pg.id) i = doc.pages.findIndex(p => p.id === pg.id); return i; } /* 쪽 사본(투명 PNG 등)도 원래 쪽 번호로 */
-function bookTokens(pg, html) {
+/* ---- 메일머지 (11/27 팀장님 「엽서 같은 일반 문서에서도 재원생 이름을 넣어, 인쇄할 때 그 자리만 바뀌며 찍히게 — 200쪽을 만드는 것이 아니라」) ----
+   글 속 {이름}·{이름만}·{성}·{이름만+아}·{이름만+이}·{반}·{띠급}·{학년} → 인쇄·다운로드 때 사람마다 바꿔 그림(문서는 그대로 1쪽).
+   명단 = doc.merge.list(관리프로그램에서 고른 재원생 — 이름·반·띠급·학년만). 편집 화면은 노란 표시, 미리보기면 그 사람 이름 */
+const MM_F = [['이름', '이름 (성 포함)', s => s.n], ['이름만', '이름만 (성 빼고)', s => mmGiven(s.n)], ['성', '성', s => mmSur(s.n)], ['이름만+아', '부를 때 (나라야·민준아)', s => mmGiven(s.n) + (mmBat(mmGiven(s.n)) ? '아' : '야')], ['이름만+이', '이름만+이 (나라·민준이)', s => mmGiven(s.n) + (mmBat(mmGiven(s.n)) ? '이' : '')], ['반', '반', s => s.b || ''], ['띠급', '띠·급', s => s.g || ''], ['학년', '학년', s => s.y || '']];
+const MM_RX = /\{(이름만\+아|이름만\+이|이름만|이름|성|반|띠급|학년)\}/g, MM_TEST = /\{(이름만\+아|이름만\+이|이름만|이름|성|반|띠급|학년)\}/;
+const MM_SUR2 = ['남궁', '황보', '제갈', '사공', '선우', '서문', '독고', '동방', '어금', '망절', '무본', '장곡', '소봉', '강전', '사마'];
+function mmSur(n) { n = String(n || '').trim(); if (n.length >= 3 && MM_SUR2.includes(n.slice(0, 2))) return n.slice(0, 2); return n.slice(0, 1); }
+function mmGiven(n) { n = String(n || '').trim().replace(/\s+/g, ''); if (n.length <= 1) return n; return n.slice(mmSur(n).length) || n; }
+function mmBat(w) { const c = String(w || '').slice(-1).charCodeAt(0); return c >= 0xAC00 && c <= 0xD7A3 ? (c - 0xAC00) % 28 !== 0 : false; }
+let mmPv = -1;  /* 편집 화면 미리보기 사람 번호 (-1 = 끔, 문서에는 안 남김) */
+const mmList = () => (doc && doc.merge && Array.isArray(doc.merge.list) ? doc.merge.list.filter(x => x && x.n && !(doc.merge.off || {})[x.n]) : []);
+function mmUsed(pages) { return (pages || (doc && doc.pages) || []).some(p => (p.els || []).some(e => (e.type === 'text' && MM_TEST.test(e.text || '')) || (e.type === 'tbl' && MM_TEST.test(JSON.stringify(e.rows || ''))))); }
+const mmActive = () => mmUsed() && mmList().length > 0;
+function mmFill(html, who, mark) { return html.replace(MM_RX, (all, k) => { const f = MM_F.find(x => x[0] === k); const v = who ? esc(String(f[2](who) || '')) : all; return mark ? `<span class="mmk${who ? ' pv' : ''}">${v || '&nbsp;'}</span>` : v; }); }
+/* 내보내기용 쪽 목록: 메일머지를 켜면 사람마다 고른 쪽을 한 벌씩 (쪽 사본에 _mm = 그 사람) */
+function mmJobs(idx, on) { const L = on ? mmList() : []; if (!L.length || !mmUsed(idx.map(i => doc.pages[i]))) return idx.map(i => doc.pages[i]); const out = []; L.forEach(w => idx.forEach(i => out.push(Object.assign({}, doc.pages[i], { _mm: w })))); return out; }
+function bookTokens(pg, html, mode) {
+  if (html.indexOf('{') >= 0 && MM_TEST.test(html)) { const who = pg && pg._mm ? pg._mm : (mode === 'edit' && mmPv >= 0 ? mmList()[mmPv] : null); html = mmFill(html, who, mode === 'edit'); }
   if (html.indexOf('{디데이:') >= 0 || html.indexOf('{남은날:') >= 0) html = html.replace(/\{(디데이|남은날):(\d{4})-(\d{1,2})-(\d{1,2})\}/g, (_, k, y, m, d) => k === '디데이' ? ddayText(+y, +m, +d) : String(Math.max(0, Math.round((new Date(+y, +m - 1, +d) - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000)))); /* D-day: 볼 때(내보낼 때) 날짜 기준으로 계산 */
   if (html.indexOf('{쪽}') < 0 && html.indexOf('{전체쪽}') < 0) return html; const i = pgIndex(pg); const n = i < 0 ? '' : (bookNum(i) == null ? i + 1 : bookNum(i)); return html.split('{쪽}').join(String(n)).split('{전체쪽}').join(String(bookTotal())); }
 function masterHTML(pg) {
@@ -594,7 +611,7 @@ function renderCanvas() {
   ensureLibFonts([page()]).then(n => { if (n && !editing) renderCanvas(); });
   const c = $('#canvas'); const pg = page();
   c.style.setProperty('--pw', doc.w); c.style.setProperty('--ph', doc.h); c.style.setProperty('--b', '0mm');
-  c.innerHTML = bookTokens(pg, `<div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, 'edit')).join('')}${masterHTML(pg)}</div>`);
+  c.innerHTML = bookTokens(pg, `<div class="page" style="--bg:${pg.bg}"><div class="bgfill"></div>${pg.els.map(e => elHTML(e, 'edit')).join('')}${masterHTML(pg)}</div>`, 'edit');
   textOver.clear();
   pg.els.forEach(el => { if (el.type === 'text' && !isWarp(el)) { let d = c.querySelector(`[data-id="${el.id}"]`); if (!d) return; if (el.sizing === 'autow') autoWidth(d, el); if (el.fitText && el.sizing === 'fixed') d = autoFitText(d, el) || d; const hh = fitTextH(d, el, true); if (hh != null) el.h = hh; if (el.sizing === 'fixed' && !(el.flowFrame && el.flowFrame !== 'body') && textOverflows(d, el)) textOver.add(el.id); } });  /* 차례·찾아보기 흐름 상자는 다음 쪽으로 이어지므로 넘침 표시 안 함 (11/26 편집 조) */
   pg.els.forEach(el => { if (el.type !== 'tbl') return; const d = c.querySelector(`[data-id="${el.id}"]`); if (!d) return; const hh = Math.round(d.offsetHeight / MM * 100) / 100; if (hh > 0 && Math.abs(hh - el.h) > 0.05) el.h = hh; });  /* 표: 줄 높이는 글에 맞춰 — 선택 상자도 같게 */
@@ -1206,7 +1223,7 @@ function paraHTML(el, h) { const g = Number(el.paraGap) || 0; if (!(g > 0) || !/
 function nobrPhone(h) { return /\d-\d/.test(h) ? h.replace(/(\d{2,4}-\d{3,4}-\d{4})/g, '<span class="nobr">$1</span>') : h; }
 function startEdit(dom, ev) {
   if (editing === dom) return; let preset = null; { const el9 = find(dom.dataset.id); if (dom.querySelector('div.pgp') && el9 && !(el9.html && el9.htmlFor === el9.text)) { let off = -1; try { const r0 = ev && document.caretRangeFromPoint ? document.caretRangeFromPoint(ev.clientX, ev.clientY) : null; const pgs = [...dom.querySelectorAll('div.pgp')], pi = r0 ? pgs.findIndex(d => d.contains(r0.startContainer)) : -1; if (pi >= 0) { const rr = document.createRange(); rr.selectNodeContents(pgs[pi]); rr.setEnd(r0.startContainer, r0.startOffset); off = pgs.slice(0, pi).reduce((a, d) => a + d.textContent.replace(/\u200b/g, '').length + 1, 0) + rr.toString().replace(/\u200b/g, '').length; } } catch (e) {} dom.textContent = el9.text || ''; if (off >= 0 && dom.firstChild) { preset = document.createRange(); preset.setStart(dom.firstChild, Math.min(off, dom.firstChild.length)); preset.collapse(true); } } const nb = dom.querySelectorAll('span.nobr'); if (nb.length) { nb.forEach(s => s.replaceWith(document.createTextNode(s.textContent))); dom.normalize(); } }  /* 그릴 때 넣은 단락 칸·전화 칸은 고칠 때 풂 */
-  { const el0 = find(dom.dataset.id); if (el0 && /\{(쪽|전체쪽|디데이:|남은날:)/.test(el0.text || '')) dom.innerHTML = el0.html && el0.htmlFor === el0.text ? el0.html : esc(el0.text); } /* 쪽 번호·D-day 자리는 원문으로 편집 */
+  { const el0 = find(dom.dataset.id); if (el0 && (/\{(쪽|전체쪽|디데이:|남은날:)/.test(el0.text || '') || MM_TEST.test(el0.text || ''))) dom.innerHTML = el0.html && el0.htmlFor === el0.text ? el0.html : esc(el0.text); } /* 쪽 번호·D-day 자리는 원문으로 편집 */
   editing = dom; dom.contentEditable = 'true'; dom.classList.add('editing'); dom.focus(); try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
   // 누른 자리에 커서 (새 글 상자처럼 위치가 없으면 전체 선택)
   let r = preset || (ev && document.caretRangeFromPoint ? document.caretRangeFromPoint(ev.clientX, ev.clientY) : null);  /* 단락 칸을 풀었으면 미리 계산한 자리 */
@@ -1313,7 +1330,7 @@ function sizeSel(f) {
 function rerenderEl(el) {
   wrapDirty();
   const c = $('#canvas'), old = c && c.querySelector(`[data-id="${el.id}"]`);
-  if (!old || /\{(쪽|전체쪽|디데이:|남은날:)/.test(el.text || '')) { renderCanvas(); return; } /* 쪽 번호·D-day 자리는 쪽 전체 바꿈이 필요 */
+  if (!old || /\{(쪽|전체쪽|디데이:|남은날:)/.test(el.text || '') || MM_TEST.test(el.text || '')) { renderCanvas(); return; } /* 쪽 번호·D-day 자리는 쪽 전체 바꿈이 필요 */
   const tmp = document.createElement('div'); tmp.innerHTML = elHTML(el, 'edit'); const nu = tmp.firstElementChild; if (!nu) { renderCanvas(); return; }
   if (old.classList.contains('editing')) return; old.replaceWith(nu);
   if (el.type === 'text' && !isWarp(el)) { let d = nu; if (el.sizing === 'autow') autoWidth(d, el); if (el.fitText && el.sizing === 'fixed') d = autoFitText(d, el) || d; const hh = fitTextH(d, el, true); if (hh != null) { el.h = hh; d.style.minHeight = hh + 'mm'; } }
@@ -4078,6 +4095,73 @@ function applyFontChoice(k, fam) { const els = selEls(); if (!els.length) return
 document.addEventListener('pointerdown', e => { if ($('#fpPop') && !e.target.closest('#fpPop') && !e.target.closest('.fp-btn')) closeFontPop(); }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#fpPop')) { closeFontPop(); e.stopPropagation(); } }, true);
 
+/* 메일머지 칸 (속성 창 — 쪽 속성·글 상자 속성 모두): 명단 · 칸 넣기 · 미리보기 */
+const MM_PH = /\[[^\]\n]{0,12}이름[^\]\n]{0,6}\]|○○○|OOO/;  /* 「[수련생 이름]」 같은 자리 표시 */
+function mmPanelHTML(el) {
+  const L = mmList(), used = mmUsed(), ex = L[Math.max(0, mmPv)] || { n: '김나라', b: '', g: '', y: '' }, M = doc.merge || {};
+  const ph = (el ? [el] : page().els).find(e => e.type === 'text' && MM_PH.test(e.text || ''));
+  const chips = MM_F.map(([k, t, fn]) => { const v = String(fn(ex) || ''); return `<button type="button" class="mmins" data-mmins="${esc(k)}" title="${esc(t)} — 글 상자를 두 번 눌러 커서를 둔 자리에 넣습니다"><b>{${esc(k)}}</b><small>${esc(v || t)}</small></button>`; }).join('');
+  return `<details class="fx mmbox" ${used || L.length || ph ? 'open' : ''}><summary><span class="anim-h">✉ 메일머지 <small>${L.length ? `재원생 ${L.length}명` : '이름 바꿔 인쇄'}</small></span></summary>
+    <p class="hint" style="margin:2px 0 6px">글 속 <b>{이름}</b> 같은 칸이 인쇄·다운로드할 때 <b>재원생마다</b> 바뀌어 찍힙니다 — 문서는 1쪽 그대로.</p>
+    <div class="row mmrow"><button type="button" class="btn sm${L.length ? '' : ' primary'}" data-mm="pick">${L.length ? '명단 다시 고르기' : '📥 관리프로그램 명단 고르기'}</button>${L.length ? `<button type="button" class="btn sm" data-mm="clear" title="이 문서의 메일머지 명단 비우기">명단 비우기</button>` : ''}</div>
+    ${L.length ? `<p class="hint mmsrc">${esc(M.src || '관리프로그램')} · ${M.at ? new Date(M.at).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' 받음' : ''} · ${esc(L.slice(0, 3).map(x => x.n).join(', '))}${L.length > 3 ? ` 외 ${L.length - 3}명` : ''}</p>` : ''}
+    ${ph ? `<div class="mmph"><span>「${esc((ph.text.match(MM_PH) || [''])[0])}」 자리를</span><button type="button" class="btn sm" data-mm="ph:이름">{이름}</button><button type="button" class="btn sm" data-mm="ph:이름만">{이름만}</button><span>으로</span></div>` : ''}
+    <div class="pk-lb">칸 넣기 <small>글 상자 안 커서 자리에</small></div><div class="mmchips">${chips}</div>
+    ${L.length && used ? `<div class="pk-lb">미리보기</div><div class="row mmpv"><button type="button" class="btn sm icon" data-mm="pv:-1" title="앞 사람">‹</button><button type="button" class="btn sm mmpvb${mmPv >= 0 ? ' on' : ''}" data-mm="pv:0">${mmPv >= 0 ? `${esc(L[mmPv].n)} <small>${mmPv + 1}/${L.length}</small>` : '칸 이름으로 보기 <small>누르면 첫 사람</small>'}</button><button type="button" class="btn sm icon" data-mm="pv:1" title="다음 사람">›</button>${mmPv >= 0 ? '<button type="button" class="btn sm" data-mm="pv:off">끄기</button>' : ''}</div><p class="hint" style="margin:4px 0 0">이름이 긴 사람으로 넘겨 보며 줄이 넘치지 않는지 확인하세요 · 인쇄: 출력 창의 「메일머지 — ${L.length}명 각각」</p>` : ''}
+  </details>`;
+}
+/* 칸 넣기: 글 고치는 중이면 커서 자리에, 아니면 고른 글 상자의 「[수련생 이름]」 자리를, 그것도 없으면 안내 */
+function mmInsert(k) {
+  const tok = '{' + k + '}';
+  if (editing) { const ed = document.querySelector('#canvas .el-text.editing') || document.querySelector('#canvas [contenteditable="true"]'); if (ed) { ed.focus(); document.execCommand('insertText', false, tok); return; } }
+  const el = selEls().find(e => e.type === 'text'); if (el && MM_PH.test(el.text || '')) { mmPh(el, k); return; }
+  toast('글 상자를 두 번 눌러 이름이 들어갈 자리에 커서를 둔 뒤 누르세요');
+}
+function mmPh(el, k) { const m = String(el.text || '').match(MM_PH); if (!m) return; const to = '{' + k + '}'; el.text = el.text.replace(m[0], to); if (el.html) { el.html = el.html.split(esc(m[0])).join(to).split(m[0]).join(to); el.htmlFor = el.text; } commit(); rerender(); toastUndo(`「${m[0]}」 자리를 ${to}(으)로 바꿨습니다 — 인쇄할 때 재원생마다 바뀝니다`); }
+document.addEventListener('mousedown', e => { if (e.target.closest && e.target.closest('[data-mmins]')) e.preventDefault(); }, true);  /* 글 고치는 중 커서를 잃지 않게 */
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-mmins],[data-mm]'); if (!t || !t.closest('#inspector')) return;
+  if (t.dataset.mmins) { mmInsert(t.dataset.mmins); return; }
+  const a = t.dataset.mm, L = mmList();
+  if (a === 'pick') { openMergePick(); return; }
+  if (a === 'clear') { confirmBtns('이 문서의 메일머지 명단을 비울까요?\n(글 속 {이름} 칸은 그대로 남고, 명단은 언제든 다시 고를 수 있어요)').then(ok => { if (!ok) return; delete doc.merge; mmPv = -1; commit(); rerender(); renderInspector(); }); return; }
+  if (a.startsWith('ph:')) { const el = (selEls().find(x => x.type === 'text' && MM_PH.test(x.text || ''))) || page().els.find(x => x.type === 'text' && MM_PH.test(x.text || '')); if (el) mmPh(el, a.slice(3)); renderInspector(); return; }
+  if (a.startsWith('pv:')) { const v = a.slice(3); if (!L.length) return; mmPv = v === 'off' ? -1 : v === '0' ? (mmPv < 0 ? 0 : mmPv) : (Math.max(0, mmPv) + Number(v) + L.length) % L.length; renderCanvas(); renderInspector(); return; }
+});
+/* 명단 고르기 — 출석부와 같은 관리프로그램 재원생 명단(읽기만). 문서에는 이름·반·띠급·학년만 남김 */
+const mmPick = { mode: 'all', ban: [], q: '', off: {} };
+async function openMergePick() {
+  let d = $('#dlgMMPick'); if (!d) { d = document.createElement('dialog'); d.id = 'dlgMMPick'; d.className = 'wide'; document.body.appendChild(d); }
+  const head = '✉ 메일머지 명단 고르기';
+  const box = (msg, hint) => { d.innerHTML = `<div class="dhead"><h2>${head}</h2><button class="btn sm" data-close>닫기</button></div><div class="dbody" style="max-width:560px"><p>${msg}</p>${hint ? `<p class="hint">${hint}</p>` : ''}</div>`; d.querySelector('[data-close]').onclick = () => d.close(); if (!d.open) d.showModal(); };
+  box('<span class="spin"></span> 관리프로그램 서버에서 최신 명단을 받는 중…'); await attFetch();
+  const a = attData(), L0 = a && a.roster && Array.isArray(a.roster.list) ? a.roster.list.filter(x => x && String(x.n || '').trim()) : [];
+  if (!L0.length) { box('<b>수련생 명단을 읽지 못했습니다.</b>', `같은 브라우저에서 <a href="https://narachadata.github.io/naracha/" target="_blank" rel="noopener"><b>관리프로그램</b></a>에 한 번 로그인하면 여기서 바로 받습니다. 공방은 명단을 읽기만 합니다.<br><button class="btn sm" id="mmRetry" style="margin-top:10px">다시 시도</button>`); const rb = d.querySelector('#mmRetry'); if (rb) rb.onclick = () => openMergePick(); return; }
+  const enrolled = measEnrolledFn(a), live = L0.filter(x => !enrolled || enrolled(x.n));
+  const bans = Object.entries(live.reduce((m, x) => { const b = String(x.b || '').trim() || '(반 없음)'; m[b] = (m[b] || 0) + 1; return m; }, {})).sort((x, y) => x[0].localeCompare(y[0], 'ko'));
+  const P = mmPick; if (doc.merge && doc.merge.list && !P._init) { P.off = Object.assign({}, doc.merge.off || {}); } P._init = 1;
+  const draw = () => {
+    const q = P.q.trim(); let list = P.mode === 'ban' ? live.filter(x => P.ban.includes(String(x.b || '').trim() || '(반 없음)')) : P.mode === 'name' ? (q ? live.filter(x => String(x.n).includes(q)) : []) : live.slice();
+    list.sort((x, y) => String(x.n).localeCompare(String(y.n), 'ko')); const nOn = list.filter(x => !P.off[x.n]).length;
+    d.innerHTML = `<div class="dhead"><h2>${head} <small>재원생 ${live.length}명${enrolled ? '' : ' (휴관·퇴관 판정 자료 없음)'}</small></h2><button class="btn sm" data-close>닫기</button></div><div class="dbody">
+      <div class="f"><span>누구에게 보낼까요?</span><div class="seg attmode">${[['all', '재원생 전체'], ['ban', '반별'], ['name', '이름 검색 <small>몇 명만</small>']].map(([k, t]) => `<button type="button" data-mmm="${k}" aria-pressed="${P.mode === k}">${t}</button>`).join('')}</div></div>
+      ${P.mode === 'ban' ? `<div class="row attbans">${bans.map(([b, n]) => `<label class="chk"><input type="checkbox" data-mmban="${esc(b)}" ${P.ban.includes(b) ? 'checked' : ''}> ${esc(b)} <small class="hint" style="margin:0">${n}명</small></label>`).join('')}</div>` : ''}
+      ${P.mode === 'name' ? `<label class="f"><span>이름 <small>글자 일부만 써도 찾습니다</small></span><input type="text" id="mmQ" value="${esc(P.q)}" placeholder="예: 김나라" autocomplete="off"></label>` : ''}
+      <h3>${list.length}명 <small>체크를 풀면 빠짐</small> <button class="btn sm" data-mmall="1">모두 체크</button> <button class="btn sm" data-mmall="0">모두 해제</button></h3>
+      <div class="mpeople attpeople">${list.map(x => `<label class="mper ${P.off[x.n] ? 'off' : ''}"><input type="checkbox" data-mmoff="${esc(x.n)}" ${P.off[x.n] ? '' : 'checked'}><b>${esc(x.n)}</b> <small>${esc(x.b || '')}${x.grade ? ' · ' + esc(x.grade) : ''}</small><span>${esc(mmGiven(x.n))}${mmBat(mmGiven(x.n)) ? '아' : '야'}</span></label>`).join('') || `<p class="hint">${P.mode === 'name' && !q ? '이름을 써 넣으세요' : P.mode === 'ban' && !P.ban.length ? '반을 고르세요' : '해당하는 재원생이 없습니다'}</p>`}</div>
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn primary" id="mmGo" ${nOn ? '' : 'disabled'}>이 ${nOn}명으로 메일머지</button></div></div>`;
+    d.querySelector('[data-close]').onclick = () => d.close();
+    d.onclick = e => { const m = e.target.closest('[data-mmm]'); if (m) { P.mode = m.dataset.mmm; draw(); if (P.mode === 'name') setTimeout(() => { const i = d.querySelector('#mmQ'); if (i) i.focus(); }, 0); return; }
+      const al = e.target.closest('[data-mmall]'); if (al) { list.forEach(x => { if (al.dataset.mmall === '1') delete P.off[x.n]; else P.off[x.n] = 1; }); draw(); return; }
+      if (e.target.closest('#mmGo')) { const picked = list.filter(x => !P.off[x.n]); if (!picked.length) return;
+        doc.merge = { src: '관리프로그램 재원생', at: Date.now(), list: picked.map(x => ({ n: String(x.n).trim(), b: String(x.b || '').trim(), g: String(x.grade || '').trim(), y: (() => { try { return attGrade(x) || ''; } catch (er) { return ''; } })() })), off: {} };
+        mmPv = 0; commit(); d.close(); rerender(); renderInspector();
+        toast(mmUsed() ? `메일머지 명단 ${picked.length}명 — 편집 화면은 「${picked[0].n}」 미리보기, 출력·다운로드하면 ${picked.length}명 각각 찍힙니다` : `메일머지 명단 ${picked.length}명을 넣었습니다 — 이제 글 상자에 {이름} 칸을 넣으세요(속성 창 「칸 넣기」)`); } };
+    d.onchange = e => { const t = e.target; if (t.dataset.mmban != null) { const b = t.dataset.mmban; P.ban = t.checked ? [...new Set(P.ban.concat(b))] : P.ban.filter(x => x !== b); draw(); return; } if (t.dataset.mmoff != null) { if (t.checked) delete P.off[t.dataset.mmoff]; else P.off[t.dataset.mmoff] = 1; draw(); } };
+    d.oninput = e => { if (e.target.id !== 'mmQ' || e.isComposing) return; P.q = e.target.value; clearTimeout(draw.t); draw.t = setTimeout(() => { draw(); const i = d.querySelector('#mmQ'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
+  };
+  draw(); if (!d.open) d.showModal();
+}
 function renderInspector() {
   if (newsMode) { renderNewsInspector(); return; }
   const ins = $('#inspector'); const els = selEls(); ins.onclick = null;
@@ -4089,6 +4173,7 @@ function renderInspector() {
     <h3>배경</h3><div class="swrow">${['#ffffff', '#FFE89A', '#E6EDF2', '#DDF3EA', '#FDE7E4', '#F0EBFB', '#1E2B5A', '#1a1a1a'].map(c => `<button class="swb" data-pgbg="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>
     <label class="f"><span>직접 고르기</span><input type="color" data-k="pg.bg" value="${/^#[0-9a-f]{6}$/i.test(pg.bg) ? pg.bg : '#ffffff'}"></label>
     <p class="hint">그라데이션·패턴 배경은 왼쪽 "배경" 메뉴에서 고릅니다. 요소를 누르면 그 요소의 속성이 여기에 나옵니다. 빈 곳을 끌면 여러 요소를 함께 고릅니다.</p>
+    ${doc.cert || doc.att || newsMode ? '' : mmPanelHTML(null)}
     <details class="fx pgvid" ${tlOn() || (doc.video && doc.video.isCopy) ? 'open' : ''}><summary><span class="anim-h"><svg class="ic"><use href="#i-video"/></svg>영상 장면 설정</span> <small class="hint" style="margin:0">영상으로 만들 때만</small></summary><div>${F('보여 주는 시간', 'pg.vdur', pg.vdur || vset().dur, { type: 'slider', min: 1, max: Math.max(20, Math.ceil(Number(pg.vdur || 0))), step: 0.5, unit: '초', def: vset().dur })}</div><div><div class="pk-lb">◆ 다음으로 넘김</div><button type="button" class="pk-b pk-trbtn" id="pgTrPick" title="넘김 효과 고르기 — 견본이 움직입니다">${(() => { const v = pg.vtrans || vset().trans, u = trStill(v); return `${u ? `<img src="${u}" alt="">` : ''}<span class="pk-t">◆ ${esc((VIDEO.TRANS.find(t => t[0] === v) || [0, v])[1])}${pg.vtrans ? '' : ' (기본)'}</span>`; })()}</button></div><div hidden>${F('다음으로 넘김', 'pg.vtrans', pg.vtrans || '', { type: 'select', options: [['', '기본']].concat(VIDEO.TRANS) })}</div><div class="grid2">${F('넘김 길이', 'pg.vturn', pg.vturn || vset().turn, { type: 'slider', min: 0.2, max: 2, step: 0.1, unit: '초', def: vset().turn })}</div><div class="pk-lb">🎥 카메라</div>${proxyPick('select[data-k="pg.vcam"]', pg.vcam || '', [['', '⏹', '없음'], ['in', '🔍+', '다가가기', '천천히 다가가기'], ['out', '🔍−', '물러나기', '천천히 물러나기'], ['left', '⬅', '왼쪽', '왼쪽으로 흐르기'], ['right', '➡', '오른쪽', '오른쪽으로 흐르기']], 'txt')}<div hidden>${F('카메라', 'pg.vcam', pg.vcam || '', { type: 'select', options: [['', '없음']].concat(VIDEO.CAMS.slice(1)) })}</div><div class="row" style="gap:6px"><button class="btn sm" id="pgVplay"><svg class="ic"><use href="#i-play"/></svg>이 쪽부터 미리보기</button><button class="btn sm" id="pgVtab">영상 메뉴</button></div></details>
     <details class="bk-more"><summary>⌨ 단축키</summary><div class="kbd-grid">${[['T', '글자 넣기'], ['P', '펜'], ['Ctrl+D', '복제'], ['Ctrl+G', '묶기'], ['Ctrl+Z', '되돌리기'], ['← → ↑ ↓', '옮기기'], ['Delete', '지우기'], ['Ctrl+휠', '확대']].map(([k, t]) => `<span><kbd>${k}</kbd>${t}</span>`).join('')}</div></details>`;
     if (doc.bookCover) { const v9 = ins.querySelector('.pgvid'); if (v9) v9.remove(); const h9 = ins.querySelector('h2'); if (h9 && !ins.querySelector('.bk-pginfo')) h9.insertAdjacentHTML('afterend', '<div class="bk-pginfo"><b>표지 펼침면</b><span>뒷날개·뒤표지·책등·앞표지·앞날개 한 장 — 책등·날개는 왼쪽 「도서 편집」에서 맞춥니다</span></div>'); }
@@ -4118,7 +4203,7 @@ function renderInspector() {
   const fillBlock = `${vpick('fillType', el.fillType || 'solid', [['solid', '<span class="pk-sw2" style="background:#2f6fe4"></span>', '단색'], ['gradient', '<span class="pk-sw2" style="background:linear-gradient(90deg,#2f5bea,#e0564b)"></span>', '그라데이션']])}${(el.fillType || 'solid') === 'gradient' ? `<div class="grid3">${F('시작 색', 'g1', el.g1 || '#2f5bea', { type: 'color' })}${F('끝 색', 'g2', el.g2 || '#e0564b', { type: 'color' })}</div>${F('방향', 'gAngle', el.gAngle == null ? 90 : el.gAngle, { type: 'angle', def: 90 })}${el.type === 'shape' || el.type === 'path' ? `<div class="pk-lb">그라데이션 모양</div>${vpick('gKind', el.gKind || 'linear', [['linear', `<span class="pk-sw2" style="background:linear-gradient(${el.gAngle == null ? 90 : el.gAngle}deg,${el.g1 || '#2f5bea'},${el.g2 || '#e0564b'})"></span>`, '직선'], ['radial', `<span class="pk-sw2" style="background:radial-gradient(circle,${el.g1 || '#2f5bea'},${el.g2 || '#e0564b'})"></span>`, '원형']])}` : ''}` : ''}`;
   if (el.type === 'text') {
     h += `<div class="tstyles sm" id="presetGrid" ${presetsOpen() ? '' : 'hidden'}>${FX.TEXT_PRESETS.map(p => `<button data-preset="${p.id}" class="tsb"><span style="${FX.textStyle(Object.assign({}, TEXT_DEF, { font: 'Jua', size: 13, weight: 800, align: 'center' }, p.st))}">${esc(p.name)}</span></button>`).join('')}</div>
-    <h3>글자</h3>${psHTML(el)}${el.html && el.htmlFor === el.text ? `<label class="f"><span>내용 <small>부분 서식이 있어 캔버스에서 두 번 눌러 고칩니다</small></span><textarea rows="3" readonly>${esc(el.text)}</textarea></label><button class="btn sm" data-set="html:">부분 서식 지우고 여기서 편집</button>` : F('내용', 'text', el.text, { type: 'textarea', rows: 3 })}
+    ${doc.cert || doc.att ? '' : mmPanelHTML(el)}<h3>글자</h3>${psHTML(el)}${el.html && el.htmlFor === el.text ? `<label class="f"><span>내용 <small>부분 서식이 있어 캔버스에서 두 번 눌러 고칩니다</small></span><textarea rows="3" readonly>${esc(el.text)}</textarea></label><button class="btn sm" data-set="html:">부분 서식 지우고 여기서 편집</button>` : F('내용', 'text', el.text, { type: 'textarea', rows: 3 })}
     <div class="row"><label class="f" style="flex:1;margin:0"><span>글꼴</span>${fontPicker('font', el.font)}</label><button class="btn sm" id="fontBrowse" style="margin-top:17px">둘러보기</button></div>
     <div class="fsz"><span>글자 크기</span><div class="fszc"><button type="button" data-fsz="-1" title="작게 (Ctrl+Shift+,)">−</button><input class="num" id="fszIn" data-k="size" type="number" step="0.5" min="1" value="${el.size}" title="크기를 직접 입력 (제한 없음)"><button type="button" class="fszdd" data-fszdd title="자주 쓰는 크기">▾</button><button type="button" data-fsz="1" title="크게 (Ctrl+Shift+.)">+</button><em>pt</em></div></div>
     <div class="tfmt"><button type="button" data-tfi="bold" class="${fmtOn(el, 'bold') ? 'on' : ''}" title="굵게 (Ctrl+B)"><b>B</b></button><button type="button" data-tfi="italic" class="${el.italic ? 'on' : ''}" title="기울임 (Ctrl+I)"><i>I</i></button><button type="button" data-tfi="underline" class="${el.underline ? 'on' : ''}" title="밑줄 (Ctrl+U)"><u>U</u></button><button type="button" data-tfi="strike" class="${el.strike ? 'on' : ''}" title="취소선"><s>S</s></button><button type="button" data-tfi2="upper" class="${el.upper ? 'on' : ''}" title="영문 대문자">AA</button><button type="button" data-tfi2="vertical" class="${el.vertical ? 'on' : ''}" title="세로쓰기">세로</button>
@@ -6046,7 +6131,8 @@ function openDownload(fmt) {
 function renderDownload() {
   const p = $('#dlPanel'); if (!p) return; const S = dlState, f = DL_FMTS.find(x => x[0] === S.fmt);
   if (S.pages === 'sel' && (!sel.length || (S.fmt !== 'png' && S.fmt !== 'jpg'))) S.pages = 'cur';
-  const img = S.fmt === 'jpg' || S.fmt === 'png', n = dlPages().length;
+  const mmN = S.mm !== false && mmActive() && S.pages !== 'sel' && !/^pptx/.test(S.fmt) && mmUsed(dlPages().map(i => doc.pages[i])) ? mmList().length : 1;  /* 메일머지: 사람 수만큼 */
+  const img = S.fmt === 'jpg' || S.fmt === 'png', n = dlPages().length * mmN;
   const bleed = (S.fmt === 'pdfprint' || S.fmt === 'pdfvector' || (img && S.imgBleed)) ? (Number(doc.bleed) || 0) : 0;
   let dpi = img ? dlDpi(96 * S.scale, bleed) : DL_PDF[S.fmt] ? dlDpi(DL_PDF[S.fmt].dpi, bleed) : 0;
   if (img && S.merge && n > 1) dpi = Math.min(dpi, dlMergeDpi(n, bleed));
@@ -6063,6 +6149,7 @@ function renderDownload() {
   ${S.pages === 'range' ? `<label class="f"><input id="dlRange" placeholder="예: 1-3, 5" value="${esc(S.range)}"></label>` : ''}
   ${S.fmt === 'pptx' ? `<label class="f"><span>글꼴</span></label><div class="seg dlpf"><button type="button" data-pptf="embed" class="${(S.pptFont || 'embed') === 'embed' ? 'on' : ''}">공방 글꼴 넣기<small>어느 PC에서나 같게</small></button><button type="button" data-pptf="safe" class="${S.pptFont === 'safe' ? 'on' : ''}">맑은 고딕·바탕<small>가장 작은 파일</small></button><button type="button" data-pptf="keep" class="${S.pptFont === 'keep' ? 'on' : ''}">글꼴 이름만<small>깐 PC에서만</small></button></div>` : ''}
   ${S.fmt === 'png' ? `<label class="chk"><input type="checkbox" id="dlTransp" ${S.transp ? 'checked' : ''}> <span class="pk-chk">▦</span> 투명 배경 <small class="hint" style="margin:0">로고·스티커용</small></label>` : ''}
+  ${mmActive() && S.pages !== 'sel' && !/^pptx/.test(S.fmt) ? `<label class="chk mmchk"><input type="checkbox" id="dlMM" ${S.mm !== false ? 'checked' : ''}> <span class="pk-chk">✉</span> 메일머지 — 재원생 ${mmList().length}명 각각 <small class="hint" style="margin:0">{이름} 자리만 바뀜 · 문서는 그대로</small></label>` : ''}
   ${img && n > 1 ? `<label class="chk"><input type="checkbox" id="dlMerge" ${S.merge ? 'checked' : ''}> <span class="pk-chk">🧷</span> 한 장으로 이어 붙이기 <small class="hint" style="margin:0">세로로</small></label>` : ''}
   ${img && Number(doc.bleed) > 0 ? `<label class="chk"><input type="checkbox" id="dlImgBleed" ${S.imgBleed ? 'checked' : ''}> <span class="pk-chk">✂</span> 도련 ${doc.bleed}mm 포함 <small class="hint" style="margin:0">명함·스티커를 인쇄소에 그림으로 보낼 때</small></label>` : ''}
   <div class="dlinfo"><b>다운로드 정보</b><ul>${dlPlaceholders()}${bookDoc && S.fmt === 'pdfprint' ? `<li class="dlwarn">📖 책 본문(검정 글자)은 그림 PDF면 인쇄할 때 4색 검정이 되어 번지기 쉽습니다 — 글자가 많은 본문은 <b>PDF (벡터 · 인쇄 창)</b>이 더 선명합니다. 이 파일로 보낼 때는 인쇄소에 「본문 먹 1도」라고 꼭 말하세요 <button type="button" class="btn sm" data-fmt2="pdfvector">벡터 PDF로</button></li>` : ''}<li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${docSizeLabel(' × ')}${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${(px(doc.h + 2 * bleed) * (img && S.merge && n > 1 ? n : 1)).toLocaleString()} px · ${Math.round(dpi)}dpi${(img ? Math.round(dpi) < Math.round(96 * S.scale) - 1 : DL_PDF[S.fmt] && Math.round(dpi) < DL_PDF[S.fmt].dpi - 1) ? (Math.max(doc.w, doc.h) >= 1500 ? (Math.round(dpi) < 60 ? ' <small style="color:#b54708">(60dpi보다 낮아 글자가 거칠 수 있습니다 — 벡터 PDF로 받거나 인쇄소에 확대 출력을 물어보세요)' : ' <small>(현수막처럼 큰 인쇄물은 멀리서 보므로 60~100dpi면 충분)') + '</small>' : ' <b>(크기가 커서 브라우저 한계에 맞춰 낮춤)</b>') : ''}</li>${(() => { const pc = px(doc.w + 2 * bleed) * px(doc.h + 2 * bleed) * n, f = img ? S.fmt : 'jpg', q = img ? 0.92 : DL_PDF[S.fmt].q, mb = dlEstMB(pc, f, q); return `<li>파일 크기 최대 약 ${mb < 1 ? '1MB' : mb < 10 ? mb.toFixed(1) + 'MB' : Math.round(mb) + 'MB'} <small>(사진이 적은 디자인은 훨씬 작아짐)</small>${mb > 300 ? ' <b>— 아주 클 수 있으니 인쇄소 웹하드로 보내거나 쪽을 나눠 받으세요</b>' : ''}</li>`; })()}${!img && DL_PDF[S.fmt] && PDF_TENTH(doc.w + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0)), doc.h + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0))) ? '<li><b>5.08m가 넘어 PDF를 1/10 크기로 만듭니다</b> — 인쇄소에 "1000% 확대 출력" 요청 (화질은 그대로)</li>' : ''}` : /^pptx/.test(S.fmt) ? `<li>PowerPoint 쪽 ${n}장 · 쪽마다 ${S.fmt === 'pptx' ? '바탕(도형·그림)은 그림 한 장 + <b>글은 고칠 수 있는 글 상자</b>' : '그림 한 장(글은 못 고침)'}${(() => { const nn = doc.pages.filter(p => String(p.notes || '').trim()).length; return nn ? ` · 발표자 메모 ${nn}쪽` : ' · 발표자 메모 없음 (쪽 속성 「🎤 발표자 메모」에 적으면 함께 들어감)'; })()}</li>${S.fmt === 'pptx' && (S.pptFont || 'embed') === 'embed' ? (() => { const F = pptUsedFonts(dlPages()), lib = F.filter(f => { const i = FONTS.find(x => x.family === f); return (i && i.lib) || (doc.fonts || []).some(x => x.family === f); }); return `<li>📦 글꼴 ${F.length}개(${esc(F.slice(0, 4).join(', '))}${F.length > 4 ? ' …' : ''})를 파일에 넣습니다 — 한글 글꼴은 하나에 1~12MB라 파일이 그만큼 커집니다${lib.length ? ` · <b>${esc(lib.join(', '))}</b>은 자료실·직접 올린 글꼴이라 넣지 않고 맑은 고딕으로` : ''} <small>(라이선스·형식 때문에 못 넣는 글꼴은 받은 뒤 알려 드려요)</small></li>`; })() : ''}` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
@@ -6075,6 +6162,7 @@ function renderDownload() {
   $('#dlPages').onchange = e => { S.pages = e.target.value; renderDownload(); };
   const rg = $('#dlRange'); if (rg) { rg.onchange = e => { S.range = e.target.value; renderDownload(); }; }
   const mg = $('#dlMerge'); if (mg) mg.onchange = e => { S.merge = e.target.checked; renderDownload(); };
+  const mm = $('#dlMM'); if (mm) mm.onchange = e => { S.mm = e.target.checked; renderDownload(); };
   const ib = $('#dlImgBleed'); if (ib) ib.onchange = e => { S.imgBleed = e.target.checked; renderDownload(); };
   const tp = $('#dlTransp'); if (tp) tp.onchange = e => { S.transp = e.target.checked; renderDownload(); };
   p.querySelectorAll('[data-pptf]').forEach(b => b.onclick = () => { S.pptFont = b.dataset.pptf; renderDownload(); });
@@ -6239,22 +6327,24 @@ async function renderPageCanvas0(pg, dpi, mode, bg) {
   } finally { tmp.remove(); }
 }
 async function runDownload() {
-  endEdit(); const S = dlState, pages = dlPages(); if (!pages.length) { toast('페이지 번호를 확인해 주세요', true); return; }
+  endEdit(); const S = dlState, pages0 = dlPages(); if (!pages0.length) { toast('페이지 번호를 확인해 주세요', true); return; }
+  const mmOn = S.mm !== false && mmActive() && S.pages !== 'sel', jobs = mmJobs(pages0, mmOn), pages = jobs.map((_, k) => k), PG = k => jobs[k], pno = k => pgIndex(jobs[k]) + 1, who = k => jobs[k]._mm ? '-' + String(jobs[k]._mm.n).replace(/[\\/:*?"<>|]/g, '_') : '';  /* 메일머지: 사람마다 한 벌 (문서는 그대로) */
+  if (mmUsed(pages0.map(i => doc.pages[i])) && !mmOn && !mmList().length) toast('글에 메일머지 칸({이름} 등)이 있는데 명단이 없어 그대로 찍힙니다 — 속성 창 「메일머지」에서 명단을 고르세요', true);
   const base = (doc.name || 'design').replace(/[\\/:*?"<>|]/g, '_');
-  if (S.fmt === 'pdfvector') { $('#dlPanel').remove(); printVector(pages); return; }
+  if (S.fmt === 'pdfvector') { $('#dlPanel').remove(); printVector(jobs); return; }
   const prog = $('#dlProg'), go = $('#dlGo'); go.disabled = true; dlFallback = 0;
   const say = t => { prog.innerHTML = `<span class="spin"></span>${t}`; };
   const free = c => { c.width = c.height = 0; };  // 쪽마다 메모리 바로 비움
   try {
     say('모듈 불러오는 중…');
-    try { await ensureLibFonts(pages.map(i => doc.pages[i])); await document.fonts.ready; } catch (e) {}
-    if (S.fmt === 'pptx' || S.fmt === 'pptximg') { await exportPPTX(pages, say, base, S.fmt === 'pptximg', S.pptFont === 'keep' ? true : S.pptFont === 'safe' ? false : 'embed'); say('완료'); go.disabled = false; return; }
+    try { await ensureLibFonts(pages0.map(i => doc.pages[i])); await document.fonts.ready; } catch (e) {}
+    if (S.fmt === 'pptx' || S.fmt === 'pptximg') { if (mmOn) toast('PowerPoint는 메일머지 없이 문서 그대로 내보냅니다 — 사람마다 바꾸려면 PDF·그림·출력으로', true); await exportPPTX(pages0, say, base, S.fmt === 'pptximg', S.pptFont === 'keep' ? true : S.pptFont === 'safe' ? false : 'embed'); say('완료'); go.disabled = false; return; }
     const img = S.fmt === 'jpg' || S.fmt === 'png';
     if (img) {
       const bl = S.imgBleed && Number(doc.bleed) > 0 ? Number(doc.bleed) : 0, mode = bl ? 'print' : 'thumb';
       let dpi = dlDpi(96 * S.scale, bl); const type = S.fmt === 'png' ? 'image/png' : 'image/jpeg', ext = S.fmt, bg = S.fmt === 'png' ? null : '#ffffff';
       const toBlob = c => new Promise((r, rej) => c.toBlob(b => b ? r(b) : rej(new Error('이미지가 너무 큽니다. 크기를 줄이거나 ZIP으로 받아 주세요')), type, 0.92)).then(b => setDpi(b, dpi, type));
-      const transp = S.fmt === 'png' && (S.transp || S.pages === 'sel'); const pgOf = i => transp ? Object.assign({}, doc.pages[i], { bg: 'transparent', transp: true }) : doc.pages[i];
+      const transp = S.fmt === 'png' && (S.transp || S.pages === 'sel'); const pgOf = i => transp ? Object.assign({}, PG(i), { bg: 'transparent', transp: true }) : PG(i);
       if (S.pages === 'sel') { // 선택한 요소만: 그 요소만 그린 뒤 둘레(1mm 여유)로 잘라 냄
         const ids = new Set(sel); page().els.forEach(x => { if (x.group && selEls().some(y => y.group === x.group)) ids.add(x.id); });
         const els = page().els.filter(x => ids.has(x.id) && !x.hidden); if (!els.length) { toast('먼저 내려받을 요소를 고르세요', true); return; } const bb = els.map(x => { const a = (x.rot || 0) * Math.PI / 180, cx = x.x + x.w / 2, cy = x.y + x.h / 2, hw = (Math.abs(Math.cos(a)) * x.w + Math.abs(Math.sin(a)) * x.h) / 2, hh = (Math.abs(Math.sin(a)) * x.w + Math.abs(Math.cos(a)) * x.h) / 2; return [cx - hw, cy - hh, cx + hw, cy + hh]; });
@@ -6270,11 +6360,11 @@ async function runDownload() {
         for (let i = 0; i < pages.length; i++) { say(`${i + 1}/${pages.length} 페이지 그리는 중…`); const c = await renderPageCanvas(pgOf(pages[i]), dpi, mode, bg); g.drawImage(c, 0, i * ph, pw, ph); free(c); }
         saveBlob(await toBlob(m), `${base}.${ext}`); free(m);
       } else if (pages.length === 1) {
-        const c = await renderPageCanvas(pgOf(pages[0]), dpi, mode, bg); saveBlob(await toBlob(c), `${base}-${pages[0] + 1}.${ext}`); free(c);
+        const c = await renderPageCanvas(pgOf(pages[0]), dpi, mode, bg); saveBlob(await toBlob(c), `${base}${who(0)}-${pno(0)}.${ext}`); free(c);
       } else {
         await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', () => window.JSZip, 'sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG');
         const zip = new JSZip();
-        for (let i = 0; i < pages.length; i++) { say(`${i + 1}/${pages.length} 페이지 그리는 중…`); const c = await renderPageCanvas(pgOf(pages[i]), dpi, mode, bg); zip.file(`${base}-${String(pages[i] + 1).padStart(2, '0')}.${ext}`, await toBlob(c)); free(c); }
+        for (let i = 0; i < pages.length; i++) { say(`${i + 1}/${pages.length} 페이지 그리는 중…`); const c = await renderPageCanvas(pgOf(pages[i]), dpi, mode, bg); zip.file(`${base}${who(i)}-${String(pno(i)).padStart(2, '0')}${jobs[i]._mm ? '-' + String(i + 1).padStart(3, '0') : ''}.${ext}`, await toBlob(c)); free(c); }
         say('ZIP으로 묶는 중…'); saveBlob(await zip.generateAsync({ type: 'blob' }), `${base}.zip`);
       }
     } else {
@@ -6290,7 +6380,7 @@ async function runDownload() {
       const pt = v => v / 25.4 * 72;
       for (let i = 0; i < pages.length; i++) {
         say(`${i + 1}/${pages.length} 페이지 그리는 중…`);
-        const c = await renderPageCanvas(doc.pages[pages[i]], dpi, bleed ? 'print' : 'thumb', '#ffffff');
+        const c = await renderPageCanvas(PG(pages[i]), dpi, bleed ? 'print' : 'thumb', '#ffffff');
         if (i) pdf.addPage([W, H], W > H ? 'landscape' : 'portrait');
         if (cfg.png) pdf.addImage(c, 'PNG', u(slug), u(slug), u(doc.w + 2 * bleed), u(doc.h + 2 * bleed), `p${i}`, 'FAST');
         else pdf.addImage(c.toDataURL('image/jpeg', cfg.q), 'JPEG', u(slug), u(slug), u(doc.w + 2 * bleed), u(doc.h + 2 * bleed), `p${i}`, 'NONE');
@@ -6471,14 +6561,15 @@ const kindCache = (() => { try { return new Map(Object.entries(JSON.parse(localS
 async function kindOfEntry(x) { const kp = kindOfPath(x.path); if (kp) return kp; const key = x.path.join('/') + '/' + x.name + '@' + x.lastModified; if (kindCache.has(key)) return kindCache.get(key);
   let k = 'image'; try { const f = await x.handle.getFile(); k = docKind(JSON.parse(await f.text())); } catch (e) {} kindCache.set(key, k); try { const o = Object.fromEntries([...kindCache].slice(-400)); localStorage.setItem('naracal-kind-cache', JSON.stringify(o)); } catch (e) {} return k; }
 async function printVector(pages, opt) {
+  const PO = pages.map(i => typeof i === 'number' ? doc.pages[i] : i);  /* 메일머지 쪽 사본도 받음 */
   const b = opt && opt.noBleed ? 0 : Math.max(0, Number(doc.bleed) || 0); /* 프린터 출력은 도련 없이 종이 크기 그대로 */
   $('#pageStyle').textContent = `@page{size:${doc.w + 2 * b}mm ${doc.h + 2 * b}mm;margin:0}`;
   $('#canvas').innerHTML = ''; const th = $('#thumbs'); if (th) th.innerHTML = '';  // SVG id 중복 방지
   // 브라우저 인쇄 PDF에는 재단 여백(슬러그)이 없어 재단선이 도련 위 그림에 찍히므로 끔. 파일 이름에 도련 포함을 표시
-  const restoreF = await swapPdfFrames(pages.map(i => doc.pages[i]), 600); /* 상장 틀은 원본 PDF를 600dpi로 */
-  const keepMarks = doc.cropMarks; doc.cropMarks = false; const root = $('#printRoot'); try { const keepBleed = doc.bleed; if (opt && opt.noBleed) doc.bleed = 0; try { root.innerHTML = pages.map(i => sheetHTML(doc.pages[i], 'print')).join(''); } finally { doc.bleed = keepBleed; } } finally { doc.cropMarks = keepMarks; restoreF(); }
+  const restoreF = await swapPdfFrames(PO, 600); /* 상장 틀은 원본 PDF를 600dpi로 */
+  const keepMarks = doc.cropMarks; doc.cropMarks = false; const root = $('#printRoot'); try { const keepBleed = doc.bleed; if (opt && opt.noBleed) doc.bleed = 0; try { root.innerHTML = PO.map(pg => sheetHTML(pg, 'print')).join(''); } finally { doc.bleed = keepBleed; } } finally { doc.cropMarks = keepMarks; restoreF(); }
   const keepTitle = document.title; document.title = `${(doc.name || 'design').replace(/[\\/:*?"<>|]/g, '_')}_인쇄용${b ? `_도련${b}mm` : ''}`; window.addEventListener('afterprint', () => { document.title = keepTitle; }, { once: true }); setTimeout(() => { document.title = keepTitle; }, 60000);
-  setStatus('PDF 준비 중…'); await ensureLibFonts(pages.map(i => doc.pages[i]));
+  setStatus('PDF 준비 중…'); await ensureLibFonts(PO);
   // 실제로 쓰인 글꼴·굵기·기울임 조합을 모두 먼저 불러 둠 (300·800 같은 굵기가 대체 글꼴로 찍히지 않게)
   const combos = new Set(); root.querySelectorAll('*').forEach(e => { const cs = getComputedStyle(e); if (!e.childNodes.length) return; cs.fontFamily.split(',').forEach(f => combos.add(`${cs.fontStyle} ${cs.fontWeight} 12px "${f.trim().replace(/^["']|["']$/g, '')}"`)); });
   try { await Promise.all([...combos].map(c => document.fonts.load(c, '가A1').catch(() => {}))); await document.fonts.ready; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); } catch (e) {}
@@ -7878,7 +7969,7 @@ function openPrint(pre) {
             return [['all', '모두'], ['cur', '현재 쪽'], ['to', '현재까지'], ['from', '현재부터'], ['pick', '일부분'], ...(hasCert && doc.pages.some(p => p.els.length && !p.cert && !p.certTpl) ? [['cert', '상장 쪽만']] : []), ...(hasAtt && doc.pages.some(p => p.els.length && !p.att) ? [['att', '출석부 쪽만']] : [])].map(([a, t]) => `<label class="prr ${S.pages === a ? 'on' : ''}"><input type="radio" name="prPgR" value="${a}" ${S.pages === a ? 'checked' : ''}> ${t} <small>${a === 'pick' && S.pages !== 'pick' ? '' : cnt(a) + '쪽'}</small></label>`).join(''); })()}</div>
           ${S.pages === 'cur' || S.pages === 'to' || S.pages === 'from' ? `<div class="prr-at"><span>현재 쪽</span><button type="button" class="btn sm icon" data-prat="-1" title="앞 쪽">‹</button><input type="number" id="prAt" min="${pgOff()}" max="${pgNo(doc.pages.length - 1)}" value="${pgNo(prAt())}" style="width:60px"><button type="button" class="btn sm icon" data-prat="1" title="다음 쪽">›</button><small class="hint" style="margin:0">${esc(((doc.pages[prAt()] || {}).label) || '')} · ${S.pages === 'cur' ? '이 쪽만' : S.pages === 'to' ? `처음~${pgNo(prAt())}쪽` : `${pgNo(prAt())}쪽~끝`}</small></div>` : ''}</div>
         <div class="grid2">
-        </div><div class="prrow"><span>용지</span>${seg('paper', [['A4', 'A4', 'A4 (210×297mm) — 보통 종이', paperIc(21, 29.7)], ['A3', 'A3', 'A3 (297×420mm) — A4 두 배', paperIc(29.7, 42)], ['B5', 'B5', 'B5 (182×257mm)', paperIc(18.2, 25.7)], ['Letter', 'Letter', 'Letter (216×279mm)', paperIc(21.6, 27.9)], ['doc', '문서 크기', `문서 크기 (${Math.round(doc.w)}×${Math.round(doc.h)}mm)`, paperIc(doc.w, doc.h)]])}</div>
+        </div>${mmActive() ? `<div class="prrow"><span>메일머지</span><label class="chk mmchk" style="margin:0"><input type="checkbox" id="prMM" ${S.mm !== false ? 'checked' : ''}> 재원생 ${mmList().length}명 각각 찍기 <small class="hint" style="margin:0">— 고른 쪽 × ${mmList().length}명 = ${prPages().length * mmList().length}쪽 · {이름} 자리만 바뀜</small></label></div>` : ''}<div class="prrow"><span>용지</span>${seg('paper', [['A4', 'A4', 'A4 (210×297mm) — 보통 종이', paperIc(21, 29.7)], ['A3', 'A3', 'A3 (297×420mm) — A4 두 배', paperIc(29.7, 42)], ['B5', 'B5', 'B5 (182×257mm)', paperIc(18.2, 25.7)], ['Letter', 'Letter', 'Letter (216×279mm)', paperIc(21.6, 27.9)], ['doc', '문서 크기', `문서 크기 (${Math.round(doc.w)}×${Math.round(doc.h)}mm)`, paperIc(doc.w, doc.h)]])}</div>
         ${C && C.frame && list.some(i => doc.pages[i].cert) ? `<div class="prrow prframe"><span>상장 틀</span>${certFrameSeg(!!S.frame, 'data-prframe')}<small class="hint" style="margin:0;flex-basis:100%">${S.frame ? '틀과 글자를 함께 찍습니다 — 흰 종이·일반 상장지' : '틀은 빼고 글자만 찍습니다 — 틀이 미리 인쇄된 상장 용지 (크기는 실제 100%)'}</small></div>` : ''}
         ${doc.att && list.some(i => doc.pages[i].att) ? `<div class="prrow prframe"><span>출석부</span>${attModeSeg(attModeOf(doc.att), 'data-pramode')}<small class="hint" style="margin:0;flex-basis:100%">${doc.att.photoOnly ? '사진만 — 글자가 이미 찍힌 출석부 용지에' : doc.att.textOnly ? '글자만 — 사진은 나중에 「사진만」으로' : S.frame ? '틀과 글자·사진 — 흰 종이' : '글자와 사진 — 인쇄된 출석부 용지 (어긋나면 위치 보정)'}${S.paper === 'A4' && (Number(S.nup) || 1) === 1 ? '<br>📄 출석부 용지를 A4처럼 위쪽부터 · 프린터 창 용지 A4 그대로' : ''}</small></div>` : ''}
         ${S.pages === 'pick' ? (() => { const P = S.pick || new Set(), n = doc.pages.length, lbl = (p, i) => { if (p.att) return String(p.label || '').replace(/^출석부\s*\d+\s*·\s*/, '').trim() || `출석부 ${(p.att.i || 0) + 1}`; if (!p.cert) return p.label || p.name || ''; const r = (((doc.cert && doc.cert.data && doc.cert.data[p.cert.form]) || {}).rows || [])[p.cert.i] || {}, nm = String(r.name || '').trim() || String(p.label || '').replace(/^상장\s*\d+\s*·\s*/, '').trim(); return nm || `상장 ${(p.cert.i || 0) + 1}`; };  /* 상장 쪽은 학생 이름 (팀장님) */ return `<div class="prpick">
@@ -7920,7 +8011,7 @@ function openPrint(pre) {
       if (S.mgLink) prSetMg(S, v); else { M[k] = v; prSetMg(S, M.t, M.b, M.l, M.r); } const M2 = prMg(S); d.querySelectorAll('[data-mg]').forEach(i => { i.value = M2[i.dataset.mg]; }); live(); };
     const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); document.body.classList.remove('prmg-drag'); prSave(); };
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up); };
-  d.onchange = e => { const t = e.target, S = prState;
+  d.onchange = e => { const t = e.target, S = prState; if (t.id === 'prMM') { S.mm = t.checked; draw(); return; }
     if (t.id === 'prNupGap') { S.nupGap = Math.max(0, Number(t.value) || 0); prSave(); draw(); return; } if (t.id === 'prNupCut') { S.nupCut = t.checked; prSave(); draw(); return; }
     if (t.id === 'prMgLink') { S.mgLink = t.checked; if (t.checked) { const M = prMg(S); prSetMg(S, M.t); } prSave(); draw(); return; }
     if (t.id === 'prAt') { const v = Math.round(Number(t.value)); if (v >= pgOff() && v <= pgNo(doc.pages.length - 1)) { S.at = v; S.pv = 0; } draw(); return; }
@@ -7948,11 +8039,12 @@ function openPrint(pre) {
   };
   draw(); d.showModal();
 }
-async function runPrint(list) {
-  if (!list.length) return; const S = prState, L = prLayout();
+async function runPrint(list0) {
+  if (!list0.length) return; const S = prState, L = prLayout();
+  const jobs = mmJobs(list0, S.mm !== false && mmActive()), list = jobs.map((_, k) => k), PGP = k => jobs[k];  /* 메일머지: 사람마다 한 벌 */
   const frIds = []; doc.pages.forEach(p => p.els.forEach(e => { if (e.certFrame) { frIds.push(e.id); elVisOv.set(e.id, !!S.frame); } })); /* 이번 출력에만 (문서는 그대로) */
   const restore = () => frIds.forEach(id => elVisOv.delete(id));
-  if (S.mode === 'vec' && !(S.feed === 'cw' || S.feed === 'ccw') && !((Number(S.nup) || 1) > 1)) { try { await printVector(list, { noBleed: true }); }  /* 돌려 보내기는 그림 방식으로 */ finally { setTimeout(restore, 1500); } return; }
+  if (S.mode === 'vec' && !(S.feed === 'cw' || S.feed === 'ccw') && !((Number(S.nup) || 1) > 1)) { try { await printVector(jobs, { noBleed: true }); }  /* 돌려 보내기는 그림 방식으로 */ finally { setTimeout(restore, 1500); } return; }
   const feed = S.feed === 'cw' || S.feed === 'ccw' ? S.feed : '';
   /* 돌려 보낼 때: 종이 = 세로(높이↔너비), 디자인 자리도 같이 돌림 — 시계 방향 (x,y) → (ph−y−h, x) · 반대 (y, pw−x−w) */
   const P = L.cells ? (feed ? { pw: L.ph, ph: L.pw, x: 0, y: 0, w: L.ph, h: L.pw } : { pw: L.pw, ph: L.ph, x: 0, y: 0, w: L.pw, h: L.ph }) : feed ? { pw: L.ph, ph: L.pw, x: feed === 'cw' ? L.ph - L.y - L.h : L.y, y: feed === 'cw' ? L.x : L.pw - L.x - L.w, w: L.h, h: L.w } : { pw: L.pw, ph: L.ph, x: L.x, y: L.y, w: L.w, h: L.h };
@@ -7961,12 +8053,12 @@ async function runPrint(list) {
     if (L.cells) { /* 모아 찍기: 종이 한 장 그림에 칸마다 쪽을 그려 넣음 (자르는 선 포함) → 돌려 보내기면 그 장을 돌림 */
       const pxmm = (dpi || 300) / 25.4, n = L.nup;
       for (let si = 0; si * n < list.length; si++) { setStatus(`출력 준비 ${si + 1}/${Math.ceil(list.length / n)}장…`); const sc = document.createElement('canvas'); sc.width = Math.round(L.pw * pxmm); sc.height = Math.round(L.ph * pxmm); const g = sc.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, sc.width, sc.height);
-        for (let j = 0; j < n && si * n + j < list.length; j++) { const R = L.cells[j], pc = await renderPageCanvas(doc.pages[list[si * n + j]], dlDpi((dpi || 300) * Math.min(1, L.k), 0), 'thumb', '#ffffff'); g.drawImage(pc, R.x * pxmm, R.y * pxmm, R.w * pxmm, R.h * pxmm); pc.width = pc.height = 0; }
+        for (let j = 0; j < n && si * n + j < list.length; j++) { const R = L.cells[j], pc = await renderPageCanvas(PGP(list[si * n + j]), dlDpi((dpi || 300) * Math.min(1, L.k), 0), 'thumb', '#ffffff'); g.drawImage(pc, R.x * pxmm, R.y * pxmm, R.w * pxmm, R.h * pxmm); pc.width = pc.height = 0; }
         if (S.nupCut) { g.save(); g.strokeStyle = '#9aa0aa'; g.lineWidth = Math.max(1, 0.2 * pxmm); g.setLineDash([2 * pxmm, 1.5 * pxmm]); prCutLines(L).forEach(([x1, y1, x2, y2]) => { g.beginPath(); g.moveTo(x1 * pxmm, y1 * pxmm); g.lineTo(x2 * pxmm, y2 * pxmm); g.stroke(); }); g.restore(); }
         let c = sc; if (feed) { const r = document.createElement('canvas'); r.width = c.height; r.height = c.width; const g2 = r.getContext('2d'); if (feed === 'cw') { g2.translate(r.width, 0); g2.rotate(Math.PI / 2); } else { g2.translate(0, r.height); g2.rotate(-Math.PI / 2); } g2.drawImage(c, 0, 0); c.width = c.height = 0; c = r; }
         const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95)); urls.push(URL.createObjectURL(b)); c.width = c.height = 0; }
     } else
-    for (let i = 0; i < list.length; i++) { setStatus(`출력 준비 ${i + 1}/${list.length}쪽…`); let c = await renderPageCanvas(doc.pages[list[i]], dlDpi(dpi * Math.min(1, L.k) || dpi, 0), 'thumb', '#ffffff');
+    for (let i = 0; i < list.length; i++) { setStatus(`출력 준비 ${i + 1}/${list.length}쪽…`); let c = await renderPageCanvas(PGP(list[i]), dlDpi(dpi * Math.min(1, L.k) || dpi, 0), 'thumb', '#ffffff');
       if (feed) { const r = document.createElement('canvas'); r.width = c.height; r.height = c.width; const g = r.getContext('2d'); if (feed === 'cw') { g.translate(r.width, 0); g.rotate(Math.PI / 2); } else { g.translate(0, r.height); g.rotate(-Math.PI / 2); } g.drawImage(c, 0, 0); c.width = c.height = 0; c = r; }  /* 종이를 세워 넣는 프린터: 쪽을 미리 돌려 세로 쪽으로 */
       const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95)); urls.push(URL.createObjectURL(b)); c.width = c.height = 0; }
   } catch (e) { toast('출력 준비 중 문제가 생겼습니다: ' + e.message, true); urls.forEach(u => URL.revokeObjectURL(u)); restore(); setStatus(''); return; }
