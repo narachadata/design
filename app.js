@@ -182,13 +182,14 @@ function mergeNoteToast(j) { const n = j && j.mergeNote; if (!n || !n.at || n.by
   if (n.union) toast(`${n.by}가 두 판을 모아 합쳤습니다 — 지운 것이 되살아났는지 한 번 봐 주세요 (버전 기록에 이전 판)`); else if ((n.what || []).length) toast(`${n.by}가 이 PC에서 고친 것과 합쳤습니다 — 살펴볼 곳: ${n.what.slice(0, 5).map(x => String(x).slice(0, 24)).join(', ')} (같은 곳은 ${n.by} 것 · 이 PC 판은 버전 기록에서 되살릴 수 있어요)`); }
 window.addEventListener('gdrive-merged', e => { const d = e.detail || {}; if (d.union) toast('다른 PC 판과 두 판을 모아 합쳐 올렸습니다 — 지운 것이 되살아났는지 한 번 봐 주세요'); else if ((d.what || []).length) toast(`다른 PC에서 고친 것과 합쳐 올렸습니다 — 살펴볼 곳: ${d.what.slice(0, 5).join(', ')} (같은 곳을 둘 다 고쳤으면 이 PC 것)`); });
 function refreshAfterFile() { cur = clamp(cur, 0, doc.pages.length - 1); sel = sel.filter(id => find(id)); if (cellSel && !find(cellSel.id)) cellSel = null; renderAll(); if (hptr >= 0) { hist[hptr] = snapshot(); histMeta[hptr].rn = NC.live.rn; } updateSaveBadge(); }
+const mergeSnapAt = {};  /* 합치기 이름표 기록은 문서마다 10분에 한 번까지 (이름표 기록은 정리에서 안 지워지므로 쌓이지 않게) */
 async function mergeTheirs(theirs, file) {
   const st = store.state; if (!theirs || !theirs.pages || !sameDoc(theirs, doc)) return false;
   const base = (await store.baseFor(theirs)) || (await store.commonBase(Object.assign({}, doc, { saveId: st.lastSaveId, lineage: st.lineage }), theirs));  /* 없으면 아래에서 둘을 합침(사본 없음) */
   if (editing || drag || $('#cellEd')) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, 2000); return true; }  /* 글 고치는 중·끄는 중이면 끝난 뒤에 */
   flushNudge();
   const myLin = st.lineage.slice(), merged = base ? NC.live.merge(base, doc, theirs) : NC.live.union(doc, theirs);
-  { const I0 = NC.live.lastMerge || {}; if ((I0.conf && I0.conf.length) || I0.union) { const by = theirs.savedBy && theirs.savedBy !== store.pcName() ? theirs.savedBy : '다른 PC';  /* 11/27 같은 곳을 둘 다 고쳤으면(이 PC 것이 이김) 진 쪽 — 상대 판 — 을 이름표 붙여 버전 기록에 (이름표 붙은 기록은 40개 넘어도 지우지 않음) */
+  { const I0 = NC.live.lastMerge || {}, dk = doc.docId || theirs.docId || ''; if (((I0.conf && I0.conf.length) || I0.union) && Date.now() - (mergeSnapAt[dk] || 0) > 600000) { mergeSnapAt[dk] = Date.now(); const by = theirs.savedBy && theirs.savedBy !== store.pcName() ? theirs.savedBy : '다른 PC';  /* 11/27 같은 곳을 둘 다 고쳤으면(이 PC 것이 이김) 진 쪽 — 상대 판 — 을 이름표 붙여 버전 기록에 (이름표 붙은 기록은 40개 넘어도 지우지 않음) */
     store.snapshot(doc.docId || theirs.docId, JSON.stringify(Object.assign({}, theirs, { savedBy: by })), `합치기 전 ${by} 판${I0.union ? ' (모아 합침)' : ` (같은 곳 ${I0.conf.length}곳)`}`).catch(() => {}); } }
   NC.live.patchTo(doc, merged); sanitizeDoc(doc);
   st.lastMod = file && file.lastModified || st.lastMod; store.adopt(theirs); st.lineage = [...new Set(st.lineage.concat(myLin))].slice(0, 60);
@@ -951,7 +952,7 @@ function openCellEditor(c, append) {
   ta.dataset.c = c; ta.dataset.day = isDay ? n : ''; ta.dataset.id = el.id;
   $('#canvas').appendChild(ta); ta.focus(); if (append || (isDay && ta.value)) { if (append && ta.value) ta.value += '\n'; ta.setSelectionRange(ta.value.length, ta.value.length); } else ta.select();  /* 일정이 있는 날짜 칸은 전체 선택하지 않음(바로 치면 기존 일정이 지워짐) */
   ta.addEventListener('keydown', e => { if (e.isComposing || e.keyCode === 229) { e.stopPropagation(); return; } /* 한글 조합 중 Esc·Enter는 조합만 끝냄 */ if (e.key === 'Escape') { e.preventDefault(); closeCellEditor(false); } if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); closeCellEditor(true); } e.stopPropagation(); });
-  ta.addEventListener('blur', () => closeCellEditor(true));
+  ta.addEventListener('blur', e => { if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#mmKMenu')) return; closeCellEditor(true); });
 }
 function openTblEditor(el, r, c) {
   closeCellEditor(true); tblNorm(el); const cv = $('#canvas'), dom = cv && cv.querySelector(`[data-id="${el.id}"]`), td = dom && dom.querySelector(`td[data-r="${r}"][data-c="${c}"]`); if (!td) return;
@@ -967,7 +968,7 @@ function openTblEditor(el, r, c) {
     else if (e.key === 'Tab') { e.preventDefault(); closeCellEditor(true); const R = el.rows.length, C = el.rows[0].length, st = e.shiftKey ? -1 : 1; let n = r * C + c; do { n += st; const m = n >= 0 && n < R * C ? tblMergeAt(el, Math.floor(n / C), n % C) : null; if (!m || (m.r === Math.floor(n / C) && m.c === n % C)) break; } while (n > 0 && n < R * C);  /* 합친 칸에 덮인 칸은 건너뜀 */ if (n >= R * C) { el.rows.push(Array(C).fill('')); commit(); renderCanvas(); if (el.y + el.h > doc.h + 0.5) toast('표가 쪽 아래로 넘쳤습니다 — 글자 크기·줄 간격을 줄이거나 표를 나눠 다음 쪽에 넣으세요'); } n = Math.max(0, n); setTimeout(() => openTblEditor(find(el.id) || el, Math.floor(n / C), n % C), 0); }
     else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); closeCellEditor(true); }
     e.stopPropagation(); });
-  ta.addEventListener('blur', () => closeCellEditor(true));
+  ta.addEventListener('blur', e => { if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#mmKMenu')) return; closeCellEditor(true); });
   ta.addEventListener('paste', e => { const t = (e.clipboardData || window.clipboardData).getData('text/plain') || ''; if (!/\t/.test(t) && !/\n./.test(t.replace(/\r/g, '').trim())) return; const g = tblParseGrid(t); if (!g || (g.length < 2 && g[0].length < 2)) return; e.preventDefault(); ta.id = ''; ta.remove(); tblPasteGrid(find(el.id) || el, r, c, g); });  /* 엑셀·한글 표를 붙여 넣으면 여러 칸에 */
 }
 /* 붙여 넣은 표 글(탭으로 칸, 줄 바꿈으로 줄 — 엑셀·한글·구글 시트) → 2차 배열. 따옴표로 묶인 칸 안 줄 바꿈도 */
@@ -1378,7 +1379,7 @@ function fitTextH(d, el, growOnly) { if (el.sizing === 'fixed') return null; con
 $('#canvas').addEventListener('input', e => { if (editing && e.target === editing) { const el = find(editing.dataset.id); if (el) { if (el.sizing === 'autow') { autoWidth(editing, el); renderOverlay(); } const hh = fitTextH(editing, el); if (hh != null) { el.h = hh; editing.style.minHeight = hh + 'mm'; renderOverlay(); placeTextBar(); } } } });
 // 붙여넣기는 글자만 (다른 곳 서식·글꼴이 섞여 들어오지 않게)
 $('#canvas').addEventListener('paste', e => { if (!editing || !editing.contains(e.target)) return; e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData('text/plain'); document.execCommand('insertText', false, t); });
-$('#canvas').addEventListener('blur', e => { if (!(editing && e.target === editing && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#textBar')))) return;
+$('#canvas').addEventListener('blur', e => { if (!(editing && e.target === editing && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#textBar, #mmKMenu')))) return;
   /* 11/26 포스터 조: 글 고치는 중 오른쪽 패널 단추를 누르면 blur에서 바로 끝내며 패널을 다시 그려 누른 단추가 사라짐(첫 클릭이 먹히지 않음·innerHTML 오류) → 패널 안이면 그 클릭이 끝난 뒤 끝냄 */
   const rt = e.relatedTarget; if (rt && rt.closest && rt.closest('#inspector, #sidebody')) { let tm = 0; const done = () => { document.removeEventListener('click', done, true); clearTimeout(tm); setTimeout(() => { if (editing) endEdit(); }, 0); }; document.addEventListener('click', done, true); tm = setTimeout(done, 500); return; }
   endEdit(); }, true);
@@ -4143,6 +4144,7 @@ function mmPanelHTML(el) {
 }
 /* 칸 넣기: 글 고치는 중이면 커서 자리에, 아니면 고른 글 상자의 「[수련생 이름]」 자리를, 그것도 없으면 안내 */
 function mmInsert(k) {
+  if (mmFieldMenu.cancel) mmFieldMenu.cancel();
   const tok = '{' + k + '}';
   { const ta = $('#cellEd'); if (ta && ta.dataset.tbl) { ta.focus(); const a = ta.selectionStart, b = ta.selectionEnd; ta.setRangeText(tok, a, b, 'end'); ta.dispatchEvent(new Event('input', { bubbles: true })); return; } }  /* 표 칸을 쓰는 중: 커서 자리에 */
   if (editing) { const ed = document.querySelector('#canvas .el-text.editing') || document.querySelector('#canvas [contenteditable="true"]'); if (ed) { ed.focus(); document.execCommand('insertText', false, tok); return; } }
@@ -4316,28 +4318,31 @@ function mmXDialog() {
 /* 메일머지 표시 달기 단축키 — 아래한글처럼 글을 쓰는 중 Ctrl+K, M (맥 ⌘K, M): 커서 자리에 넣을 칸 고르기 */
 let mmChordT = 0;
 function mmFieldMenu(ed) {
-  /* 초점은 글 상자에 그대로(메뉴로 옮기면 글 고치기가 끝남) — ↑↓ 옮기기 · Enter 넣기 · Esc 닫기, 마우스로 눌러도 됨 */
-  const isTa = ed.tagName === 'TEXTAREA', sl = window.getSelection(), rg = !isTa && sl.rangeCount ? sl.getRangeAt(0).cloneRange() : null;
+  /* 키 입력은 메뉴 안 보이지 않는 칸(sink)으로 — 한글 입력 상태에서 M이 「ㅡ」로 글 상자에 들어가지 않게. 글 고치기는 그대로(blur 예외 #mmKMenu) — ↑↓ · Enter · Esc · 마우스 */
+  const isTa = ed.tagName === 'TEXTAREA', sl = window.getSelection(), rg = !isTa && sl.rangeCount ? sl.getRangeAt(0).cloneRange() : null, a0 = isTa ? ed.selectionStart : 0, a1 = isTa ? ed.selectionEnd : 0;
   const L = mmList(), ex = L[Math.max(0, mmPv)] || { n: '김나라', b: '', g: '', y: '' }, cols = (doc.merge && doc.merge.cols) || [];
   const items = cols.map(c => ['{' + c + '}', `{{${c}}}`, `엑셀 열 · ${String(mmField(ex, c) || '(빈칸)')}`]).concat(MM_F.map(([k, t, fn]) => [k, `{${k}}`, `${t}${L.length ? ' · ' + String(fn(ex) || '') : ''}`]));
   $('#mmKMenu') && $('#mmKMenu').remove(); const m = document.createElement('div'); m.id = 'mmKMenu'; m.className = 'tl-menu mmkmenu';
-  m.innerHTML = `<div class="mmk-h">✉ 메일머지 표시 달기 <small>↑↓ · Enter · Esc</small></div>` + items.map(([k, t, d], i) => `<button type="button" data-mk="${esc(k)}" class="${i ? '' : 'on'}"><b>${esc(t)}</b><small>${esc(d)}</small></button>`).join('');
+  m.innerHTML = `<input class="mmk-sink" aria-label="메일머지 표시 고르기" autocomplete="off"><div class="mmk-h">✉ 메일머지 표시 달기 <small>↑↓ · Enter · Esc</small></div>` + items.map(([k, t, d], i) => `<button type="button" tabindex="-1" data-mk="${esc(k)}" class="${i ? '' : 'on'}"><b>${esc(t)}</b><small>${esc(d)}</small></button>`).join('');
   document.body.appendChild(m); let r = rg ? rg.getBoundingClientRect() : null; if (!r || (!r.width && !r.height)) r = ed.getBoundingClientRect();
   m.style.left = Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.left)) + 'px'; m.style.top = (r.bottom + 6 + m.offsetHeight < innerHeight ? r.bottom + 6 : Math.max(8, r.top - m.offsetHeight - 6)) + 'px';
-  const B = () => [...m.querySelectorAll('[data-mk]')]; let at = 0;
+  const sink = m.querySelector('.mmk-sink'), B = () => [...m.querySelectorAll('[data-mk]')]; let at = 0, gone = false;
   const mark = () => B().forEach((b, i) => { b.classList.toggle('on', i === at); if (i === at) b.scrollIntoView({ block: 'nearest' }); });
-  const close = () => { m.remove(); document.removeEventListener('keydown', key, true); document.removeEventListener('pointerdown', out, true); };
-  const put = k => { close(); const tok = '{' + k + '}'; ed.focus(); if (isTa) { ed.setRangeText(tok, ed.selectionStart, ed.selectionEnd, 'end'); ed.dispatchEvent(new Event('input', { bubbles: true })); return; } if (rg) { sl.removeAllRanges(); sl.addRange(rg); } document.execCommand('insertText', false, tok); };
-  const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(); return; } if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopImmediatePropagation(); at = (at + (e.key === 'ArrowDown' ? 1 : -1) + B().length) % B().length; mark(); return; } if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); e.stopImmediatePropagation(); put(B()[at].dataset.mk); return; } close(); };
-  const out = e => { if (!m.contains(e.target)) close(); };
-  m.addEventListener('mousedown', e => e.preventDefault()); m.onclick = e => { const b = e.target.closest('[data-mk]'); if (b) put(b.dataset.mk); };
-  setTimeout(() => { document.addEventListener('keydown', key, true); document.addEventListener('pointerdown', out, true); });
+  const back = () => { ed.focus(); if (isTa) { try { ed.setSelectionRange(a0, a1); } catch (e) {} } else if (rg) { sl.removeAllRanges(); sl.addRange(rg); } };
+  const close = () => { if (gone) return; gone = true; mmFieldMenu.cancel = null; document.removeEventListener('pointerdown', out, true); m.remove(); };
+  const put = k => { close(); back(); const tok = '{' + k + '}'; if (isTa) { ed.setRangeText(tok, ed.selectionStart, ed.selectionEnd, 'end'); ed.dispatchEvent(new Event('input', { bubbles: true })); return; } document.execCommand('insertText', false, tok); };
+  sink.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { e.preventDefault(); close(); back(); return; } if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); at = (at + (e.key === 'ArrowDown' ? 1 : -1) + B().length) % B().length; mark(); return; } if (e.key === 'Enter') { e.preventDefault(); put(B()[at].dataset.mk); return; } if (e.key === 'Tab') { e.preventDefault(); close(); back(); } });
+  sink.addEventListener('input', () => { sink.value = ''; });
+  const out = e => { if (m.contains(e.target)) return; if (e.target.closest && e.target.closest('[data-mmins], #textBar')) { close(); back(); return; } close(); setTimeout(() => { if (isTa) { if ($('#cellEd') === ed && document.activeElement !== ed) closeCellEditor(true); } else if (editing && !editing.contains(document.activeElement)) endEdit(); }, 0); };
+  m.addEventListener('mousedown', e => { if (e.target !== sink) e.preventDefault(); }); m.onclick = e => { const b = e.target.closest('[data-mk]'); if (b) put(b.dataset.mk); };
+  mmFieldMenu.cancel = () => { close(); back(); };  /* 메뉴가 떠 있을 때 속성 창 칸 단추를 누르면: 메뉴 닫고 커서 자리 되살린 뒤 넣기 */
+  sink.focus({ preventScroll: true }); setTimeout(() => document.addEventListener('pointerdown', out, true));
   if (!L.length) toast('메일머지 표시를 넣습니다 — 명단은 속성 창 「✉ 메일머지」에서 관리프로그램·엑셀로 고르세요');
 }
 document.addEventListener('keydown', e => {
   const ed = e.target && e.target.closest ? e.target.closest('#canvas [contenteditable="true"], #cellEd') : null; if (!ed || doc.cert || doc.att) return;
   if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyK') { e.preventDefault(); e.stopImmediatePropagation(); mmChordT = Date.now(); return; }
-  if (mmChordT && Date.now() - mmChordT < 1500 && e.code === 'KeyM') { e.preventDefault(); e.stopImmediatePropagation(); mmChordT = 0; mmFieldMenu(ed); return; }
+  if (mmChordT && Date.now() - mmChordT < 1500 && (e.code === 'KeyM' || e.key === 'ㅡ')) { e.preventDefault(); e.stopImmediatePropagation(); mmChordT = 0; mmFieldMenu(ed); return; }
   if (!['Control', 'Meta'].includes(e.key)) mmChordT = 0;
 }, true);
 /* 속성 창: 엑셀 열 표시 달기 단추 + 명단에 없는 표시 알림 */

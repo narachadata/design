@@ -2432,3 +2432,4 @@ table.dvinfo th{font-weight:700}
 /* 11/27 모아 찍기 이름표·라벨(10~24쪽) */
 .prnup .prnup-more{display:flex;align-items:center;gap:6px;flex-basis:100%;flex-wrap:wrap;margin-top:4px}
 .prnup .prnup-more .seg button{padding-left:6px;padding-right:6px}
+.mmkmenu .mmk-sink{position:absolute;opacity:0;width:1px;height:1px;left:0;top:0;border:0;padding:0;pointer-events:none}
