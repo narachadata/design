@@ -9615,6 +9615,9 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
   bc.onmessage = e => { const m = e.data || {}; if (m.id === me) return; if (!tabMulti) { tabMulti = true; slotSave(); } if (m.t === 'hi') { bc.postMessage({ t: 'here', id: me, docId: doc && doc.docId }); warn(m.docId); } else if (m.t === 'here') warn(m.docId); }; setTimeout(() => bc.postMessage({ t: 'hi', id: me, docId: doc && doc.docId }), 3000); } catch (e) {} })();
 (async function init() {
   doc = newDoc(); renderRail();
+  /* 11/27 시작 중 가림: 지난 문서를 되살리는 몇 초 동안(구글 확인·파일 읽기) 다른 문서를 열면 그 위에 덮이던 것 — 되살릴 때까지 화면을 잠깐 막음(최대 10초) */
+  const boot = document.createElement('div'); boot.id = 'ncBoot'; boot.innerHTML = '<span><i class="spin"></i>지난 문서를 여는 중…</span>'; document.body.appendChild(boot);
+  const bootOff = () => { clearTimeout(bootT); boot.remove(); }, bootT = setTimeout(bootOff, 10000);
   let loaded = false;
   try {
     const p = await store.reconnect();
@@ -9640,6 +9643,7 @@ function sameDoc(a, b) { return a && b && (a.docId && b.docId ? a.docId === b.do
   } catch (e) { console.warn(e); }
   if (!loaded) { try { const saved0 = await store.idbGet('doc'), saved = await tabPick(saved0); if (saved) { await loadDoc(saved); loaded = true; setStatus(saved !== saved0 ? '이 탭에서 쓰던 문서를 불러왔습니다' : '브라우저 저장본을 불러왔습니다'); setTimeout(() => relinkByDocId(), 2500); } } catch (e) {} }  /* 파일 연결을 못 되살렸으면 같은 문서 번호의 파일에 다시 연결 */
   if (!loaded) { doc = newDoc(); doc.calendar.year = 2027; doc.name = '2027 인성 캘린더'; virtueTextFix(doc.calendar, 2027); virtueArtFix(doc.calendar, null, 2027); doc.pages = CAL.buildPages(doc, uid, { year: 2027, kind: 'full' }); ensureAllHolidays(); $('#pname').value = doc.name; hist = [snapshot()]; histMeta = [{ cur: 0, sel: [] }]; hptr = 0; renderAll(); setStatus('2027년 캘린더 초안을 만들었습니다. 공휴일은 자동으로 들어갔습니다.'); freshDraft = true; }
+  bootOff();
   // 동기화 폴더(구글 드라이브): 허락돼 있으면 바로 맞추고, 아니면 한 번 눌러 허락받기
   const nlm0 = /[?&]nlimport=/.test(location.search), acctHash = acctFromHash();
   try {

@@ -2437,3 +2437,6 @@ table.dvinfo th{font-weight:700}
 .mmbox .mmppl label[hidden]{display:none}
 .prmm .prmmq{width:100%;margin:6px 0 4px;padding:4px 8px;border:1px solid var(--ui-line);border-radius:6px;font:inherit;font-size:12px}
 .prmm .prmm-grid [hidden]{display:none}
+/* 11/27 시작 중 가림 (지난 문서를 되살리는 동안, 최대 10초) */
+#ncBoot{position:fixed;inset:0;z-index:99990;background:rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center;cursor:progress}
+#ncBoot span{display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;background:#fff;box-shadow:0 6px 24px rgba(16,24,40,.18);font-size:14px;font-weight:600;color:var(--ui-fg,#1a1a1a)}
