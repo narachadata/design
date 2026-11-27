@@ -305,8 +305,22 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) sync
 setInterval(() => { if (!document.hidden) syncTick(); }, 20000);
 setInterval(() => { if (store.state.dir) store.pushSettings().then(r => { if (r === 'merged') applySyncedSettings(); }).catch(() => {}); }, 4000);
 // 폴더가 연결된 뒤: 설정 맞추고, 문서가 폴더 밖이면 폴더의 최근 문서를 열거나 지금 문서를 폴더에 저장
+/* 11/27 팀장님 「예전 방식으로 구글 드라이브 연결된 PC가 있다면 강제로 새로운 방법으로 연결하도록 유도」: 드라이브 앱 폴더(예전 방식)로 연결된 PC는 공방을 열 때마다 바꾸기 창
+   (그 PC끼리는 드라이브 앱이 파일을 늦게 맞춰 「충돌 사본」이 생기기 쉬움 · 새 방식 PC와는 서로 안 보임). 「구글 로그인으로 바꾸기」 = connectDriveChecked(지금 폴더의 문서·설정을 옮겨 줌) */
+async function oldModeNag() {
+  try { const st = store.state; if (!st.dir || st.dir.__gd || (store.isDrive && store.isDrive()) || !(await store.folderReady())) return; if (document.querySelector('dialog[open]')) { setTimeout(oldModeNag, 4000); return; }
+    let d = $('#dlgOldMode'); if (d) d.remove(); d = document.createElement('dialog'); d.id = 'dlgOldMode'; d.className = 'nw-dlg';
+    d.innerHTML = `<div class="dhead"><h2>저장 방식을 바꿔 주세요</h2></div><div class="dbody" style="max-width:540px"><p>이 PC는 <b>예전 방식(구글 드라이브 앱 폴더)</b>으로 저장하고 있습니다. 이 방식은 두 PC가 같은 문서를 고칠 때 드라이브 앱이 파일을 늦게 맞춰 <b>「충돌 사본」이 생기는 원인</b>이 되고, 새 방식으로 쓰는 PC와는 문서가 서로 보이지 않습니다.</p>
+      <p><b>구글 로그인 저장</b>으로 바꾸면 이 PC에 먼저 저장하고 드라이브에는 뒤에서 올리며, 두 PC가 같이 고쳐도 사본 없이 합쳐집니다. 지금 폴더의 문서·설정은 그대로 옮겨 드립니다(지금 폴더의 파일은 지우지 않음).</p>
+      <p class="hint">로그인할 계정: ${esc((acctGet() || {}).email || '우리 공방 구글 계정')}</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px"><button class="btn primary full" id="omGo" style="padding:10px 14px">구글 로그인 저장으로 바꾸기 (권장)</button><button class="btn full" id="omLater">이번만 예전 방식으로 쓰기 <small style="font-weight:400;color:var(--ui-muted)">— 다음에 열면 다시 물어요</small></button></div></div>`;
+    document.body.appendChild(d); d.addEventListener('cancel', e => e.preventDefault());
+    d.querySelector('#omLater').onclick = () => { d.close(); d.remove(); setStatus('예전 방식(드라이브 앱 폴더)으로 저장 중 — 저장 설정에서 「앱 없이 쓰기로 바꾸기」를 눌러 주세요'); };
+    d.querySelector('#omGo').onclick = async () => { d.close(); d.remove(); try { const ok = await connectDriveChecked(); if (ok) toast('구글 로그인 저장으로 바꿨습니다 — 이제 두 PC가 같이 고쳐도 사본 없이 합쳐집니다'); else setTimeout(oldModeNag, 1500); } catch (e) { toast('바꾸지 못했습니다: ' + (e.message || e) + ' — 저장 설정에서 다시 눌러 주세요', true); } };  /* 로그인 창은 누른 순간 바로 (connectDriveChecked 맨 앞) */
+    d.showModal(); } catch (e) { console.warn('예전 방식 안내', e); } }
 async function afterFolderReady(opts) {
   opts = opts || {};
+  setTimeout(oldModeNag, 2500);
   await syncSettings(true);
   NC.lib.load(true); syncBlocks();
   if (store.state.handle && await store.inFolder(store.state.handle)) {

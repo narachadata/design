@@ -321,7 +321,8 @@ NC.gdrive = (function () {
   async function mergeUp(n, f, c, pid) {  /* 성공하면 true: 합친 판을 올리고 이 PC 판도 합친 판으로 */
     if (!window.NC || !NC.live || !NC.live.merge || typeof c.data !== 'string') return false;
     const bt = await st().idbGet('gd-b:' + n.k).catch(() => null);
-    let T, M, B; try { M = JSON.parse(c.data); B = bt ? JSON.parse(bt) : null; T = JSON.parse(await unpackDoc(await (await call(`${API}/files/${f.id}?alt=media`, {}, true)).text())); } catch (e) { if (e && e.name === 'SyntaxError') return false; throw e; }
+    let T, M, B; try { M = JSON.parse(c.data); B = bt ? JSON.parse(bt) : null; T = JSON.parse(await unpackDoc(await (await call(`${API}/files/${f.id}?alt=media`, {}, true)).text())); } catch (e) { if (e && e.name === 'SyntaxError') { if ((n.mfail = (n.mfail || 0) + 1) < 6) { const x = new Error('드라이브 판을 덜 받음 — 잠시 뒤 다시 합침'); x.later = true; throw x; } return false; } throw e; }  /* 11/27: 덜 받은 판(읽기 실패)으로 곧장 사본을 만들지 않고 5번까지 다시 */
+    delete n.mfail;
     if (!T || !T.pages || !M || !M.pages || (T.docId && M.docId && T.docId !== M.docId)) return false;
     if (B && B.saveId && T.saveId !== B.saveId && !(T.lineage || []).includes(B.saveId)) B = null;  /* 11/27 합치기 조: 이 PC가 마지막에 올린 판이 그사이 다른 PC 판에 덮여 드라이브 판의 조상이 아님 → 그것을 기준으로 하면 이 PC의 그 판 작업이 사라짐 → 두 판이 함께 가진 판으로 */
     if (!B && st().commonBase) B = await st().commonBase(M, T);  /* 11/26: 기준판이 없던 예전 문서·새로 고침 직후 — 계보가 겹치는 판, 그것도 없으면 합집합(사본 없음) */

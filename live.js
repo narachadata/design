@@ -287,7 +287,15 @@ NC.live = (function () {
     else if (msg.kind === 'cur') { touch(msg, null, via); const x = room.peers.get(msg.from); if (x) { x.c = msg.c || null; x.ct = Date.now(); } paintCursors(); }
     else if (msg.kind === 'bye') { const x = room.peers.get(msg.from); room.peers.delete(msg.from); if (x) note(`${x.pc || '다른 PC'}에서 이 문서를 닫았습니다`); emit(); paint(); checkSaver(); }
     else if (msg.kind === 'hello') { touch(msg, null, via); if (oldest() === me.id && api) { changed(); const d = api.doc(); send({ kind: 'state', pages: d.pages, doc: docFields(d), q: queue.slice() }, msg.from); } }  /* 아직 못 보낸 이 PC 변경은 먼저 보내고, 받았지만 (편집 중이라) 아직 적용 안 한 다른 PC 변경도 함께 넘김 */
-    else if (msg.kind === 'state') { if (!api) return; const d = api.doc(); const sd = Object.assign({}, msg.doc, { pages: msg.pages }); const ops = diff(scan(d), scan(sd), sd); if (ops.length) { if (NC.store && NC.store.state.dirty && ops.some(o => o.op === 'del' || o.op === 'pageDel' || o.op === 'set' || o.op === 'patch')) { try { NC.store.writeCopy(JSON.parse(JSON.stringify(d)), '실시간 들어가기 전 이 PC 작업').then(n => note(`이 PC에서 저장하지 않은 작업이 있어 "${n}"로 보관하고 함께 편집을 시작합니다`)).catch(() => {}); } catch (e) {} } receiveOps(ops); } if (Array.isArray(msg.q) && msg.q.length) receiveOps(msg.q); }
+    else if (msg.kind === 'state') { if (!api) return; const d = api.doc(); const sd = Object.assign({}, msg.doc, { pages: msg.pages }); const ops = diff(scan(d), scan(sd), sd); if (ops.length) { const st9 = NC.store && NC.store.state;
+        if (st9 && st9.dirty && ops.some(o => o.op === 'del' || o.op === 'pageDel' || o.op === 'set' || o.op === 'patch')) {
+          /* 11/27 팀장님 「송년회 포스터 충돌 사본 6개」: 예전엔 다시 들어올 때마다(새 버전·끊겼다 붙음) 저장 안 된 이 PC 작업을 드라이브 「충돌 사본」 파일로 만듦 — 실시간 중엔 저장 담당이 아닌 PC가 늘 「저장 안 됨」이라 거듭 생김
+             → 사본 파일 없이: 마지막 저장 판을 기준으로 이 PC가 고친 것을 상대 상태 위에 합치고(이 PC 것을 상대에게도 보냄), 만일을 위해 이 브라우저 「직전 문서」에만 한 부 */
+          const mine = JSON.parse(JSON.stringify(d));
+          (async () => { try { if (NC.store.keepLocal) await NC.store.keepLocal(mine, '실시간 들어가기 전 이 PC 작업');
+              const b = st9.lastSaveId && NC.store.verById ? await NC.store.verById(st9.lastSaveId) : null; const out = b ? mergeDocs(b, mine, sd) : unionDocs(mine, sd);
+              receiveOps(diff(scan(api.doc()), scan(out), out)); const sdv = scan(sd); const push = (n) => { if (queue.length && n < 20) { setTimeout(() => push(n + 1), 250); return; } try { base = sdv; changed(); } catch (e) {} }; setTimeout(() => push(0), 250);  /* 상대가 보낸 상태를 기준으로 이 PC가 더한 것을 보냄 (합친 뒤 기준이 합친 상태가 되어 안 보내지던 것) */ } catch (e) { receiveOps(ops); } })();
+        } else receiveOps(ops); } if (Array.isArray(msg.q) && msg.q.length) receiveOps(msg.q); }
   }
   function docFields(d) { const o = {}; for (const k in d) if (k !== 'pages' && !SKIP.includes(k)) o[k] = d[k]; return o; }
   // 접속자 기록. via: 'bc'(같은 브라우저) | 'fb'(Firebase) — 어느 통로로 마지막에 봤는지 남겨 끊김 판정에 씀

@@ -91,7 +91,7 @@ NC.store = (function () {
         let j = null, rerr = null; try { j = JSON.parse(await f0.text()); } catch (e) { if (e && e.name !== 'SyntaxError') rerr = e; }
         if (!j && rerr) return { retry: true };  /* 잠깐 못 읽음(다른 PC 사진을 아직 못 받음·인터넷·로그인) — 덮지 않고 다시, 충돌 사본은 만들지 않음 (11/25 점검) */
         if (!j) { /* 동기화 중이라 덜 받은 파일일 수 있음: 덮어쓰지 않고 잠시 뒤 다시. 4번째에 이 PC 작업을 충돌 사본으로 한 번 보관(예전엔 4번째에 덮어씀) */
-          if (++state.retries === 4) { try { await writeCopy(doc, pcName() + ' 저장 대기'); } catch (e) {} }
+          if (++state.retries === 4) { try { await keepLocal(doc, pcName() + ' 저장 대기 — 연결된 파일을 읽지 못함'); } catch (e) {} }  /* 11/27: 드라이브 사본 파일 대신 */
           return { retry: true, held: state.retries >= 4 }; }
         else state.retries = 0;
         if (j && (j.saveId || '') !== state.lastSaveId) { if (window.NC && NC.live && NC.live.peers() && j.docId && j.docId === doc.docId) { if (!descends(j) && lostEls(j, doc)) return { conflict: true, file: f0, data: j };  /* 11/26: 사본 대신 합치기(app.js mergeTheirs) */ adopt(j); } else return { conflict: true, file: f0, data: j }; } // 실시간으로 같이 고치는 중이면 상대 저장본을 이어받아 그 다음 판으로 저장
@@ -111,7 +111,13 @@ NC.store = (function () {
   // 충돌 때 한쪽 내용을 따로 보관: 동기화 폴더가 있으면 그 안에 "충돌 사본" 파일로, 없으면 내려받기로
   /* 사본이 생긴 까닭 기록 (11/26 「배포 뒤 사본이 계속」 — 다음에 원인을 바로 보려고, 이 PC localStorage 최근 20개, 🔍 점검에 보임) */
   function noteCopy(name, why) { try { const L = JSON.parse(localStorage.getItem('naracal-copylog') || '[]'); L.unshift({ t: Date.now(), name: String(name || '').slice(0, 80), why: String(why || '').slice(0, 80), v: window.NARACAL_VER || '' }); localStorage.setItem('naracal-copylog', JSON.stringify(L.slice(0, 20))); } catch (e) {} }
-  async function writeCopy(data, label) { noteCopy((data && data.name) || '', '공방: ' + (label || ''));
+  /* 11/27 팀장님 「송년회 포스터 충돌 사본이 6개 더」: 저절로 생기는 사본은 드라이브 파일로 만들지 않고 이 브라우저의 「직전 문서」에만 보관(저장 ▾ → 직전 문서 되살리기, 최근 6개) */
+  async function keepLocal(data, label) { noteCopy((data && data.name) || '', '브라우저에만 보관: ' + (label || ''));
+    try { const cp = JSON.parse(JSON.stringify(data)); delete cp.saveId; cp._keptAt = Date.now(); cp._why = String(label || ''); let L = (await idbGet('doc-prevs')) || []; L = [cp].concat(L.filter(x => x && !(x.docId === cp.docId && Math.abs((x._keptAt || 0) - cp._keptAt) < 60000))).slice(0, 6); await idbSet('doc-prevs', L); return '직전 문서(이 브라우저)'; } catch (e) { return ''; } }
+  const copyAt = new Map();  /* 문서마다 마지막으로 사본 파일을 만든 때 — 10분 안에 또 생기면 파일 대신 브라우저에만 */
+  async function writeCopy(data, label) {
+    { const key = (data && (data.docId || data.name)) || ''; const t0 = copyAt.get(key) || Number(localStorage.getItem('naracal-copyat:' + key) || 0); if (Date.now() - t0 < 10 * 60e3) return keepLocal(data, label + ' (10분 안 거듭 — 파일 안 만듦)'); copyAt.set(key, Date.now()); try { localStorage.setItem('naracal-copyat:' + key, String(Date.now())); } catch (e) {} }
+    noteCopy((data && data.name) || '', '공방: ' + (label || ''));
     const t = new Date(), p2 = n => String(n).padStart(2, '0');
     const stamp = `${p2(t.getMonth() + 1)}-${p2(t.getDate())} ${p2(t.getHours())}${p2(t.getMinutes())}${p2(t.getSeconds())}`;
     const base = (data.name || 'design').replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 80) || 'design';
@@ -373,6 +379,6 @@ NC.store = (function () {
   async function emptyEntry(name, handle) { const t = await state.dir.getDirectoryHandle(TRASH); await t.removeEntry(name, handle && handle.__gd ? { recursive: true, handle } : { recursive: true }); }  /* 11/26: 구글 드라이브는 같은 이름이 둘일 수 있어 손잡이로 그 파일만 */
 
   return { ensureDir, writeBlobAt, listFiles, snapshot, listSnapshots, readSnapshot, state, idbGet, idbSet, idbDel, uniqueNameIn: uniqueName, dirAt, listDir, walkDocs, allFolders, makeFolder, moveEntry, toTrash, trashFrom, emptyEntry, TRASH, connectNew, openExisting, reconnect, requestPermission, readFile, writeFile, disconnect, checkExternal, download, pickLocal,
-    writeCopy, pcName, setPcName, adopt, descends, baseFor, commonBase, verById, remember, noteCopy, pcId: () => pc().id,
+    writeCopy, pcName, setPcName, adopt, descends, baseFor, commonBase, verById, remember, noteCopy, keepLocal, pcId: () => pc().id,
     connectFolder, connectDrive, isDrive, useFolder, folderInfo, reconnectFolder, requestFolderPermission, disconnectFolder, folderReady, pushSettings, pullSettings, findDocById, listDocs, inFolder, openHandle, saveIntoFolder, copyIntoFolder };
 })();
