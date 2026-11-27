@@ -106,7 +106,7 @@ async function saveFileNow() {
     else if (r && r.retry) { clearTimeout(fileTimer); fileTimer = setTimeout(saveFileNow, r.held ? 15000 : 3000); if (r.held) setStatus(`연결된 파일을 아직 읽을 수 없어(동기화 중) 덮어쓰지 않고 기다립니다 · 이 PC 작업은 충돌 사본으로 보관 · ${tnow()}`); }
   } catch (e) {
     if (e && e.name === 'NotFoundError' && !saveFileNow._relink) { /* 다른 PC·폴더 이름 바꾸기로 파일이 옮겨짐: 문서 번호로 다시 찾아 이어 저장 */
-      saveFileNow._relink = true; try { const h = doc.docId && await store.findDocById(doc.docId); if (h) { store.state.handle = h; store.state.fileName = h.name; store.state.lastMod = 0; await store.idbSet('fileHandle', h).catch(() => {}); toast(`연결된 파일이 옮겨져 새 위치("${h.name}")에 이어서 저장합니다`); saveFileNow._relink = false; return await saveFileNow(); } } catch (e2) {} finally { saveFileNow._relink = false; }
+      saveFileNow._relink = true; try { const st9 = store.state, h = doc.docId && await store.findDocById(doc.docId, { main: true, lineage: [st9.lastSaveId].concat(st9.lineage || []), name: st9.fileName }); if (h) { store.state.handle = h; store.state.fileName = h.name; store.state.lastMod = 0; await store.idbSet('fileHandle', h).catch(() => {}); toast(`연결된 파일이 옮겨져 새 위치("${h.name}")에 이어서 저장합니다`); saveFileNow._relink = false; return await saveFileNow(); } } catch (e2) {} finally { saveFileNow._relink = false; }
       setStatus('연결된 파일을 찾을 수 없습니다'); toast('연결된 파일이 옮겨지거나 지워져 저장하지 못했습니다. 작업은 브라우저에 남아 있습니다 — 저장 ▾ → "동기화 폴더에 저장"으로 새로 저장하세요', true);
     } else { setStatus('파일 저장 실패: ' + e.message); toast('파일 저장 실패: ' + e.message, true); }
   }
@@ -129,6 +129,10 @@ function confirmBtns(msg) {
 /* 11/26 팀장님 「같은 파일을 여러 곳에서 열면 충돌 사본이 자꾸 — 따로 저장한 게 아니면 같이 작업」: 두 판이 함께 가졌던 판(store.baseFor)을 찾으면
    묻지 않고 요소·속성 단위로 합침(같은 속성을 둘 다 고쳤으면 이 PC 것) → 합친 판을 다른 PC 판의 다음 판으로 저장. 못 찾을 때만 예전처럼 묻고 사본 */
 let mergeToastAt = 0;
+/* 다른 PC가 이 PC 판과 합쳐 올리면서 같은 곳은 그쪽 것을 남겼을 때 — 받는 PC에도 알림 (11/27 합치기 조: 내 글이 말없이 바뀜) */
+function mergeNoteToast(j) { const n = j && j.mergeNote; if (!n || !n.at || n.by === store.pcName()) return; let seen = 0; try { seen = Number(localStorage.getItem('naracal-mnote')) || 0; } catch (e) {} if (n.at <= seen || Date.now() - n.at > 10 * 60000) return; try { localStorage.setItem('naracal-mnote', String(n.at)); } catch (e) {}
+  if (n.union) toast(`${n.by}가 두 판을 모아 합쳤습니다 — 지운 것이 되살아났는지 한 번 봐 주세요 (버전 기록에 이전 판)`); else if ((n.what || []).length) toast(`${n.by}가 이 PC에서 고친 것과 합쳤습니다 — 살펴볼 곳: ${n.what.slice(0, 5).map(x => String(x).slice(0, 24)).join(', ')} (같은 곳은 ${n.by} 것 · 이 PC 판은 버전 기록에서 되살릴 수 있어요)`); }
+window.addEventListener('gdrive-merged', e => { const d = e.detail || {}; if (d.union) toast('다른 PC 판과 두 판을 모아 합쳐 올렸습니다 — 지운 것이 되살아났는지 한 번 봐 주세요'); else if ((d.what || []).length) toast(`다른 PC에서 고친 것과 합쳐 올렸습니다 — 살펴볼 곳: ${d.what.slice(0, 5).join(', ')} (같은 곳을 둘 다 고쳤으면 이 PC 것)`); });
 function refreshAfterFile() { cur = clamp(cur, 0, doc.pages.length - 1); sel = sel.filter(id => find(id)); if (cellSel && !find(cellSel.id)) cellSel = null; renderAll(); if (hptr >= 0) { hist[hptr] = snapshot(); histMeta[hptr].rn = NC.live.rn; } updateSaveBadge(); }
 async function mergeTheirs(theirs, file) {
   const st = store.state; if (!theirs || !theirs.pages || !sameDoc(theirs, doc)) return false;
@@ -141,7 +145,9 @@ async function mergeTheirs(theirs, file) {
   Object.keys(doc.assets || {}).forEach(k => liveAssetKeys.add(k));
   refreshAfterFile(); markDirty();
   const who = theirs.savedBy && theirs.savedBy !== store.pcName() ? theirs.savedBy : '다른 PC';
-  if (Date.now() - mergeToastAt > 60000) { mergeToastAt = Date.now(); toast(`${who}에서 고친 것과 합쳤습니다 — 같이 작업 중 (충돌 사본 없음 · 같은 곳을 둘 다 고쳤으면 이 PC 것)`); }
+  const I = NC.live.lastMerge || {}; if (I.union) toast(`${who} 판과 두 판을 모아 합쳤습니다 — 함께 가진 판을 몰라 대강 합쳤으니 지운 것이 되살아났거나 고친 것이 빠졌는지 한 번 봐 주세요 (버전 기록에 두 판 모두 있음)`);
+  else if (I.what && I.what.length) toast(`${who}에서 고친 것과 합쳤습니다 — 살펴볼 곳: ${I.what.join(', ')} (같은 곳을 둘 다 고쳤으면 이 PC 것 · ${who} 판은 버전 기록에)`);
+  else if (Date.now() - mergeToastAt > 60000) { mergeToastAt = Date.now(); toast(`${who}에서 고친 것과 합쳤습니다 — 같이 작업 중 (충돌 사본 없음)`); }
   setStatus(`${who}와 합침 ${tnow()}`);
   return true;
 }
@@ -276,7 +282,7 @@ async function checkExternalChange() {
   // 여기 저장 안 한 변경이 있거나, 상대가 내 마지막 저장을 못 보고 저장했으면 충돌
   if (st.dirty || !store.descends(j)) { await resolveConflict(j, ch.file); return; }
   st.lastMod = ch.file.lastModified; store.adopt(j);
-  if (sameDoc(j, doc)) { NC.live.patchTo(doc, j); sanitizeDoc(doc); Object.keys(doc.assets || {}).forEach(k => liveAssetKeys.add(k)); st.dirty = false; refreshAfterFile(); setStatus(`${j.savedBy || '다른 PC'}에서 고친 것을 받음 ${tnow()}`); return; }  /* 같은 문서: 통째로 다시 열지 않고 달라진 요소만(보던 쪽·선택 그대로) */
+  if (sameDoc(j, doc)) { NC.live.patchTo(doc, j); sanitizeDoc(doc); Object.keys(doc.assets || {}).forEach(k => liveAssetKeys.add(k)); st.dirty = false; refreshAfterFile(); setStatus(`${j.savedBy || '다른 PC'}에서 고친 것을 받음 ${tnow()}`); mergeNoteToast(j); return; }  /* 같은 문서: 통째로 다시 열지 않고 달라진 요소만(보던 쪽·선택 그대로) */
   await loadDoc(j, `${j.savedBy || '다른 PC'}에서 바뀐 내용을 불러왔습니다`, true);
 }
 // 동기화 폴더의 설정값(API 키·모델·최근 사용 목록): 다른 PC가 바꾼 건 가져오고, 여기서 바뀐 건 올림
@@ -5185,7 +5191,7 @@ function pickSaveLocation(o) {
    → 저장 곳에 같은 문서 번호(docId)의 본 파일이 있으면 그 파일에 다시 연결하고, 그 파일 내용과 합쳐 이어 저장 (lastMod=1 → writeFile이 비교·합치기) */
 async function relinkByDocId(quiet) {
   if (!doc || !doc.docId || store.state.handle || freshDraft) return false;
-  try { if (!(await store.folderReady())) return false; const h = await store.findDocById(doc.docId, { main: true }); if (!h) return false;
+  try { if (!(await store.folderReady())) return false; const st9 = store.state, h = await store.findDocById(doc.docId, { main: true, lineage: [st9.lastSaveId].concat(st9.lineage || []), name: st9.fileName || docFileName(), strict: true }); if (!h) return false;
     store.state.handle = h; store.state.fileName = h.name; store.state.needPerm = false; store.state.lastMod = 1; await store.idbSet('fileHandle', h).catch(() => {}); updateSaveBadge();
     if (!quiet) toast(`이 문서의 파일 「${h.name}」에 다시 연결했습니다 — 새 파일을 만들지 않고 이어서 저장합니다`); markDirty(); return true; } catch (e) { console.warn('문서 다시 연결 실패', e); return false; } }
 async function saveNow() {

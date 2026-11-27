@@ -8,7 +8,7 @@ window.NC = window.NC || {};
 NC.live = (function () {
   const KEY = 'naracal-live';            // 설정(localStorage; 동기화 폴더의 설정.naracha.json으로 다른 PC에도 넘어감)
   const SDK = 'https://www.gstatic.com/firebasejs/10.14.1/';
-  const SKIP = ['assets', 'fonts', 'name', 'docId', 'updatedAt', 'saveId', 'lineage', 'savedBy', 'pcId', 'savedAt', '_size', 'assetRefs'];  // 보내지 않는 문서 필드
+  const SKIP = ['assets', 'fonts', 'name', 'docId', 'updatedAt', 'saveId', 'lineage', 'savedBy', 'pcId', 'savedAt', '_size', 'assetRefs', 'gone', 'mergeNote'];  // 보내지 않는 문서 필드
   const COLORS = ['#e0564b', '#2f9e6b', '#d98b00', '#8a4fd1', '#1f9bd1', '#c2456b', '#5b7c2f'];
   const BIG = 2000, BIG_MARK = 'live:big';  // 이보다 긴 data: 문자열은 보내지 않고 표시만(파일에서 보충)
   const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -124,23 +124,94 @@ NC.live = (function () {
   }
   /* ---------- 파일로 온 다른 PC 판과 합치기 (11/26 팀장님 「같은 파일을 여러 곳에서 열면 충돌 사본이 자꾸 — 같이 작업하는 것으로」) ----------
      base(두 판이 함께 가졌던 판) → mine(이 PC) 변경을 theirs(다른 PC) 위에 요소·속성 단위로 얹음. 같은 속성을 둘 다 고쳤으면 이 PC 것. 그림·글꼴은 합집합 */
+  /* ---- 3방향 깊은 합치기 (11/27 합치기 조: 표 칸·달력 날짜·영상 장면·책 원고가 통째로 한쪽만 남던 것) ----
+     b 기준판 · m 이 PC · t 다른 PC. 한쪽만 바꿨으면 그쪽 · 객체는 칸마다 · id 있는 목록(장면·트랙 등)은 id마다 · 길이 같은 목록(표 줄·칸)은 자리마다 ·
+     여러 줄 글(원고·글 상자)은 줄 단위로 · 그래도 같은 곳을 둘 다 바꿨으면 이 PC 것(conf에 적음) */
+  const plainO = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  const idList = a => Array.isArray(a) && a.every(x => plainO(x) && typeof x.id === 'string' && x.id);
+  function hunks(a, b) {  /* 기준 줄 a → 새 줄 b: [{ s, e, ins }] = a[s,e)를 ins로 */
+    let p = 0; while (p < a.length && p < b.length && a[p] === b[p]) p++;
+    let q = 0; while (q < a.length - p && q < b.length - p && a[a.length - 1 - q] === b[b.length - 1 - q]) q++;
+    const A = a.slice(p, a.length - q), X = b.slice(p, b.length - q), n = A.length, m = X.length; if (n * m > 4e6) return null;
+    const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = A[i] === X[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    const H = []; let i = 0, j = 0, hs = -1, hj = -1; const flush = () => { if (hs >= 0) { H.push({ s: p + hs, e: p + i, ins: X.slice(hj, j) }); hs = -1; } };
+    while (i < n || j < m) { if (i < n && j < m && A[i] === X[j]) { flush(); i++; j++; } else { if (hs < 0) { hs = i; hj = j; } if (j < m && (i >= n || dp[i][j + 1] >= dp[i + 1][j])) j++; else i++; } }
+    flush(); return H;
+  }
+  function lines3(b, m, t) {
+    const B = b.split('\n'), hm = hunks(B, m.split('\n')), ht = hunks(B, t.split('\n')); if (!hm || !ht) return null;
+    const same = (x, y) => x.s === y.s && x.e === y.e && J(x.ins) === J(y.ins);
+    for (const x of hm) for (const y of ht) { if (same(x, y)) continue; if ((x.s < y.e && y.s < x.e) || (x.s === y.s && (x.s === x.e || y.s === y.e))) return null; }  /* 같은 줄 근처를 둘 다 고침 */
+    const all = hm.concat(ht.filter(y => !hm.some(x => same(x, y)))).sort((x, y) => x.s - y.s || x.e - y.e); const out = []; let pos = 0;
+    for (const h of all) { out.push(...B.slice(pos, h.s), ...h.ins); pos = h.e; } out.push(...B.slice(pos)); return out.join('\n');
+  }
+  function merge3(b, m, t, conf, path) {
+    const jb = J(b), jm = J(m), jt = J(t);
+    if (jm === jb) return t; if (jt === jb || jm === jt) return m;
+    if (plainO(m) && plainO(t) && (b === undefined || plainO(b))) { const B = b || {}, o = {}; for (const k of new Set([...Object.keys(m), ...Object.keys(t)])) { const v = merge3(B[k], m[k], t[k], conf, path + '.' + k); if (v !== undefined) o[k] = v; } return o; }
+    if (Array.isArray(m) && Array.isArray(t) && (b === undefined || Array.isArray(b))) { const B = b || [];
+      if (idList(m) && idList(t) && idList(B) && (m.length || t.length)) {
+        const bm = new Map(B.map(x => [x.id, x])), mm = new Map(m.map(x => [x.id, x])), tm = new Map(t.map(x => [x.id, x])), out = [];
+        for (const x of t) { if (bm.has(x.id) && !mm.has(x.id)) continue; /* 이 PC가 지움 */ out.push(mm.has(x.id) ? merge3(bm.get(x.id), mm.get(x.id), x, conf, path + '#' + x.id) : x); }
+        m.forEach((x, i) => { if (tm.has(x.id) || bm.has(x.id)) return; /* 이 PC가 새로 넣음 → 이 PC에서 앞에 있던 것 뒤에 */ let at = 0; for (let k = i - 1; k >= 0; k--) { const j = out.findIndex(y => y.id === m[k].id); if (j >= 0) { at = j + 1; break; } } out.splice(at, 0, x); });
+        return out; }
+      if (m.length === t.length && B.length === m.length) return m.map((x, i) => merge3(B[i], x, t[i], conf, path + '[' + i + ']'));
+      const prim = a => a.every(x => x === null || typeof x !== 'object');
+      if (prim(m) && prim(t) && prim(B)) { const bs = new Set(B.map(J)), ms = new Set(m.map(J)), ts = new Set(t.map(J)); const out = m.filter(x => !(bs.has(J(x)) && !ts.has(J(x)))); t.forEach(x => { if (!bs.has(J(x)) && !ms.has(J(x))) out.push(x); }); return out; }  /* 이름 목록 등: 두 쪽이 더한 것은 모두, 한쪽이 뺀 것은 빼고 */
+    }
+    if (typeof m === 'string' && typeof t === 'string' && typeof b === 'string' && (m.includes('\n') || t.includes('\n') || b.includes('\n'))) { const r = lines3(b, m, t); if (r != null) return r; }
+    conf.push(path); return m;
+  }
+  const GEN = p => !!p && !!(p.flow || p.toc || p.cert || p.att);  /* 원본(원고·명단)에서 다시 만드는 쪽 — 만들 때마다 쪽 번호가 바뀜 */
+  const elName = e => (e && (e.name || (typeof e.text === 'string' && e.text.trim().slice(0, 12)) || ({ tbl: '표', cal: '달력', image: '그림', shape: '도형' })[e.type])) || '요소';
+  function dedupeIds(out) { const seen = new Set(); (out.pages || []).forEach(p => { p.els = (p.els || []).filter(e => { if (!e || !e.id) return true; if (seen.has(e.id)) return false; seen.add(e.id); return true; }); }); }
+  /* 지운 요소 묘비(gone): 기준판이 없어 합집합으로 합칠 때 지운 요소가 되살아나지 않게 (storage.js가 저장할 때 적음) */
+  const goneOf = d => new Set(Array.isArray(d && d.gone) ? d.gone : []);
+  let lastInfo = { conf: [], union: false, what: [] };
   function mergeDocs(baseD, mineD, theirsD) {
     const out = JSON.parse(J(Object.assign({}, theirsD, { assets: undefined })));
     out.assets = Object.assign({}, theirsD.assets || {}, mineD.assets || {});
-    const ops = diff(scan(baseD), scan(mineD), mineD);
+    const sb = scan(baseD), sm = scan(mineD);
+    let ops = diff(sb, sm, mineD);
+    /* 순서: 이 PC가 실제로 순서를 바꾼 때만 보냄 (쪽·요소를 더하기만 했는데 상대가 바꾼 순서를 되돌리던 것) */
+    const relSame = (a, b) => { const A = new Set(a), Bs = new Set(b); return J(a.filter(x => Bs.has(x))) === J(b.filter(x => A.has(x))); };
+    const conf = [], what = new Set(), pgOf = (d, id) => (d.pages || []).find(p => p.id === id), elIn = (d, pg, id) => { const p = pgOf(d, pg); let e = p && (p.els || []).find(x => x.id === id); if (!e) for (const q of d.pages || []) { e = (q.els || []).find(x => x.id === id); if (e) break; } return e; };
+    ops = ops.filter(op => {
+      if (op.op === 'pageDel') { const tp = pgOf(theirsD, op.pg), bp = pgOf(baseD, op.pg); if (tp && bp) { const bIds = new Set((bp.els || []).map(e => e.id)); if ((tp.els || []).some(e => !bIds.has(e.id))) { what.add('지운 쪽에 다른 PC가 넣은 요소(쪽을 남김)'); return false; } } }  /* 이 PC가 지운 쪽에 다른 PC가 새 요소를 넣었으면 쪽을 남김 */
+      if (op.op === 'del') { const eb = elIn(baseD, op.pg, op.id), et = elIn(theirsD, op.pg, op.id); if (eb && et && J(eb) !== J(et)) what.add(elName(et) + '(다른 PC가 고쳤지만 이 PC가 지움)'); }
+      if (op.op === 'pages') return !relSame(sb.pageIds, sm.pageIds); if (op.op === 'order') { const pa = sb.pages.get(op.pg), pb = sm.pages.get(op.pg); return !(pa && pb && relSame(pa.ids, pb.ids)); } return true; });
     const was = applying; applying = true; try { apply(ops, out); } finally { applying = was; }
-    if (J(baseD.media) !== J(mineD.media) && mineD.media !== undefined) out.media = JSON.parse(J(mineD.media));
+    /* 요소: 둘 다 바꾼 속성은 깊이 합침 (표 칸·글 줄) */
+    ops.forEach(op => { if (op.op !== 'patch') return; const eb = elIn(baseD, op.pg, op.id), em = elIn(mineD, op.pg, op.id), et = elIn(theirsD, op.pg, op.id), eo = elIn(out, op.pg, op.id); if (!eb || !em || !et || !eo) return;
+      for (const k in (op.set || {})) { if (J(eb[k]) === J(et[k])) continue; const n0 = conf.length, v = merge3(eb[k], em[k], et[k], conf, k); if (v === undefined) delete eo[k]; else eo[k] = v; if (conf.length > n0) what.add(elName(em)); } });
+    /* 문서 칸(달력·영상 트랙·원고·책 설정·출석부 명단 등) */
+    for (const k of new Set([...Object.keys(mineD), ...Object.keys(theirsD)])) { if (k === 'pages' || k === 'media' || SKIP.includes(k) || k === 'mergeNote') continue; if (J(baseD[k]) === J(mineD[k])) continue; const n0 = conf.length, v = merge3(baseD[k], mineD[k], theirsD[k], conf, k); if (v === undefined) delete out[k]; else out[k] = v; if (conf.length > n0) what.add(({ bstory: '원고', calendar: '달력', tracks: '영상 타임라인', att: '출석부 명단', cert: '상장 명단', book: '책 설정' })[k] || k); }
+    if (J(baseD.media) !== J(mineD.media) && mineD.media !== undefined) out.media = merge3(baseD.media, mineD.media, theirsD.media, conf, 'media');
     if (Array.isArray(theirsD.fonts) || Array.isArray(mineD.fonts)) { const seen = new Set(), f = []; [].concat(theirsD.fonts || [], mineD.fonts || []).forEach(x => { const k = J(x); if (!seen.has(k)) { seen.add(k); f.push(x); } }); out.fonts = f; }
-    return out;
+    /* 다른 PC가 지운 쪽에 이 PC가 새로 넣은 요소 → 그 쪽을 되살림 */
+    const outP = new Set(out.pages.map(p => p.id)); ops.forEach(op => { if (op.op !== 'set' || outP.has(op.pg)) return; const mp = pgOf(mineD, op.pg); if (!mp) return; const i = mineD.pages.indexOf(mp); out.pages.splice(Math.min(i, out.pages.length), 0, JSON.parse(J(mp))); outP.add(op.pg); what.add('지운 쪽에 넣은 요소(쪽을 되살림)'); });
+    /* 다시 만드는 쪽(책 본문·차례, 출석부·상장): 두 벌 되지 않게 한쪽 것만 — 이 PC가 다시 만들지 않았으면 다른 PC 것 */
+    const gids = d => (d.pages || []).filter(GEN).map(p => p.id); if (J(gids(mineD)) !== J(gids(theirsD))) { const src = J(gids(mineD)) === J(gids(baseD)) ? theirsD : mineD, keep = new Set(gids(src));
+      out.pages = out.pages.filter(p => !GEN(p) || keep.has(p.id)); const have = new Set(out.pages.map(p => p.id)); src.pages.forEach((p, i) => { if (!GEN(p) || have.has(p.id)) return; let at = 0; for (let k = i - 1; k >= 0; k--) { const j = out.pages.findIndex(q => q.id === src.pages[k].id); if (j >= 0) { at = j + 1; break; } } out.pages.splice(at, 0, JSON.parse(J(p))); });
+      if (src === mineD && ['bstory', 'att', 'cert'].some(k => J(out[k]) !== J(mineD[k]))) what.add('책 본문·출석부·상장 쪽은 「다시 만들기·흘리기」를 하면 다른 PC 원고·명단이 들어감'); }
+    dedupeIds(out);
+    { const G = new Set([...goneOf(mineD), ...goneOf(theirsD)]), have = new Set(); out.pages.forEach(p => p.els.forEach(e => have.add(e.id))); const g = [...G].filter(x => !have.has(x)).slice(0, 300); if (g.length) out.gone = g; else delete out.gone; }
+    lastInfo = { conf, union: false, what: [...what].slice(0, 6) }; return out;
   }
-  /* 기준판을 못 찾을 때(예전 판·새로 고침 직후): 사본을 만들지 않고 둘을 합침 — 이 PC 판에 상대에만 있는 쪽·요소를 더함(같은 요소는 이 PC 것), 그림·글꼴은 합집합 */
+  /* 기준판을 못 찾을 때(예전 판·새로 고침 직후): 사본을 만들지 않고 둘을 합침 — 이 PC 판에 상대에만 있는 쪽·요소를 더함(같은 요소는 이 PC 것), 그림·글꼴은 합집합.
+     11/27: 상대가 지운 요소(gone)는 빼고, 이 PC가 지운 요소는 되살리지 않음 · 다른 쪽으로 옮긴 요소가 두 개 되지 않게(문서 전체 id) */
   function unionDocs(mineD, theirsD) {
     const out = JSON.parse(J(Object.assign({}, mineD, { assets: undefined }))); out.assets = Object.assign({}, theirsD.assets || {}, mineD.assets || {});
+    const gm = goneOf(mineD), gt = goneOf(theirsD), tIds = new Set(); (theirsD.pages || []).forEach(p => (p.els || []).forEach(e => tIds.add(e.id)));
+    out.pages.forEach(p => { p.els = (p.els || []).filter(e => !(gt.has(e.id) && !tIds.has(e.id))); });
+    const all = new Set(); out.pages.forEach(p => p.els.forEach(e => all.add(e.id)));
     const mp = new Map(out.pages.map(p => [p.id, p]));
-    (theirsD.pages || []).forEach((tp, ti) => { const p = mp.get(tp.id); if (!p) { out.pages.splice(Math.min(ti, out.pages.length), 0, JSON.parse(J(tp))); return; }
-      const have = new Set((p.els || []).map(e => e.id)); (tp.els || []).forEach((e, ei) => { if (!have.has(e.id)) p.els.splice(Math.min(ei, p.els.length), 0, JSON.parse(J(e))); }); });
+    (theirsD.pages || []).forEach((tp, ti) => { const p = mp.get(tp.id); if (!p) { if (GEN(tp) && (mineD.pages || []).some(GEN)) return; const np = JSON.parse(J(tp)); np.els = (np.els || []).filter(e => !gm.has(e.id) && !all.has(e.id)); np.els.forEach(e => all.add(e.id)); out.pages.splice(Math.min(ti, out.pages.length), 0, np); return; }
+      (tp.els || []).forEach((e, ei) => { if (all.has(e.id) || gm.has(e.id)) return; all.add(e.id); p.els.splice(Math.min(ei, p.els.length), 0, JSON.parse(J(e))); }); });
     if (Array.isArray(theirsD.fonts) || Array.isArray(mineD.fonts)) { const seen = new Set(), f = []; [].concat(mineD.fonts || [], theirsD.fonts || []).forEach(x => { const k = J(x); if (!seen.has(k)) { seen.add(k); f.push(x); } }); out.fonts = f; }
-    return out;
+    { const G = new Set([...gm, ...gt]); const g = [...G].filter(x => !all.has(x)).slice(0, 300); if (g.length) out.gone = g; }
+    lastInfo = { conf: [], union: true, what: [] }; return out;
   }
   /* 지금 열린 문서 d를 target과 같게 — 통째로 바꾸지 않고 달라진 요소만(보던 쪽·선택·되돌리기가 그대로) */
   function patchTo(d, target) {
@@ -457,5 +528,5 @@ NC.live = (function () {
   }
 
   function attach(a) { api = a; ensureUI(); if (cfg().fb) loadFb(); sync(); }
-  return { attach, changed, step, peers, deferSave, fromFile, merge: mergeDocs, union: unionDocs, patchTo, paint, settingsHTML, bindSettings, cfg, setCfg, rulesText, parseFbConfig, login, logout, onChange: f => listeners.add(f), get rn() { return rn; }, active: () => !!room, me, debug: () => ({ room: room && { docId: room.docId, peers: Array.from(room.peers.values()), fb: !!room.fb }, fb: { ready: fb.ready, user: fb.user && fb.user.email, connected: fb.connected, err: fb.err }, pending: Array.from(pending), rn, queue: queue.length }) };
+  return { attach, changed, step, peers, deferSave, fromFile, merge: mergeDocs, union: unionDocs, get lastMerge() { return lastInfo; }, merge3: (b, m, t) => { const c = []; const v = merge3(b, m, t, c, ''); return { v, conf: c }; }, patchTo, paint, settingsHTML, bindSettings, cfg, setCfg, rulesText, parseFbConfig, login, logout, onChange: f => listeners.add(f), get rn() { return rn; }, active: () => !!room, me, debug: () => ({ room: room && { docId: room.docId, peers: Array.from(room.peers.values()), fb: !!room.fb }, fb: { ready: fb.ready, user: fb.user && fb.user.email, connected: fb.connected, err: fb.err }, pending: Array.from(pending), rn, queue: queue.length }) };
 })();

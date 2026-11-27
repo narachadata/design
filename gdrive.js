@@ -323,9 +323,11 @@ NC.gdrive = (function () {
     const bt = await st().idbGet('gd-b:' + n.k).catch(() => null);
     let T, M, B; try { M = JSON.parse(c.data); B = bt ? JSON.parse(bt) : null; T = JSON.parse(await unpackDoc(await (await call(`${API}/files/${f.id}?alt=media`, {}, true)).text())); } catch (e) { if (e && e.name === 'SyntaxError') return false; throw e; }
     if (!T || !T.pages || !M || !M.pages || (T.docId && M.docId && T.docId !== M.docId)) return false;
+    if (B && B.saveId && T.saveId !== B.saveId && !(T.lineage || []).includes(B.saveId)) B = null;  /* 11/27 합치기 조: 이 PC가 마지막에 올린 판이 그사이 다른 PC 판에 덮여 드라이브 판의 조상이 아님 → 그것을 기준으로 하면 이 PC의 그 판 작업이 사라짐 → 두 판이 함께 가진 판으로 */
     if (!B && st().commonBase) B = await st().commonBase(M, T);  /* 11/26: 기준판이 없던 예전 문서·새로 고침 직후 — 계보가 겹치는 판, 그것도 없으면 합집합(사본 없음) */
     const out = B ? NC.live.merge(B, M, T) : NC.live.union(M, T), sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    Object.assign(out, { docId: M.docId || T.docId, name: T.name || M.name, saveId: sid, lineage: [...new Set([sid].concat(M.lineage || [], T.lineage || []))].slice(0, 60), savedBy: T.savedBy || M.savedBy, pcId: T.pcId || M.pcId, savedAt: now() });
+    Object.assign(out, { docId: M.docId || T.docId, name: T.name || M.name, saveId: sid, lineage: [...new Set([sid].concat(M.lineage || [], T.lineage || []))].slice(0, 60), savedBy: st().pcName ? st().pcName() : (M.savedBy || T.savedBy), pcId: st().pcId ? st().pcId() : (M.pcId || T.pcId), savedAt: now() });  /* 합친 판은 이 PC가 저장한 것 */
+    { const I = NC.live.lastMerge || {}; if ((I.what && I.what.length) || I.union) { out.mergeNote = { by: out.savedBy, at: now(), what: I.what || [], union: !!I.union }; try { window.dispatchEvent(new CustomEvent('gdrive-merged', { detail: { what: I.what || [], union: !!I.union, name: n.name } })); } catch (e) {} } else delete out.mergeNote; }
     const text = JSON.stringify(out), c3 = await cGet(n.k); if (c3 && c3.lm !== c.lm) return 'later';  /* 그사이 또 저장 → 다음 올리기에서 다시 합침 */
     const lm2 = Math.max(now(), (n.lm || 0) + 1), body = await packDoc(text);
     const f2 = await upload(n.id, { appProperties: { lm: String(lm2) } }, body, typeOf(n.name));

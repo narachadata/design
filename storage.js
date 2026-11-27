@@ -54,10 +54,16 @@ NC.store = (function () {
   const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   // 저장본 계보: saveId(이번 저장) + lineage(최근 저장 id들). 다른 PC가 내 마지막 저장을 이어받았는지 판단에 씀
   Object.assign(state, { lastSaveId: '', lineage: [], seq: 0, conflict: false, retries: 0 });
-  function adopt(j) { state.lastSnap = 0; state.lastSaveId = (j && j.saveId) || ''; state.lineage = (j && j.lineage) || (state.lastSaveId ? [state.lastSaveId] : []); keepBase(j && j.docId); remember(j); }
+  function adopt(j) { state.lastIds = idsOf(j); state.gone = Array.isArray(j && j.gone) ? j.gone.slice(0, 300) : []; state.lastSnap = 0; state.lastSaveId = (j && j.saveId) || ''; state.lineage = (j && j.lineage) || (state.lastSaveId ? [state.lastSaveId] : []); keepBase(j && j.docId); remember(j); }
+  /* 지운 요소 묘비(gone, 11/27 합치기 조): 지난 저장에 있었는데 이번에 없는 요소 번호 — 기준판 없이 합칠 때(합집합) 지운 요소가 되살아나지 않게. 다시 생기면(되돌리기) 뺌 */
+  const idsOf = j => { const s = new Set(); ((j && j.pages) || []).forEach(p => (p.els || []).forEach(e => e && e.id && s.add(e.id))); return s; };
+  function goneNow(d) { const now = idsOf(d), last = state.lastIds || now, g = new Set((state.gone || []).filter(x => !now.has(x))); last.forEach(x => { if (!now.has(x)) g.add(x); }); state.lastIds = now; return [...g].slice(-300); }
   /* 최근 판 기억(그림 빼고 8개, 이 브라우저): 다른 PC 판과 갈라졌을 때 「둘 다 가졌던 판」을 찾아 합치는 데 씀 (11/26 팀장님 「충돌 사본 대신 같이 작업」) */
   let VERS = null; const versLoad = () => VERS ? Promise.resolve(VERS) : idbGet('docVers').then(v => (VERS = Array.isArray(VERS) ? VERS : Array.isArray(v) ? v : [])).catch(() => (VERS = VERS || []));
-  function remember(j) { if (!j || !j.saveId) return; versLoad().then(L => { if (L.some(v => v.id === j.saveId)) return; let t; try { t = JSON.stringify(Object.assign({}, j, { assets: undefined, _gdA: undefined })); } catch (e) { return; } L.unshift({ id: j.saveId, docId: j.docId || '', t }); L.splice(8); idbSet('docVers', L).catch(() => {}); }); }
+  function remember(j) { if (!j || !j.saveId) return; versLoad().then(L => { if (L.some(v => v.id === j.saveId)) return; let t; try { t = JSON.stringify(Object.assign({}, j, { assets: undefined, _gdA: undefined })); } catch (e) { return; } L.unshift({ id: j.saveId, docId: j.docId || '', t, at: Date.now() });
+    /* 11/27: 모든 문서 합쳐 8개뿐이라 1~2분 고치면 두 PC가 함께 가진 판이 밀려나던 것 → 문서마다 최근 3개 + 그 앞은 1분 이상 떨어진 판으로 10개까지, 모두 60개 */
+    const per = new Map(), keep = []; for (const v of L) { const a = per.get(v.docId) || []; if (a.length < 3 || (a.length < 10 && (a[a.length - 1].at || 0) - (v.at || 0) >= 60000)) { a.push(v); per.set(v.docId, a); keep.push(v); } }
+    L.length = 0; L.push(...keep.slice(0, 60)); idbSet('docVers', L).catch(() => {}); }); }
   async function verById(id) { if (!id) return null; const L = await versLoad(); const v = L.find(x => x.id === id); if (!v) return null; try { return JSON.parse(v.t); } catch (e) { return null; } }
   /* 두 판의 계보(saveId·lineage)가 함께 가진 가장 최근 판(이 브라우저에 기억된 것) — 새로 고침 직후처럼 내 마지막 판을 모를 때도 */
   async function commonBase(a, b) { const L = await versLoad(); if (!a || !b) return null; const B = new Set([b.saveId].concat(b.lineage || []).filter(Boolean)); for (const id of [a.saveId].concat(a.lineage || [])) { if (!id || !B.has(id)) continue; const v = L.find(x => x.id === id); if (v) { try { return JSON.parse(v.t); } catch (e) { return null; } } } return null; }
@@ -92,12 +98,12 @@ NC.store = (function () {
       }
       const seq = state.seq, saveId = rid(), lineage = [saveId].concat(state.lineage).slice(0, 60);
       if (!doc.docId) doc.docId = rid(); // 버전 기록을 묶는 문서 번호 (이름을 바꾸거나 옮겨도 그대로)
-      const text = JSON.stringify(Object.assign({}, doc, { saveId, lineage, savedBy: pcName(), pcId: pc().id, savedAt: Date.now() }));
+      const gone = goneNow(doc); state.gone = gone; const text = JSON.stringify(Object.assign({}, doc, { saveId, lineage, savedBy: pcName(), pcId: pc().id, savedAt: Date.now() }, gone.length ? { gone } : {}));
       const w = await state.handle.createWritable();
       await w.write(text);
       await w.close();
       if (Date.now() - (state.lastSnap || 0) > SNAP_EVERY) { state.lastSnap = Date.now(); snapshot(doc.docId, text).catch(() => {}); }
-      state.lastSaveId = saveId; state.lineage = lineage; state.retries = 0; keepBase(doc.docId); remember(Object.assign({}, doc, { saveId, lineage, assets: undefined }));
+      state.lastSaveId = saveId; state.lineage = lineage; state.retries = 0; keepBase(doc.docId); remember(Object.assign({}, doc, { saveId, lineage, assets: undefined }, gone.length ? { gone } : {}));
       const f = await state.handle.getFile(); state.lastMod = f.lastModified; if (state.seq === seq) state.dirty = false;
       return true;
     } finally { state.saving = false; }
@@ -252,7 +258,12 @@ NC.store = (function () {
     return true;
   }
   // 문서 번호(docId)로 동기화 폴더 안의 문서 파일 찾기 (영상 사본 → 원본 다시 가져오기용)
-  async function findDocById(id, o) { if (!id) return null; let docs = []; try { docs = (await walkDocs()).sort((a, b) => ((a.path || [])[0] === TRASH) - ((b.path || [])[0] === TRASH)); } catch (e) { docs = await listDocs(); }  /* 11/26 데이터 조: 맨 위 폴더만 보던 것 — 하위 폴더까지 */ for (const x of docs) { if (o && o.main && (((x.path || [])[0] === TRASH) || /\(충돌 사본 /.test(x.name || ''))) continue;  /* 이어 저장할 본 문서만 (휴지통·충돌 사본 빼고) */ try { const f = await x.handle.getFile(); if (f.size > 40 * 1024 * 1024) continue; const t = await f.text(); const m = t.match(/"docId":"([^"]+)"/); if (m && m[1] === id) return x.handle; } catch (e) {} } return null; }
+  async function findDocById(id, o) { if (!id) return null; let docs = []; try { docs = (await walkDocs()).sort((a, b) => ((a.path || [])[0] === TRASH) - ((b.path || [])[0] === TRASH)); } catch (e) { docs = await listDocs(); }  /* 11/26 데이터 조: 맨 위 폴더만 보던 것 — 하위 폴더까지 */ const cand = []; for (const x of docs) { if (o && o.main && (((x.path || [])[0] === TRASH) || /\(충돌 사본 /.test(x.name || ''))) continue;  /* 이어 저장할 본 문서만 (휴지통·충돌 사본 빼고) */ try { const f = await x.handle.getFile(); if (f.size > 40 * 1024 * 1024) continue; const t = await f.text(); const m = t.match(/"docId":"([^"]+)"/); if (m && m[1] === id) { const sid = (t.match(/"saveId":"([^"]+)"/) || [])[1] || '', lm = t.match(/"lineage":\[([^\]]*)\]/), lin = lm ? (lm[1].match(/"([^"]+)"/g) || []).map(q => q.slice(1, -1)) : []; cand.push({ h: x.handle, name: x.name || x.handle.name, trash: (x.path || [])[0] === TRASH, ids: new Set([sid].concat(lin).filter(Boolean)), lm: f.lastModified }); if (!o || (!o.lineage && !o.name)) break; } } catch (e) {} }
+    /* 11/27 합치기 조: 같은 문서 번호의 파일이 여럿이면(드라이브 「사본 만들기」·탐색기 복사 등) 먼저 찾은 아무 파일에 붙어 두 문서가 섞이던 것 → ① 이 문서 계보와 겹치는 파일 ② 같은 이름 ③ 하나뿐일 때만. 여럿인데 아무것도 안 맞으면 붙이지 않음 */
+    if (!cand.length) return null; const nonTrash = cand.filter(c => !c.trash), pool = nonTrash.length ? nonTrash : cand; if (pool.length === 1 && cand.length === 1) return pool[0].h;
+    const L = (o && o.lineage || []).filter(Boolean); if (L.length) { const hit = pool.filter(c => L.some(x => c.ids.has(x))).sort((a, b) => L.findIndex(x => a.ids.has(x)) - L.findIndex(x => b.ids.has(x)) || b.lm - a.lm); if (hit.length) return hit[0].h; }
+    if (o && o.name) { const nm = pool.find(c => c.name === o.name); if (nm) return nm.h; }
+    return pool.length === 1 && !(o && o.strict) ? pool[0].h : null; }
   async function listDocs() {
     if (!(await folderReady())) return [];
     const out = [];
