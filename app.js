@@ -572,6 +572,7 @@ function mmField(w, k) {
 function mmFieldKnown(k) { if (!mmList().length) return true; k = unesc(k).trim(); const cols = (doc.merge && doc.merge.cols) || []; return cols.includes(k) || (/^\d+$/.test(k) && Number(k) >= 1 && Number(k) <= cols.length) || MM_F.some(x => x[0] === k) || k === '성명'; }
 const mmHasTok = e => !!e && ((e.type === 'text' && MM_TEST.test(e.text || '')) || (e.type === 'tbl' && MM_TEST.test(JSON.stringify(e.rows || ''))));  /* 표 칸 안의 칸도 (11/27) */
 function mmUsed(pages) { return (pages || (doc && doc.pages) || []).some(p => (p.els || []).some(e => (e.type === 'text' && MM_TEST.test(e.text || '')) || (e.type === 'tbl' && MM_TEST.test(JSON.stringify(e.rows || ''))))); }
+const mmWhoWord = () => (doc && doc.merge && doc.merge.cols ? '명단' : '재원생');  /* 엑셀 명단은 「명단 N명」 */
 const mmActive = () => mmUsed() && mmList().length > 0;
 function mmFill(html, who, mark) {
   if (html.indexOf('{{') >= 0) html = html.replace(MM_FLD, (all, k) => { const ok = mmFieldKnown(k), v = who ? mmField(who, k) : null, show = who ? (v == null ? '' : esc(v)) : '&#123;&#123;' + k + '&#125;&#125;', bad = who ? v == null : !ok; return mark ? `<span class="mmk${who ? ' pv' : ''}${bad ? ' bad' : ''}"${bad ? ' title="명단에 없는 열 — 빈칸으로 찍힙니다"' : ''}>${show || '&nbsp;'}</span>` : show; });
@@ -3195,7 +3196,7 @@ const KEY_GROUPS = [
   ['넣기', 'i-plus', [['T', '글 상자'], ['R', '사각형'], ['O', '원'], ['L', '선'], ['P', '펜(그리기) 켬 / 끔'], ['Enter', '고른 글 상자 고치기 시작'], ['글자 치기', '글 상자 하나를 고른 채 치면 바로 고치기 — 친 글로 바뀜 (PowerPoint처럼, ⌘Z로 되돌림)'], ['Esc', '글 고치기 끝'], ['R | O | L | T', '(세로 메뉴 「영상」을 연 때는 영상 키 — R 녹음 · O 범위 끝 · L 재생 · T 글자)']]],
   ['고치기', 'i-pen', [['Mod+Z', '실행 취소 (되돌리기)'], ['Mod+Shift+Z | Mod+Y', '다시 실행'], ['Mod+C | Mod+X', '복사 / 잘라 내기'], ['Mod+V', '붙여넣기'], ['Mod+Shift+V', '같은 자리에 붙여넣기'], ['Mod+D', '복제'], ['Alt+끌기', '끌어서 복제'], ['Mod+A', '이 쪽의 요소 모두 고르기'], ['Delete | Backspace', '고른 요소 지우기'], ['Mod+G', '그룹으로 묶기'], ['Mod+Shift+G', '그룹 풀기'], ['Mod+L', '잠그기 / 풀기'], ['Mod+Alt+C | Mod+Alt+V', '서식 복사 / 서식 붙여넣기']]],
   ['움직이기 · 맞추기', 'i-dist', [['← ↑ → ↓', '1mm 옮기기 (px 문서는 1px)'], ['Shift+화살표', '5mm (px 문서는 10px)'], ['Alt+화살표', '0.1mm'], ['Mod+← | Mod+→', '1° 돌리기 (Shift를 더하면 15°)'], ['Shift+H | Shift+V', '그림 좌우 / 위아래 뒤집기'], ['1 … 9 | 0', '투명도 10~90% / 100% (글 상자 하나만 고른 때는 글자로 들어감)'], ['Mod+] | Mod+[', '한 칸 앞으로 / 뒤로'], ['Mod+Shift+] | Mod+Shift+[', '맨 앞으로 / 맨 뒤로'], ['Alt+A | Alt+H | Alt+D', '왼쪽 / 가로 가운데 / 오른쪽 맞춤'], ['Alt+W | Alt+V | Alt+S', '위 / 세로 가운데 / 아래 맞춤'], ['Alt+Shift+H | Alt+Shift+V', '가로 / 세로 같은 간격'], ['Alt 누르고 있기', '고른 요소와 다른 요소 사이 거리 보기']]],
-  ['글자', 'i-text', [['Mod+B | Mod+I | Mod+U', '굵게 / 기울임 / 밑줄'], ['Mod+Shift+. | Mod+Shift+,', '글자 크게 / 작게'], ['Mod+A', '(글 고치는 중) 이 글 상자 글 모두 고르기']]],
+  ['글자', 'i-text', [['Mod+B | Mod+I | Mod+U', '굵게 / 기울임 / 밑줄'], ['Mod+Shift+. | Mod+Shift+,', '글자 크게 / 작게'], ['Mod+A', '(글 고치는 중) 이 글 상자 글 모두 고르기'], ['Mod+K, M', '(글·표 칸 고치는 중) 메일머지 표시 달기 — {이름}·{{엑셀 열}}을 커서 자리에 (아래한글과 같음)']]],
   ['화면 · 쪽', 'i-pages', [['Mod+0', '화면에 딱 맞게'], ['Mod+1', '실제 크기 (100%)'], ['Mod+= | Mod+-', '크게 / 작게 보기'], ['Space+끌기', '화면 옮기기 (마우스 가운데 단추 끌기도)'], ['Shift+R', '눈금자 켬 / 끔 (눈금자에서 끌면 안내선)'], ['Mod+\\', '양쪽 패널 접기 / 펴기 (편집 화면만)'], ['PageUp | PageDown', '앞 쪽 / 다음 쪽'], ['← → ↑ ↓', '(아무것도 고르지 않았을 때) 쪽 넘기기'], ['Home | End', '(아무것도 고르지 않았을 때) 첫 쪽 / 끝 쪽'], ['Mod+Enter', '다음에 새 쪽 넣기'], ['Mod+Shift+Enter', '이 쪽 복제']]],
   ['쪽 목록 (왼쪽 「페이지」)', 'i-layers', [['Mod+A', '쪽 모두 고르기'], ['Mod+C | Mod+X | Mod+V', '쪽 복사 / 잘라 내기 / 붙여넣기'], ['Mod+D', '쪽 복제'], ['Delete', '쪽 지우기'], ['Mod+↑ | Mod+↓', '쪽 순서 위로 / 아래로'], ['Shift+↑ | Shift+↓', '여러 쪽 고르기'], ['F2', '쪽 이름 바꾸기']]],
   ['달력 칸', 'i-cal', [['Enter | F2', '칸에 글 쓰기'], ['글자 치기', '고른 칸에 바로 쓰기'], ['Delete', '칸 글·서식 지우기'], ['← ↑ → ↓', '옆 칸으로'], ['Shift+화살표', '여러 칸 고르기'], ['Esc', '칸 고르기 풀기']]],
@@ -4125,7 +4126,7 @@ function mmPanelHTML(el) {
   const L = mmList(), used = mmUsed(), ex = L[Math.max(0, mmPv)] || { n: '김나라', b: '', g: '', y: '' }, M = doc.merge || {};
   const ph = (el ? [el] : page().els).find(e => mmPhOf(e));
   const chips = MM_F.map(([k, t, fn]) => { const v = String(fn(ex) || ''); return `<button type="button" class="mmins" data-mmins="${esc(k)}" title="${esc(t)} — 글 상자(또는 표 칸)를 두 번 눌러 커서를 둔 자리에 넣습니다"><b>{${esc(k)}}</b><small>${esc(v || t)}</small></button>`; }).join('');
-  return `<details class="fx mmbox" ${used || L.length || ph ? 'open' : ''}><summary><span class="anim-h">✉ 메일머지 <small>${L.length ? `재원생 ${L.length}명` : '이름 바꿔 인쇄'}</small></span></summary>
+  return `<details class="fx mmbox" ${used || L.length || ph ? 'open' : ''}><summary><span class="anim-h">✉ 메일머지 <small>${L.length ? `${mmWhoWord()} ${L.length}명` : '이름 바꿔 인쇄'}</small></span></summary>
     <p class="hint" style="margin:2px 0 6px">글 속 <b>{이름}</b> 같은 칸이 인쇄·다운로드할 때 <b>재원생마다</b> 바뀌어 찍힙니다 — 문서는 1쪽 그대로.</p>
     <div class="row mmrow" style="flex-wrap:wrap;gap:4px"><button type="button" class="btn sm${L.length ? '' : ' primary'}" data-mm="pick" title="관리프로그램 재원생 명단에서 고르기">📥 관리프로그램 명단</button><button type="button" class="btn sm${L.length ? '' : ' primary'}" data-mm="xls" title="엑셀(.xlsx)·CSV 파일 — 첫 줄이 열 이름 (아래한글 메일 머지와 같은 방식)">📊 엑셀·CSV 파일</button>${L.length ? `<button type="button" class="btn sm" data-mm="clear" title="이 문서의 메일머지 명단 비우기">명단 비우기</button>` : ''}</div>
     ${L.length ? `<p class="hint mmsrc">${esc(M.src || '관리프로그램')}${M.file ? ` 「${esc(M.file)}${M.sheet ? ' · ' + esc(M.sheet) : ''}」` : ''} · ${M.at ? new Date(M.at).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' 받음' : ''} · ${esc(L.slice(0, 3).map(x => x.n).join(', '))}${L.length > 3 ? ` 외 ${L.length - 3}명` : ''}</p>` : ''}
@@ -4289,10 +4290,38 @@ function mmXDialog() {
   };
   draw(); if (!d.open) d.showModal();
 }
+/* 메일머지 표시 달기 단축키 — 아래한글처럼 글을 쓰는 중 Ctrl+K, M (맥 ⌘K, M): 커서 자리에 넣을 칸 고르기 */
+let mmChordT = 0;
+function mmFieldMenu(ed) {
+  /* 초점은 글 상자에 그대로(메뉴로 옮기면 글 고치기가 끝남) — ↑↓ 옮기기 · Enter 넣기 · Esc 닫기, 마우스로 눌러도 됨 */
+  const isTa = ed.tagName === 'TEXTAREA', sl = window.getSelection(), rg = !isTa && sl.rangeCount ? sl.getRangeAt(0).cloneRange() : null;
+  const L = mmList(), ex = L[Math.max(0, mmPv)] || { n: '김나라', b: '', g: '', y: '' }, cols = (doc.merge && doc.merge.cols) || [];
+  const items = cols.map(c => ['{' + c + '}', `{{${c}}}`, `엑셀 열 · ${String(mmField(ex, c) || '(빈칸)')}`]).concat(MM_F.map(([k, t, fn]) => [k, `{${k}}`, `${t}${L.length ? ' · ' + String(fn(ex) || '') : ''}`]));
+  $('#mmKMenu') && $('#mmKMenu').remove(); const m = document.createElement('div'); m.id = 'mmKMenu'; m.className = 'tl-menu mmkmenu';
+  m.innerHTML = `<div class="mmk-h">✉ 메일머지 표시 달기 <small>↑↓ · Enter · Esc</small></div>` + items.map(([k, t, d], i) => `<button type="button" data-mk="${esc(k)}" class="${i ? '' : 'on'}"><b>${esc(t)}</b><small>${esc(d)}</small></button>`).join('');
+  document.body.appendChild(m); let r = rg ? rg.getBoundingClientRect() : null; if (!r || (!r.width && !r.height)) r = ed.getBoundingClientRect();
+  m.style.left = Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.left)) + 'px'; m.style.top = (r.bottom + 6 + m.offsetHeight < innerHeight ? r.bottom + 6 : Math.max(8, r.top - m.offsetHeight - 6)) + 'px';
+  const B = () => [...m.querySelectorAll('[data-mk]')]; let at = 0;
+  const mark = () => B().forEach((b, i) => { b.classList.toggle('on', i === at); if (i === at) b.scrollIntoView({ block: 'nearest' }); });
+  const close = () => { m.remove(); document.removeEventListener('keydown', key, true); document.removeEventListener('pointerdown', out, true); };
+  const put = k => { close(); const tok = '{' + k + '}'; ed.focus(); if (isTa) { ed.setRangeText(tok, ed.selectionStart, ed.selectionEnd, 'end'); ed.dispatchEvent(new Event('input', { bubbles: true })); return; } if (rg) { sl.removeAllRanges(); sl.addRange(rg); } document.execCommand('insertText', false, tok); };
+  const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(); return; } if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopImmediatePropagation(); at = (at + (e.key === 'ArrowDown' ? 1 : -1) + B().length) % B().length; mark(); return; } if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); e.stopImmediatePropagation(); put(B()[at].dataset.mk); return; } close(); };
+  const out = e => { if (!m.contains(e.target)) close(); };
+  m.addEventListener('mousedown', e => e.preventDefault()); m.onclick = e => { const b = e.target.closest('[data-mk]'); if (b) put(b.dataset.mk); };
+  setTimeout(() => { document.addEventListener('keydown', key, true); document.addEventListener('pointerdown', out, true); });
+  if (!L.length) toast('메일머지 표시를 넣습니다 — 명단은 속성 창 「✉ 메일머지」에서 관리프로그램·엑셀로 고르세요');
+}
+document.addEventListener('keydown', e => {
+  const ed = e.target && e.target.closest ? e.target.closest('#canvas [contenteditable="true"], #cellEd') : null; if (!ed || doc.cert || doc.att) return;
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyK') { e.preventDefault(); e.stopImmediatePropagation(); mmChordT = Date.now(); return; }
+  if (mmChordT && Date.now() - mmChordT < 1500 && e.code === 'KeyM') { e.preventDefault(); e.stopImmediatePropagation(); mmChordT = 0; mmFieldMenu(ed); return; }
+  if (!['Control', 'Meta'].includes(e.key)) mmChordT = 0;
+}, true);
 /* 속성 창: 엑셀 열 표시 달기 단추 + 명단에 없는 표시 알림 */
+function mmBadFields() { return [...new Set(doc.pages.flatMap(p => p.els).filter(mmHasTok).flatMap(e => [...String(e.type === 'tbl' ? e.rows.flat().join('\n') : e.text || '').matchAll(MM_FLD)].map(m => m[1].trim())))].filter(k => !mmFieldKnown(esc(k))); }  /* 문서에 단 {{표시}} 중 명단에 없는 열 */
 function mmColsHTML(ex) {
   const M = doc.merge || {}, cols = M.cols || [];
-  const bad = [...new Set(doc.pages.flatMap(p => p.els).filter(mmHasTok).flatMap(e => [...String(e.type === 'tbl' ? e.rows.flat().join('\n') : e.text || '').matchAll(MM_FLD)].map(m => m[1].trim())))].filter(k => !mmFieldKnown(esc(k)));
+  const bad = mmBadFields();
   return (cols.length ? `<div class="pk-lb">엑셀 열 — 메일머지 표시 달기 <small>{{열 이름}}</small></div><div class="mmchips">${cols.map(c => { const v = mmField(ex, c); return `<button type="button" class="mmins xl" data-mmins="{${esc(c)}}" title="{{${esc(c)}}} — 글 상자(또는 표 칸)를 두 번 눌러 커서를 둔 자리에 넣습니다"><b>{{${esc(c)}}}</b><small>${esc(v || '(빈칸)')}</small></button>`; }).join('')}</div>` : '')
     + (bad.length ? `<p class="hint mmbad">⚠ 명단에 없는 표시: ${bad.map(k => `<b>{{${esc(k)}}}</b>`).join(' ')} — 빈칸으로 찍힙니다. 열 이름과 똑같이 쓰거나 명단을 다시 불러오세요.</p>` : '');
 }
@@ -6311,7 +6340,8 @@ function renderDownload() {
   ${S.pages === 'range' ? `<label class="f"><input id="dlRange" placeholder="예: 1-3, 5" value="${esc(S.range)}"></label>` : ''}
   ${S.fmt === 'pptx' ? `<label class="f"><span>글꼴</span></label><div class="seg dlpf"><button type="button" data-pptf="embed" class="${(S.pptFont || 'embed') === 'embed' ? 'on' : ''}">공방 글꼴 넣기<small>어느 PC에서나 같게</small></button><button type="button" data-pptf="safe" class="${S.pptFont === 'safe' ? 'on' : ''}">맑은 고딕·바탕<small>가장 작은 파일</small></button><button type="button" data-pptf="keep" class="${S.pptFont === 'keep' ? 'on' : ''}">글꼴 이름만<small>깐 PC에서만</small></button></div>` : ''}
   ${S.fmt === 'png' ? `<label class="chk"><input type="checkbox" id="dlTransp" ${S.transp ? 'checked' : ''}> <span class="pk-chk">▦</span> 투명 배경 <small class="hint" style="margin:0">로고·스티커용</small></label>` : ''}
-  ${mmActive() && S.pages !== 'sel' && !/^pptx/.test(S.fmt) ? `<label class="chk mmchk"><input type="checkbox" id="dlMM" ${S.mm !== false ? 'checked' : ''}> <span class="pk-chk">✉</span> 메일머지 — ${mmSel().length < mmList().length ? `고른 ${mmSel().length}명(출력 창에서 고른 범위)` : `재원생 ${mmList().length}명`} 각각 <small class="hint" style="margin:0">{이름} 자리만 바뀜 · 문서는 그대로</small></label>` : ''}
+  ${mmActive() && S.pages !== 'sel' && !/^pptx/.test(S.fmt) ? `<label class="chk mmchk"><input type="checkbox" id="dlMM" ${S.mm !== false ? 'checked' : ''}> <span class="pk-chk">✉</span> 메일머지 — ${mmSel().length < mmList().length ? `고른 ${mmSel().length}명(출력 창에서 고른 범위)` : `${mmWhoWord()} ${mmList().length}명`} 각각 <small class="hint" style="margin:0">{이름} 자리만 바뀜 · 문서는 그대로</small></label>` : ''}
+  ${mmActive() && S.pages !== 'sel' && S.mm !== false && DL_PDF[S.fmt] ? `<label class="chk mmchk" style="margin-left:22px" title="한 사람에 PDF 한 개씩 만들어 ZIP 하나로 묶습니다 — 학부모님께 한 명씩 보낼 때"><input type="checkbox" id="dlMMSplit" ${S.mmSplit ? 'checked' : ''}> 사람마다 PDF 따로 <small class="hint" style="margin:0">ZIP 안에 이름별 PDF</small></label>` : ''}
   ${img && n > 1 ? `<label class="chk"><input type="checkbox" id="dlMerge" ${S.merge ? 'checked' : ''}> <span class="pk-chk">🧷</span> 한 장으로 이어 붙이기 <small class="hint" style="margin:0">세로로</small></label>` : ''}
   ${img && Number(doc.bleed) > 0 ? `<label class="chk"><input type="checkbox" id="dlImgBleed" ${S.imgBleed ? 'checked' : ''}> <span class="pk-chk">✂</span> 도련 ${doc.bleed}mm 포함 <small class="hint" style="margin:0">명함·스티커를 인쇄소에 그림으로 보낼 때</small></label>` : ''}
   <div class="dlinfo"><b>다운로드 정보</b><ul>${dlPlaceholders()}${bookDoc && S.fmt === 'pdfprint' ? `<li class="dlwarn">📖 책 본문(검정 글자)은 그림 PDF면 인쇄할 때 4색 검정이 되어 번지기 쉽습니다 — 글자가 많은 본문은 <b>PDF (벡터 · 인쇄 창)</b>이 더 선명합니다. 이 파일로 보낼 때는 인쇄소에 「본문 먹 1도」라고 꼭 말하세요 <button type="button" class="btn sm" data-fmt2="pdfvector">벡터 PDF로</button></li>` : ''}<li>${n} 페이지${img && n > 1 && !S.merge ? ' (ZIP 파일로 묶음)' : ''}</li><li>${docSizeLabel(' × ')}${bleed ? ` (+도련 ${bleed}mm)` : ''}</li>${dpi ? `<li>${px(doc.w + 2 * bleed).toLocaleString()} × ${(px(doc.h + 2 * bleed) * (img && S.merge && n > 1 ? n : 1)).toLocaleString()} px · ${Math.round(dpi)}dpi${(img ? Math.round(dpi) < Math.round(96 * S.scale) - 1 : DL_PDF[S.fmt] && Math.round(dpi) < DL_PDF[S.fmt].dpi - 1) ? (Math.max(doc.w, doc.h) >= 1500 ? (Math.round(dpi) < 60 ? ' <small style="color:#b54708">(60dpi보다 낮아 글자가 거칠 수 있습니다 — 벡터 PDF로 받거나 인쇄소에 확대 출력을 물어보세요)' : ' <small>(현수막처럼 큰 인쇄물은 멀리서 보므로 60~100dpi면 충분)') + '</small>' : ' <b>(크기가 커서 브라우저 한계에 맞춰 낮춤)</b>') : ''}</li>${(() => { const pc = px(doc.w + 2 * bleed) * px(doc.h + 2 * bleed) * n, f = img ? S.fmt : 'jpg', q = img ? 0.92 : DL_PDF[S.fmt].q, mb = dlEstMB(pc, f, q); return `<li>파일 크기 최대 약 ${mb < 1 ? '1MB' : mb < 10 ? mb.toFixed(1) + 'MB' : Math.round(mb) + 'MB'} <small>(사진이 적은 디자인은 훨씬 작아짐)</small>${mb > 300 ? ' <b>— 아주 클 수 있으니 인쇄소 웹하드로 보내거나 쪽을 나눠 받으세요</b>' : ''}</li>`; })()}${!img && DL_PDF[S.fmt] && PDF_TENTH(doc.w + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0)), doc.h + 2 * (bleed + (DL_PDF[S.fmt].bleed && doc.cropMarks ? 5 : 0))) ? '<li><b>5.08m가 넘어 PDF를 1/10 크기로 만듭니다</b> — 인쇄소에 "1000% 확대 출력" 요청 (화질은 그대로)</li>' : ''}` : /^pptx/.test(S.fmt) ? `<li>PowerPoint 쪽 ${n}장 · 쪽마다 ${S.fmt === 'pptx' ? '바탕(도형·그림)은 그림 한 장 + <b>글은 고칠 수 있는 글 상자</b>' : '그림 한 장(글은 못 고침)'}${(() => { const nn = doc.pages.filter(p => String(p.notes || '').trim()).length; return nn ? ` · 발표자 메모 ${nn}쪽` : ' · 발표자 메모 없음 (쪽 속성 「🎤 발표자 메모」에 적으면 함께 들어감)'; })()}</li>${S.fmt === 'pptx' && (S.pptFont || 'embed') === 'embed' ? (() => { const F = pptUsedFonts(dlPages()), lib = F.filter(f => { const i = FONTS.find(x => x.family === f); return (i && i.lib) || (doc.fonts || []).some(x => x.family === f); }); return `<li>📦 글꼴 ${F.length}개(${esc(F.slice(0, 4).join(', '))}${F.length > 4 ? ' …' : ''})를 파일에 넣습니다 — 한글 글꼴은 하나에 1~12MB라 파일이 그만큼 커집니다${lib.length ? ` · <b>${esc(lib.join(', '))}</b>은 자료실·직접 올린 글꼴이라 넣지 않고 맑은 고딕으로` : ''} <small>(라이선스·형식 때문에 못 넣는 글꼴은 받은 뒤 알려 드려요)</small></li>`; })() : ''}` : '<li>브라우저 인쇄 창에서 "대상: PDF로 저장", "여백: 없음", "배경 그래픽: 켬"</li>'}</ul>
@@ -6324,7 +6354,7 @@ function renderDownload() {
   $('#dlPages').onchange = e => { S.pages = e.target.value; renderDownload(); };
   const rg = $('#dlRange'); if (rg) { rg.onchange = e => { S.range = e.target.value; renderDownload(); }; }
   const mg = $('#dlMerge'); if (mg) mg.onchange = e => { S.merge = e.target.checked; renderDownload(); };
-  const mm = $('#dlMM'); if (mm) mm.onchange = e => { S.mm = e.target.checked; renderDownload(); };
+  const mm = $('#dlMM'); if (mm) mm.onchange = e => { S.mm = e.target.checked; renderDownload(); }; const mms = $('#dlMMSplit'); if (mms) mms.onchange = e => { S.mmSplit = e.target.checked; };
   const ib = $('#dlImgBleed'); if (ib) ib.onchange = e => { S.imgBleed = e.target.checked; renderDownload(); };
   const tp = $('#dlTransp'); if (tp) tp.onchange = e => { S.transp = e.target.checked; renderDownload(); };
   p.querySelectorAll('[data-pptf]').forEach(b => b.onclick = () => { S.pptFont = b.dataset.pptf; renderDownload(); });
@@ -6587,12 +6617,13 @@ async function runDownload() {
       const W0 = doc.w + 2 * (bleed + slug), H0 = doc.h + 2 * (bleed + slug), dpi = dlDpi(cfg.dpi, bleed);
       /* PDF 쪽 한 변 한계 5.08m(200인치, 아크로뱃·인쇄소 프로그램) — 넘으면 1/10 크기로(현수막 관례, 인쇄소에서 1000% 확대). 그림 화소 수는 그대로라 화질은 같음 */
       const SC = PDF_TENTH(W0, H0) ? 10 : 1, W = W0 / SC, H = H0 / SC, u = v => v / SC;
-      const pdf = new jspdf.jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
-      pdf.setProperties({ title: doc.name || 'design', creator: '나라차 디자인 공방' });
       const pt = v => v / 25.4 * 72;
-      for (let i = 0; i < pages.length; i++) {
-        say(`${i + 1}/${pages.length} 페이지 그리는 중…`);
-        const c = await renderPageCanvas(PG(pages[i]), dpi, bleed ? 'print' : 'thumb', '#ffffff');
+      /* PDF 한 벌 만들기 — list = 그릴 쪽(작업 번호), tag = 진행 글 앞머리 (메일머지 「사람마다 PDF 따로」는 사람마다 한 벌) */
+      const pdfOf = async (list, tag) => { const pdf = new jspdf.jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
+      pdf.setProperties({ title: doc.name || 'design', creator: '나라차 디자인 공방' });
+      for (let i = 0; i < list.length; i++) {
+        say(`${tag || ''}${i + 1}/${list.length} 페이지 그리는 중…`);
+        const c = await renderPageCanvas(PG(list[i]), dpi, bleed ? 'print' : 'thumb', '#ffffff');
         if (i) pdf.addPage([W, H], W > H ? 'landscape' : 'portrait');
         if (cfg.png) pdf.addImage(c, 'PNG', u(slug), u(slug), u(doc.w + 2 * bleed), u(doc.h + 2 * bleed), `p${i}`, 'FAST');
         else pdf.addImage(c.toDataURL('image/jpeg', cfg.q), 'JPEG', u(slug), u(slug), u(doc.w + 2 * bleed), u(doc.h + 2 * bleed), `p${i}`, 'NONE');
@@ -6603,7 +6634,13 @@ async function runDownload() {
         // 인쇄소 프로그램이 읽는 재단·도련 영역 (pt, 왼쪽 아래 기준)
         try { const pc = pdf.internal.getCurrentPageInfo().pageContext; if (bleed || slug) { pc.trimBox = { bottomLeftX: pt(u(slug + bleed)), bottomLeftY: pt(u(slug + bleed)), topRightX: pt(u(slug + bleed + doc.w)), topRightY: pt(u(slug + bleed + doc.h)) }; pc.bleedBox = { bottomLeftX: pt(u(slug)), bottomLeftY: pt(u(slug)), topRightX: pt(u(slug + 2 * bleed + doc.w)), topRightY: pt(u(slug + 2 * bleed + doc.h)) }; } } catch (e) {}
       }
-      saveBlob(pdf.output('blob'), `${base}${S.fmt === 'pdfprint' ? `_인쇄용_${doc.w}x${doc.h}mm${bleed ? `_도련${bleed}mm` : ''}` : S.fmt === 'pdfweb' ? '_공유용' : ''}${SC > 1 ? '_1-10축소(1000%확대출력)' : ''}.pdf`);
+      return pdf; };
+      const suf = `${S.fmt === 'pdfprint' ? `_인쇄용_${doc.w}x${doc.h}mm${bleed ? `_도련${bleed}mm` : ''}` : S.fmt === 'pdfweb' ? '_공유용' : ''}${SC > 1 ? '_1-10축소(1000%확대출력)' : ''}`;
+      if (mmOn && S.mmSplit && jobs.some(j => j._mm)) {  /* 11/27 사람마다 PDF 따로 → ZIP (아래한글 메일 머지 「파일로」처럼 — 학부모님께 한 명씩 보내기) */
+        await loadScript(...JSZIP_SRC); const zip = new JSZip(), G = []; pages.forEach(k => { const w = jobs[k]._mm, g = G.length && G[G.length - 1].w === w ? G[G.length - 1] : null; if (g) g.ks.push(k); else G.push({ w, ks: [k] }); });
+        const used = new Set(); for (let gi = 0; gi < G.length; gi++) { const g = G[gi], pdf = await pdfOf(g.ks, `${gi + 1}/${G.length}명 · `); let nm = `${base}-${String(g.w ? g.w.n : gi + 1).replace(/[\\/:*?"<>|]/g, '_')}`; if (used.has(nm)) nm += `-${gi + 1}`; used.add(nm); zip.file(`${String(gi + 1).padStart(3, '0')}_${nm}${suf}.pdf`, pdf.output('blob')); }
+        say('ZIP으로 묶는 중…'); saveBlob(await zip.generateAsync({ type: 'blob' }), `${base}-사람마다PDF${suf}.zip`);
+      } else saveBlob((await pdfOf(pages, '')).output('blob'), `${base}${suf}.pdf`);
       if (SC > 1) dlTenth = true;
     }
     prog.textContent = lastSaveName ? `다운로드했습니다 — ${lastSaveName}` : '다운로드했습니다'; if (dlTenth) { dlTenth = false; toast('5.08m가 넘어 PDF를 1/10 크기로 만들었습니다 — 인쇄소에 "1000% 확대 출력"이라고 꼭 알려 주세요'); } else toast(dlFallback ? `다운로드했습니다. ${dlFallback}쪽은 대체 방식으로 그려 일부 효과가 화면과 다를 수 있습니다 (Chrome·Edge 최신 버전 권장)` : '다운로드했습니다', !!dlFallback);
@@ -8139,6 +8176,7 @@ function mmPrBlock(S, list) {
   const L = mmList(), on = S.mm !== false, R = mmR(), sel = mmSel(), n = sel.length;
   let h = `<div class="prmm"><label class="chk mmchk prmm-on"><input type="checkbox" id="prMM" ${on ? 'checked' : ''}> <b>✉ 메일머지</b> <small>사람마다 {이름} 자리만 바꿔 찍기</small></label>`;
   if (!on) return h + `<p class="hint" style="margin:4px 0 0">끄면 문서 그대로(칸 이름 {이름}이 그대로) 찍힙니다.</p></div>`;
+  { const bad = mmBadFields(); if (bad.length) h += `<p class="hint mmbad" style="margin:4px 0">⚠ 명단에 없는 표시 ${bad.map(k => `<b>{{${esc(k)}}}</b>`).join(' ')} — 그 자리는 빈칸으로 찍힙니다(속성 창 「✉ 메일머지」에서 확인).</p>`; }
   h += `<div class="prr-opts">${[['all', '모두', L.length + '명'], ['range', '번호로', R.mode === 'range' ? n + '명' : ''], ['pick', '골라서', R.mode === 'pick' ? n + '명' : '']].map(([a, t, c]) => `<label class="prr ${R.mode === a ? 'on' : ''}"><input type="radio" name="prMMR" value="${a}" ${R.mode === a ? 'checked' : ''}> ${t} <small>${c}</small></label>`).join('')}</div>`;
   if (R.mode === 'range') h += `<label class="f" style="margin:6px 0 0"><span>명단 번호 <small>예: 1-20, 25 — 명단 순서(아래 번호) · ${L.length}명</small></span><input id="prMMRange" value="${esc(R.range)}" placeholder="예: 1-20, 25" autocomplete="off"></label>`;
   if (R.mode === 'range' || R.mode === 'pick') { const on2 = R.mode === 'pick' ? w => R.pick.has(mmKey(w)) : (() => { const st = mmRangeSet(R.range, L.length); return (w, i) => st.has(i); })();

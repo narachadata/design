@@ -2360,7 +2360,7 @@ table.dvinfo th{font-weight:700}
 #canvas .mmk.pv{background:rgba(120,200,255,.32);box-shadow:0 0 0 .08em rgba(47,111,228,.45)}
 #canvas .mmk.bad{background:rgba(255,120,120,.28);box-shadow:0 0 0 .08em rgba(220,38,38,.6)}
 .mmbox .mmins.xl b{color:#166534}
-.mmbox .mmbad{color:#b91c1c;margin:4px 0}
+.mmbox .mmbad,.prmm .mmbad{color:#b91c1c;margin:4px 0}
 #dlgMMXls .mmxopt{gap:10px;flex-wrap:wrap;align-items:flex-end}
 #dlgMMXls .mmxopt .f{margin:0;min-width:150px}
 #dlgMMXls .mmxwrap{max-height:46vh;overflow:auto;border:1px solid var(--ui-line);border-radius:8px}
@@ -2415,3 +2415,8 @@ table.dvinfo th{font-weight:700}
 .drive .dvmeta .dvloc i{font-style:normal;opacity:.55;margin:0 3px}
 .drive .dvmeta .dvloc.root{border-style:dashed;background:#f6f7f9;color:var(--ui-muted);border-color:var(--ui-line2)}
 .drive .dvmeta .dvloc.root .ic{color:var(--ui-muted)}
+/* 11/27 메일머지 표시 달기 단축키(Ctrl+K, M) 메뉴 */
+.mmkmenu{position:fixed;z-index:9999;max-height:300px;overflow:auto;min-width:220px}
+.mmkmenu .mmk-h{padding:6px 10px 4px;font-size:12px;font-weight:700;color:#8a5a00}
+.mmkmenu .mmk-h small{font-weight:400;color:var(--ui-muted);margin-left:4px}
+.mmkmenu button.on{background:color-mix(in srgb,var(--ui-accent,#2f6fe4) 12%,#fff)}

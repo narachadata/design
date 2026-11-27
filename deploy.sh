@@ -10,7 +10,7 @@ sed -i '' -E "s/(app\.(js|css)\?v=)[0-9a-z.]+/\1$VER/g; s/(version|effects|imged
 H=$(md5 -q fonts/fonts.css | cut -c1-10); sed -i '' -E "s/(fonts\/fonts\.css\?v=)[0-9a-z.]+/\1$H/g" index.html  # 글꼴 설정도 바뀔 때만 번호 (11/26 WOFF2)
 for A in assets assets-brand; do if [ -f "$A.js" ]; then H=$(md5 -q "$A.js" | cut -c1-10); sed -i '' -E "s/($A)\.js\?v=[0-9a-z.]+/\1.js?v=$H/g" index.html; fi; done
 # 새 파일 검사 (11/26 보안 조): 허용한 종류가 아닌 새 파일(명단 엑셀·한글·문서·사진 등)이 있으면 멈춤 — 실수로 공개되지 않게
-BAD=$(git ls-files --others --exclude-standard -z | tr '\0' '\n' | grep -v -E '^(assets/.+\.(png|jpe?g|webp|svg|gif|pdf|md)|fonts/.+\.(woff2?|ttf|otf|css|js|md)|[^/]+\.(js|css|html|md|sh)|version\.json|manifest\.json)$' || true)
+BAD=$(git ls-files --others --exclude-standard -z | tr '\0' '\n' | grep -v -E '^(assets/.+\.(png|jpe?g|webp|svg|gif|pdf|md)|fonts/.+\.(woff2?|ttf|otf|css|js|md)|[^/]+\.(js|css|html|md|sh)|version\.json|manifest\.json|\.nojekyll)$' || true)
 if [ -n "$BAD" ]; then echo "배포 멈춤: 공개하면 안 될 수 있는 새 파일이 있습니다 — 옮기거나 .gitignore에 넣은 뒤 다시:"; echo "$BAD"; exit 1; fi
 git add -A
 # 커밋 메일 주소는 스크립트에 적지 않고, 이 폴더의 git 설정(git config user.email)에서 씀 — 처음 한 번 팀장님이 직접 등록
